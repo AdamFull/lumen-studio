@@ -9,6 +9,7 @@
 #include "pose/PosePresets.h"
 #include "pose/PoseRenderer.h"
 #include "ui/Icons.h"
+#include "ui/Shortcuts.h"
 #include "ui/Studio.h"
 #include "ui/Theme.h"
 #include "ui/widgets/Controls.h"
@@ -246,7 +247,8 @@ GeneratePage::GeneratePage(Studio *studio, QWidget *parent)
     m_go = new QPushButton(Icons::get(QStringLiteral("sparkles")), tr("Generate"), panel);
     Theme::setRole(m_go, QStringLiteral("primary"));
     m_go->setMinimumHeight(40);
-    m_go->setShortcut(QKeySequence(QStringLiteral("Ctrl+Return")));
+    Shortcuts::instance().bindButton(m_go, QStringLiteral("generate.run"), tr("Generate"), QStringLiteral("generate"),
+                                     QKeySequence(QStringLiteral("Ctrl+Return")), tr("Generate"));
     m_go->setToolTip(tr("Generate (Ctrl+Enter)"));
     v->addWidget(m_go);
     v->addStretch();

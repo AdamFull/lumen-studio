@@ -1,6 +1,7 @@
 add_library(lumen_ui STATIC
     Theme.h Theme.cpp
     Icons.h Icons.cpp
+    Shortcuts.h Shortcuts.cpp
     Studio.h Studio.cpp
     MainWindow.h MainWindow.cpp
     PageFactory.h PageFactory.cpp
@@ -19,6 +20,7 @@ add_library(lumen_ui STATIC
     pages/AiPanel.h pages/AiPanel.cpp
     pages/EditorPage.h pages/EditorPage.cpp
     dialogs/SettingsDialog.h dialogs/SettingsDialog.cpp
+    dialogs/ShortcutsPage.h dialogs/ShortcutsPage.cpp
     dialogs/PoseEditDialog.h dialogs/PoseEditDialog.cpp
     widgets/ThumbnailCache.h widgets/ThumbnailCache.cpp
     pose/PoseCanvas.h pose/PoseCanvas.cpp

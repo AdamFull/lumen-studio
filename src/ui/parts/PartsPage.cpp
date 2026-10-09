@@ -11,6 +11,7 @@
 #include "doc/Document.h"
 #include "doc/Project.h"
 #include "ui/Icons.h"
+#include "ui/Shortcuts.h"
 #include "ui/Studio.h"
 #include "ui/Theme.h"
 #include "ui/canvas/CanvasView.h"
@@ -308,9 +309,9 @@ PartsPage::PartsPage(Studio *studio, QWidget *parent)
     for (Tool *tool : std::as_const(m_tools)) {
         auto *action = new QAction(Icons::get(tool->iconName()), tool->name(), this);
         action->setCheckable(true);
-        action->setShortcut(QKeySequence(tool->shortcut()));
         action->setShortcutContext(Qt::WidgetWithChildrenShortcut);
-        action->setToolTip(QStringLiteral("%1 (%2)").arg(tool->name(), tool->shortcut()));
+        Shortcuts::instance().bindAction(action, QStringLiteral("parts.tool.") + tool->id(), tr("Parts tools"), QStringLiteral("parts"),
+                                         {QKeySequence(tool->shortcut())}, tool->name(), true);
         m_toolGroup->addAction(action);
         addAction(action);
         auto *button = new QToolButton(m_palette);
@@ -467,27 +468,30 @@ PartsPage::PartsPage(Studio *studio, QWidget *parent)
             });
 
     // Shortcuts (page scope).
-    auto shortcut = [this](const QString &keys, std::function<void()> fn) {
+    auto shortcut = [this](const QString &id, const QString &name, const QStringList &keys, std::function<void()> fn) {
         auto *a = new QAction(this);
-        a->setShortcut(QKeySequence(keys));
         a->setShortcutContext(Qt::WidgetWithChildrenShortcut);
         connect(a, &QAction::triggered, this, std::move(fn));
         addAction(a);
+        QList<QKeySequence> defaults;
+        for (const QString &k : keys)
+            defaults << QKeySequence(k);
+        Shortcuts::instance().bindAction(a, QStringLiteral("parts.") + id, tr("Parts"), QStringLiteral("parts"), defaults, name);
     };
-    shortcut(QStringLiteral("Ctrl+Z"), [this] { if (m_set) m_set->undoStack()->undo(); });
-    shortcut(QStringLiteral("Ctrl+Shift+Z"), [this] { if (m_set) m_set->undoStack()->redo(); });
-    shortcut(QStringLiteral("Ctrl+Y"), [this] { if (m_set) m_set->undoStack()->redo(); });
-    shortcut(QStringLiteral("Ctrl+0"), [this] { m_canvas->fitToView(); });
-    shortcut(QStringLiteral("Ctrl+="), [this] { m_canvas->zoomIn(); });
-    shortcut(QStringLiteral("Ctrl+-"), [this] { m_canvas->zoomOut(); });
-    shortcut(QStringLiteral("Del"), [this] {
+    shortcut(QStringLiteral("undo"), tr("Undo"), {QStringLiteral("Ctrl+Z")}, [this] { if (m_set) m_set->undoStack()->undo(); });
+    shortcut(QStringLiteral("redo"), tr("Redo"), {QStringLiteral("Ctrl+Shift+Z"), QStringLiteral("Ctrl+Y")},
+             [this] { if (m_set) m_set->undoStack()->redo(); });
+    shortcut(QStringLiteral("fit"), tr("Fit to window"), {QStringLiteral("Ctrl+0")}, [this] { m_canvas->fitToView(); });
+    shortcut(QStringLiteral("zoom-in"), tr("Zoom in"), {QStringLiteral("Ctrl+=")}, [this] { m_canvas->zoomIn(); });
+    shortcut(QStringLiteral("zoom-out"), tr("Zoom out"), {QStringLiteral("Ctrl+-")}, [this] { m_canvas->zoomOut(); });
+    shortcut(QStringLiteral("delete-parts"), tr("Delete selected parts"), {QStringLiteral("Del")}, [this] {
         const QList<int> sel = m_list->selectedLabels();
         if (m_set && !sel.isEmpty()) {
             m_context->setActiveLabel(0);
             m_set->removeParts(sel);
         }
     });
-    shortcut(QStringLiteral("Ctrl+G"), [this] { generate(m_list->selectedLabels()); });
+    shortcut(QStringLiteral("generate"), tr("Generate selected parts"), {QStringLiteral("Ctrl+G")}, [this] { generate(m_list->selectedLabels()); });
 
     selectTool(QStringLiteral("part-pick"));
     setStep(SourceStep);

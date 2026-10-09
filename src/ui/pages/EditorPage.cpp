@@ -8,6 +8,7 @@
 #include "ui/Icons.h"
 #include "ui/Studio.h"
 #include "ui/Theme.h"
+#include "ui/Shortcuts.h"
 #include "ui/canvas/CanvasView.h"
 #include "ui/canvas/ContextBar.h"
 #include "ui/canvas/EditorState.h"
@@ -119,9 +120,9 @@ EditorPage::EditorPage(Studio *studio, QWidget *parent)
     for (Tool *tool : std::as_const(m_tools)) {
         auto *action = new QAction(Icons::get(tool->iconName()), tool->name(), this);
         action->setCheckable(true);
-        action->setShortcut(QKeySequence(tool->shortcut()));
         action->setShortcutContext(Qt::WidgetWithChildrenShortcut);
-        action->setToolTip(QStringLiteral("%1 (%2)").arg(tool->name(), tool->shortcut()));
+        Shortcuts::instance().bindAction(action, QStringLiteral("editor.tool.") + tool->id(), tr("Editor tools"), QStringLiteral("editor"),
+                                         {QKeySequence(tool->shortcut())}, tool->name(), true);
         m_toolGroup->addAction(action);
         addAction(action);
         auto *button = new QToolButton(palette);
@@ -242,31 +243,37 @@ EditorPage::EditorPage(Studio *studio, QWidget *parent)
     connect(studio, &Studio::activeDocumentChanged, this, &EditorPage::setDocument);
 
     // Shortcuts.
-    auto shortcut = [this](const QString &keys, std::function<void()> fn) {
+    // Page shortcuts (customisable in Settings → Shortcuts).
+    auto shortcut = [this](const QString &id, const QString &name, const QStringList &keys, std::function<void()> fn) {
         auto *a = new QAction(this);
-        a->setShortcut(QKeySequence(keys));
         a->setShortcutContext(Qt::WidgetWithChildrenShortcut);
         connect(a, &QAction::triggered, this, std::move(fn));
         addAction(a);
+        QList<QKeySequence> defaults;
+        for (const QString &k : keys)
+            defaults << QKeySequence(k);
+        Shortcuts::instance().bindAction(a, QStringLiteral("editor.") + id, tr("Editor"), QStringLiteral("editor"), defaults, name);
     };
-    shortcut(QStringLiteral("Ctrl+Z"), [this] { if (m_doc) m_doc->undoStack()->undo(); });
-    shortcut(QStringLiteral("Ctrl+Shift+Z"), [this] { if (m_doc) m_doc->undoStack()->redo(); });
-    shortcut(QStringLiteral("Ctrl+Y"), [this] { if (m_doc) m_doc->undoStack()->redo(); });
-    shortcut(QStringLiteral("Ctrl+D"), [this] { if (m_doc) m_doc->clearSelection(); });
-    shortcut(QStringLiteral("Ctrl+A"), [this] { if (m_doc) m_doc->selectAll(); });
-    shortcut(QStringLiteral("Ctrl+Shift+I"), [this] { if (m_doc) m_doc->invertSelection(); });
-    shortcut(QStringLiteral("Del"), [this] { deleteSelectionPixels(); });
-    shortcut(QStringLiteral("Ctrl+0"), [this] { m_canvas->fitToView(); });
-    shortcut(QStringLiteral("Ctrl+1"), [this] { m_canvas->actualPixels(); });
-    shortcut(QStringLiteral("Ctrl+="), [this] { m_canvas->zoomIn(); });
-    shortcut(QStringLiteral("Ctrl++"), [this] { m_canvas->zoomIn(); });
-    shortcut(QStringLiteral("Ctrl+-"), [this] { m_canvas->zoomOut(); });
-    shortcut(QStringLiteral("X"), [this] { m_state->swapColors(); });
-    shortcut(QStringLiteral("Ctrl+Shift+C"), [this] { copyMerged(); });
-    shortcut(QStringLiteral("Ctrl+V"), [this] { pasteAsLayer(); });
-    shortcut(QStringLiteral("Ctrl+Shift+N"), [this] { if (m_doc) m_doc->addLayer(tr("Layer %1").arg(m_doc->layerCount() + 1)); });
-    shortcut(QStringLiteral("Ctrl+J"), [this] { if (m_doc) m_doc->duplicateLayer(m_doc->activeLayerId()); });
-    shortcut(QStringLiteral("Ctrl+E"), [this] { if (m_doc) m_doc->mergeDown(m_doc->activeLayerId()); });
+    shortcut(QStringLiteral("undo"), tr("Undo"), {QStringLiteral("Ctrl+Z")}, [this] { if (m_doc) m_doc->undoStack()->undo(); });
+    shortcut(QStringLiteral("redo"), tr("Redo"), {QStringLiteral("Ctrl+Shift+Z"), QStringLiteral("Ctrl+Y")},
+             [this] { if (m_doc) m_doc->undoStack()->redo(); });
+    shortcut(QStringLiteral("deselect"), tr("Deselect"), {QStringLiteral("Ctrl+D")}, [this] { if (m_doc) m_doc->clearSelection(); });
+    shortcut(QStringLiteral("select-all"), tr("Select all"), {QStringLiteral("Ctrl+A")}, [this] { if (m_doc) m_doc->selectAll(); });
+    shortcut(QStringLiteral("invert-selection"), tr("Invert selection"), {QStringLiteral("Ctrl+Shift+I")},
+             [this] { if (m_doc) m_doc->invertSelection(); });
+    shortcut(QStringLiteral("delete-pixels"), tr("Delete selected pixels"), {QStringLiteral("Del")}, [this] { deleteSelectionPixels(); });
+    shortcut(QStringLiteral("fit"), tr("Fit to window"), {QStringLiteral("Ctrl+0")}, [this] { m_canvas->fitToView(); });
+    shortcut(QStringLiteral("actual-pixels"), tr("Actual pixels (100 %)"), {QStringLiteral("Ctrl+1")}, [this] { m_canvas->actualPixels(); });
+    shortcut(QStringLiteral("zoom-in"), tr("Zoom in"), {QStringLiteral("Ctrl+="), QStringLiteral("Ctrl++")}, [this] { m_canvas->zoomIn(); });
+    shortcut(QStringLiteral("zoom-out"), tr("Zoom out"), {QStringLiteral("Ctrl+-")}, [this] { m_canvas->zoomOut(); });
+    shortcut(QStringLiteral("swap-colors"), tr("Swap colours"), {QStringLiteral("X")}, [this] { m_state->swapColors(); });
+    shortcut(QStringLiteral("paste-layer"), tr("Paste as layer"), {QStringLiteral("Ctrl+V")}, [this] { pasteAsLayer(); });
+    shortcut(QStringLiteral("new-layer"), tr("New layer"), {QStringLiteral("Ctrl+Shift+N")},
+             [this] { if (m_doc) m_doc->addLayer(tr("Layer %1").arg(m_doc->layerCount() + 1)); });
+    shortcut(QStringLiteral("duplicate-layer"), tr("Duplicate layer"), {QStringLiteral("Ctrl+J")},
+             [this] { if (m_doc) m_doc->duplicateLayer(m_doc->activeLayerId()); });
+    shortcut(QStringLiteral("merge-down"), tr("Merge down"), {QStringLiteral("Ctrl+E")},
+             [this] { if (m_doc) m_doc->mergeDown(m_doc->activeLayerId()); });
 
     selectTool(QStringLiteral("mask"));
     rebuildTabs();

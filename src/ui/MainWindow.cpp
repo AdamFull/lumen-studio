@@ -6,6 +6,7 @@
 #include "core/Settings.h"
 #include "ui/Icons.h"
 #include "ui/PageFactory.h"
+#include "ui/Shortcuts.h"
 #include "ui/Theme.h"
 #include "ui/canvas/ContextBar.h"
 #include "ui/canvas/EditorState.h"
@@ -124,12 +125,12 @@ QWidget *MainWindow::buildNavRail()
     v->addSpacing(14);
     m_nav = new QButtonGroup(this);
     const QList<std::tuple<Page, QString, QString, QString>> items = {
-        {Page::Create, QStringLiteral("chat"), tr("Create"), tr("AI director: plan character shots from references and a description (Alt+1)")},
-        {Page::Generate, QStringLiteral("sparkles"), tr("Generate"), tr("Text/image to image generation (Alt+2)")},
-        {Page::Editor, QStringLiteral("brush"), tr("Edit"), tr("Layered editor with inpainting and AI tools (Alt+3)")},
-        {Page::Poses, QStringLiteral("person"), tr("Poses"), tr("Pose editor and library (Alt+4)")},
-        {Page::Parts, QStringLiteral("parts"), tr("Parts"), tr("Slice a character into parts for Live2D (Alt+5)")},
-        {Page::Library, QStringLiteral("gallery"), tr("Library"), tr("All images of the project (Alt+6)")},
+        {Page::Create, QStringLiteral("chat"), tr("Create"), tr("AI director: plan character shots from references and a description")},
+        {Page::Generate, QStringLiteral("sparkles"), tr("Generate"), tr("Text/image to image generation")},
+        {Page::Editor, QStringLiteral("brush"), tr("Edit"), tr("Layered editor with inpainting and AI tools")},
+        {Page::Poses, QStringLiteral("person"), tr("Poses"), tr("Pose editor and library")},
+        {Page::Parts, QStringLiteral("parts"), tr("Parts"), tr("Slice a character into parts for Live2D")},
+        {Page::Library, QStringLiteral("gallery"), tr("Library"), tr("All images of the project")},
     };
     int index = 0;
     for (const auto &[page, icon, label, tip] : items) {
@@ -137,13 +138,17 @@ QWidget *MainWindow::buildNavRail()
         b->setIcon(Icons::get(icon));
         b->setIconSize(QSize(22, 22));
         b->setText(label);
-        b->setToolTip(tip);
         b->setCheckable(true);
         b->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
         b->setFixedSize(74, 58);
         b->setProperty("role", QStringLiteral("nav"));
         b->setStyleSheet(QStringLiteral("font-size: 8pt;"));
-        b->setShortcut(QKeySequence(QStringLiteral("Alt+%1").arg(++index)));
+        Shortcuts::Info info{QStringLiteral("nav.%1").arg(icon), tr("Pages"), tr("Go to %1").arg(label), QStringLiteral("global"),
+                             {QKeySequence(QStringLiteral("Alt+%1").arg(++index))}};
+        Shortcuts::instance().bind(info, b, [b, tip](const QList<QKeySequence> &keys) {
+            b->setShortcut(keys.value(0));
+            b->setToolTip(keys.isEmpty() ? tip : QStringLiteral("%1 (%2)").arg(tip, Shortcuts::toText(keys)));
+        });
         m_nav->addButton(b, static_cast<int>(page));
         v->addWidget(b, 0, Qt::AlignHCenter);
     }
@@ -177,25 +182,29 @@ QWidget *MainWindow::buildNavRail()
 
 void MainWindow::buildMenus()
 {
+    const QString general = tr("General");
+    auto bind = [general](QAction *action, const QString &id) {
+        Shortcuts::instance().bindAction(action, QStringLiteral("app.") + id, general, QStringLiteral("global"));
+    };
     QMenu *file = menuBar()->addMenu(tr("&File"));
-    file->addAction(Icons::get(QStringLiteral("plus")), tr("New document..."), QKeySequence::New, this, [this] {
+    bind(file->addAction(Icons::get(QStringLiteral("plus")), tr("New document..."), QKeySequence::New, this, [this] {
         showPage(Page::Editor);
         m_editor->newDocumentDialog();
-    });
-    file->addAction(Icons::get(QStringLiteral("image")), tr("Open image..."), QKeySequence::Open, this, &MainWindow::openImages);
-    file->addAction(Icons::get(QStringLiteral("upload")), tr("Import images to library..."), this, &MainWindow::importToLibrary);
+    }), QStringLiteral("new-document"));
+    bind(file->addAction(Icons::get(QStringLiteral("image")), tr("Open image..."), QKeySequence::Open, this, &MainWindow::openImages), QStringLiteral("open-image"));
+    bind(file->addAction(Icons::get(QStringLiteral("upload")), tr("Import images to library..."), this, &MainWindow::importToLibrary), QStringLiteral("import-library"));
     file->addSeparator();
-    file->addAction(Icons::get(QStringLiteral("save")), tr("Save all"), QKeySequence::Save, this, [this] {
+    bind(file->addAction(Icons::get(QStringLiteral("save")), tr("Save all"), QKeySequence::Save, this, [this] {
         m_studio->saveAll().then(this, [this] { m_studio->notify(tr("Project saved."), QStringLiteral("success")); });
-    });
-    file->addAction(Icons::get(QStringLiteral("download")), tr("Export image..."), QKeySequence(QStringLiteral("Ctrl+Shift+E")), this,
-                    [this] { m_editor->exportImage(); });
-    file->addAction(Icons::get(QStringLiteral("gallery")), tr("Save image to library"), QKeySequence(QStringLiteral("Ctrl+Shift+S")), this,
-                    [this] { m_editor->saveToLibrary(); });
-    file->addAction(tr("Close document"), QKeySequence::Close, this, [this] { m_studio->closeDocument(m_studio->activeDocument()); });
+    }), QStringLiteral("save-all"));
+    bind(file->addAction(Icons::get(QStringLiteral("download")), tr("Export image..."), QKeySequence(QStringLiteral("Ctrl+Shift+E")), this,
+                    [this] { m_editor->exportImage(); }), QStringLiteral("export-image"));
+    bind(file->addAction(Icons::get(QStringLiteral("gallery")), tr("Save image to library"), QKeySequence(QStringLiteral("Ctrl+Shift+S")), this,
+                    [this] { m_editor->saveToLibrary(); }), QStringLiteral("save-to-library"));
+    bind(file->addAction(tr("Close document"), QKeySequence::Close, this, [this] { m_studio->closeDocument(m_studio->activeDocument()); }), QStringLiteral("close-document"));
     file->addSeparator();
-    file->addAction(Icons::get(QStringLiteral("folder")), tr("New project..."), this, &MainWindow::newProject);
-    file->addAction(Icons::get(QStringLiteral("folder")), tr("Open project..."), QKeySequence(QStringLiteral("Ctrl+Shift+O")), this, &MainWindow::openProject);
+    bind(file->addAction(Icons::get(QStringLiteral("folder")), tr("New project..."), this, &MainWindow::newProject), QStringLiteral("new-project"));
+    bind(file->addAction(Icons::get(QStringLiteral("folder")), tr("Open project..."), QKeySequence(QStringLiteral("Ctrl+Shift+O")), this, &MainWindow::openProject), QStringLiteral("open-project"));
     QMenu *recent = file->addMenu(tr("Recent projects"));
     connect(recent, &QMenu::aboutToShow, this, [this, recent] {
         recent->clear();
@@ -208,27 +217,28 @@ void MainWindow::buildMenus()
             recent->addAction(tr("(none)"))->setEnabled(false);
     });
     file->addSeparator();
-    file->addAction(tr("Quit"), QKeySequence::Quit, this, &QWidget::close);
+    bind(file->addAction(tr("Quit"), QKeySequence::Quit, this, &QWidget::close), QStringLiteral("quit"));
 
     QMenu *edit = menuBar()->addMenu(tr("&Edit"));
-    edit->addAction(Icons::get(QStringLiteral("copy")), tr("Copy merged"), QKeySequence(QStringLiteral("Ctrl+Shift+C")), this, [this] { m_editor->copyMerged(); });
-    edit->addAction(tr("Paste as layer"), this, [this] {
+    bind(edit->addAction(Icons::get(QStringLiteral("copy")), tr("Copy merged"), QKeySequence(QStringLiteral("Ctrl+Shift+C")), this, [this] { m_editor->copyMerged(); }), QStringLiteral("copy-merged"));
+    bind(edit->addAction(tr("Paste as layer"), this, [this] {
         showPage(Page::Editor);
         m_editor->pasteAsLayer();
-    });
-    edit->addAction(tr("Import image as layer..."), this, [this] {
+    }), QStringLiteral("paste-layer-menu"));
+    bind(edit->addAction(tr("Import image as layer..."), this, [this] {
         showPage(Page::Editor);
         m_editor->importAsLayer();
-    });
+    }), QStringLiteral("import-layer"));
     edit->addSeparator();
-    edit->addAction(Icons::get(QStringLiteral("settings")), tr("Settings..."), QKeySequence(QStringLiteral("Ctrl+,")), this, [this] { openSettings(); });
+    bind(edit->addAction(Icons::get(QStringLiteral("settings")), tr("Settings..."), QKeySequence(QStringLiteral("Ctrl+,")), this, [this] { openSettings(); }), QStringLiteral("settings"));
 
     QMenu *view = menuBar()->addMenu(tr("&View"));
-    view->addAction(Icons::get(QStringLiteral("queue")), tr("Job queue"), QKeySequence(QStringLiteral("Ctrl+Shift+Q")), this, [this] {
+    bind(view->addAction(Icons::get(QStringLiteral("queue")), tr("Job queue"), QKeySequence(QStringLiteral("Ctrl+Shift+Q")), this, [this] {
         m_queueButton->setChecked(!m_queueButton->isChecked());
         toggleQueue();
-    });
+    }), QStringLiteral("job-queue"));
     QAction *contextBar = view->addAction(Icons::get(QStringLiteral("sparkles")), tr("Generative toolbar on the canvas"));
+    bind(contextBar, QStringLiteral("context-bar"));
     contextBar->setCheckable(true);
     contextBar->setChecked(m_editor && m_editor->editorState()->showContextBar());
     connect(contextBar, &QAction::toggled, this, [this](bool on) {

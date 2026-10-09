@@ -1,4 +1,5 @@
 #include "ui/dialogs/SettingsDialog.h"
+#include "ui/dialogs/ShortcutsPage.h"
 
 #include "ai/ProviderRegistry.h"
 #include "core/Async.h"
@@ -320,6 +321,7 @@ SettingsDialog::SettingsDialog(Studio *studio, QWidget *parent)
     m_tabs->addTab(buildProvidersTab(), Icons::get(QStringLiteral("server")), tr("Providers"));
     m_tabs->addTab(buildRolesTab(), Icons::get(QStringLiteral("chat")), tr("Models & roles"));
     m_tabs->addTab(buildGeneralTab(), Icons::get(QStringLiteral("settings")), tr("General"));
+    m_tabs->addTab(new ShortcutsPage(this), Icons::get(QStringLiteral("text")), tr("Shortcuts"));
     v->addWidget(m_tabs, 1);
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, this);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::accept);
@@ -334,6 +336,8 @@ void SettingsDialog::showTab(const QString &tab)
         m_tabs->setCurrentIndex(1);
     else if (tab == QLatin1String("general"))
         m_tabs->setCurrentIndex(2);
+    else if (tab == QLatin1String("shortcuts"))
+        m_tabs->setCurrentIndex(3);
 }
 
 QWidget *SettingsDialog::buildProvidersTab()

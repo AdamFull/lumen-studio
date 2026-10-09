@@ -70,6 +70,11 @@ Open images with **File → Open image…** (`Ctrl+O`) or drag them onto the win
 
 ### Shortcuts
 
+Every shortcut can be changed in **Edit → Settings… → Shortcuts**: search for an action, click the
+*Shortcut* or *Alternative* field and press the new keys. A key that another action in the same
+place uses moves to the new action (the page tells you which one lost it); *Reset to default* and
+*Reset all* restore the defaults. The defaults are:
+
 | Action | Keys |
 |---|---|
 | Undo / redo | `Ctrl+Z` / `Ctrl+Shift+Z` or `Ctrl+Y` |

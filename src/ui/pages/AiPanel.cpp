@@ -6,6 +6,7 @@
 #include "core/JobQueue.h"
 #include "pose/PoseRenderer.h"
 #include "ui/Icons.h"
+#include "ui/Shortcuts.h"
 #include "ui/Studio.h"
 #include "ui/Theme.h"
 #include "ui/widgets/Controls.h"
@@ -168,7 +169,8 @@ AiPanel::AiPanel(Studio *studio, QWidget *parent)
     m_run = new QPushButton(Icons::get(QStringLiteral("sparkles")), tr("Generate"), content);
     Theme::setRole(m_run, QStringLiteral("primary"));
     m_run->setMinimumHeight(36);
-    m_run->setShortcut(QKeySequence(QStringLiteral("Ctrl+Return")));
+    Shortcuts::instance().bindButton(m_run, QStringLiteral("editor.ai-run"), tr("Editor"), QStringLiteral("editor"),
+                                     QKeySequence(QStringLiteral("Ctrl+Return")), tr("Run the AI action"));
     v->addWidget(m_run);
 
     m_jobs = new QVBoxLayout;

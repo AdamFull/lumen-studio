@@ -4,9 +4,14 @@
 #include "ui/canvas/ContextBar.h"
 #include "ui/canvas/EditorState.h"
 #include "ui/canvas/TransformTool.h"
+#include "core/Settings.h"
+#include "ui/MainWindow.h"
+#include "ui/Shortcuts.h"
 #include "ui/Studio.h"
+#include "ui/dialogs/ShortcutsPage.h"
 
 #include <QJsonArray>
+#include <QAction>
 #include <QLineEdit>
 #include <QPainter>
 #include <QTemporaryDir>
@@ -48,6 +53,8 @@ private slots:
     void transformLockedLayer();
     void contextBarFollowsSelection();
     void studioRestoresSession();
+    void shortcutRegistry();
+    void shortcutsHaveNoConflicts();
 
 private:
     ToolEvent at(double x, double y, Qt::KeyboardModifiers mods = Qt::NoModifier) const
@@ -318,6 +325,86 @@ void TestCanvas::studioRestoresSession()
     const QJsonArray docs = records.result().first().json.value(QStringLiteral("documents")).toArray();
     QCOMPARE(docs.size(), 1);
     QCOMPARE(docs.first().toString(), secondId);
+}
+
+void TestCanvas::shortcutRegistry()
+{
+    Shortcuts &sc = Shortcuts::instance();
+    auto *a = new QAction(QStringLiteral("Alpha"));
+    auto *b = new QAction(QStringLiteral("Beta"));
+    auto *g = new QAction(QStringLiteral("Global"));
+    a->setShortcut(QKeySequence(QStringLiteral("Ctrl+K")));
+    sc.reset(QStringLiteral("test.alpha"));
+    sc.reset(QStringLiteral("test.beta"));
+    sc.bindAction(a, QStringLiteral("test.alpha"), QStringLiteral("Test"), QStringLiteral("test-scope"), {}, QString(), true);
+    sc.bindAction(b, QStringLiteral("test.beta"), QStringLiteral("Test"), QStringLiteral("other-scope"), {QKeySequence(QStringLiteral("Ctrl+K"))});
+    sc.bindAction(g, QStringLiteral("test.global"), QStringLiteral("Test"), QStringLiteral("global"), {QKeySequence(QStringLiteral("F9"))});
+    QCOMPARE(sc.info(QStringLiteral("test.alpha")).name, QStringLiteral("Alpha"));
+    QCOMPARE(sc.keys(QStringLiteral("test.alpha")), QList<QKeySequence>{QKeySequence(QStringLiteral("Ctrl+K"))});
+    QCOMPARE(a->toolTip(), QStringLiteral("Alpha (%1)").arg(QKeySequence(QStringLiteral("Ctrl+K")).toString(QKeySequence::NativeText)));
+    // Same key in different page scopes is fine; the global scope conflicts with everything.
+    QVERIFY(sc.conflicts(QStringLiteral("test.alpha"), QKeySequence(QStringLiteral("Ctrl+K"))).isEmpty());
+    QCOMPARE(sc.conflicts(QStringLiteral("test.alpha"), QKeySequence(QStringLiteral("F9"))), QStringList{QStringLiteral("test.global")});
+
+    // Overrides apply to the action at once and persist; resetting restores the default.
+    sc.setKeys(QStringLiteral("test.alpha"), {QKeySequence(QStringLiteral("Ctrl+Alt+K")), QKeySequence(QStringLiteral("F7"))});
+    QCOMPARE(a->shortcuts().size(), 2);
+    QCOMPARE(a->shortcut(), QKeySequence(QStringLiteral("Ctrl+Alt+K")));
+    QVERIFY(sc.isCustomized(QStringLiteral("test.alpha")));
+    QVERIFY(Settings::instance().contains(QStringLiteral("shortcuts/test.alpha")));
+    auto *again = new QAction(QStringLiteral("Alpha 2")); // a second window binding the same id gets the override
+    sc.bindAction(again, QStringLiteral("test.alpha"), QStringLiteral("Test"), QStringLiteral("test-scope"));
+    QCOMPARE(again->shortcut(), QKeySequence(QStringLiteral("Ctrl+Alt+K")));
+    sc.reset(QStringLiteral("test.alpha"));
+    QCOMPARE(a->shortcut(), QKeySequence(QStringLiteral("Ctrl+K")));
+    QVERIFY(!sc.isCustomized(QStringLiteral("test.alpha")));
+    // Setting the defaults explicitly does not count as a customisation; an empty list removes the key.
+    sc.setKeys(QStringLiteral("test.alpha"), {QKeySequence(QStringLiteral("Ctrl+K"))});
+    QVERIFY(!sc.isCustomized(QStringLiteral("test.alpha")));
+    sc.setKeys(QStringLiteral("test.alpha"), {});
+    QVERIFY(a->shortcuts().isEmpty());
+    QCOMPARE(a->toolTip(), QStringLiteral("Alpha"));
+
+    // The settings page moves a key that is taken in a conflicting scope.
+    ShortcutsPage page;
+    const QStringList moved = page.assign(QStringLiteral("test.alpha"), QKeySequence(QStringLiteral("F9")), {});
+    QCOMPARE(moved, QStringList{QStringLiteral("test.global")});
+    QVERIFY(g->shortcuts().isEmpty());
+    QCOMPARE(a->shortcut(), QKeySequence(QStringLiteral("F9")));
+    sc.reset(QStringLiteral("test.alpha"));
+    sc.reset(QStringLiteral("test.global"));
+    QCOMPARE(g->shortcut(), QKeySequence(QStringLiteral("F9")));
+    delete a;
+    delete b;
+    delete g;
+    delete again;
+    // Bindings of deleted actions are dropped.
+    sc.setKeys(QStringLiteral("test.alpha"), {QKeySequence(QStringLiteral("F8"))});
+    sc.reset(QStringLiteral("test.alpha"));
+}
+
+void TestCanvas::shortcutsHaveNoConflicts()
+{
+    Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
+    Studio studio;
+    MainWindow window(&studio);
+    Shortcuts &sc = Shortcuts::instance();
+    int checked = 0;
+    for (const Shortcuts::Info &info : sc.all()) {
+        if (info.id.startsWith(QLatin1String("test.")))
+            continue;
+        QVERIFY2(!info.name.isEmpty(), qPrintable(info.id));
+        for (const QKeySequence &key : sc.keys(info.id)) {
+            const QStringList others = sc.conflicts(info.id, key);
+            QVERIFY2(others.isEmpty(), qPrintable(QStringLiteral("%1 (%2) conflicts with %3")
+                                                       .arg(info.id, key.toString(), others.join(QStringLiteral(", ")))));
+            ++checked;
+        }
+    }
+    QVERIFY(checked > 40);
+    QVERIFY(sc.contains(QStringLiteral("editor.tool.transform")));
+    QVERIFY(sc.contains(QStringLiteral("parts.tool.part-lasso")) || sc.contains(QStringLiteral("parts.tool.lasso")));
+    QVERIFY(sc.contains(QStringLiteral("app.settings")));
 }
 
 QTEST_MAIN(TestCanvas)
