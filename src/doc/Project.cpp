@@ -115,7 +115,7 @@ QString futureErrorMessage(const std::exception_ptr &e)
         if (e)
             std::rethrow_exception(e);
     } catch (const std::exception &ex) {
-        return QString::fromUtf8(ex.what());
+        return describeException(ex);
     } catch (...) {
         return QObject::tr("Unknown error");
     }
@@ -263,11 +263,11 @@ QFuture<AssetInfo> Project::importFile(const QString &filePath, AssetKind kind)
     return async::run([filePath] {
                QFile file(filePath);
                if (!file.open(QIODevice::ReadOnly))
-                   throw StoreError(QObject::tr("Cannot open %1: %2").arg(filePath, file.errorString()).toStdString());
+                   throw StoreError(QObject::tr("Cannot open %1: %2").arg(filePath, file.errorString()));
                const QByteArray bytes = file.readAll();
                QImage image = img::normalized(img::decode(bytes));
                if (image.isNull())
-                   throw StoreError(QObject::tr("Unsupported or damaged image: %1").arg(filePath).toStdString());
+                   throw StoreError(QObject::tr("Unsupported or damaged image: %1").arg(filePath));
                QJsonObject meta;
                const QString params = png::readText(bytes).value(QStringLiteral("parameters"));
                if (!params.isEmpty())
@@ -338,7 +338,7 @@ void Project::updateAsset(const AssetInfo &info)
             q.addBindValue(info.id);
             ProjectStore::check(q.exec(), q);
         })
-        .onFailed(this, [this](const std::exception &e) { reportError(tr("Updating asset failed"), QString::fromUtf8(e.what())); });
+        .onFailed(this, [this](const std::exception &e) { reportError(tr("Updating asset failed"), describeException(e)); });
 }
 
 void Project::removeAssets(const QStringList &ids)
@@ -358,7 +358,7 @@ void Project::removeAssets(const QStringList &ids)
             }
             db.commit();
         })
-        .onFailed(this, [this](const std::exception &e) { reportError(tr("Deleting assets failed"), QString::fromUtf8(e.what())); });
+        .onFailed(this, [this](const std::exception &e) { reportError(tr("Deleting assets failed"), describeException(e)); });
 }
 
 QFuture<void> Project::exportAsset(const QString &id, const QString &filePath)
@@ -371,14 +371,14 @@ QFuture<void> Project::exportAsset(const QString &id, const QString &filePath)
             const QByteArray fmt = suffix == QLatin1String("jpg") ? QByteArray("JPEG") : suffix.toLatin1().toUpper();
             out = img::encode(image, fmt.constData(), 95);
             if (out.isEmpty())
-                throw StoreError(QObject::tr("Unsupported export format: %1").arg(suffix).toStdString());
+                throw StoreError(QObject::tr("Unsupported export format: %1").arg(suffix));
         }
         QSaveFile f(filePath);
         if (!f.open(QIODevice::WriteOnly))
-            throw StoreError(f.errorString().toStdString());
+            throw StoreError(f.errorString());
         f.write(out);
         if (!f.commit())
-            throw StoreError(f.errorString().toStdString());
+            throw StoreError(f.errorString());
     });
 }
 
@@ -541,7 +541,7 @@ QFuture<void> Project::saveDocument(Document *doc)
             finishSave(job->id);
         })
         .onFailed(this, [this, docId](const std::exception &e) {
-            reportError(tr("Saving document failed"), QString::fromUtf8(e.what()));
+            reportError(tr("Saving document failed"), describeException(e));
             finishSave(docId);
         });
 }
@@ -641,7 +641,7 @@ void Project::removeDocument(const QString &id)
             }
             db.commit();
         })
-        .onFailed(this, [this](const std::exception &e) { reportError(tr("Deleting document failed"), QString::fromUtf8(e.what())); });
+        .onFailed(this, [this](const std::exception &e) { reportError(tr("Deleting document failed"), describeException(e)); });
 }
 
 // ---- records ----------------------------------------------------------------------------------
@@ -717,7 +717,7 @@ void Project::removeRecord(const QString &id, const QString &type)
             ProjectStore::check(q.exec(), q);
         })
         .then(this, [this, type] { emit recordsChanged(type); })
-        .onFailed(this, [this](const std::exception &e) { reportError(tr("Deleting record failed"), QString::fromUtf8(e.what())); });
+        .onFailed(this, [this](const std::exception &e) { reportError(tr("Deleting record failed"), describeException(e)); });
 }
 
 } // namespace lumen::doc

@@ -4,6 +4,7 @@ add_library(lumen_core STATIC
     Settings.h Settings.cpp
     SecretStore.h SecretStore.cpp
     Async.h
+    Error.h Error.cpp
     Job.h Job.cpp
     JobQueue.h JobQueue.cpp
     ImageOps.h ImageOps.cpp

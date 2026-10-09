@@ -35,7 +35,7 @@ const char *kSchema[] = {
 void ProjectStore::check(bool ok, const QSqlQuery &query)
 {
     if (!ok)
-        throw StoreError(query.lastError().text().toStdString());
+        throw StoreError(query.lastError().text());
 }
 
 ProjectStore::ProjectStore(QObject *parent)
@@ -79,7 +79,7 @@ QFuture<void> ProjectStore::open(const QString &path)
                 db.close();
             db.setDatabaseName(path);
             if (!db.open())
-                throw StoreError(db.lastError().text().toStdString());
+                throw StoreError(db.lastError().text());
             QSqlQuery q(db);
             // WAL keeps the GUI responsive (readers never block writers) and is crash safe.
             for (const char *pragma : {"PRAGMA journal_mode=WAL", "PRAGMA synchronous=NORMAL", "PRAGMA foreign_keys=ON",

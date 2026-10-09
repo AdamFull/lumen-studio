@@ -9,15 +9,11 @@
 
 #include <functional>
 #include <memory>
-#include <stdexcept>
+#include "core/Error.h"
 
 namespace lumen::doc {
 
-class StoreError : public std::runtime_error
-{
-public:
-    using std::runtime_error::runtime_error;
-};
+LUMEN_DECLARE_ERROR(StoreError);
 
 // Owns a dedicated thread with a single SQLite connection. All database work is serialised on that
 // thread and results are delivered as QFutures, so the GUI never waits on disk I/O.

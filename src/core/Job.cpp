@@ -1,5 +1,6 @@
 #include "core/Job.h"
 
+#include "core/Error.h"
 #include "core/Log.h"
 
 namespace lumen {
@@ -52,7 +53,7 @@ void Job::start()
     try {
         m_starter(this);
     } catch (const std::exception &e) {
-        fail(QString::fromUtf8(e.what()));
+        fail(describeException(e));
     }
 }
 
