@@ -15,14 +15,6 @@ namespace lumen::ai::parts {
 
 namespace {
 
-QString normalizedLabel(const QString &s)
-{
-    QString t = s.trimmed().toLower();
-    t.replace(QLatin1Char('_'), QLatin1Char(' '));
-    t.replace(QLatin1Char('-'), QLatin1Char(' '));
-    return t.simplified();
-}
-
 struct Target
 {
     QString tag;
@@ -71,6 +63,58 @@ double colorDistance(QRgb a, const QColor &b)
 
 // ---- Segmentation -----------------------------------------------------------------------------------
 
+QString normalizePartLabel(const QString &s)
+{
+    QString t = s.trimmed().toLower();
+    t.replace(QLatin1Char('_'), QLatin1Char(' '));
+    t.replace(QLatin1Char('-'), QLatin1Char(' '));
+    return t.simplified();
+}
+
+std::pair<QString, QString> splitSide(const QString &nameIn)
+{
+    const QString name = nameIn.trimmed();
+    for (const QString &side : {QStringLiteral("L"), QStringLiteral("R")}) {
+        for (const QString &sep : {QStringLiteral(" "), QStringLiteral("_"), QStringLiteral("-"), QStringLiteral(".")}) {
+            if (name.size() > 2 && name.endsWith(sep + side, Qt::CaseInsensitive))
+                return {name.left(name.size() - 2).trimmed(), side};
+        }
+    }
+    return {name, QString()};
+}
+
+QList<SegmentLayer> layersFromPsd(const psd::File &file, int *skipped)
+{
+    QList<SegmentLayer> out;
+    int skip = 0;
+    const QList<psd::ResolvedLayer> resolved = psd::resolvedLayers(file);
+    int order = 0;
+    for (auto it = resolved.crbegin(); it != resolved.crend(); ++it) {
+        const psd::Layer &l = *it->layer;
+        if (!it->visible || l.image.isNull() || l.name.compare(QLatin1String("Original"), Qt::CaseInsensitive) == 0) {
+            ++skip;
+            continue;
+        }
+        QImage canvas(file.size, QImage::Format_ARGB32_Premultiplied);
+        canvas.fill(Qt::transparent);
+        QPainter p(&canvas);
+        p.setCompositionMode(QPainter::CompositionMode_Source);
+        p.drawImage(l.offset, img::normalized(l.image));
+        p.end();
+        const auto [label, side] = splitSide(l.name);
+        SegmentLayer s;
+        s.label = label.isEmpty() ? l.name : label;
+        s.side = side;
+        s.kind = QStringLiteral("layer");
+        s.image = canvas;
+        s.order = order++;
+        out.append(s);
+    }
+    if (skipped)
+        *skipped = skip;
+    return out;
+}
+
 SegmentOutcome mergeSegmentation(const doc::PartSet::Snapshot &current, const QImage &silhouetteIn,
                                  const doc::PartTaxonomy &taxonomy, const QList<SegmentLayer> &layers,
                                  const SegmentOptions &options)
@@ -107,7 +151,7 @@ SegmentOutcome mergeSegmentation(const doc::PartSet::Snapshot &current, const QI
     QList<Target> targets;
     auto addTarget = [&](const QString &label, const QString &side, const QImage &mask, int stackIndex) {
         const doc::PartKind *kind = taxonomy.find(label);
-        const QString tag = kind ? kind->tag : normalizedLabel(label);
+        const QString tag = kind ? kind->tag : normalizePartLabel(label);
         if (tag.isEmpty())
             return;
         if (options.scope == SegmentScope::SelectedKinds && !options.kinds.isEmpty() && !options.kinds.contains(tag))

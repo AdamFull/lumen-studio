@@ -328,6 +328,10 @@ const PartKind *PartTaxonomy::find(const QString &tagOrAlias) const
                 return &k;
         }
     }
+    for (const PartKind &k : kinds) {
+        if (normalizedTag(k.name) == t)
+            return &k;
+    }
     return nullptr;
 }
 

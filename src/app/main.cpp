@@ -32,7 +32,7 @@ int main(int argc, char *argv[])
     QCommandLineOption projectOpt(QStringLiteral("project"), QStringLiteral("Open this project file."), QStringLiteral("path"));
     QCommandLineOption screenshotOpt(QStringLiteral("screenshot"), QStringLiteral("Render the window to a PNG and quit."), QStringLiteral("path"));
     QCommandLineOption pageOpt(QStringLiteral("page"), QStringLiteral("Page to show (create, generate, editor, poses, parts, library)."), QStringLiteral("name"));
-    QCommandLineOption imageOpt(QStringLiteral("image"), QStringLiteral("Open an image in the editor."), QStringLiteral("path"));
+    QCommandLineOption imageOpt(QStringLiteral("image"), QStringLiteral("Open an image (or layered PSD) in the editor."), QStringLiteral("path"));
     QCommandLineOption sizeOpt(QStringLiteral("size"), QStringLiteral("Window size WxH (screenshot mode)."), QStringLiteral("size"));
     QCommandLineOption sliceOpt(QStringLiteral("slice"), QStringLiteral("Start a part slicing session (Live2D) for this image."), QStringLiteral("path"));
     QCommandLineOption sliceStepOpt(QStringLiteral("slice-step"),
@@ -74,13 +74,8 @@ int main(int argc, char *argv[])
                                             {QStringLiteral("parts"), ui::Page::Parts}};
     if (pages.contains(page))
         window.showPage(pages.value(page));
-    if (parser.isSet(imageOpt)) {
-        QImageReader reader(parser.value(imageOpt));
-        reader.setAutoTransform(true);
-        const QImage img = reader.read();
-        if (!img.isNull())
-            studio.openImageAsDocument(img, QFileInfo(parser.value(imageOpt)).completeBaseName());
-    }
+    if (parser.isSet(imageOpt))
+        studio.openFile(QFileInfo(parser.value(imageOpt)).absoluteFilePath());
     if (parser.isSet(sliceOpt)) {
         const QString file = QFileInfo(parser.value(sliceOpt)).absoluteFilePath();
         const int step = parser.value(sliceStepOpt).toInt();

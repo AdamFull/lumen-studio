@@ -326,41 +326,46 @@ bool unpackBits(const uchar *&src, const uchar *end, uchar *dst, int length)
 
 // ---- Writing ------------------------------------------------------------------------------------
 
+QList<ResolvedLayer> resolvedLayers(const File &file)
+{
+    QList<ResolvedLayer> out;
+    struct Group
+    {
+        bool visible;
+        double opacity;
+        QString path;
+    };
+    QList<Group> stack;
+    Group current{true, 1.0, QString()};
+    for (const Layer &l : file.layers) {
+        switch (l.kind) {
+        case Layer::Kind::GroupBegin:
+            stack.append(current);
+            current.visible = current.visible && l.visible;
+            current.opacity *= l.opacity / 255.0;
+            current.path = current.path.isEmpty() ? l.name : current.path + QLatin1Char('/') + l.name;
+            break;
+        case Layer::Kind::GroupEnd:
+            if (!stack.isEmpty())
+                current = stack.takeLast();
+            break;
+        case Layer::Kind::Pixels:
+            out.append(ResolvedLayer{&l, current.path, current.visible && l.visible, current.opacity * l.opacity / 255.0});
+            break;
+        }
+    }
+    return out;
+}
+
 QImage flatten(const File &file)
 {
     QImage out(file.size, QImage::Format_ARGB32_Premultiplied);
     out.fill(Qt::transparent);
-    struct Item
-    {
-        const Layer *layer;
-        double opacity;
-    };
-    QList<Item> items;
-    QList<std::pair<bool, double>> groups; // visible, opacity
-    bool visible = true;
-    double opacity = 1.0;
-    for (const Layer &l : file.layers) {
-        switch (l.kind) {
-        case Layer::Kind::GroupBegin:
-            groups.append({visible, opacity});
-            visible = visible && l.visible;
-            opacity *= l.opacity / 255.0;
-            break;
-        case Layer::Kind::GroupEnd:
-            if (!groups.isEmpty()) {
-                visible = groups.last().first;
-                opacity = groups.last().second;
-                groups.removeLast();
-            }
-            break;
-        case Layer::Kind::Pixels:
-            if (visible && l.visible && !l.image.isNull())
-                items.append({&l, opacity * l.opacity / 255.0});
-            break;
-        }
-    }
+    const QList<ResolvedLayer> layers = resolvedLayers(file);
     QPainter p(&out);
-    for (auto it = items.crbegin(); it != items.crend(); ++it) {
+    for (auto it = layers.crbegin(); it != layers.crend(); ++it) {
+        if (!it->visible || it->layer->image.isNull())
+            continue;
         p.setOpacity(it->opacity);
         p.drawImage(it->layer->offset, it->layer->image);
     }
@@ -433,7 +438,8 @@ QByteArray toBytes(const File &file)
         const bool isFolder = l->kind == Layer::Kind::GroupBegin;
         const bool isDivider = l->kind == Layer::Kind::GroupEnd;
         w.raw("8BIM", 4);
-        w.raw(isFolder ? "pass" : "norm", 4);
+        const QByteArray blend = l->blendKey.size() == 4 && !isFolder && !isDivider ? l->blendKey : QByteArray(isFolder ? "pass" : "norm");
+        w.raw(blend);
         w.u8(quint8(std::clamp(l->opacity, 0, 255)));
         w.u8(0); // clipping
         quint8 flags = 0;
@@ -568,6 +574,9 @@ std::optional<File> read(QIODevice *device, QString *error)
                 bool visible = true;
                 QString name;
                 quint32 section = SectionOther;
+                QByteArray blend = "norm";
+                bool clipped = false;
+                bool hasMask = false;
             };
             QList<Record> records;
             for (int i = 0; i < count && r.ok(); ++i) {
@@ -579,14 +588,17 @@ std::optional<File> read(QIODevice *device, QString *error)
                     const qint16 id = r.i16();
                     rec.channels.append({id, r.u32()});
                 }
-                r.skip(8); // blend signature + key
+                r.skip(4); // blend signature
+                rec.blend = r.bytes(4);
                 rec.opacity = r.u8();
-                r.u8();    // clipping
+                rec.clipped = r.u8() != 0;
                 rec.visible = !(r.u8() & 0x02);
                 r.u8();    // filler
                 const quint32 extraLength = r.u32();
                 const qsizetype extraEnd = r.pos() + extraLength;
-                r.skip(r.u32()); // layer mask
+                const quint32 maskLength = r.u32();
+                rec.hasMask = maskLength > 0;
+                r.skip(maskLength);
                 r.skip(r.u32()); // blending ranges
                 const int nameLength = r.u8();
                 rec.name = QString::fromLatin1(r.bytes(nameLength));
@@ -617,6 +629,9 @@ std::optional<File> read(QIODevice *device, QString *error)
                 layer.name = rec.name;
                 layer.opacity = rec.opacity;
                 layer.visible = rec.visible;
+                layer.blendKey = rec.blend;
+                layer.clipped = rec.clipped;
+                layer.hasMask = rec.hasMask;
                 QHash<qint16, QByteArray> planes;
                 bool ok = true;
                 for (const auto &[id, length] : rec.channels) {

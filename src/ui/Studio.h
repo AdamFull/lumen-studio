@@ -50,6 +50,10 @@ public:
     void setActiveDocument(doc::Document *doc);
     doc::Document *newDocument(const QSize &size, const QString &name, const QColor &background = Qt::white);
     doc::Document *openImageAsDocument(const QImage &image, const QString &name, const QJsonObject &meta = {});
+    // Opens an image file as a document; layered PSD files keep their layers.
+    void openFile(const QString &path);
+    void openPsdAsDocument(const QString &path);
+    static QString openFileFilter();
     void openStoredDocument(const QString &documentId);
     void openAssetInEditor(const QString &assetId);
     void closeDocument(doc::Document *doc);

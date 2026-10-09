@@ -68,6 +68,9 @@ public:
     ImageProvider *layerDiffuseProvider(const QString &preferredId, QString *templateId = nullptr) const;
 
     Job *segment(doc::PartSet *set, const QString &providerId, const parts::SegmentOptions &options);
+    // Parts from ready-made RGBA layers (e.g. a layered PSD): masks by stacking order, layers kept
+    // as model layers so the "decomposition" completion turns them into results.
+    Job *applyLayers(doc::PartSet *set, const QList<parts::SegmentLayer> &layers, const parts::SegmentOptions &options);
     // Local segmentation from a body skeleton (no model needed).
     Job *segmentWithSkeleton(doc::PartSet *set, const pose::Person &skeleton, const parts::SegmentOptions &options);
     // One job per part; parts without pixels are skipped.

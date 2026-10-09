@@ -1,6 +1,8 @@
 #include "ui/Studio.h"
 
 #include "ai/ProviderCatalog.h"
+#include "core/Async.h"
+#include "doc/PsdIO.h"
 #include "core/Error.h"
 #include "core/ImageOps.h"
 #include "core/Log.h"
@@ -9,6 +11,7 @@
 
 #include <QDir>
 #include <QFileInfo>
+#include <QImageReader>
 #include <QPainter>
 
 namespace lumen::ui {
@@ -154,6 +157,51 @@ doc::Document *Studio::openImageAsDocument(const QImage &image, const QString &n
     adoptDocument(doc);
     showPage(Page::Editor);
     return doc;
+}
+
+QString Studio::openFileFilter()
+{
+    return tr("Images (*.png *.jpg *.jpeg *.webp *.bmp *.tif *.tiff *.psd);;Layered Photoshop (*.psd)");
+}
+
+void Studio::openFile(const QString &path)
+{
+    if (QFileInfo(path).suffix().compare(QLatin1String("psd"), Qt::CaseInsensitive) == 0) {
+        openPsdAsDocument(path);
+        return;
+    }
+    QImageReader reader(path);
+    reader.setAutoTransform(true);
+    const QImage image = reader.read();
+    if (image.isNull())
+        notify(tr("Cannot open %1: %2").arg(QFileInfo(path).fileName(), reader.errorString()), QStringLiteral("error"));
+    else
+        openImageAsDocument(image, QFileInfo(path).completeBaseName());
+}
+
+void Studio::openPsdAsDocument(const QString &path)
+{
+    const QString name = QFileInfo(path).completeBaseName();
+    notify(tr("Opening %1...").arg(QFileInfo(path).fileName()));
+    async::run([path] { return doc::importPsd(path); })
+        .then(this, [this, name](doc::PsdImport imported) {
+            if (imported.layers.isEmpty()) {
+                openImageAsDocument(imported.composite, name);
+                return;
+            }
+            auto *d = new doc::Document(imported.size);
+            d->setName(name);
+            for (int i = 0; i < imported.layers.size(); ++i)
+                d->insertLayerRaw(i, imported.layers[i]);
+            d->setActiveLayer(imported.layers.last()->id);
+            d->undoStack()->clear();
+            d->setModified(false);
+            adoptDocument(d);
+            showPage(Page::Editor);
+            if (!imported.warnings.isEmpty())
+                notify(tr("Opened %1 (%2).").arg(name, imported.warnings.join(QStringLiteral("; "))), QStringLiteral("warning"));
+        })
+        .onFailed(this, [this](const std::exception &e) { notify(describeException(e), QStringLiteral("error")); });
 }
 
 void Studio::openAssetInEditor(const QString &assetId)

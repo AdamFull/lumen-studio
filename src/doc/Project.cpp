@@ -4,6 +4,7 @@
 #include "core/ImageOps.h"
 #include "core/Log.h"
 #include "core/PngText.h"
+#include "core/Psd.h"
 
 #include <QBuffer>
 #include <QFile>
@@ -268,6 +269,14 @@ QFuture<AssetInfo> Project::importFile(const QString &filePath, AssetKind kind)
                    throw StoreError(QObject::tr("Cannot open %1: %2").arg(filePath, file.errorString()));
                const QByteArray bytes = file.readAll();
                QImage image = img::normalized(img::decode(bytes));
+               // Layered Photoshop files import their merged image.
+               if (image.isNull() && bytes.startsWith("8BPS")) {
+                   QBuffer buffer;
+                   buffer.setData(bytes);
+                   buffer.open(QIODevice::ReadOnly);
+                   if (const auto psdFile = psd::read(&buffer))
+                       image = img::normalized(psdFile->composite.isNull() ? psd::flatten(*psdFile) : psdFile->composite);
+               }
                if (image.isNull())
                    throw StoreError(QObject::tr("Unsupported or damaged image: %1").arg(filePath));
                QJsonObject meta;

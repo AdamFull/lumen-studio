@@ -3,6 +3,8 @@
 #include "core/Async.h"
 #include "core/Error.h"
 #include "core/ImageOps.h"
+#include "core/Psd.h"
+#include "doc/PsdIO.h"
 #include "ui/Icons.h"
 #include "ui/Studio.h"
 #include "ui/Theme.h"
@@ -400,13 +402,19 @@ void EditorPage::exportImage()
         return;
     QString filter;
     const QString path = QFileDialog::getSaveFileName(this, tr("Export image"), m_doc->name() + QStringLiteral(".png"),
-                                                      tr("PNG (*.png);;JPEG (*.jpg *.jpeg);;WebP (*.webp)"), &filter);
+                                                      tr("PNG (*.png);;JPEG (*.jpg *.jpeg);;WebP (*.webp);;Layered Photoshop (*.psd)"), &filter);
     if (path.isEmpty())
         return;
     const doc::DocumentSnapshot snap = m_doc->snapshot();
     const QSize size = m_doc->size();
     const QString suffix = QFileInfo(path).suffix().toLower();
     async::run([snap, size, path, suffix] {
+        if (suffix == QLatin1String("psd")) {
+            QString error;
+            if (!psd::write(path, doc::exportPsd(snap, size), &error))
+                throw Error(error);
+            return;
+        }
         const QImage img = doc::flatten(snap, size);
         const QByteArray fmt = suffix == QLatin1String("jpg") || suffix == QLatin1String("jpeg") ? QByteArray("JPEG") : suffix.toUpper().toLatin1();
         const QByteArray bytes = img::encode(img, fmt.isEmpty() ? "PNG" : fmt.constData(), fmt == "PNG" ? 6 : 95);
@@ -505,11 +513,7 @@ void EditorPage::dropEvent(QDropEvent *e)
         for (const QUrl &url : m->urls()) {
             if (!url.isLocalFile())
                 continue;
-            QImageReader reader(url.toLocalFile());
-            reader.setAutoTransform(true);
-            const QImage img = reader.read();
-            if (!img.isNull())
-                m_studio->openImageAsDocument(img, QFileInfo(url.toLocalFile()).completeBaseName());
+            m_studio->openFile(url.toLocalFile());
         }
     } else if (m->hasImage()) {
         m_studio->openImageAsDocument(qvariant_cast<QImage>(m->imageData()), tr("Dropped image"));

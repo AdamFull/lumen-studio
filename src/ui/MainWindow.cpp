@@ -352,17 +352,9 @@ void MainWindow::openProject()
 
 void MainWindow::openImages()
 {
-    const QStringList files = QFileDialog::getOpenFileNames(this, tr("Open images"), QString(),
-                                                            tr("Images (*.png *.jpg *.jpeg *.webp *.bmp *.tif *.tiff)"));
-    for (const QString &f : files) {
-        QImageReader reader(f);
-        reader.setAutoTransform(true);
-        const QImage img = reader.read();
-        if (img.isNull())
-            m_studio->notify(tr("Cannot open %1: %2").arg(QFileInfo(f).fileName(), reader.errorString()), QStringLiteral("error"));
-        else
-            m_studio->openImageAsDocument(img, QFileInfo(f).completeBaseName());
-    }
+    const QStringList files = QFileDialog::getOpenFileNames(this, tr("Open images"), QString(), Studio::openFileFilter());
+    for (const QString &f : files)
+        m_studio->openFile(f);
 }
 
 void MainWindow::importToLibrary()
@@ -370,8 +362,7 @@ void MainWindow::importToLibrary()
     doc::Project *project = m_studio->project();
     if (!project || !project->isOpen())
         return;
-    const QStringList files = QFileDialog::getOpenFileNames(this, tr("Import images"), QString(),
-                                                            tr("Images (*.png *.jpg *.jpeg *.webp *.bmp *.tif *.tiff)"));
+    const QStringList files = QFileDialog::getOpenFileNames(this, tr("Import images"), QString(), Studio::openFileFilter());
     for (const QString &f : files) {
         project->importFile(f).then([](doc::AssetInfo) {}).onFailed(this, [this](const std::exception &e) {
             m_studio->notify(describeException(e), QStringLiteral("error"));

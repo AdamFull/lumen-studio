@@ -25,6 +25,9 @@ struct Layer
     int opacity = 255;
     bool visible = true;
     bool groupOpen = true; // GroupBegin only
+    QByteArray blendKey = "norm"; // Photoshop blend mode key ("norm", "mul ", "scrn", ...)
+    bool clipped = false;         // clipping mask onto the layer below (read only)
+    bool hasMask = false;         // the layer had a layer mask (read only; masks are not applied)
 
     static Layer pixels(const QString &name, const QImage &image, const QPoint &offset = {})
     {
@@ -68,6 +71,17 @@ std::optional<File> read(const QString &path, QString *error = nullptr);
 // PackBits encoding of one row (exposed for tests).
 QByteArray packBits(const uchar *data, int length);
 bool unpackBits(const uchar *&src, const uchar *end, uchar *dst, int length);
+
+// Pixel layers with their groups resolved (top-to-bottom): effective visibility and opacity, and
+// the group path ("Head/Eyes").
+struct ResolvedLayer
+{
+    const Layer *layer = nullptr;
+    QString groupPath;
+    bool visible = true;
+    double opacity = 1.0;
+};
+QList<ResolvedLayer> resolvedLayers(const File &file);
 
 // Flattens the pixel layers (respecting visibility and opacity, normal blending) onto a transparent canvas.
 QImage flatten(const File &file);

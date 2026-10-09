@@ -90,6 +90,7 @@ private slots:
     void comfySegmentationTemplate();
     void expressionVariant();
     void layerDiffuseCompletion();
+    void psdLayersBecomeParts();
 
 private:
     net::HttpClient m_http;
@@ -704,6 +705,84 @@ void TestSlicing::layerDiffuseCompletion()
     QVERIFY(!result.isNull());
     QVERIFY(parts::hasTransparency(result));
     QFile::remove(registry.configPath());
+}
+
+void TestSlicing::psdLayersBecomeParts()
+{
+    QCOMPARE(parts::splitSide(QStringLiteral("Upper arm L")), (std::pair<QString, QString>{QStringLiteral("Upper arm"), QStringLiteral("L")}));
+    QCOMPARE(parts::splitSide(QStringLiteral("arm_R")).second, QStringLiteral("R"));
+    QCOMPARE(parts::splitSide(QStringLiteral("Hair")).second, QString());
+
+    // A layered file as exported by Lumen (front-most first) plus a hidden original.
+    const QSize size(200, 300);
+    psd::File f;
+    f.size = size;
+    QImage face = rgbaLayer(size, QRect(90, 20, 60, 70), QColor(250, 220, 200));
+    QImage armL = rgbaLayer(size, QRect(150, 110, 40, 20), QColor(240, 200, 180));
+    QImage armR = rgbaLayer(size, QRect(10, 110, 40, 20), QColor(240, 200, 180));
+    QImage torso = rgbaLayer(size, QRect(50, 85, 100, 140), QColor(60, 90, 170)); // continues under the face
+    psd::Layer original = psd::Layer::pixels(QStringLiteral("Original"), figure());
+    original.visible = false;
+    f.layers = {psd::Layer::pixels(QStringLiteral("Face"), face), psd::Layer::pixels(QStringLiteral("Upper arm L"), armL),
+                psd::Layer::pixels(QStringLiteral("Upper arm R"), armR), psd::Layer::pixels(QStringLiteral("Topwear / torso"), torso), original};
+    int skipped = 0;
+    const QList<parts::SegmentLayer> layers = parts::layersFromPsd(f, &skipped);
+    QCOMPARE(skipped, 1);
+    QCOMPARE(layers.size(), 4);
+    QCOMPARE(layers.first().label, QStringLiteral("Topwear / torso")); // bottom first
+    QCOMPARE(layers.last().label, QStringLiteral("Face"));
+    QCOMPARE(layers[1].side, QStringLiteral("R"));
+
+    QTemporaryDir dir;
+    doc::Project project;
+    auto opened = project.open(dir.filePath(QStringLiteral("p.lumen")));
+    QTRY_VERIFY(opened.isFinished());
+    ProviderRegistry registry(&m_http);
+    JobQueue queue;
+    GenerationService generation(&registry, &queue);
+    generation.setProject(&project);
+    PartService service(&registry, &queue, &generation);
+
+    QImage composite(size, QImage::Format_ARGB32_Premultiplied);
+    composite.fill(Qt::transparent);
+    QPainter p(&composite);
+    for (const parts::SegmentLayer &l : layers)
+        p.drawImage(0, 0, l.image);
+    p.end();
+    PartSet set;
+    set.bind(&project);
+    set.setSource(composite, QStringLiteral("src"), img::silhouetteMask(composite));
+    parts::SegmentOptions options;
+    options.clipToSilhouette = false;
+    options.minIsland = 4;
+    Job *job = service.applyLayers(&set, layers, options);
+    QTRY_VERIFY_WITH_TIMEOUT(job->isFinished(), 10000);
+    QVERIFY2(job->state() == Job::State::Succeeded, qPrintable(job->errorString()));
+    QCOMPARE(set.parts().size(), 4);
+    QStringList kinds;
+    for (const doc::Part &part : set.parts())
+        kinds << part.tag + part.side;
+    kinds.sort();
+    QCOMPARE(kinds, (QStringList{QStringLiteral("face"), QStringLiteral("topwear"), QStringLiteral("upper armL"), QStringLiteral("upper armR")}));
+
+    QList<int> labels;
+    for (const doc::Part &part : set.parts())
+        labels << part.label;
+    CompletionOptions completion;
+    completion.strategy = CompletionStrategy::Decomposition;
+    const QList<Job *> jobs = service.complete(&set, labels, completion);
+    QCOMPARE(jobs.size(), 4);
+    for (Job *j : jobs) {
+        QTRY_VERIFY_WITH_TIMEOUT(j->isFinished(), 10000);
+        QVERIFY2(j->state() == Job::State::Succeeded, qPrintable(j->errorString()));
+    }
+    // The torso result is the whole layer, including the area hidden behind the face.
+    const int torsoLabel = labelAt(set, 100, 200);
+    QCOMPARE(set.part(torsoLabel)->tag, QStringLiteral("topwear"));
+    QCOMPARE(set.part(torsoLabel)->chosenRect(), QRect(50, 85, 100, 140));
+    // Each arm only gets its own layer.
+    const int armLLabel = labelAt(set, 170, 120);
+    QCOMPARE(set.part(armLLabel)->chosenRect(), QRect(150, 110, 40, 20));
 }
 
 QTEST_MAIN(TestSlicing)

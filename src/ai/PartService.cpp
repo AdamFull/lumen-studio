@@ -166,6 +166,22 @@ Job *PartService::segment(doc::PartSet *setIn, const QString &providerId, const 
     return job;
 }
 
+Job *PartService::applyLayers(doc::PartSet *setIn, const QList<parts::SegmentLayer> &layers, const parts::SegmentOptions &optionsIn)
+{
+    QPointer<doc::PartSet> set(setIn);
+    QPointer<PartService> self(this);
+    parts::SegmentOptions options = optionsIn;
+    if (options.provenance.isEmpty())
+        options.provenance = QStringLiteral("layers");
+    return m_queue->submit(tr("Import part layers"), kLocalGroup, [self, set, layers, options](Job *job) {
+        if (!self || !set || !set->hasSource()) {
+            job->fail(tr("The part set is no longer open"));
+            return;
+        }
+        self->applySegmentation(job, set, layers, options, QJsonObject{{QStringLiteral("source"), QStringLiteral("layers")}});
+    }, QStringLiteral("parts"));
+}
+
 Job *PartService::segmentWithSkeleton(doc::PartSet *setIn, const pose::Person &skeleton, const parts::SegmentOptions &optionsIn)
 {
     QPointer<doc::PartSet> set(setIn);
@@ -262,7 +278,7 @@ void PartService::applySegmentation(Job *job, QPointer<doc::PartSet> set, QList<
         const doc::PartTaxonomy taxonomy = set->taxonomy();
         for (const parts::SegmentLayer &l : std::as_const(rgba)) {
             const doc::PartKind *kind = taxonomy.find(l.label);
-            const QString tag = kind ? kind->tag : l.label;
+            const QString tag = kind ? kind->tag : parts::normalizePartLabel(l.label);
             const QImage layerImage = l.image;
             async::run([layerImage] {
                 QImage cropped = img::normalized(layerImage);
@@ -289,7 +305,8 @@ void PartService::applySegmentation(Job *job, QPointer<doc::PartSet> set, QList<
                                                    {QStringLiteral("x"), cropped.second.x()},
                                                    {QStringLiteral("y"), cropped.second.y()},
                                                    {QStringLiteral("order"), l.order},
-                                                   {QStringLiteral("depth"), l.depth}});
+                                                   {QStringLiteral("depth"), l.depth},
+                                                   {QStringLiteral("side"), l.side}});
                         pending->decomposition.insert(tag, entries);
                         finishOne();
                     });
@@ -378,6 +395,20 @@ QList<Job *> PartService::complete(doc::PartSet *setIn, const QList<int> &labels
                         job->fail(tr("No model layer for \"%1\". Run a model segmentation (see-through) first or use Inpaint.").arg(part.displayName()));
                         return;
                     }
+                    // A layer made for exactly this part (same side, or the only part of its kind) is used
+                    // whole; shared layers (e.g. both arms in one model layer) are limited to the part's area.
+                    QJsonArray sided;
+                    for (const QJsonValue &v : entries) {
+                        if (v.toObject().value(QStringLiteral("side")).toString() == part.side)
+                            sided.append(v);
+                    }
+                    int sameKind = 0;
+                    for (const doc::Part &o : set->parts())
+                        sameKind += (set->taxonomy().find(o.tag) ? set->taxonomy().find(o.tag)->tag : o.tag) == tag;
+                    const bool exact = !sided.isEmpty() && (!part.side.isEmpty() || sameKind == 1);
+                    if (exact)
+                        entries = sided;
+                    const QImage clip = exact ? img::createMask(source.size(), 255) : extension;
                     QPointer<doc::Project> project = self->m_generation->project();
                     if (!project) {
                         job->fail(tr("No project is open"));
@@ -389,12 +420,12 @@ QList<Job *> PartService::complete(doc::PartSet *setIn, const QList<int> &labels
                     for (const QJsonValue &v : entries) {
                         const QJsonObject e = v.toObject();
                         project->loadImage(e.value(QStringLiteral("asset")).toString())
-                            .then(job, [self, job, set, label, partId, meta, source, visible, extension, images, remaining, e](QImage img) {
+                            .then(job, [self, job, set, label, partId, meta, source, visible, clip, images, remaining, e](QImage img) {
                                 images->append({e, img});
                                 if (--*remaining > 0)
                                     return;
                                 const QList<std::pair<QJsonObject, QImage>> all = *images;
-                                async::run([all, source, visible, extension] {
+                                async::run([all, source, visible, clip] {
                                     QImage layer(source.size(), QImage::Format_ARGB32_Premultiplied);
                                     layer.fill(Qt::transparent);
                                     QList<std::pair<QJsonObject, QImage>> sorted = all;
@@ -405,7 +436,7 @@ QList<Job *> PartService::complete(doc::PartSet *setIn, const QList<int> &labels
                                     for (const auto &[entry, image] : sorted)
                                         painter.drawImage(QPoint(entry.value(QStringLiteral("x")).toInt(), entry.value(QStringLiteral("y")).toInt()), image);
                                     painter.end();
-                                    return parts::partFromLayer(layer, source, visible, extension);
+                                    return parts::partFromLayer(layer, source, visible, clip);
                                 }).then(job, [self, job, set, label, partId, meta](QImage layer) {
                                     if (self)
                                         self->storeResult(job, set, label, partId, layer, meta);

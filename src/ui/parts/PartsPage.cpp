@@ -6,6 +6,7 @@
 #include "core/ImageOps.h"
 #include "core/JobQueue.h"
 #include "core/MaskOps.h"
+#include "core/Psd.h"
 #include "core/Settings.h"
 #include "doc/Document.h"
 #include "doc/Project.h"
@@ -517,6 +518,10 @@ QWidget *PartsPage::buildSourcePanel()
     row->addWidget(open);
     row->addWidget(editor);
     v->addLayout(row);
+    auto *layered = new QPushButton(Icons::get(QStringLiteral("layers")), tr("Open layered PSD..."), w);
+    layered->setToolTip(tr("Start from a layered PSD (see-through output, a previous export or hand-made parts): every visible "
+                           "layer becomes a part with its complete drawing."));
+    v->addWidget(layered);
     m_removeBg = new QPushButton(Icons::get(QStringLiteral("scissors")), tr("Remove background"), w);
     m_removeBg->setToolTip(tr("Makes the background transparent with a background-removal provider; the character "
                               "silhouette then guides every mask."));
@@ -546,6 +551,7 @@ QWidget *PartsPage::buildSourcePanel()
     v->addWidget(next);
 
     connect(open, &QPushButton::clicked, this, &PartsPage::chooseSourceFile);
+    connect(layered, &QPushButton::clicked, this, [this] { openLayeredPsd(); });
     connect(editor, &QPushButton::clicked, this, &PartsPage::useEditorImage);
     connect(m_removeBg, &QPushButton::clicked, this, &PartsPage::removeBackground);
     connect(presets, &QPushButton::clicked, this, [this] { m_studio->showPage(Page::Poses); });
@@ -1077,6 +1083,96 @@ void PartsPage::chooseSourceFile()
         });
 }
 
+void PartsPage::openLayeredPsd(const QString &pathIn)
+{
+    doc::Project *project = m_studio->project();
+    if (!project)
+        return;
+    QString path = pathIn;
+    if (path.isEmpty()) {
+        const QString dir = Settings::instance().value(QStringLiteral("parts/exportDir"),
+                                                       QStandardPaths::writableLocation(QStandardPaths::PicturesLocation)).toString();
+        path = QFileDialog::getOpenFileName(this, tr("Open layered PSD"), dir, tr("Layered Photoshop (*.psd)"));
+        if (path.isEmpty())
+            return;
+    }
+    struct Loaded
+    {
+        QImage composite;
+        QImage silhouette;
+        QList<ai::parts::SegmentLayer> layers;
+        int skipped = 0;
+    };
+    m_studio->notify(tr("Reading %1...").arg(QFileInfo(path).fileName()));
+    QPointer<PartsPage> self(this);
+    QPointer<doc::Project> guard(project);
+    const QString name = QFileInfo(path).completeBaseName();
+    async::run([path] {
+        QString error;
+        const std::optional<psd::File> file = psd::read(path, &error);
+        if (!file)
+            throw Error(QObject::tr("Cannot open %1: %2").arg(QFileInfo(path).fileName(), error));
+        Loaded l;
+        l.layers = ai::parts::layersFromPsd(*file, &l.skipped);
+        if (l.layers.isEmpty())
+            throw Error(QObject::tr("%1 has no visible pixel layers.").arg(QFileInfo(path).fileName()));
+        // The parts define the character: composite of the imported (visible) layers.
+        l.composite = QImage(file->size, QImage::Format_ARGB32_Premultiplied);
+        l.composite.fill(Qt::transparent);
+        QPainter p(&l.composite);
+        for (const ai::parts::SegmentLayer &s : std::as_const(l.layers))
+            p.drawImage(0, 0, s.image);
+        p.end();
+        l.silhouette = img::silhouetteMask(l.composite);
+        return l;
+    }).then(this, [self, guard, name](Loaded loaded) {
+        if (!self || !guard)
+            return;
+        guard->addAsset(loaded.composite, doc::AssetKind::Reference, name, QJsonObject{{QStringLiteral("source"), QStringLiteral("psd")}})
+            .then(self, [self, loaded, name](doc::AssetInfo info) {
+                if (!self)
+                    return;
+                self->newSession();
+                doc::PartSet *set = self->m_set;
+                set->setName(name);
+                set->setSource(loaded.composite, info.id, loaded.silhouette);
+                ai::parts::SegmentOptions options;
+                options.clipToSilhouette = false;
+                options.minIsland = 4;
+                options.provenance = QStringLiteral("psd");
+                Job *job = self->m_studio->parts()->applyLayers(set, loaded.layers, options);
+                const int skipped = loaded.skipped;
+                QPointer<doc::PartSet> setGuard(set);
+                connect(job, &Job::finished, self, [self, setGuard, skipped](Job *j) {
+                    if (!self || !setGuard)
+                        return;
+                    if (j->state() != Job::State::Succeeded) {
+                        if (j->state() == Job::State::Failed)
+                            self->m_studio->notify(j->errorString(), QStringLiteral("error"));
+                        return;
+                    }
+                    // Every layer is already a complete drawing: turn the layers into results.
+                    QList<int> labels;
+                    for (const doc::Part &p : setGuard->parts())
+                        labels.append(p.label);
+                    ai::CompletionOptions completion;
+                    completion.strategy = ai::CompletionStrategy::Decomposition;
+                    self->m_studio->parts()->complete(setGuard, labels, completion);
+                    QString msg = tr("Imported %n part layer(s).", nullptr, int(labels.size()));
+                    if (skipped)
+                        msg += QLatin1Char(' ') + tr("%n hidden layer(s) skipped.", nullptr, skipped);
+                    self->m_studio->notify(msg, QStringLiteral("success"));
+                    self->setStep(GenerateStep);
+                });
+                self->setStep(MasksStep);
+                self->m_canvas->fitToView();
+            });
+    }).onFailed(this, [self](const std::exception &e) {
+        if (self)
+            self->m_studio->notify(describeException(e), QStringLiteral("error"));
+    });
+}
+
 void PartsPage::useEditorImage()
 {
     doc::Document *d = m_studio->activeDocument();
@@ -1204,6 +1300,11 @@ void PartsPage::dropEvent(QDropEvent *e)
         const QString file = mime->urls().first().toLocalFile();
         if (file.isEmpty())
             return;
+        if (file.endsWith(QLatin1String(".psd"), Qt::CaseInsensitive)) {
+            openLayeredPsd(file);
+            e->acceptProposedAction();
+            return;
+        }
         QPointer<PartsPage> self(this);
         m_studio->project()->importFile(file, doc::AssetKind::Reference).then(this, [self](doc::AssetInfo info) {
             if (self)

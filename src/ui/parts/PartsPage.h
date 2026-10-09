@@ -75,6 +75,7 @@ private:
 
     // Source.
     void chooseSourceFile();
+    void openLayeredPsd(const QString &path = QString());
     void useEditorImage();
     void setSourceAsset(const QString &assetId, bool keepSession = false);
     void removeBackground();

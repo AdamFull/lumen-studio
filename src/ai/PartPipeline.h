@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/Psd.h"
 #include "doc/Parts.h"
 #include "pose/Skeleton.h"
 
@@ -48,6 +49,14 @@ struct SegmentOutcome
     QStringList unmatched; // model labels kept as custom parts
     QStringList empty;     // requested kinds that were not found
 };
+
+// Canonical spelling of model / layer labels ("Front_Hair" -> "front hair").
+QString normalizePartLabel(const QString &label);
+// Splits a trailing side marker from a layer name ("Upper arm L" -> {"Upper arm", "L"}).
+std::pair<QString, QString> splitSide(const QString &name);
+// Visible pixel layers of a PSD as segmentation layers (bottom to top). Hidden layers and a layer
+// named "Original" are skipped (counted in `skipped`).
+QList<SegmentLayer> layersFromPsd(const psd::File &file, int *skipped = nullptr);
 
 // Merges segmenter output into the current part set (see SegmentScope). Heavy; worker thread.
 SegmentOutcome mergeSegmentation(const doc::PartSet::Snapshot &current, const QImage &silhouette,

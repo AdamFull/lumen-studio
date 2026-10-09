@@ -2,7 +2,9 @@
 #include "core/PngText.h"
 #include "doc/Document.h"
 #include "doc/Project.h"
+#include "doc/PsdIO.h"
 
+#include <QBuffer>
 #include <QElapsedTimer>
 #include <QImageReader>
 #include <QPainter>
@@ -16,6 +18,8 @@ class TestDoc : public QObject
 {
     Q_OBJECT
 private slots:
+    void psdImportExport();
+    void projectImportsPsd();
     void addRemoveLayerUndo();
     void paintCommitUndo();
     void layerPropsMerge();
@@ -251,6 +255,79 @@ void TestDoc::projectRecords()
     auto list2 = project.records(QStringLiteral("pose"));
     QTRY_VERIFY(list2.isFinished());
     QCOMPARE(list2.result().size(), 0);
+}
+
+void TestDoc::psdImportExport()
+{
+    psd::File f;
+    f.size = QSize(40, 30);
+    QImage a(10, 10, QImage::Format_ARGB32);
+    a.fill(Qt::red);
+    QImage b(5, 5, QImage::Format_ARGB32);
+    b.fill(Qt::blue);
+    psd::Layer shade = psd::Layer::pixels(QStringLiteral("Shade"), a, QPoint(2, 3));
+    shade.blendKey = "mul ";
+    shade.opacity = 128;
+    psd::Layer hidden = psd::Layer::groupBegin(QStringLiteral("Extras"));
+    hidden.visible = false;
+    f.layers = {shade, hidden, psd::Layer::pixels(QStringLiteral("Star"), b, QPoint(30, 20)), psd::Layer::groupEnd(),
+                psd::Layer::pixels(QStringLiteral("Base"), a, QPoint(0, 0))};
+    QBuffer buffer;
+    buffer.open(QIODevice::ReadWrite);
+    QVERIFY(psd::write(&buffer, f));
+    buffer.seek(0);
+    const auto back = psd::read(&buffer);
+    QVERIFY(back.has_value());
+    QCOMPARE(back->layers[0].blendKey, QByteArray("mul "));
+
+    const doc::PsdImport imported = doc::importPsd(*back);
+    QCOMPARE(imported.size, QSize(40, 30));
+    QCOMPARE(imported.layers.size(), 3);
+    // Bottom first: Base, Star (inside the hidden group), Shade.
+    QCOMPARE(imported.layers[0]->props.name, QStringLiteral("Base"));
+    QCOMPARE(imported.layers[1]->props.name, QStringLiteral("Star"));
+    QVERIFY(!imported.layers[1]->props.visible);
+    QCOMPARE(imported.layers[1]->meta.value(QStringLiteral("psd_group")).toString(), QStringLiteral("Extras"));
+    QCOMPARE(imported.layers[1]->image.pixelColor(31, 21), QColor(Qt::blue)); // placed at its offset
+    QCOMPARE(imported.layers[2]->props.blend, doc::BlendMode::Multiply);
+    QVERIFY(std::abs(imported.layers[2]->props.opacity - 128 / 255.0) < 1e-6);
+    QVERIFY(imported.warnings.isEmpty());
+
+    // Export the stack again and read it back.
+    doc::DocumentSnapshot snap;
+    for (const doc::LayerPtr &l : imported.layers)
+        snap.append(doc::LayerSnapshot{l->image, l->props});
+    const psd::File out = doc::exportPsd(snap, imported.size);
+    QCOMPARE(out.layers.size(), 3);
+    QCOMPARE(out.layers[0].name, QStringLiteral("Shade")); // front-most first
+    QCOMPARE(out.layers[0].blendKey, QByteArray("mul "));
+    QCOMPARE(out.layers[0].opacity, 128);
+    QVERIFY(!out.layers[1].visible);
+    QCOMPARE(doc::blendModeFromPsdKey("lddg"), doc::BlendMode::Add);
+    bool known = true;
+    doc::blendModeFromPsdKey("vLit", &known);
+    QVERIFY(!known);
+}
+
+void TestDoc::projectImportsPsd()
+{
+    QTemporaryDir dir;
+    psd::File f;
+    f.size = QSize(16, 16);
+    QImage a(16, 16, QImage::Format_ARGB32);
+    a.fill(Qt::green);
+    f.layers = {psd::Layer::pixels(QStringLiteral("Fill"), a)};
+    const QString path = dir.filePath(QStringLiteral("layers.psd"));
+    QVERIFY(psd::write(path, f));
+    doc::Project project;
+    auto opened = project.open(dir.filePath(QStringLiteral("p.lumen")));
+    QTRY_VERIFY(opened.isFinished());
+    auto imported = project.importFile(path);
+    QTRY_VERIFY_WITH_TIMEOUT(imported.isFinished(), 5000);
+    QCOMPARE(imported.result().size, QSize(16, 16));
+    auto image = project.loadImage(imported.result().id);
+    QTRY_VERIFY(image.isFinished());
+    QCOMPARE(image.result().pixelColor(5, 5), QColor(Qt::green));
 }
 
 QTEST_MAIN(TestDoc)
