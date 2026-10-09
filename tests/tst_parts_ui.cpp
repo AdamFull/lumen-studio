@@ -281,6 +281,25 @@ void TestPartsUi::cubismViewAnimates()
     QSignalSpy frames(&view, &CubismView::framePresented);
     QTRY_VERIFY_WITH_TIMEOUT(frames.size() >= 3, 5000);
     QVERIFY(view.value(0) != 0.0f); // the Idle curve moves ParamAngleX
+    // Motion groups, played motions and expressions.
+    QCOMPARE(view.motionGroups(), (QStringList{QStringLiteral("Idle"), QStringLiteral("TapBody")}));
+    QCOMPARE(view.motionCount(QStringLiteral("Idle")), 2);
+    QCOMPARE(view.motionLabel(QStringLiteral("TapBody"), 0), QStringLiteral("tap"));
+    QCOMPARE(view.expressionNames(), QStringList{QStringLiteral("smile")});
+    QVERIFY(view.hasPose());
+    QSignalSpy motions(&view, &CubismView::motionChanged);
+    QVERIFY(!view.playMotion(QStringLiteral("TapBody"), 5, &error));
+    QVERIFY(view.playMotion(QStringLiteral("TapBody"), 0, &error));
+    QTRY_VERIFY_WITH_TIMEOUT(view.currentMotionGroup() == QLatin1String("TapBody") && std::abs(view.value(0) - 20.0f) < 0.5f, 3000);
+    QVERIFY(!motions.isEmpty());
+    // After the one-shot motion an idle motion takes over again.
+    QTRY_VERIFY_WITH_TIMEOUT(view.currentMotionGroup() == QLatin1String("Idle"), 4000);
+    QVERIFY(view.setExpression(QStringLiteral("smile"), &error));
+    QCOMPARE(view.currentExpression(), QStringLiteral("smile"));
+    QVERIFY(!view.setExpression(QStringLiteral("angry"), &error));
+    QVERIFY(view.setExpression(QString()));
+    QCOMPARE(view.currentExpression(), QString());
+
     // The fake model's physics3.json swings ParamHairFront while ParamAngleX moves.
     QVERIFY(view.hasPhysics());
     QTRY_VERIFY_WITH_TIMEOUT(std::abs(view.value(1)) > 0.02f, 5000);

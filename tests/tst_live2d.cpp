@@ -1,4 +1,5 @@
 #include "FakeCubismCore.h"
+#include "live2d/Animation.h"
 #include "live2d/CubismCore.h"
 #include "live2d/CubismModel.h"
 #include "live2d/CubismRenderer.h"
@@ -33,6 +34,9 @@ private slots:
     void physicsMath();
     void physicsPendulum();
     void physicsOutputs();
+    void motionPlayer();
+    void expressions();
+    void pose();
 
 private:
     QTemporaryDir m_dir;
@@ -62,6 +66,13 @@ void TestLive2D::modelSettings()
     QVERIFY(s->textures[1].endsWith(QStringLiteral("tex/blue.png")));
     QCOMPARE(QFileInfo(s->idleMotion()).fileName(), QStringLiteral("idle.motion3.json"));
     QCOMPARE(s->eyeBlinkIds, (QStringList{QStringLiteral("ParamEyeLOpen"), QStringLiteral("ParamEyeROpen")}));
+    QCOMPARE(s->motionGroups(), (QStringList{QStringLiteral("Idle"), QStringLiteral("TapBody")}));
+    QCOMPARE(s->motions.value(QStringLiteral("Idle")).size(), 2);
+    QCOMPARE(s->motions.value(QStringLiteral("TapBody")).first().fadeIn, 0.1);
+    QCOMPARE(s->motions.value(QStringLiteral("Idle")).first().fadeIn, -1.0);
+    QCOMPARE(s->expressions.size(), 1);
+    QCOMPARE(s->expressions.first().name, QStringLiteral("smile"));
+    QVERIFY(s->pose.endsWith(QStringLiteral("fake.pose3.json")));
     QVERIFY(!ModelSettings::fromJson(QJsonObject{}, m_dir.path(), &error).has_value());
     QVERIFY(!error.isEmpty());
 }
@@ -344,6 +355,199 @@ void TestLive2D::physicsOutputs()
         windy->evaluate(values, mins, maxs, defs, 1.0 / 30.0);
     }
     QVERIFY(std::abs(values[1]) > 0.05);
+}
+
+namespace {
+
+// Parameters and part opacities in plain maps.
+class MapTarget : public MotionTarget
+{
+public:
+    QHash<QString, float> params;
+    QHash<QString, float> parts;
+    QStringList eyes, lips;
+    bool hasParameter(const QString &id) const override { return params.contains(id); }
+    float parameter(const QString &id) const override { return params.value(id); }
+    void setParameter(const QString &id, float value) override { params.insert(id, value); }
+    void setPartOpacity(const QString &id, float value) override { parts.insert(id, value); }
+    QStringList eyeBlinkIds() const override { return eyes; }
+    QStringList lipSyncIds() const override { return lips; }
+};
+
+std::shared_ptr<const Motion> constantMotion(const QString &id, double value, double duration, bool loop, double fadeIn = -1,
+                                             double fadeOut = -1, QJsonArray extraCurves = {})
+{
+    QJsonObject meta{{QStringLiteral("Duration"), duration}, {QStringLiteral("Loop"), loop}};
+    if (fadeIn >= 0)
+        meta.insert(QStringLiteral("FadeInTime"), fadeIn);
+    if (fadeOut >= 0)
+        meta.insert(QStringLiteral("FadeOutTime"), fadeOut);
+    QJsonArray curves{QJsonObject{{QStringLiteral("Target"), QStringLiteral("Parameter")},
+                                  {QStringLiteral("Id"), id},
+                                  {QStringLiteral("Segments"), QJsonArray{0, value, 0, duration, value}}}};
+    for (const QJsonValue &c : extraCurves)
+        curves.append(c);
+    auto m = Motion::fromJson(QJsonObject{{QStringLiteral("Meta"), meta}, {QStringLiteral("Curves"), curves}});
+    return m ? std::make_shared<const Motion>(*m) : nullptr;
+}
+
+float applied(MotionPlayer &player, double now, float base = 0.0f)
+{
+    MapTarget t;
+    t.params.insert(QStringLiteral("P"), base);
+    player.update(now, t);
+    return t.params.value(QStringLiteral("P"));
+}
+
+} // namespace
+
+void TestLive2D::motionPlayer()
+{
+    QCOMPARE(easeSine(-1), 0.0);
+    QCOMPARE(easeSine(0.5), 0.5);
+    QCOMPARE(easeSine(2), 1.0);
+
+    // One-shot motion with 0.5 s fades: eases in, holds, eases out at its end.
+    MotionPlayer player;
+    MotionPlayer::Options once;
+    once.group = QStringLiteral("Tap");
+    once.index = 0;
+    QVERIFY(player.play(constantMotion(QStringLiteral("P"), 10, 2.0, false, 0.5, 0.5), 0.0, once));
+    QVERIFY(std::abs(applied(player, 0.25) - 5.0f) < 1e-4);
+    QVERIFY(std::abs(applied(player, 1.0) - 10.0f) < 1e-4);
+    QVERIFY(player.isPlaying(1.5));
+    QVERIFY(std::abs(applied(player, 1.75) - 5.0f) < 1e-4);
+    QCOMPARE(player.currentGroup(), QStringLiteral("Tap"));
+    applied(player, 2.0);
+    QVERIFY(!player.isPlaying(2.0));
+    QCOMPARE(player.activeCount(), 0);
+
+    // Crossfade: a looping motion fades out while the next one fades in (Cubism default fade 1 s).
+    MotionPlayer cross;
+    MotionPlayer::Options loop;
+    loop.loop = true;
+    loop.fadeIn = 0.0;
+    loop.fadeOut = 0.5;
+    cross.play(constantMotion(QStringLiteral("P"), 10, 1.0, true), 0.0, loop);
+    QCOMPARE(applied(cross, 0.9), 10.0f);
+    MotionPlayer::Options next;
+    QVERIFY(cross.play(constantMotion(QStringLiteral("P"), -10, 3.0, false), 1.0, next));
+    const double oldWeight = easeSine(0.25 / 0.5), newWeight = easeSine(0.25 / 1.0);
+    const double afterOld = 10.0 * oldWeight;
+    const double expected = afterOld + (-10.0 - afterOld) * newWeight;
+    QVERIFY(std::abs(applied(cross, 1.25) - expected) < 1e-4);
+    QCOMPARE(cross.activeCount(), 2);
+    applied(cross, 1.6); // the old motion has faded out
+    QCOMPARE(cross.activeCount(), 1);
+    QCOMPARE(applied(cross, 2.5), -10.0f);
+
+    // Priorities: an idle motion cannot replace a running normal one; force always plays.
+    MotionPlayer prio;
+    MotionPlayer::Options normal;
+    prio.play(constantMotion(QStringLiteral("P"), 1, 2.0, false), 0.0, normal);
+    MotionPlayer::Options idle;
+    idle.priority = MotionPlayer::Priority::Idle;
+    QVERIFY(!prio.play(constantMotion(QStringLiteral("P"), 2, 2.0, false), 0.5, idle));
+    MotionPlayer::Options force;
+    force.priority = MotionPlayer::Priority::Force;
+    QVERIFY(prio.play(constantMotion(QStringLiteral("P"), 3, 2.0, false), 0.5, force));
+    prio.stop(1.0);
+    QVERIFY(!prio.isPlaying(1.0));
+
+    // Model curves drive the eye-blink (multiply) and lip-sync (add) groups.
+    const QJsonArray modelCurves{
+        QJsonObject{{QStringLiteral("Target"), QStringLiteral("Model")}, {QStringLiteral("Id"), QStringLiteral("EyeBlink")},
+                    {QStringLiteral("Segments"), QJsonArray{0, 0, 0, 1, 0}}},
+        QJsonObject{{QStringLiteral("Target"), QStringLiteral("Model")}, {QStringLiteral("Id"), QStringLiteral("LipSync")},
+                    {QStringLiteral("Segments"), QJsonArray{0, 0.6, 0, 1, 0.6}}},
+        QJsonObject{{QStringLiteral("Target"), QStringLiteral("PartOpacity")}, {QStringLiteral("Id"), QStringLiteral("PartHat")},
+                    {QStringLiteral("Segments"), QJsonArray{0, 0, 0, 1, 0}}}};
+    MotionPlayer modelPlayer;
+    MotionPlayer::Options instant;
+    instant.fadeIn = 0;
+    instant.fadeOut = 0;
+    modelPlayer.play(constantMotion(QStringLiteral("P"), 1, 1.0, true, -1, -1, modelCurves), 0.0, instant);
+    MapTarget t;
+    t.params = {{QStringLiteral("P"), 0}, {QStringLiteral("EyeL"), 1}, {QStringLiteral("Mouth"), 0.1f}};
+    t.eyes = {QStringLiteral("EyeL")};
+    t.lips = {QStringLiteral("Mouth")};
+    modelPlayer.update(0.5, t);
+    QCOMPARE(t.params.value(QStringLiteral("EyeL")), 0.0f);
+    QVERIFY(std::abs(t.params.value(QStringLiteral("Mouth")) - 0.7f) < 1e-5);
+    QCOMPARE(t.parts.value(QStringLiteral("PartHat"), -1), 0.0f);
+}
+
+void TestLive2D::expressions()
+{
+    const QJsonObject json{{QStringLiteral("Type"), QStringLiteral("Live2D Expression")},
+                           {QStringLiteral("FadeInTime"), 0.5},
+                           {QStringLiteral("FadeOutTime"), 0.5},
+                           {QStringLiteral("Parameters"),
+                            QJsonArray{QJsonObject{{QStringLiteral("Id"), QStringLiteral("A")}, {QStringLiteral("Value"), 1}},
+                                       QJsonObject{{QStringLiteral("Id"), QStringLiteral("M")}, {QStringLiteral("Value"), 3},
+                                                   {QStringLiteral("Blend"), QStringLiteral("Multiply")}},
+                                       QJsonObject{{QStringLiteral("Id"), QStringLiteral("O")}, {QStringLiteral("Value"), 0.2},
+                                                   {QStringLiteral("Blend"), QStringLiteral("Overwrite")}}}}};
+    QString error;
+    const auto e = Expression::fromJson(json, QStringLiteral("smile"), &error);
+    QVERIFY2(e.has_value(), qPrintable(error));
+    QCOMPARE(e->parameters.size(), 3);
+    QVERIFY(!Expression::fromJson(QJsonObject{{QStringLiteral("Type"), QStringLiteral("Other")}}, QStringLiteral("x"), &error));
+
+    ExpressionPlayer player;
+    player.set(std::make_shared<const Expression>(*e), 0.0);
+    QCOMPARE(player.current(), QStringLiteral("smile"));
+    auto run = [&player](double now) {
+        MapTarget t;
+        t.params = {{QStringLiteral("A"), 0.5f}, {QStringLiteral("M"), 2.0f}, {QStringLiteral("O"), 1.0f}};
+        player.update(now, t);
+        return t.params;
+    };
+    auto full = run(1.0);
+    QCOMPARE(full.value(QStringLiteral("A")), 1.5f);  // add
+    QCOMPARE(full.value(QStringLiteral("M")), 6.0f);  // multiply
+    QCOMPARE(full.value(QStringLiteral("O")), 0.2f);  // overwrite
+    auto half = run(0.25);                             // halfway through the fade-in
+    QCOMPARE(half.value(QStringLiteral("A")), 1.0f);
+    QCOMPARE(half.value(QStringLiteral("M")), 4.0f);
+    QVERIFY(std::abs(half.value(QStringLiteral("O")) - 0.6f) < 1e-6);
+    player.set(nullptr, 2.0);                          // fade out over 0.5 s
+    QCOMPARE(player.current(), QString());
+    QCOMPARE(run(2.25).value(QStringLiteral("A")), 1.0f);
+    QCOMPARE(run(2.5).value(QStringLiteral("A")), 0.5f);
+    QCOMPARE(player.activeCount(), 0);
+}
+
+void TestLive2D::pose()
+{
+    const QJsonObject json{{QStringLiteral("Type"), QStringLiteral("Live2D Pose")},
+                           {QStringLiteral("FadeInTime"), 0.5},
+                           {QStringLiteral("Groups"),
+                            QJsonArray{QJsonArray{QJsonObject{{QStringLiteral("Id"), QStringLiteral("ArmA")},
+                                                              {QStringLiteral("Link"), QJsonArray{QStringLiteral("ArmAHand")}}},
+                                                  QJsonObject{{QStringLiteral("Id"), QStringLiteral("ArmB")}, {QStringLiteral("Link"), QJsonArray{}}}}}}};
+    QString error;
+    auto pose = Pose::fromJson(json, &error);
+    QVERIFY2(pose.has_value(), qPrintable(error));
+    QVERIFY(!Pose::fromJson(QJsonObject{}, &error).has_value());
+    MapTarget t;
+    t.params = {{QStringLiteral("ArmA"), 0}, {QStringLiteral("ArmB"), 0}};
+    pose->reset(t);
+    QCOMPARE(t.params.value(QStringLiteral("ArmA")), 1.0f);
+    QCOMPARE(t.parts.value(QStringLiteral("ArmA")), 1.0f);
+    QCOMPARE(t.parts.value(QStringLiteral("ArmAHand")), 1.0f);
+    QCOMPARE(t.parts.value(QStringLiteral("ArmB")), 0.0f);
+    // A motion switches to arm B: it fades in over 0.5 s while A disappears.
+    t.params = {{QStringLiteral("ArmA"), 0}, {QStringLiteral("ArmB"), 1}};
+    pose->update(0.1, t);
+    const float bEarly = t.parts.value(QStringLiteral("ArmB"));
+    QVERIFY(bEarly > 0.0f && bEarly < 1.0f);
+    QVERIFY(t.parts.value(QStringLiteral("ArmA")) < 1.0f);
+    for (int i = 0; i < 10; ++i)
+        pose->update(0.1, t);
+    QCOMPARE(t.parts.value(QStringLiteral("ArmB")), 1.0f);
+    QCOMPARE(t.parts.value(QStringLiteral("ArmA")), 0.0f);
+    QCOMPARE(t.parts.value(QStringLiteral("ArmAHand")), 0.0f); // linked part follows
 }
 
 QTEST_MAIN(TestLive2D)

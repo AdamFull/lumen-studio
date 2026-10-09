@@ -1,5 +1,6 @@
 #pragma once
 
+#include "live2d/Animation.h"
 #include "live2d/CubismModel.h"
 #include "live2d/Motion.h"
 #include "live2d/Physics.h"
@@ -29,7 +30,23 @@ public:
     bool hasModel() const { return m_model != nullptr; }
     live2d::CubismModel *model() const { return m_model.get(); }
     QString modelName() const { return m_name; }
-    bool hasIdleMotion() const { return m_idle.has_value(); }
+    bool hasIdleMotion() const;
+    bool hasPose() const { return m_pose.has_value(); }
+
+    // Motion groups of the model ("Idle" first) and their motions.
+    QStringList motionGroups() const;
+    int motionCount(const QString &group) const;
+    QString motionLabel(const QString &group, int index) const;
+    // Plays a motion once (crossfading from the current one); idle motions resume afterwards.
+    bool playMotion(const QString &group, int index, QString *error = nullptr);
+    void stopMotions();
+    QString currentMotionGroup() const { return m_motions.currentGroup(); }
+    int currentMotionIndex() const { return m_motions.currentIndex(); }
+
+    QStringList expressionNames() const;
+    // Crossfades to the named expression; an empty name clears it.
+    bool setExpression(const QString &name, QString *error = nullptr);
+    QString currentExpression() const { return m_expressions.current(); }
     bool hasPhysics() const { return m_physics.has_value(); }
     const std::optional<live2d::Physics> &physics() const { return m_physics; }
     QString physicsError() const { return m_physicsError; }
@@ -37,6 +54,7 @@ public:
     void setAutoIdle(bool on);
     void setFollowMouse(bool on);
     void setTalking(bool on);
+    // Plays the Idle group (random motion after motion) whenever nothing else is playing.
     void setPlayMotion(bool on);
     void setPhysicsEnabled(bool on);
     // Wind for the physics (x, y in physics units; 0 = still air).
@@ -50,6 +68,7 @@ public:
 
 signals:
     void modelChanged();
+    void motionChanged(const QString &group, int index); // index -1: nothing playing
     void framePresented();
 
 protected:
@@ -71,7 +90,17 @@ private:
     void updateTimer();
 
     std::unique_ptr<live2d::CubismModel> m_model;
-    std::optional<live2d::Motion> m_idle;
+    std::shared_ptr<const live2d::Motion> motion(const QString &group, int index, QString *error);
+    void startIdle(double now);
+
+    live2d::MotionPlayer m_motions;
+    live2d::ExpressionPlayer m_expressions;
+    std::optional<live2d::Pose> m_pose;
+    QHash<QString, std::shared_ptr<const live2d::Motion>> m_motionCache;      // by file
+    QHash<QString, std::shared_ptr<const live2d::Expression>> m_expressionCache; // by name
+    QString m_lastGroup;
+    int m_lastIndex = -2;
+    int m_lastIdle = -1;
     std::optional<live2d::Physics> m_physics;
     QString m_physicsError;
     bool m_physicsEnabled = true;

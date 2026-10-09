@@ -5,6 +5,8 @@
 #include <QWidget>
 
 class QCheckBox;
+class QComboBox;
+class QTreeWidget;
 class QLabel;
 class QPushButton;
 class QVBoxLayout;
@@ -32,6 +34,8 @@ private:
     void chooseModel();
     void refreshStatus();
     void rebuildParameters();
+    void rebuildMotions();
+    void highlightMotion(const QString &group, int index);
     void syncSliders();
 
     Studio *m_studio;
@@ -46,6 +50,9 @@ private:
     QCheckBox *m_physics;
     SliderField *m_wind;
     QPushButton *m_reset;
+    QTreeWidget *m_motionTree;
+    QPushButton *m_stopMotion;
+    QComboBox *m_expression;
     QWidget *m_paramHost;
     QVBoxLayout *m_params;
     QList<QPointer<SliderField>> m_sliders;

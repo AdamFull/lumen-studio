@@ -19,6 +19,25 @@ namespace {
 
 constexpr double kAnimatedResolution = 960.0;
 
+// Animations write straight into the model's parameters and part opacities.
+class ModelTarget : public live2d::MotionTarget
+{
+public:
+    explicit ModelTarget(live2d::CubismModel &model)
+        : m_model(model)
+    {
+    }
+    bool hasParameter(const QString &id) const override { return m_model.parameterIndex(id) >= 0; }
+    float parameter(const QString &id) const override { return m_model.parameter(m_model.parameterIndex(id)); }
+    void setParameter(const QString &id, float value) override { m_model.setParameter(id, value); }
+    void setPartOpacity(const QString &id, float value) override { m_model.setPartOpacity(id, value); }
+    QStringList eyeBlinkIds() const override { return m_model.settings().eyeBlinkIds; }
+    QStringList lipSyncIds() const override { return m_model.settings().lipSyncIds; }
+
+private:
+    live2d::CubismModel &m_model;
+};
+
 double approach(double current, double target, double dt, double speed)
 {
     return current + (target - current) * std::min(1.0, dt * speed);
@@ -44,11 +63,21 @@ bool CubismView::loadModel(const QString &model3Path, QString *error)
     if (!model)
         return false;
     m_model = std::move(model);
-    m_idle.reset();
-    const QString idle = m_model->settings().idleMotion();
-    if (!idle.isEmpty()) {
-        QString motionError;
-        m_idle = live2d::Motion::load(idle, &motionError);
+    m_motions = live2d::MotionPlayer();
+    m_expressions = live2d::ExpressionPlayer();
+    m_motionCache.clear();
+    m_expressionCache.clear();
+    m_lastGroup.clear();
+    m_lastIndex = -2;
+    m_lastIdle = -1;
+    m_pose.reset();
+    if (!m_model->settings().pose.isEmpty()) {
+        QString poseError;
+        m_pose = live2d::Pose::load(m_model->settings().pose, &poseError);
+        if (m_pose) {
+            ModelTarget target(*m_model);
+            m_pose->reset(target);
+        }
     }
     m_physics.reset();
     m_physicsError.clear();
@@ -78,7 +107,11 @@ bool CubismView::loadModel(const QString &model3Path, QString *error)
 void CubismView::clear()
 {
     m_model.reset();
-    m_idle.reset();
+    m_motions = live2d::MotionPlayer();
+    m_expressions = live2d::ExpressionPlayer();
+    m_motionCache.clear();
+    m_expressionCache.clear();
+    m_pose.reset();
     m_physics.reset();
     m_image = QImage();
     m_manual.clear();
@@ -109,7 +142,165 @@ void CubismView::setTalking(bool on)
 void CubismView::setPlayMotion(bool on)
 {
     m_playMotion = on;
+    if (!on && m_model) {
+        // The playing idle motion fades out; played motions keep running.
+        const double now = m_clock.elapsed() / 1000.0;
+        if (m_motions.currentPriority(now) == live2d::MotionPlayer::Priority::Idle) {
+            if (m_timer.isActive()) {
+                m_motions.stop(now);
+            } else {
+                m_motions = live2d::MotionPlayer();
+                tick();
+            }
+        }
+    }
     updateTimer();
+}
+
+bool CubismView::hasIdleMotion() const
+{
+    if (!m_model)
+        return false;
+    for (const QString &g : m_model->settings().motionGroups()) {
+        if (live2d::ModelSettings::isIdleGroup(g) && !m_model->settings().motions.value(g).isEmpty())
+            return true;
+    }
+    return false;
+}
+
+QStringList CubismView::motionGroups() const
+{
+    return m_model ? m_model->settings().motionGroups() : QStringList();
+}
+
+int CubismView::motionCount(const QString &group) const
+{
+    return m_model ? int(m_model->settings().motions.value(group).size()) : 0;
+}
+
+QString CubismView::motionLabel(const QString &group, int index) const
+{
+    if (!m_model)
+        return {};
+    const auto refs = m_model->settings().motions.value(group);
+    if (index < 0 || index >= refs.size())
+        return {};
+    QString name = QFileInfo(refs[index].file).completeBaseName();
+    name.remove(QStringLiteral(".motion3"));
+    return name;
+}
+
+std::shared_ptr<const live2d::Motion> CubismView::motion(const QString &group, int index, QString *error)
+{
+    if (!m_model)
+        return nullptr;
+    const auto refs = m_model->settings().motions.value(group);
+    if (index < 0 || index >= refs.size()) {
+        if (error)
+            *error = tr("Motion %1 %2 does not exist.").arg(group).arg(index + 1);
+        return nullptr;
+    }
+    const QString file = refs[index].file;
+    if (auto cached = m_motionCache.value(file))
+        return cached;
+    auto loaded = live2d::Motion::load(file, error);
+    if (!loaded)
+        return nullptr;
+    auto shared = std::make_shared<const live2d::Motion>(std::move(*loaded));
+    m_motionCache.insert(file, shared);
+    return shared;
+}
+
+bool CubismView::playMotion(const QString &group, int index, QString *error)
+{
+    auto m = motion(group, index, error);
+    if (!m)
+        return false;
+    const auto ref = m_model->settings().motions.value(group).value(index);
+    live2d::MotionPlayer::Options options;
+    options.group = group;
+    options.index = index;
+    options.fadeIn = ref.fadeIn;
+    options.fadeOut = ref.fadeOut;
+    options.priority = live2d::MotionPlayer::Priority::Force;
+    m_motions.play(m, m_clock.elapsed() / 1000.0, options);
+    updateTimer();
+    return true;
+}
+
+void CubismView::stopMotions()
+{
+    m_motions.stop(m_clock.elapsed() / 1000.0);
+}
+
+void CubismView::startIdle(double now)
+{
+    QString idleGroup;
+    for (const QString &g : m_model->settings().motionGroups()) {
+        if (live2d::ModelSettings::isIdleGroup(g))
+            idleGroup = g;
+    }
+    const int count = motionCount(idleGroup);
+    if (count == 0)
+        return;
+    // A different idle motion each time when there are several.
+    int index = count == 1 ? 0 : int(QRandomGenerator::global()->bounded(count));
+    if (count > 1 && index == m_lastIdle)
+        index = (index + 1) % count;
+    m_lastIdle = index;
+    auto m = motion(idleGroup, index, nullptr);
+    if (!m)
+        return;
+    const auto ref = m_model->settings().motions.value(idleGroup).value(index);
+    live2d::MotionPlayer::Options options;
+    options.group = idleGroup;
+    options.index = index;
+    options.fadeIn = ref.fadeIn;
+    options.fadeOut = ref.fadeOut;
+    options.priority = live2d::MotionPlayer::Priority::Idle;
+    m_motions.play(m, now, options);
+}
+
+QStringList CubismView::expressionNames() const
+{
+    QStringList names;
+    if (m_model) {
+        for (const auto &e : m_model->settings().expressions)
+            names << e.name;
+    }
+    return names;
+}
+
+bool CubismView::setExpression(const QString &name, QString *error)
+{
+    if (!m_model)
+        return false;
+    const double now = m_clock.elapsed() / 1000.0;
+    if (name.isEmpty()) {
+        m_expressions.set(nullptr, now);
+        updateTimer();
+        return true;
+    }
+    std::shared_ptr<const live2d::Expression> expression = m_expressionCache.value(name);
+    if (!expression) {
+        for (const auto &ref : m_model->settings().expressions) {
+            if (ref.name != name)
+                continue;
+            auto loaded = live2d::Expression::load(ref.file, ref.name, error);
+            if (!loaded)
+                return false;
+            expression = std::make_shared<const live2d::Expression>(std::move(*loaded));
+            m_expressionCache.insert(name, expression);
+        }
+    }
+    if (!expression) {
+        if (error)
+            *error = tr("The model has no expression \"%1\".").arg(name);
+        return false;
+    }
+    m_expressions.set(expression, now);
+    updateTimer();
+    return true;
 }
 
 void CubismView::setPhysicsEnabled(bool on)
@@ -149,7 +340,8 @@ float CubismView::value(int parameterIndex) const
 void CubismView::updateTimer()
 {
     const bool animate = m_model && isVisible()
-                         && (m_autoIdle || m_follow || m_talking || (m_playMotion && m_idle) || (m_physicsEnabled && m_physics));
+                         && (m_autoIdle || m_follow || m_talking || (m_playMotion && hasIdleMotion()) || m_motions.activeCount() > 0
+                             || m_expressions.activeCount() > 0 || m_pose || (m_physicsEnabled && m_physics));
     if (animate && !m_timer.isActive()) {
         m_lastT = m_clock.elapsed() / 1000.0;
         m_timer.start();
@@ -179,15 +371,20 @@ void CubismView::resizeEvent(QResizeEvent *)
 void CubismView::applyAnimation(double t, double dt)
 {
     live2d::CubismModel &m = *m_model;
+    ModelTarget target(m);
     m.resetParameters();
-    if (m_playMotion && m_idle) {
-        m_idle->evaluate(t, [&m](live2d::MotionCurve::Target target, const QString &id, double v) {
-            if (target == live2d::MotionCurve::Target::Parameter)
-                m.setParameter(id, float(v));
-            else if (target == live2d::MotionCurve::Target::PartOpacity)
-                m.setPartOpacity(id, float(v));
-        });
+    // Motions: the Idle group fills the gaps between played motions.
+    if (m_playMotion && !m_motions.isPlaying(t))
+        startIdle(t);
+    m_motions.update(t, target);
+    const QString group = m_motions.isPlaying(t) ? m_motions.currentGroup() : QString();
+    const int index = m_motions.isPlaying(t) ? m_motions.currentIndex() : -1;
+    if (group != m_lastGroup || index != m_lastIndex) {
+        m_lastGroup = group;
+        m_lastIndex = index;
+        emit motionChanged(group, index);
     }
+    const bool motionPlaying = m_motions.isPlaying(t);
     // Procedural motion is added on top of the motion values.
     double tx = 0, ty = 0, tz = 0, tb = 0, ex = 0, ey = 0;
     if (m_follow && m_mouse.x() >= 0) {
@@ -199,7 +396,7 @@ void CubismView::applyAnimation(double t, double dt)
         tb = nx * 10.0;
         ex = nx;
         ey = -ny;
-    } else if (m_autoIdle && !(m_playMotion && m_idle)) {
+    } else if (m_autoIdle && !motionPlaying) {
         tx = 12.0 * std::sin(t * 0.55) + 4.0 * std::sin(t * 1.6 + 0.4);
         ty = 7.0 * std::sin(t * 0.42 + 1.0);
         tz = 5.0 * std::sin(t * 0.5 + 2.0);
@@ -252,11 +449,14 @@ void CubismView::applyAnimation(double t, double dt)
         for (const QString &id : std::as_const(lips))
             m.setParameter(id, mouth);
     }
+    m_expressions.update(t, target);
     // Manual inputs drive the physics too (dragging an angle slider swings the hair).
     for (auto it = m_manual.cbegin(); it != m_manual.cend(); ++it)
         m.setParameter(it.key(), it.value());
     if (m_physicsEnabled && m_physics)
         m_physics->evaluate(m.parameterValues(), m.parameterMinimums(), m.parameterMaximums(), m.parameterDefaults(), dt);
+    if (m_pose)
+        m_pose->update(dt, target);
     // A manually set physics output stays where the user put it.
     for (auto it = m_manual.cbegin(); it != m_manual.cend(); ++it)
         m.setParameter(it.key(), it.value());

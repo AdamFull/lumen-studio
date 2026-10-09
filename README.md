@@ -51,6 +51,8 @@ Live2D Cubism, in four steps:
    with `parts.json`, or editor layers. The *Cubism model* tab previews a model rigged in Cubism Editor
    (`.model3.json`). It uses the Cubism Core library from your own copy of the Live2D Cubism SDK for
    Native, which Lumen loads at runtime. Physics (`physics3.json`) are simulated, with optional wind.
+   Every motion group can be played (idle motions resume afterwards), expressions (`exp3.json`) crossfade
+   in and out, and `pose3.json` part switching is applied.
 
 A layered PSD can also start a session (*Open layered PSD…*): every visible layer becomes a complete
 part. The editor opens and exports layered PSDs too.
@@ -76,7 +78,7 @@ LumenStudio --cubism path/to/model.model3.json
 | `src/pose` | OpenPose skeleton, renderer, FK/IK editing, 3D generation rig, presets |
 | `src/doc` | projects (SQLite), assets, layered documents, undo |
 | `src/ai` | provider framework, provider adapters, director pipeline, part slicing |
-| `src/live2d` | Cubism Core runtime binding, model/motion loading, software renderer |
+| `src/live2d` | Cubism Core runtime binding, model/motion loading, motion/expression/pose playback, physics, software renderer |
 | `src/ui` | main window, canvas, tools, panels, dialogs |
 | `src/app` | executable entry point |
 | `tests` | unit and contract tests (mock HTTP server) |

@@ -8,6 +8,9 @@
 #include "ui/widgets/Controls.h"
 
 #include <QCheckBox>
+#include <QComboBox>
+#include <QHeaderView>
+#include <QTreeWidget>
 #include <QDir>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -50,9 +53,9 @@ CubismPanel::CubismPanel(Studio *studio, CubismView *view, QWidget *parent)
     auto *toggles = new QHBoxLayout;
     m_idle = new QCheckBox(tr("Idle"), this);
     m_idle->setChecked(true);
-    m_motion = new QCheckBox(tr("Idle motion"), this);
+    m_motion = new QCheckBox(tr("Idle motions"), this);
     m_motion->setChecked(true);
-    m_motion->setToolTip(tr("Play the model's Idle motion group"));
+    m_motion->setToolTip(tr("Play the model's Idle motion group (a random motion each time) when nothing else plays"));
     m_follow = new QCheckBox(tr("Follow mouse"), this);
     m_talk = new QCheckBox(tr("Talk"), this);
     toggles->addWidget(m_idle);
@@ -71,6 +74,28 @@ CubismPanel::CubismPanel(Studio *studio, CubismView *view, QWidget *parent)
     physicsRow->addWidget(m_physics);
     physicsRow->addWidget(m_wind, 1);
     v->addLayout(physicsRow);
+
+    // Motions and expressions.
+    auto *motionHeader = new QHBoxLayout;
+    motionHeader->addWidget(sectionLabel(tr("Motions"), this));
+    motionHeader->addStretch();
+    m_stopMotion = new QPushButton(Icons::get(QStringLiteral("stop")), tr("Stop"), this);
+    m_stopMotion->setToolTip(tr("Fade out the playing motion"));
+    motionHeader->addWidget(m_stopMotion);
+    v->addLayout(motionHeader);
+    m_motionTree = new QTreeWidget(this);
+    m_motionTree->setHeaderHidden(true);
+    m_motionTree->setRootIsDecorated(true);
+    m_motionTree->setIndentation(12);
+    m_motionTree->setMinimumHeight(110);
+    m_motionTree->setMaximumHeight(170);
+    m_motionTree->setToolTip(tr("Click a motion to play it once; idle motions resume afterwards"));
+    v->addWidget(m_motionTree);
+    auto *expressionRow = new QHBoxLayout;
+    expressionRow->addWidget(new QLabel(tr("Expression"), this));
+    m_expression = new QComboBox(this);
+    expressionRow->addWidget(m_expression, 1);
+    v->addLayout(expressionRow);
 
     auto *paramHeader = new QHBoxLayout;
     paramHeader->addWidget(sectionLabel(tr("Parameters"), this));
@@ -106,7 +131,23 @@ CubismPanel::CubismPanel(Studio *studio, CubismView *view, QWidget *parent)
     connect(m_wind, &SliderField::valueChanged, this, [this](double v) { m_view->setWind(QPointF(v / 100.0 * 0.5, 0.0)); });
     connect(m_view, &CubismView::modelChanged, this, [this] {
         rebuildParameters();
+        rebuildMotions();
         refreshStatus();
+    });
+    connect(m_view, &CubismView::motionChanged, this, &CubismPanel::highlightMotion);
+    connect(m_motionTree, &QTreeWidget::itemClicked, this, [this](QTreeWidgetItem *item) {
+        const int index = item->data(0, Qt::UserRole + 1).toInt();
+        if (index < 0)
+            return;
+        QString error;
+        if (!m_view->playMotion(item->data(0, Qt::UserRole).toString(), index, &error))
+            m_studio->notify(error, QStringLiteral("error"));
+    });
+    connect(m_stopMotion, &QPushButton::clicked, m_view, &CubismView::stopMotions);
+    connect(m_expression, &QComboBox::activated, this, [this](int i) {
+        QString error;
+        if (!m_view->setExpression(m_expression->itemData(i).toString(), &error))
+            m_studio->notify(error, QStringLiteral("error"));
     });
     refreshStatus();
 }
@@ -145,6 +186,8 @@ void CubismPanel::refreshStatus()
     m_open->setEnabled(core.isLoaded());
     m_motion->setEnabled(m_view->hasIdleMotion());
     m_physics->setEnabled(m_view->hasPhysics());
+    m_stopMotion->setEnabled(m_view->hasModel());
+    m_expression->setEnabled(m_view->expressionNames().size() > 0);
     m_wind->setEnabled(m_view->hasPhysics());
     m_reset->setEnabled(m_view->hasModel());
 }
@@ -188,6 +231,53 @@ bool CubismPanel::openModel(const QString &path)
     m_view->setTalking(m_talk->isChecked());
     m_view->setPhysicsEnabled(m_physics->isChecked());
     return true;
+}
+
+void CubismPanel::rebuildMotions()
+{
+    m_motionTree->clear();
+    m_expression->clear();
+    m_expression->addItem(tr("None"), QString());
+    if (!m_view->hasModel())
+        return;
+    for (const QString &group : m_view->motionGroups()) {
+        auto *g = new QTreeWidgetItem(m_motionTree);
+        g->setText(0, tr("%1 (%2)").arg(group).arg(m_view->motionCount(group)));
+        g->setData(0, Qt::UserRole, group);
+        g->setData(0, Qt::UserRole + 1, -1);
+        g->setFlags(Qt::ItemIsEnabled);
+        for (int i = 0; i < m_view->motionCount(group); ++i) {
+            auto *item = new QTreeWidgetItem(g);
+            item->setText(0, m_view->motionLabel(group, i));
+            item->setIcon(0, Icons::get(QStringLiteral("play")));
+            item->setData(0, Qt::UserRole, group);
+            item->setData(0, Qt::UserRole + 1, i);
+        }
+        g->setExpanded(!live2d::ModelSettings::isIdleGroup(group) || m_view->motionGroups().size() == 1);
+    }
+    if (m_motionTree->topLevelItemCount() == 0) {
+        auto *none = new QTreeWidgetItem(m_motionTree);
+        none->setText(0, tr("This model has no motions"));
+        none->setFlags(Qt::NoItemFlags);
+        none->setData(0, Qt::UserRole + 1, -1);
+    }
+    for (const QString &name : m_view->expressionNames())
+        m_expression->addItem(name, name);
+}
+
+void CubismPanel::highlightMotion(const QString &group, int index)
+{
+    QTreeWidgetItemIterator it(m_motionTree);
+    while (*it) {
+        const bool playing = index >= 0 && (*it)->data(0, Qt::UserRole).toString() == group
+                             && (*it)->data(0, Qt::UserRole + 1).toInt() == index;
+        QFont f = (*it)->font(0);
+        if (f.bold() != playing) {
+            f.setBold(playing);
+            (*it)->setFont(0, f);
+        }
+        ++it;
+    }
 }
 
 void CubismPanel::rebuildParameters()

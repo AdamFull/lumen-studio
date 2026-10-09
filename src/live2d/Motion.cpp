@@ -69,12 +69,27 @@ std::optional<ModelSettings> ModelSettings::fromJson(const QJsonObject &json, co
     for (const QJsonValue &t : refs.value(QStringLiteral("Textures")).toArray())
         s.textures << resolvePath(directory, t.toString());
     s.physics = resolvePath(directory, refs.value(QStringLiteral("Physics")).toString());
+    s.pose = resolvePath(directory, refs.value(QStringLiteral("Pose")).toString());
     const QJsonObject motions = refs.value(QStringLiteral("Motions")).toObject();
     for (auto it = motions.begin(); it != motions.end(); ++it) {
-        QStringList files;
-        for (const QJsonValue &m : it.value().toArray())
-            files << resolvePath(directory, m.toObject().value(QStringLiteral("File")).toString());
-        s.motions.insert(it.key(), files);
+        QList<MotionRef> list;
+        for (const QJsonValue &m : it.value().toArray()) {
+            const QJsonObject mo = m.toObject();
+            MotionRef ref;
+            ref.file = resolvePath(directory, mo.value(QStringLiteral("File")).toString());
+            ref.fadeIn = mo.value(QStringLiteral("FadeInTime")).toDouble(-1.0);
+            ref.fadeOut = mo.value(QStringLiteral("FadeOutTime")).toDouble(-1.0);
+            ref.sound = resolvePath(directory, mo.value(QStringLiteral("Sound")).toString());
+            if (!ref.file.isEmpty())
+                list.append(ref);
+        }
+        s.motions.insert(it.key(), list);
+    }
+    for (const QJsonValue &e : refs.value(QStringLiteral("Expressions")).toArray()) {
+        const QJsonObject eo = e.toObject();
+        const QString file = resolvePath(directory, eo.value(QStringLiteral("File")).toString());
+        if (!file.isEmpty())
+            s.expressions.append({eo.value(QStringLiteral("Name")).toString(QFileInfo(file).completeBaseName()), file});
     }
     for (const QJsonValue &g : json.value(QStringLiteral("Groups")).toArray()) {
         const QJsonObject group = g.toObject();
@@ -90,13 +105,29 @@ std::optional<ModelSettings> ModelSettings::fromJson(const QJsonObject &json, co
     return s;
 }
 
+bool ModelSettings::isIdleGroup(const QString &group)
+{
+    return group.compare(QLatin1String("Idle"), Qt::CaseInsensitive) == 0;
+}
+
 QString ModelSettings::idleMotion() const
 {
     for (auto it = motions.begin(); it != motions.end(); ++it) {
-        if (it.key().compare(QLatin1String("Idle"), Qt::CaseInsensitive) == 0 && !it.value().isEmpty())
-            return it.value().first();
+        if (isIdleGroup(it.key()) && !it.value().isEmpty())
+            return it.value().first().file;
     }
     return {};
+}
+
+QStringList ModelSettings::motionGroups() const
+{
+    QStringList groups = motions.keys();
+    std::sort(groups.begin(), groups.end(), [](const QString &a, const QString &b) {
+        if (isIdleGroup(a) != isIdleGroup(b))
+            return isIdleGroup(a);
+        return a.compare(b, Qt::CaseInsensitive) < 0;
+    });
+    return groups;
 }
 
 // ---- Curves ---------------------------------------------------------------------------------------------
@@ -156,6 +187,8 @@ std::optional<Motion> Motion::fromJson(const QJsonObject &json, QString *error)
     m.m_duration = meta.value(QStringLiteral("Duration")).toDouble();
     m.m_fps = meta.value(QStringLiteral("Fps")).toDouble(30.0);
     m.m_loop = meta.value(QStringLiteral("Loop")).toBool(true);
+    m.m_fadeIn = meta.value(QStringLiteral("FadeInTime")).toDouble(-1.0);
+    m.m_fadeOut = meta.value(QStringLiteral("FadeOutTime")).toDouble(-1.0);
     for (const QJsonValue &cv : json.value(QStringLiteral("Curves")).toArray()) {
         const QJsonObject c = cv.toObject();
         MotionCurve curve;

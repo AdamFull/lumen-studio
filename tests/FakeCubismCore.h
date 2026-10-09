@@ -240,6 +240,26 @@ inline QString writeModel(const QString &dir)
                                                                                        {QStringLiteral("Id"), QStringLiteral("ParamAngleX")},
                                                                                        {QStringLiteral("Segments"), QJsonArray{0, -30, 0, 2, 30}}}}}});
     ok = ok && writeJson(dir + QStringLiteral("/fake.physics3.json"), physicsJson());
+    auto constantMotion = [](double value, double duration, bool loop) {
+        return QJsonObject{{QStringLiteral("Version"), 3},
+                           {QStringLiteral("Meta"), QJsonObject{{QStringLiteral("Duration"), duration}, {QStringLiteral("Loop"), loop}}},
+                           {QStringLiteral("Curves"), QJsonArray{QJsonObject{{QStringLiteral("Target"), QStringLiteral("Parameter")},
+                                                                             {QStringLiteral("Id"), QStringLiteral("ParamAngleX")},
+                                                                             {QStringLiteral("Segments"), QJsonArray{0, value, 0, duration, value}}}}}};
+    };
+    ok = ok && writeJson(dir + QStringLiteral("/idle2.motion3.json"), constantMotion(-5, 2.0, true));
+    ok = ok && writeJson(dir + QStringLiteral("/tap.motion3.json"), constantMotion(20, 1.0, false));
+    ok = ok && writeJson(dir + QStringLiteral("/smile.exp3.json"),
+                         QJsonObject{{QStringLiteral("Type"), QStringLiteral("Live2D Expression")},
+                                     {QStringLiteral("FadeInTime"), 0.1},
+                                     {QStringLiteral("FadeOutTime"), 0.1},
+                                     {QStringLiteral("Parameters"), QJsonArray{QJsonObject{{QStringLiteral("Id"), QStringLiteral("ParamAngleX")},
+                                                                                           {QStringLiteral("Value"), 5},
+                                                                                           {QStringLiteral("Blend"), QStringLiteral("Add")}}}}});
+    ok = ok && writeJson(dir + QStringLiteral("/fake.pose3.json"),
+                         QJsonObject{{QStringLiteral("Type"), QStringLiteral("Live2D Pose")},
+                                     {QStringLiteral("Groups"), QJsonArray{QJsonArray{QJsonObject{{QStringLiteral("Id"), QStringLiteral("PartRoot")},
+                                                                                                  {QStringLiteral("Link"), QJsonArray{}}}}}}});
     const QString model3 = dir + QStringLiteral("/fake.model3.json");
     ok = ok && writeJson(model3, QJsonObject{
         {QStringLiteral("Version"), 3},
@@ -248,7 +268,15 @@ inline QString writeModel(const QString &dir)
             {QStringLiteral("Textures"), QJsonArray{QStringLiteral("tex/back.png"), QStringLiteral("tex/blue.png"),
                                                     QStringLiteral("tex/green.png"), QStringLiteral("tex/yellow.png")}},
             {QStringLiteral("Physics"), QStringLiteral("fake.physics3.json")},
-            {QStringLiteral("Motions"), QJsonObject{{QStringLiteral("Idle"), QJsonArray{QJsonObject{{QStringLiteral("File"), QStringLiteral("idle.motion3.json")}}}}}}}},
+            {QStringLiteral("Pose"), QStringLiteral("fake.pose3.json")},
+            {QStringLiteral("Expressions"), QJsonArray{QJsonObject{{QStringLiteral("Name"), QStringLiteral("smile")},
+                                                                   {QStringLiteral("File"), QStringLiteral("smile.exp3.json")}}}},
+            {QStringLiteral("Motions"), QJsonObject{
+                {QStringLiteral("TapBody"), QJsonArray{QJsonObject{{QStringLiteral("File"), QStringLiteral("tap.motion3.json")},
+                                                                   {QStringLiteral("FadeInTime"), 0.1},
+                                                                   {QStringLiteral("FadeOutTime"), 0.1}}}},
+                {QStringLiteral("Idle"), QJsonArray{QJsonObject{{QStringLiteral("File"), QStringLiteral("idle.motion3.json")}},
+                                                    QJsonObject{{QStringLiteral("File"), QStringLiteral("idle2.motion3.json")}}}}}}}},
         {QStringLiteral("Groups"), QJsonArray{QJsonObject{{QStringLiteral("Target"), QStringLiteral("Parameter")},
                                                           {QStringLiteral("Name"), QStringLiteral("EyeBlink")},
                                                           {QStringLiteral("Ids"), QJsonArray{QStringLiteral("ParamEyeLOpen"), QStringLiteral("ParamEyeROpen")}}}}}});
