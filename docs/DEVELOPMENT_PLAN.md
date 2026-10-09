@@ -317,7 +317,7 @@ before ticking a milestone.
 ### M9 — Live2D & advanced
 - [x] Layered PSD export (RLE) and import: editor documents (groups resolved, blend modes, opacity) and slicing sessions from layered PSDs
 - [x] Expression/mouth/eye variant generation via masked inpainting (M11)
-- [ ] Background removal batch (part separation moved to M11)
+- [x] Background removal batch (part separation moved to M11): Library context menu runs background removal or 2× upscale on every selected asset; each result is a new asset linked to its source
 - [ ] Character library reuse across projects; Critic loop
 
 ### M10 — Polish & release

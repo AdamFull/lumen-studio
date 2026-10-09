@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ai/Types.h"
 #include "doc/Project.h"
 
 #include <QAbstractListModel>
@@ -73,6 +74,8 @@ private:
     QStringList selectedIds() const;
     void exportSelected();
     void deleteSelected();
+    // Runs a provider utility on every selected asset; each result becomes a new asset.
+    void runBatchUtility(ai::Utility utility, const QJsonObject &params, const QString &title);
     void rebuildDocuments();
 
     Studio *m_studio;

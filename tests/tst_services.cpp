@@ -36,6 +36,7 @@ private slots:
     void directorSchemasAcceptExample();
     void shotRequestBuildsPoseControl();
     void generationServiceRegionEndToEnd();
+    void utilityOnAssets();
 
 private:
     net::HttpClient m_http;
@@ -225,6 +226,60 @@ void TestServices::generationServiceRegionEndToEnd()
     // Inpaint request sent at model resolution with a mask.
     QVERIFY(payload.contains(QStringLiteral("mask")));
     QCOMPARE(payload.value(QStringLiteral("width")).toInt() % 8, 0);
+    QFile::remove(registry.configPath());
+}
+
+void TestServices::utilityOnAssets()
+{
+    MockHttpServer server;
+    int calls = 0;
+    server.route("POST", QStringLiteral("/rembg"), [&](const MockRequest &req) {
+        ++calls;
+        const QImage in = img::fromBase64(req.json().value(QStringLiteral("input_image")).toString().toLatin1());
+        QImage out(in.size(), QImage::Format_ARGB32);
+        out.fill(Qt::transparent);
+        return MockResponse::json({{QStringLiteral("image"), QString::fromLatin1(img::encode(out).toBase64())}});
+    });
+
+    QTemporaryDir dir;
+    doc::Project project;
+    auto opened = project.open(dir.filePath(QStringLiteral("p.lumen")));
+    QTRY_VERIFY(opened.isFinished());
+    ProviderRegistry registry(&m_http);
+    registerBuiltInProviders(registry);
+    QFile::remove(registry.configPath());
+    JobQueue queue;
+    GenerationService service(&registry, &queue);
+    service.setProject(&project);
+
+    QImage white(40, 30, QImage::Format_ARGB32_Premultiplied);
+    white.fill(Qt::white);
+    auto added = project.addAsset(white, doc::AssetKind::Import, QStringLiteral("photo"));
+    QTRY_VERIFY(added.isFinished());
+    const QString source = added.result().id;
+
+    // Without a capable provider the job fails with a clear message.
+    Job *none = service.submitUtilityForAsset(QString(), Utility::RemoveBackground, source, {}, QStringLiteral("bg"));
+    QTRY_VERIFY_WITH_TIMEOUT(none->isFinished(), 5000);
+    QCOMPARE(none->state(), Job::State::Failed);
+
+    QVERIFY(registry.addProvider(QStringLiteral("sdwebui"), QStringLiteral("SD"), {{QStringLiteral("url"), server.baseUrl().toString()}}));
+    Job *job = service.submitUtilityForAsset(QString(), Utility::RemoveBackground, source, {}, QStringLiteral("Remove background: photo"));
+    QTRY_VERIFY_WITH_TIMEOUT(job->isFinished(), 10000);
+    QVERIFY2(job->state() == Job::State::Succeeded, qPrintable(job->errorString()));
+    QCOMPARE(calls, 1);
+    const GenerationOutput out = GenerationService::outputOf(job);
+    QCOMPARE(out.assets.size(), 1);
+    QCOMPARE(out.assets[0].parentId, source);
+    QCOMPARE(out.assets[0].metadata.value(QStringLiteral("source")).toString(), source);
+    QCOMPARE(out.assets[0].size, QSize(40, 30));
+    QCOMPARE(project.assets().size(), 2);
+
+    // A missing asset fails the job instead of calling the provider.
+    Job *missing = service.submitUtilityForAsset(QString(), Utility::RemoveBackground, QStringLiteral("nope"), {}, QStringLiteral("bg"));
+    QTRY_VERIFY_WITH_TIMEOUT(missing->isFinished(), 5000);
+    QCOMPARE(missing->state(), Job::State::Failed);
+    QCOMPARE(calls, 1);
     QFile::remove(registry.configPath());
 }
 

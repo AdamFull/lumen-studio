@@ -358,53 +358,97 @@ void GenerationService::finishWithAssets(Job *job, const GenerationSpec &spec, G
 Job *GenerationService::submitUtility(const QString &providerId, Utility utility, const QImage &image, const QJsonObject &params,
                                       const QString &title, bool saveAsset)
 {
+    return submitUtilityImpl(providerId, utility, [image] { return QtFuture::makeReadyValueFuture(image); }, params, title, saveAsset,
+                             QString());
+}
+
+Job *GenerationService::submitUtilityForAsset(const QString &providerId, Utility utility, const QString &assetId, const QJsonObject &params,
+                                              const QString &title)
+{
+    QPointer<doc::Project> project = m_project;
+    auto load = [project, assetId]() -> QFuture<QImage> {
+        if (!project)
+            return QtFuture::makeExceptionalFuture<QImage>(std::make_exception_ptr(ProviderError(tr("No project is open."))));
+        return project->loadImage(assetId);
+    };
+    return submitUtilityImpl(providerId, utility, load, params, title, true, assetId);
+}
+
+Job *GenerationService::submitUtilityImpl(const QString &providerId, Utility utility, std::function<QFuture<QImage>()> image,
+                                          const QJsonObject &params, const QString &title, bool saveAsset, const QString &sourceAssetId)
+{
     ImageProvider *provider = providerForUtility(utility, providerId);
     QPointer<ImageProvider> guard(provider);
     QPointer<GenerationService> self(this);
     const QString group = provider ? provider->instanceId() : QStringLiteral("none");
-    Job *job = m_queue->submit(title, group, [self, guard, utility, image, params, title, saveAsset](Job *job) {
+    Job *job = m_queue->submit(title, group, [self, guard, utility, image, params, title, saveAsset, sourceAssetId](Job *job) {
         if (!guard) {
             job->fail(tr("No configured provider supports %1.").arg(utilityName(utility)));
             return;
         }
-        ImageOperation *op = guard->runUtility(utility, image, params);
-        job->setCancelHandler([op = QPointer<ImageOperation>(op), job] {
-            if (op)
-                op->cancel();
-            else
-                job->reportCancelled();
-        });
-        QObject::connect(op, &Operation::progress, job, [job](double f, const QString &s) { job->setProgress(f, s); });
-        QObject::connect(op, &Operation::finished, job, [self, job, op, guard, utility, title, saveAsset] {
-            if (op->state() == Operation::State::Cancelled) {
-                job->reportCancelled();
+        auto run = [self, guard, utility, params, title, saveAsset, sourceAssetId, job](const QImage &input) {
+            if (!guard) {
+                job->fail(tr("The provider was removed."));
                 return;
             }
-            if (op->state() == Operation::State::Failed) {
-                job->fail(op->errorString());
-                return;
-            }
-            GenerationOutput out;
-            for (const GeneratedImage &g : op->result().images) {
-                out.images << g.image;
-                out.rawImages << g.image;
-            }
-            out.text = op->result().text;
-            out.info = op->result().info;
-            if (utility == Utility::Caption || !saveAsset || !self) {
-                job->succeed(QVariant::fromValue(out));
-                return;
-            }
-            GenerationSpec spec;
-            spec.title = title;
-            spec.assetKind = utility == Utility::DetectPose ? doc::AssetKind::Pose : doc::AssetKind::Edit;
-            spec.meta = QJsonObject{{QStringLiteral("utility"), utilityName(utility)}};
-            spec.request.mode = GenMode::ImageToImage;
-            spec.request.prompt = title;
-            spec.request.steps = 0;
-            spec.request.cfg = 0;
-            self->finishWithAssets(job, spec, out, guard);
-        });
+            ImageOperation *op = guard->runUtility(utility, input, params);
+            job->setCancelHandler([op = QPointer<ImageOperation>(op), job] {
+                if (op)
+                    op->cancel();
+                else
+                    job->reportCancelled();
+            });
+            QObject::connect(op, &Operation::progress, job, [job](double f, const QString &s) { job->setProgress(f, s); });
+            QObject::connect(op, &Operation::finished, job, [self, job, op, guard, utility, title, saveAsset, sourceAssetId] {
+                if (op->state() == Operation::State::Cancelled) {
+                    job->reportCancelled();
+                    return;
+                }
+                if (op->state() == Operation::State::Failed) {
+                    job->fail(op->errorString());
+                    return;
+                }
+                GenerationOutput out;
+                for (const GeneratedImage &g : op->result().images) {
+                    out.images << g.image;
+                    out.rawImages << g.image;
+                }
+                out.text = op->result().text;
+                out.info = op->result().info;
+                if (utility == Utility::Caption || !saveAsset || !self) {
+                    job->succeed(QVariant::fromValue(out));
+                    return;
+                }
+                GenerationSpec spec;
+                spec.title = title;
+                spec.assetKind = utility == Utility::DetectPose ? doc::AssetKind::Pose : doc::AssetKind::Edit;
+                spec.meta = QJsonObject{{QStringLiteral("utility"), utilityName(utility)}};
+                if (!sourceAssetId.isEmpty()) {
+                    spec.meta.insert(QStringLiteral("source"), sourceAssetId);
+                    spec.parentAssetId = sourceAssetId;
+                }
+                spec.request.mode = GenMode::ImageToImage;
+                spec.request.prompt = title;
+                spec.request.steps = 0;
+                spec.request.cfg = 0;
+                self->finishWithAssets(job, spec, out, guard);
+            });
+        };
+        job->setProgress(-1.0, tr("Loading..."));
+        image()
+            .then(job, [job, run](QImage input) {
+                if (job->isFinished())
+                    return;
+                if (input.isNull()) {
+                    job->fail(tr("The image could not be loaded."));
+                    return;
+                }
+                run(input);
+            })
+            .onFailed(job, [job](const std::exception &e) {
+                if (!job->isFinished())
+                    job->fail(QString::fromUtf8(e.what()));
+            });
     }, QStringLiteral("utility"));
     connect(job, &Job::finished, this, &GenerationService::generationFinished);
     return job;

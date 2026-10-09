@@ -1,5 +1,6 @@
 #include "ui/pages/LibraryPage.h"
 
+#include "ai/GenerationService.h"
 #include "core/Error.h"
 #include "core/JsonUtil.h"
 #include "ui/Icons.h"
@@ -516,6 +517,15 @@ LibraryPage::LibraryPage(Studio *studio, QWidget *parent)
         menu.addAction(Icons::get(QStringLiteral("parts")), tr("Slice into parts (Live2D)"), this, [this] {
             m_studio->sliceAsset(selectedIds().first());
         });
+        const int count = int(selectedIds().size());
+        const QString suffix = count > 1 ? tr(" (%n images)", nullptr, count) : QString();
+        menu.addAction(Icons::get(QStringLiteral("scissors")), tr("Remove background") + suffix, this, [this] {
+            runBatchUtility(ai::Utility::RemoveBackground, {}, tr("Remove background"));
+        });
+        menu.addAction(Icons::get(QStringLiteral("upscale")), tr("Upscale 2×") + suffix, this, [this] {
+            runBatchUtility(ai::Utility::Upscale, QJsonObject{{QStringLiteral("factor"), 2}}, tr("Upscale 2×"));
+        });
+        menu.addSeparator();
         menu.addAction(Icons::get(QStringLiteral("copy")), tr("Copy image"), this, [this] {
             if (doc::Project *p = m_studio->project())
                 p->loadImage(selectedIds().first()).then(this, [](QImage img) { QApplication::clipboard()->setImage(img); });
@@ -538,6 +548,26 @@ LibraryPage::LibraryPage(Studio *studio, QWidget *parent)
     connect(studio, &Studio::projectOpened, this, bindProject);
     bindProject();
     showInspector();
+}
+
+void LibraryPage::runBatchUtility(ai::Utility utility, const QJsonObject &params, const QString &title)
+{
+    ai::GenerationService *gen = m_studio->generation();
+    if (!gen->providerForUtility(utility)) {
+        m_studio->notify(tr("No configured provider can run \"%1\". Add SD WebUI (rembg extension), ComfyUI, Stability AI or fal.ai "
+                            "in Settings → Providers.")
+                             .arg(title),
+                         QStringLiteral("warning"));
+        return;
+    }
+    const QStringList ids = selectedIds();
+    doc::Project *project = m_studio->project();
+    for (const QString &id : ids) {
+        const auto info = project ? project->asset(id) : std::nullopt;
+        const QString name = info ? QStringLiteral("%1: %2").arg(title, info->name) : title;
+        gen->submitUtilityForAsset(QString(), utility, id, params, name);
+    }
+    m_studio->notify(tr("Queued %n job(s). The results appear in the library.", nullptr, int(ids.size())), QStringLiteral("info"));
 }
 
 QStringList LibraryPage::selectedIds() const

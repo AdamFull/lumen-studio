@@ -8,6 +8,7 @@ It covers:
 * mask-based local inpainting, with a prompt bar that appears next to the selection on the canvas;
 * LLM-driven shot planning;
 * a layered editor (selection, brush, fill, crop and free transform tools);
+* an asset library with batch background removal and upscaling;
 * character part slicing for Live2D.
 
 Local back-ends (Stable Diffusion WebUI / Forge, ComfyUI, llama.cpp, Ollama, LM Studio) and cloud

@@ -83,6 +83,9 @@ public:
     QString groupFor(const QString &providerId) const;
     Job *submitUtility(const QString &providerId, Utility utility, const QImage &image, const QJsonObject &params,
                        const QString &title, bool saveAsset = true);
+    // Runs a utility on a project asset; the result is stored as a new asset derived from it.
+    Job *submitUtilityForAsset(const QString &providerId, Utility utility, const QString &assetId, const QJsonObject &params,
+                               const QString &title);
 
     // Image provider able to run a utility (preferred provider first, then any other).
     ImageProvider *providerForUtility(Utility utility, const QString &preferredId = QString()) const;
@@ -94,6 +97,8 @@ signals:
 
 private:
     void finishWithAssets(Job *job, const GenerationSpec &spec, GenerationOutput output, ImageProvider *provider);
+    Job *submitUtilityImpl(const QString &providerId, Utility utility, std::function<QFuture<QImage>()> image, const QJsonObject &params,
+                           const QString &title, bool saveAsset, const QString &sourceAssetId);
 
     ProviderRegistry *m_registry;
     JobQueue *m_queue;
