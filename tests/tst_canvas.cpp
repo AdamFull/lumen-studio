@@ -4,9 +4,12 @@
 #include "ui/canvas/ContextBar.h"
 #include "ui/canvas/EditorState.h"
 #include "ui/canvas/TransformTool.h"
+#include "ui/Studio.h"
 
+#include <QJsonArray>
 #include <QLineEdit>
 #include <QPainter>
+#include <QTemporaryDir>
 #include <QToolButton>
 #include <QtTest>
 
@@ -44,6 +47,7 @@ private slots:
     void transformRevertAndResample();
     void transformLockedLayer();
     void contextBarFollowsSelection();
+    void studioRestoresSession();
 
 private:
     ToolEvent at(double x, double y, Qt::KeyboardModifiers mods = Qt::NoModifier) const
@@ -271,6 +275,49 @@ void TestCanvas::contextBarFollowsSelection()
     QVERIFY(!bar.isVisible());
     m_doc->applySelection(sel, QStringLiteral("Select"));
     QTRY_VERIFY(bar.isVisible());
+}
+
+void TestCanvas::studioRestoresSession()
+{
+    QTemporaryDir dir;
+    const QString path = dir.filePath(QStringLiteral("session.lumen"));
+    QString firstId, secondId;
+    {
+        Studio studio;
+        studio.openProject(path);
+        QTRY_VERIFY_WITH_TIMEOUT(studio.isProjectOpen(), 5000);
+        doc::Document *a = studio.newDocument(QSize(64, 48), QStringLiteral("First"));
+        doc::Document *b = studio.newDocument(QSize(32, 32), QStringLiteral("Second"));
+        // A change is saved shortly after the user stops editing (no explicit save).
+        a->addLayer(QStringLiteral("Paint"));
+        QTRY_VERIFY_WITH_TIMEOUT(!a->id().isEmpty() && !a->isModified(), Studio::kIdleSaveMs + 5000);
+        QTRY_VERIFY_WITH_TIMEOUT(!b->id().isEmpty() && !b->isModified(), 5000);
+        firstId = a->id();
+        secondId = b->id();
+        studio.setActiveDocument(a);
+        auto saved = studio.saveSession();
+        QTRY_VERIFY_WITH_TIMEOUT(saved.isFinished(), 5000);
+        // Simulated crash: the studio goes away without closing its documents.
+    }
+    Studio studio;
+    QSignalSpy restored(&studio, &Studio::sessionRestored);
+    studio.openProject(path);
+    QTRY_VERIFY_WITH_TIMEOUT(restored.size() == 1, 10000);
+    QCOMPARE(studio.documents().size(), 2);
+    QStringList ids;
+    for (doc::Document *d : studio.documents())
+        ids << d->id();
+    QVERIFY(ids.contains(firstId) && ids.contains(secondId));
+    QCOMPARE(studio.activeDocument()->id(), firstId);
+    QCOMPARE(studio.activeDocument()->layerCount(), 2);
+    // Closing a document removes it from the session.
+    studio.closeDocument(studio.activeDocument());
+    QTest::qWait(700);
+    auto records = studio.project()->records(QStringLiteral("session"));
+    QTRY_VERIFY(records.isFinished());
+    const QJsonArray docs = records.result().first().json.value(QStringLiteral("documents")).toArray();
+    QCOMPARE(docs.size(), 1);
+    QCOMPARE(docs.first().toString(), secondId);
 }
 
 QTEST_MAIN(TestCanvas)

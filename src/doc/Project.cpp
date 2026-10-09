@@ -7,6 +7,7 @@
 #include "core/Psd.h"
 
 #include <QBuffer>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QFileInfo>
 #include <QImageReader>
@@ -430,6 +431,9 @@ QFuture<void> Project::saveDocument(Document *doc)
         QImage selection;
         QByteArray thumb;
         qint64 now;
+        QElapsedTimer clock;
+        qint64 encodeMs = 0, thumbMs = 0;
+        int encoded = 0;
     };
     auto job = std::make_shared<SaveJob>();
     job->id = docId;
@@ -452,15 +456,20 @@ QFuture<void> Project::saveDocument(Document *doc)
     QPointer<Document> guard(doc);
     const quint64 revisionAtSave = doc->revision();
 
+    job->clock.start();
     return async::run([job] {
                QtConcurrent::blockingMap(async::pool(), job->layers, [](LayerJob &lj) {
                    if (lj.encode)
                        lj.data = img::encode(lj.image, "PNG", 1);
                    lj.image = QImage();
                });
+               for (const LayerJob &lj : job->layers)
+                   job->encoded += lj.encode ? 1 : 0;
                if (!job->selection.isNull())
                    job->state.insert(QStringLiteral("selection"), QString::fromLatin1(img::toBase64(job->selection, "PNG", 1)));
+               job->encodeMs = job->clock.elapsed();
                job->thumb = encodeThumb(flatten(job->snapshot, job->size));
+               job->thumbMs = job->clock.elapsed() - job->encodeMs;
                job->snapshot.clear();
            })
         .then(this, [this, job] {
@@ -547,6 +556,9 @@ QFuture<void> Project::saveDocument(Document *doc)
                 info.created = info.modified;
                 m_documents.prepend(info);
             }
+            qCDebug(lcPerf).nospace() << "Saved document " << job->name << ": " << job->encoded << "/" << job->layers.size()
+                                      << " layers encoded in " << job->encodeMs << " ms, thumbnail " << job->thumbMs << " ms, total "
+                                      << job->clock.elapsed() << " ms";
             emit documentsChanged();
             emit documentSaved(job->id);
             finishSave(job->id);

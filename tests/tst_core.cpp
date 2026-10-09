@@ -1,3 +1,4 @@
+#include "core/CrashGuard.h"
 #include "core/ImageOps.h"
 #include "core/JobQueue.h"
 #include "core/JsonSchema.h"
@@ -6,6 +7,7 @@
 #include <QElapsedTimer>
 #include <QPainter>
 #include <QSignalSpy>
+#include <QTemporaryDir>
 #include <QtTest>
 
 using namespace lumen;
@@ -29,6 +31,7 @@ private slots:
     void extractJsonFromProse();
     void jobQueueConcurrency();
     void jobCancelQueued();
+    void sessionLockDetectsCrash();
 };
 
 void TestCore::maskBoundsAndEmpty()
@@ -41,6 +44,16 @@ void TestCore::maskBoundsAndEmpty()
             m.scanLine(y)[x] = 255;
     QVERIFY(!img::maskIsEmpty(m));
     QCOMPARE(img::maskBounds(m), QRect(QPoint(30, 10), QPoint(45, 20)));
+    // Odd widths and pixels at the row ends (the scan skips zero runs in 8-byte words).
+    for (int w : {1, 7, 9, 61}) {
+        QImage edge = img::createMask(QSize(w, 5));
+        edge.scanLine(4)[w - 1] = 3;
+        edge.scanLine(1)[0] = 200;
+        QCOMPARE(img::maskBounds(edge), QRect(QPoint(0, 1), QPoint(w - 1, 4)));
+        QCOMPARE(img::maskBounds(edge, 10), QRect(0, 1, 1, 1)); // the faint pixel is below the threshold
+        QVERIFY(!img::maskIsEmpty(edge, 200));
+        QVERIFY(img::maskIsEmpty(edge, 201));
+    }
 }
 
 void TestCore::dilateErode()
@@ -239,6 +252,38 @@ void TestCore::jobCancelQueued()
     queue.retry(b);
     QCOMPARE(b->state(), Job::State::Queued);
     queue.remove(b);
+}
+
+void TestCore::sessionLockDetectsCrash()
+{
+    QTemporaryDir dir;
+    QVERIFY(crash::SessionLock::processAlive(QCoreApplication::applicationPid()));
+    QVERIFY(!crash::SessionLock::processAlive(-1));
+    {
+        crash::SessionLock first(dir.path());
+        QVERIFY(!first.previousSessionCrashed());
+        QVERIFY(QFile::exists(first.lockFile()));
+        first.release();
+        QVERIFY(!QFile::exists(first.lockFile()));
+    }
+    // A lock left by a process that no longer exists = the previous session crashed.
+    qint64 deadPid = 999990;
+    while (crash::SessionLock::processAlive(deadPid))
+        --deadPid;
+    QFile stale(dir.filePath(QStringLiteral("session-%1.lock").arg(deadPid)));
+    QVERIFY(stale.open(QIODevice::WriteOnly));
+    stale.write("started=2026-01-01T00:00:00 pid=1 log=x\n");
+    stale.close();
+    crash::SessionLock second(dir.path());
+    QVERIFY(second.previousSessionCrashed());
+    QCOMPARE(second.staleSessions().size(), 1);
+    QVERIFY(second.staleSessions().first().startsWith(QLatin1String("started=2026-01-01")));
+    QVERIFY(!stale.exists());
+    // Without a release (a crash) the next start sees this session's own lock as stale too.
+    crash::SessionLock third(dir.path());
+    QVERIFY(third.previousSessionCrashed());
+    third.release();
+    QVERIFY(crash::reports(dir.path()).isEmpty());
 }
 
 QTEST_MAIN(TestCore)

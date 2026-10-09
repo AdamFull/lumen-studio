@@ -14,6 +14,7 @@ add_library(lumen_core STATIC
     JsonUtil.h JsonUtil.cpp
     PngText.h PngText.cpp
     LatencyWatchdog.h LatencyWatchdog.cpp
+    CrashGuard.h CrashGuard.cpp
 )
 target_include_directories(lumen_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
 target_link_libraries(lumen_core PUBLIC Qt6::Core Qt6::Gui Qt6::Concurrent)

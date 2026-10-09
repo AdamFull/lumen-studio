@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <vector>
 
 namespace lumen::img {
@@ -139,28 +140,63 @@ QImage alphaFromMask(const QImage &image, const QImage &mask, bool transparentWh
     return out;
 }
 
+namespace {
+
+// First / last byte >= threshold in [from, to) of a mask row, or -1. Zero runs (most of a typical
+// mask) are skipped eight bytes at a time.
+int firstAtLeast(const uchar *row, int from, int to, int threshold)
+{
+    int x = from;
+    while (x < to) {
+        if (x + 8 <= to) {
+            quint64 word;
+            std::memcpy(&word, row + x, 8);
+            if (word == 0) {
+                x += 8;
+                continue;
+            }
+        }
+        if (row[x] >= threshold)
+            return x;
+        ++x;
+    }
+    return -1;
+}
+
+int lastAtLeast(const uchar *row, int from, int to, int threshold)
+{
+    int x = to - 1;
+    while (x >= from) {
+        if (x - 7 >= from) {
+            quint64 word;
+            std::memcpy(&word, row + x - 7, 8);
+            if (word == 0) {
+                x -= 8;
+                continue;
+            }
+        }
+        if (row[x] >= threshold)
+            return x;
+        --x;
+    }
+    return -1;
+}
+
+} // namespace
+
 QRect maskBounds(const QImage &mask, int threshold)
 {
     if (mask.isNull())
         return {};
-    int minX = mask.width(), minY = mask.height(), maxX = -1, maxY = -1;
+    threshold = std::max(1, threshold);
+    const int w = mask.width();
+    int minX = w, minY = mask.height(), maxX = -1, maxY = -1;
     for (int y = 0; y < mask.height(); ++y) {
         const uchar *row = mask.constScanLine(y);
-        int first = -1, last = -1;
-        for (int x = 0; x < mask.width(); ++x) {
-            if (row[x] >= threshold) {
-                first = x;
-                break;
-            }
-        }
+        const int first = firstAtLeast(row, 0, w, threshold);
         if (first < 0)
             continue;
-        for (int x = mask.width() - 1; x >= first; --x) {
-            if (row[x] >= threshold) {
-                last = x;
-                break;
-            }
-        }
+        const int last = lastAtLeast(row, first, w, threshold);
         minX = std::min(minX, first);
         maxX = std::max(maxX, last);
         minY = std::min(minY, y);
@@ -175,12 +211,10 @@ bool maskIsEmpty(const QImage &mask, int threshold)
 {
     if (mask.isNull())
         return true;
+    threshold = std::max(1, threshold);
     for (int y = 0; y < mask.height(); ++y) {
-        const uchar *row = mask.constScanLine(y);
-        for (int x = 0; x < mask.width(); ++x) {
-            if (row[x] >= threshold)
-                return false;
-        }
+        if (firstAtLeast(mask.constScanLine(y), 0, mask.width(), threshold) >= 0)
+            return false;
     }
     return true;
 }

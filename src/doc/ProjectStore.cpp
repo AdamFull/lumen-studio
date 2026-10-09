@@ -82,8 +82,9 @@ QFuture<void> ProjectStore::open(const QString &path)
                 throw StoreError(db.lastError().text());
             QSqlQuery q(db);
             // WAL keeps the GUI responsive (readers never block writers) and is crash safe.
-            for (const char *pragma : {"PRAGMA journal_mode=WAL", "PRAGMA synchronous=NORMAL", "PRAGMA foreign_keys=ON",
-                                       "PRAGMA busy_timeout=5000"}) {
+            // Large pages suit the multi-megabyte layer blobs (only takes effect when the file is created).
+            for (const char *pragma : {"PRAGMA page_size=65536", "PRAGMA journal_mode=WAL", "PRAGMA synchronous=NORMAL",
+                                       "PRAGMA foreign_keys=ON", "PRAGMA busy_timeout=5000"}) {
                 q.exec(QString::fromLatin1(pragma));
             }
             for (const char *stmt : kSchema)

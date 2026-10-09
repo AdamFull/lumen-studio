@@ -10,6 +10,7 @@
 #include "core/Settings.h"
 
 #include <QDir>
+#include <QJsonArray>
 #include <QFileInfo>
 #include <QImageReader>
 #include <QPainter>
@@ -31,6 +32,18 @@ Studio::Studio(QObject *parent)
     m_autosave.setInterval(std::max(10, Settings::instance().autosaveIntervalSec()) * 1000);
     connect(&m_autosave, &QTimer::timeout, this, &Studio::autosave);
     m_autosave.start();
+    m_idleSave.setSingleShot(true);
+    m_idleSave.setInterval(kIdleSaveMs);
+    connect(&m_idleSave, &QTimer::timeout, this, &Studio::autosave);
+    m_sessionSave.setSingleShot(true);
+    m_sessionSave.setInterval(500);
+    connect(&m_sessionSave, &QTimer::timeout, this, &Studio::saveSession);
+    connect(this, &Studio::documentsChanged, this, &Studio::scheduleSessionSave);
+    connect(this, &Studio::activeDocumentChanged, this, &Studio::scheduleSessionSave);
+    connect(this, &Studio::projectOpened, this, [this] {
+        if (Settings::instance().value(QStringLiteral("doc/restoreSession"), true).toBool())
+            restoreSession();
+    });
     connect(&Settings::instance(), &Settings::changed, this, [this](const QString &key) {
         if (key == QLatin1String("doc/autosaveSec"))
             m_autosave.setInterval(std::max(10, Settings::instance().autosaveIntervalSec()) * 1000);
@@ -66,10 +79,13 @@ void Studio::openDefaultProject()
 void Studio::openProject(const QString &path)
 {
     auto open = [this, path] {
-        // Close documents of the previous project.
+        // Close documents of the previous project (its session keeps them for the next time).
+        m_switching = true;
+        m_sessionSave.stop();
         const auto docs = m_documents;
         for (doc::Document *d : docs)
             closeDocument(d);
+        m_switching = false;
         if (m_project) {
             m_project->close();
             m_project->deleteLater();
@@ -114,14 +130,112 @@ void Studio::autosave()
 {
     if (!m_project || !m_project->isOpen())
         return;
+    bool newIds = false;
     for (doc::Document *d : std::as_const(m_documents)) {
-        if (d->isModified() && !m_project->isSaving(d->id()))
+        if (d->isModified() && !m_project->isSaving(d->id())) {
+            newIds = newIds || d->id().isEmpty();
             m_project->saveDocument(d);
+        }
     }
+    if (newIds)
+        scheduleSessionSave(); // documents saved for the first time join the session
+}
+
+void Studio::scheduleSessionSave()
+{
+    if (!m_restoring && !m_switching)
+        m_sessionSave.start();
+}
+
+QFuture<void> Studio::saveSession()
+{
+    if (!m_project || !m_project->isOpen() || m_restoring || m_switching)
+        return QtFuture::makeReadyVoidFuture();
+    QJsonArray ids;
+    for (doc::Document *d : std::as_const(m_documents)) {
+        if (!d->id().isEmpty())
+            ids.append(d->id());
+    }
+    doc::Record record;
+    record.id = QStringLiteral("session");
+    record.type = QStringLiteral("session");
+    record.name = tr("Open documents");
+    record.json = QJsonObject{{QStringLiteral("documents"), ids},
+                              {QStringLiteral("active"), m_active ? m_active->id() : QString()}};
+    return m_project->saveRecord(record).then([](doc::Record) {});
+}
+
+void Studio::restoreSession()
+{
+    if (!m_project || !m_project->isOpen())
+        return;
+    QPointer<doc::Project> project = m_project;
+    m_project->records(QStringLiteral("session")).then(this, [this, project](QList<doc::Record> records) {
+        if (project != m_project || records.isEmpty())
+            return;
+        const QJsonObject json = records.first().json;
+        QStringList ids;
+        for (const QJsonValue &v : json.value(QStringLiteral("documents")).toArray()) {
+            const QString id = v.toString();
+            bool known = false;
+            for (const doc::DocumentInfo &info : project->documents())
+                known = known || info.id == id;
+            bool open = false;
+            for (doc::Document *d : std::as_const(m_documents))
+                open = open || d->id() == id;
+            if (known && !open)
+                ids << id;
+        }
+        if (ids.isEmpty())
+            return;
+        const QString active = json.value(QStringLiteral("active")).toString();
+        m_restoring = true;
+        auto remaining = std::make_shared<int>(int(ids.size()));
+        auto done = [this, remaining, active] {
+            if (--*remaining > 0)
+                return;
+            m_restoring = false;
+            for (doc::Document *d : std::as_const(m_documents)) {
+                if (d->id() == active)
+                    setActiveDocument(d);
+            }
+            emit sessionRestored();
+        };
+        for (const QString &id : ids) {
+            project->loadDocument(id)
+                .then(this, [this, project, done](std::shared_ptr<doc::LoadedDocument> loaded) {
+                    if (project == m_project)
+                        adoptLoaded(loaded);
+                    done();
+                })
+                .onFailed(this, [this, done](const std::exception &e) {
+                    qCWarning(lcApp) << "Could not restore a document:" << describeException(e);
+                    done();
+                });
+        }
+    });
+}
+
+doc::Document *Studio::adoptLoaded(const std::shared_ptr<doc::LoadedDocument> &loaded)
+{
+    auto *doc = new doc::Document(loaded->size);
+    doc->setId(loaded->id);
+    doc->setName(loaded->name);
+    doc->replaceContentRaw(loaded->size, loaded->layers, loaded->selection);
+    doc->setActiveLayer(loaded->active);
+    doc->setSettings(loaded->settings);
+    if (loaded->pose)
+        doc->setControlPose(loaded->pose);
+    doc->undoStack()->clear();
+    doc->setModified(false);
+    adoptDocument(doc);
+    return doc;
 }
 
 void Studio::adoptDocument(doc::Document *doc)
 {
+    // Save shortly after the user stops changing the document.
+    connect(doc->undoStack(), &QUndoStack::indexChanged, &m_idleSave, qOverload<>(&QTimer::start));
     doc->setParent(this);
     m_documents.append(doc);
     emit documentsChanged();
@@ -218,31 +332,23 @@ void Studio::openAssetInEditor(const QString &assetId)
         .onFailed(this, [this](const std::exception &e) { notify(describeException(e), QStringLiteral("error")); });
 }
 
-void Studio::openStoredDocument(const QString &documentId)
+void Studio::openStoredDocument(const QString &documentId, bool show)
 {
     for (doc::Document *d : std::as_const(m_documents)) {
         if (d->id() == documentId) {
             setActiveDocument(d);
-            showPage(Page::Editor);
+            if (show)
+                showPage(Page::Editor);
             return;
         }
     }
     if (!m_project)
         return;
     m_project->loadDocument(documentId)
-        .then(this, [this](std::shared_ptr<doc::LoadedDocument> loaded) {
-            auto *doc = new doc::Document(loaded->size);
-            doc->setId(loaded->id);
-            doc->setName(loaded->name);
-            doc->replaceContentRaw(loaded->size, loaded->layers, loaded->selection);
-            doc->setActiveLayer(loaded->active);
-            doc->setSettings(loaded->settings);
-            if (loaded->pose)
-                doc->setControlPose(loaded->pose);
-            doc->undoStack()->clear();
-            doc->setModified(false);
-            adoptDocument(doc);
-            showPage(Page::Editor);
+        .then(this, [this, show](std::shared_ptr<doc::LoadedDocument> loaded) {
+            adoptLoaded(loaded);
+            if (show)
+                showPage(Page::Editor);
         })
         .onFailed(this, [this](const std::exception &e) { notify(describeException(e), QStringLiteral("error")); });
 }

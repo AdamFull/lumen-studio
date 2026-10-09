@@ -54,9 +54,17 @@ public:
     void openFile(const QString &path);
     void openPsdAsDocument(const QString &path);
     static QString openFileFilter();
-    void openStoredDocument(const QString &documentId);
+    // Opens a document stored in the project; `show` switches to the editor.
+    void openStoredDocument(const QString &documentId, bool show = true);
     void openAssetInEditor(const QString &assetId);
     void closeDocument(doc::Document *doc);
+
+    // ---- session ------------------------------------------------------------------------------
+    // The open documents are remembered in the project and reopened when it opens again (also after
+    // a crash). Modified documents are saved a few seconds after the last change and periodically.
+    void restoreSession();
+    QFuture<void> saveSession();
+    static constexpr int kIdleSaveMs = 4000;
 
     // ---- cross-page actions -------------------------------------------------------------------
     void showPage(Page page) { emit pageRequested(page); }
@@ -87,11 +95,14 @@ signals:
     void rerunRequested(const QString &assetId);
     void sliceRequested(const QString &assetId);
     void notification(const QString &message, const QString &level);
+    void sessionRestored();
 
 private:
     void applyConcurrency();
     void autosave();
     void adoptDocument(doc::Document *doc);
+    void scheduleSessionSave();
+    doc::Document *adoptLoaded(const std::shared_ptr<doc::LoadedDocument> &loaded);
 
     net::HttpClient m_http;
     ai::ProviderRegistry m_registry;
@@ -103,6 +114,10 @@ private:
     QList<doc::Document *> m_documents;
     QPointer<doc::Document> m_active;
     QTimer m_autosave;
+    QTimer m_idleSave;
+    QTimer m_sessionSave;
+    bool m_restoring = false;
+    bool m_switching = false;
 };
 
 } // namespace lumen::ui

@@ -126,9 +126,11 @@ lip-sync a talking loop, and exposes every parameter as a slider.
 ## 8. Projects
 
 Everything lives in a project file (`.lumen`): the library images and the editor documents. Modified
-documents are saved into the project automatically (every 60 seconds by default) and when the
-project closes; reopen them from the **Documents** view of the Library. **File → Open project…**
-(`Ctrl+Shift+O`) switches projects; the last one opens on start.
+documents are saved into the project a few seconds after your last change, every 60 seconds, and
+when the project closes. The documents that were open come back when the project opens again, also
+after a crash. In that case Lumen tells you, and a crash report (`crash-*.txt` with a `.dmp`
+minidump) is in the log folder. Closed documents stay in the **Documents** view of the Library.
+**File → Open project…** (`Ctrl+Shift+O`) switches projects; the last one opens on start.
 
 ## 9. Command line
 

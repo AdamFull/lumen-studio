@@ -1,4 +1,5 @@
 #include "core/Async.h"
+#include "core/CrashGuard.h"
 #include "core/LatencyWatchdog.h"
 #include "core/Log.h"
 #include "core/Paths.h"
@@ -11,16 +12,22 @@
 
 #include <QApplication>
 #include <QCommandLineParser>
+#include <QElapsedTimer>
 #include <QFontDatabase>
 #include <QImageReader>
 #include <QFileInfo>
 #include <QTimer>
+
+#include <cstdlib>
+#include <stdexcept>
 
 using namespace lumen;
 
 int main(int argc, char *argv[])
 {
     QApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
+    QElapsedTimer startup;
+    startup.start();
     QApplication app(argc, argv);
     QApplication::setApplicationName(QStringLiteral("Lumen Studio"));
     QApplication::setOrganizationName(QStringLiteral("Lumen"));
@@ -46,6 +53,21 @@ int main(int argc, char *argv[])
 
     paths::ensure();
     log::install(paths::logs());
+    crash::installHandlers(paths::logs());
+    crash::SessionLock session(paths::appData());
+    if (session.previousSessionCrashed())
+        qCWarning(lcApp) << "The previous session did not exit cleanly:" << session.staleSessions();
+    // LUMEN_CRASH_TEST=segv|throw|abort verifies the crash handlers.
+    if (const QByteArray test = qgetenv("LUMEN_CRASH_TEST"); !test.isEmpty()) {
+        QTimer::singleShot(500, [test] {
+            if (test == "throw")
+                throw std::runtime_error("crash test");
+            if (test == "abort")
+                std::abort();
+            volatile int *null = nullptr;
+            *null = 1;
+        });
+    }
     async::setMaxThreads(Settings::instance().workerThreads());
     QImageReader::setAllocationLimit(1024);
 
@@ -109,12 +131,23 @@ int main(int argc, char *argv[])
             window.resize(wh[0].toInt(), wh[1].toInt());
     }
 
+    // GUI stalls are logged (lumen.perf); release builds only report the long ones.
 #ifndef NDEBUG
     LatencyWatchdog watchdog(80);
-    watchdog.start();
+#else
+    LatencyWatchdog watchdog(250);
 #endif
+    watchdog.start();
 
     window.show();
+    QTimer::singleShot(0, &window, [&startup] { qCInfo(lcPerf) << "Window shown" << startup.elapsed() << "ms after start"; });
+    if (session.previousSessionCrashed()) {
+        QTimer::singleShot(1500, &studio, [&studio] {
+            studio.notify(QObject::tr("Lumen Studio did not close properly last time. Open documents were restored from the last "
+                                      "autosave; a crash report may be in the log folder (Help → Open log folder)."),
+                          QStringLiteral("warning"));
+        });
+    }
 
     if (parser.isSet(screenshotOpt)) {
         const QString out = parser.value(screenshotOpt);
@@ -125,6 +158,7 @@ int main(int argc, char *argv[])
     }
 
     const int rc = app.exec();
+    session.release();
     log::shutdown();
     return rc;
 }
