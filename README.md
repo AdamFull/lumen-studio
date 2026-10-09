@@ -6,7 +6,7 @@ It covers:
 * text-to-image and multi-reference character generation;
 * editable OpenPose poses, with a Live2D preset category;
 * mask-based local inpainting, with a prompt bar that appears next to the selection on the canvas;
-* LLM-driven shot planning;
+* LLM-driven shot planning, and an assistant that drives the studio through tool calls;
 * a layered editor (selection, brush, fill, crop and free transform tools);
 * an asset library with batch background removal and upscaling;
 * character part slicing for Live2D.

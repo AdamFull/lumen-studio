@@ -32,11 +32,14 @@ public:
 
 protected:
     void closeEvent(QCloseEvent *e) override;
+    void resizeEvent(QResizeEvent *e) override;
 
 private:
     void buildMenus();
     QWidget *buildNavRail();
     void toggleQueue();
+    void toggleAssistant();
+    void placeAssistant();
     void updateJobSummary();
     void updateTitle();
     void newProject();
@@ -54,6 +57,8 @@ private:
     QFrame *m_queuePanel = nullptr;
     QVBoxLayout *m_queueList = nullptr;
     QToolButton *m_queueButton = nullptr;
+    QToolButton *m_assistantButton = nullptr;
+    class AssistantPanel *m_assistant = nullptr;
     QLabel *m_jobLabel;
     QLabel *m_projectLabel;
     bool m_closing = false;

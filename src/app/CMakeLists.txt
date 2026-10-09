@@ -18,10 +18,13 @@ lumen_configure_target(lumen)
 find_package(Qt6 QUIET COMPONENTS LinguistTools)
 if(Qt6LinguistTools_FOUND)
     file(GLOB LUMEN_TS_FILES "${PROJECT_SOURCE_DIR}/translations/lumen_*.ts")
+    # lumen_en.ts only holds English plural forms ("1 image" / "2 images").
+    list(FILTER LUMEN_TS_FILES EXCLUDE REGEX "lumen_en\.ts$")
     if(LUMEN_TS_FILES)
         qt_add_translations(lumen
             SOURCE_TARGETS lumen lumen_ui lumen_ai lumen_doc lumen_core lumen_net lumen_pose lumen_live2d
             TS_FILES ${LUMEN_TS_FILES}
+            PLURALS_TS_FILE "${PROJECT_SOURCE_DIR}/translations/lumen_en.ts"
             RESOURCE_PREFIX /i18n
             LUPDATE_OPTIONS -no-obsolete -locations relative)
     endif()

@@ -561,6 +561,8 @@ QWidget *SettingsDialog::buildGeneralTab()
     language->addItem(QStringLiteral("English"), QStringLiteral("en"));
     for (const QString &file : QDir(QStringLiteral(":/i18n")).entryList({QStringLiteral("lumen_*.qm")})) {
         const QString code = file.mid(6, file.size() - 9); // lumen_<code>.qm
+        if (code == QLatin1String("en"))
+            continue; // English plural forms only
         const QLocale locale(code);
         QString name = locale.nativeLanguageName();
         if (!name.isEmpty())

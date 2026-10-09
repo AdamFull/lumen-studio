@@ -10,6 +10,7 @@
 #include "ui/Theme.h"
 #include "ui/Shortcuts.h"
 #include "ui/Studio.h"
+#include "ui/assistant/AssistantPanel.h"
 #include "ui/director/DirectorSession.h"
 #include "ui/director/ShotCard.h"
 #include "ui/pages/CreatePage.h"
@@ -68,6 +69,7 @@ private slots:
     void accessibleNames();
     void fitLabelWraps();
     void criticRetriesShot();
+    void assistantRunsReferenceScenario();
 
 private:
     ToolEvent at(double x, double y, Qt::KeyboardModifiers mods = Qt::NoModifier) const
@@ -573,6 +575,115 @@ void TestCanvas::criticRetriesShot()
     // The verdict is also stored with the library asset.
     QTRY_COMPARE(studio.project()->asset(state->results[1])->metadata.value(QStringLiteral("critic")).toObject().value(QStringLiteral("score")).toInt(), 9);
     Settings::instance().setValue(QStringLiteral("director/critic"), false);
+    for (ai::Provider *p : studio.providers()->providers())
+        studio.providers()->removeProvider(p->instanceId());
+}
+
+void TestCanvas::assistantRunsReferenceScenario()
+{
+    // Reference scenario through the tool-calling assistant: plan Live2D shots, generate them.
+    MockHttpServer server;
+    int txt2img = 0;
+    server.route("POST", QStringLiteral("/sdapi/v1/txt2img"), [&](const MockRequest &) {
+        ++txt2img;
+        QImage im(64, 64, QImage::Format_ARGB32);
+        im.fill(Qt::magenta);
+        return MockResponse::json({{QStringLiteral("images"), QJsonArray{QString::fromLatin1(img::encode(im).toBase64())}},
+                                   {QStringLiteral("info"), QStringLiteral("{\"seed\": 1, \"all_seeds\": [1]}")}});
+    });
+    server.route("GET", QStringLiteral("/sdapi/v1/progress"), [](const MockRequest &) { return MockResponse::json({}); });
+    server.route("GET", QStringLiteral("/controlnet/model_list"), [](const MockRequest &) {
+        return MockResponse::json({{QStringLiteral("model_list"), QJsonArray{QStringLiteral("control_openpose [abc]")}}});
+    });
+
+    QJsonObject shot{{QStringLiteral("id"), QStringLiteral("front")},
+                     {QStringLiteral("title"), QStringLiteral("Front A-pose")},
+                     {QStringLiteral("description"), QStringLiteral("rig-ready front view")},
+                     {QStringLiteral("aspect_ratio"), QStringLiteral("2:3")},
+                     {QStringLiteral("background"), QStringLiteral("plain grey")},
+                     {QStringLiteral("prompt"), QStringLiteral("1girl, a-pose, front view")},
+                     {QStringLiteral("negative_prompt"), QString()}};
+    QJsonObject pose = pose::RigParams().toJson();
+    pose.remove(QStringLiteral("include_hands"));
+    pose.remove(QStringLiteral("include_face"));
+    pose.remove(QStringLiteral("name"));
+    shot.insert(QStringLiteral("pose"), pose);
+    const QJsonObject plan{{QStringLiteral("title"), QStringLiteral("Live2D source")},
+                           {QStringLiteral("summary"), QStringLiteral("one front shot")},
+                           {QStringLiteral("shots"), QJsonArray{shot}}};
+    int agentSteps = 0;
+    QList<QJsonObject> agentRequests;
+    server.route("POST", QStringLiteral("/v1/chat/completions"), [&](const MockRequest &req) {
+        const QJsonObject body = req.json();
+        auto reply = [](const QJsonObject &message, const QString &finish) {
+            return MockResponse::json({{QStringLiteral("choices"), QJsonArray{QJsonObject{{QStringLiteral("message"), message},
+                                                                                         {QStringLiteral("finish_reason"), finish}}}}});
+        };
+        if (!body.contains(QStringLiteral("tools"))) // the director's structured planning call
+            return reply(QJsonObject{{QStringLiteral("content"), QString::fromUtf8(QJsonDocument(plan).toJson(QJsonDocument::Compact))}},
+                         QStringLiteral("stop"));
+        agentRequests << body;
+        ++agentSteps;
+        auto call = [&](const QString &name, const QJsonObject &args) {
+            const QJsonObject c{{QStringLiteral("id"), QStringLiteral("call_%1").arg(agentSteps)},
+                                {QStringLiteral("type"), QStringLiteral("function")},
+                                {QStringLiteral("function"), QJsonObject{{QStringLiteral("name"), name},
+                                                                         {QStringLiteral("arguments"), QString::fromUtf8(QJsonDocument(args).toJson(QJsonDocument::Compact))}}}};
+            return reply(QJsonObject{{QStringLiteral("content"), QJsonValue()}, {QStringLiteral("tool_calls"), QJsonArray{c}}},
+                         QStringLiteral("tool_calls"));
+        };
+        switch (agentSteps) {
+        case 1: return call(QStringLiteral("get_state"), {});
+        case 2: return call(QStringLiteral("plan_shots"), {{QStringLiteral("request"), QStringLiteral("three Live2D source images")},
+                                                            {QStringLiteral("purpose"), QStringLiteral("live2d")},
+                                                            {QStringLiteral("count"), 1}});
+        case 3: return call(QStringLiteral("generate_shots"), {});
+        default:
+            return reply(QJsonObject{{QStringLiteral("content"), QStringLiteral("Done — the front shot is ready.")}}, QStringLiteral("stop"));
+        }
+    });
+
+    Settings::instance().setValue(QStringLiteral("director/critic"), false);
+    QTemporaryDir dir;
+    Studio studio;
+    for (ai::Provider *p : studio.providers()->providers())
+        studio.providers()->removeProvider(p->instanceId());
+    QVERIFY(studio.providers()->addProvider(QStringLiteral("sdwebui"), QStringLiteral("SD"), {{QStringLiteral("url"), server.baseUrl().toString()}}));
+    QVERIFY(studio.providers()->addProvider(QStringLiteral("llamacpp"), QStringLiteral("LLM"),
+                                            {{QStringLiteral("url"), server.baseUrl().toString() + QStringLiteral("/v1")}}));
+    studio.openProject(dir.filePath(QStringLiteral("assistant.lumen")));
+    QTRY_VERIFY_WITH_TIMEOUT(studio.isProjectOpen(), 5000);
+    CreatePage create(&studio);
+    QTRY_VERIFY(studio.directorActions());
+    for (QSpinBox *spin : create.findChildren<QSpinBox *>()) {
+        if (spin->suffix().contains(QLatin1String("per shot")))
+            spin->setValue(1);
+    }
+    AssistantPanel panel(&studio);
+    QSignalSpy finished(&panel, &AssistantPanel::runFinished);
+    panel.send(QStringLiteral("I need three images of my character for a Live2D avatar."));
+    QVERIFY(panel.isRunning());
+    QTRY_VERIFY_WITH_TIMEOUT(finished.size() == 1, 20000);
+    QCOMPARE(panel.lastReply(), QStringLiteral("Done — the front shot is ready."));
+    QCOMPARE(agentSteps, 4);
+    QCOMPARE(txt2img, 1);
+    // The director state the model saw, the plan, and the generated asset reported back.
+    QVERIFY(QJsonDocument(agentRequests[1]).toJson().contains("purposes"));
+    const QJsonObject state = studio.directorActions()->directorState();
+    QCOMPARE(state.value(QStringLiteral("purpose")).toString(), QStringLiteral("live2d"));
+    const QJsonArray shots = state.value(QStringLiteral("shots")).toArray();
+    QCOMPARE(shots.size(), 1);
+    const QString asset = shots[0].toObject().value(QStringLiteral("results")).toArray().first().toString();
+    QVERIFY(!asset.isEmpty());
+    QVERIFY(QJsonDocument(agentRequests[3]).toJson().contains(asset.toUtf8()));
+    // The conversation keeps the tool exchange for the next turn.
+    int toolMessages = 0;
+    for (const ai::ChatMessage &m : panel.history())
+        toolMessages += m.role == ai::ChatRole::Tool ? 1 : 0;
+    QCOMPARE(toolMessages, 3);
+    // A new chat starts over with only the system prompt.
+    panel.newChat();
+    QCOMPARE(panel.history().size(), 1);
     for (ai::Provider *p : studio.providers()->providers())
         studio.providers()->removeProvider(p->instanceId());
 }

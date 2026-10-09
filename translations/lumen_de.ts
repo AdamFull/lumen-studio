@@ -683,7 +683,7 @@
         <translation>Physikeinstellung %1 benötigt mindestens zwei Eckpunkte.</translation>
     </message>
     <message>
-        <location filename="../src/ui/pages/CreatePage.cpp" line="+622"/>
+        <location filename="../src/ui/pages/CreatePage.cpp" line="+625"/>
         <source>**Character sheet:** %1 — %2</source>
         <translation>**Charakterblatt:** %1 — %2</translation>
     </message>
@@ -695,7 +695,7 @@ Planning continues without a character sheet.</source>
 Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
-        <location line="+60"/>
+        <location line="+67"/>
         <source>Review and adjust the poses on the right, then press **Generate all** (or generate shots one by one).</source>
         <translation>Prüfen und passen Sie die Posen rechts an und klicken Sie dann auf **Alle generieren** (oder generieren Sie die Aufnahmen einzeln).</translation>
     </message>
@@ -970,6 +970,73 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <source>Painting never claims background pixels outside the character silhouette.</source>
         <translation>Beim Malen werden niemals Hintergrundpixel außerhalb der Charaktersilhouette erfasst.</translation>
     </message>
+    <message>
+        <location filename="../src/ui/assistant/AssistantTools.cpp" line="+78"/>
+        <source>cancelled</source>
+        <translation>abgebrochen</translation>
+    </message>
+    <message>
+        <location line="+29"/>
+        <source>There is no asset &quot;%1&quot;. Use list_assets to find ids.</source>
+        <translation>Es gibt kein Bild „%1“. Verwenden Sie list_assets, um IDs zu finden.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>The image could not be loaded.</source>
+        <translation>Das Bild konnte nicht geladen werden.</translation>
+    </message>
+    <message>
+        <location line="+51"/>
+        <location line="+26"/>
+        <source>No project is open.</source>
+        <translation>Es ist kein Projekt geöffnet.</translation>
+    </message>
+    <message>
+        <location line="+31"/>
+        <location line="+56"/>
+        <source>No image provider is configured.</source>
+        <translation>Es ist kein Bildanbieter konfiguriert.</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Edit: %1</source>
+        <translation>Bearbeitung: %1</translation>
+    </message>
+    <message>
+        <location line="+28"/>
+        <source>The region is empty; give x, y, width and height as fractions between 0 and 1.</source>
+        <translation>Der Bereich ist leer; geben Sie x, y, Breite und Höhe als Anteile zwischen 0 und 1 an.</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Inpaint: %1</source>
+        <translation>Inpainting: %1</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <location line="+14"/>
+        <location line="+12"/>
+        <source>There is no asset &quot;%1&quot;.</source>
+        <translation>Es gibt kein Bild „%1“.</translation>
+    </message>
+    <message>
+        <location line="-24"/>
+        <source>Remove background</source>
+        <translation>Hintergrund entfernen</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Upscale %1×</source>
+        <translation>%1× hochskalieren</translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <location line="+22"/>
+        <location line="+29"/>
+        <location line="+19"/>
+        <source>The director is not available.</source>
+        <translation>Die Regie ist nicht verfügbar.</translation>
+    </message>
 </context>
 <context>
     <name>lumen</name>
@@ -991,6 +1058,32 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <location line="+13"/>
         <source>Cancelling...</source>
         <translation>Wird abgebrochen...</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::ai::AgentRun</name>
+    <message>
+        <location filename="../src/ai/Agent.cpp" line="+123"/>
+        <source>No language model is configured for the assistant. Add one in Settings → Providers.</source>
+        <translation>Für den Assistenten ist kein Sprachmodell konfiguriert. Fügen Sie eines unter Einstellungen → Anbieter hinzu.</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+20"/>
+        <source>I stopped after %n tool step(s). Tell me how to continue.</source>
+        <translation>
+            <numerusform>Ich habe nach %n Werkzeugschritt angehalten. Sagen Sie mir, wie es weitergehen soll.</numerusform>
+            <numerusform>Ich habe nach %n Werkzeugschritten angehalten. Sagen Sie mir, wie es weitergehen soll.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Thinking…</source>
+        <translation>Denke nach…</translation>
+    </message>
+    <message>
+        <location line="+77"/>
+        <source>Running %1…</source>
+        <translation>%1 wird ausgeführt…</translation>
     </message>
 </context>
 <context>
@@ -2882,6 +2975,169 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
 </context>
 <context>
+    <name>lumen::ui::AssistantPanel</name>
+    <message>
+        <location filename="../src/ui/assistant/AssistantPanel.cpp" line="+42"/>
+        <source>Looking at the project</source>
+        <translation>Projekt wird angesehen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Browsing the library</source>
+        <translation>Bibliothek wird durchsucht</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Generating</source>
+        <translation>Wird generiert</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Editing an image</source>
+        <translation>Bild wird bearbeitet</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Repainting a region</source>
+        <translation>Bereich wird neu gemalt</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Removing the background</source>
+        <translation>Hintergrund wird entfernt</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Upscaling</source>
+        <translation>Wird hochskaliert</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Opening in the editor</source>
+        <translation>Wird im Editor geöffnet</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Analysing the references</source>
+        <translation>Referenzen werden analysiert</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Planning shots</source>
+        <translation>Einstellungen werden geplant</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Adjusting a pose</source>
+        <translation>Pose wird angepasst</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Generating shots</source>
+        <translation>Einstellungen werden generiert</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <location line="+6"/>
+        <source>Assistant</source>
+        <translation>Assistent</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>New chat</source>
+        <translation>Neuer Chat</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Close</source>
+        <translation>Schließen</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Ask in your own words. The assistant plans, generates, edits and poses for you; every image lands in the library.</source>
+        <translation>Fragen Sie in Ihren eigenen Worten. Der Assistent plant, generiert, bearbeitet und posiert für Sie; jedes Bild landet in der Bibliothek.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Plan three Live2D source images of my character from the reference images, then generate them</source>
+        <translation>Plane drei Live2D-Quellbilder meiner Figur aus den Referenzbildern und generiere sie anschließend</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Generate a portrait of a fox knight in silver armour, 2:3</source>
+        <translation>Generiere ein Porträt eines Fuchsritters in silberner Rüstung, 2:3</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Remove the background of the newest image</source>
+        <translation>Entferne den Hintergrund des neuesten Bildes</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Make the latest image look like a rainy night</source>
+        <translation>Lass das neueste Bild wie eine regnerische Nacht aussehen</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>What should I do? (Enter sends, Shift+Enter adds a line)</source>
+        <translation>Was soll ich tun? (Eingabe sendet, Umschalt+Eingabe fügt eine Zeile hinzu)</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Message to the assistant</source>
+        <translation>Nachricht an den Assistenten</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+148"/>
+        <source>Send</source>
+        <translation>Senden</translation>
+    </message>
+    <message>
+        <location line="-117"/>
+        <source>no language model</source>
+        <translation>kein Sprachmodell</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+80"/>
+        <source>%n image(s)</source>
+        <translation>
+            <numerusform>%n Bild</numerusform>
+            <numerusform>%n Bilder</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>Open in the editor</source>
+        <translation>Im Editor öffnen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Result image %1</source>
+        <translation>Ergebnisbild %1</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>Stop</source>
+        <translation>Stopp</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Add a language model in **Settings → Providers** (llama.cpp, Ollama, LM Studio, OpenAI, Anthropic, Gemini…) and assign it to the *Assistant* role.</source>
+        <translation>Fügen Sie unter **Einstellungen → Anbieter** ein Sprachmodell hinzu (llama.cpp, Ollama, LM Studio, OpenAI, Anthropic, Gemini…) und weisen Sie es der Rolle *Assistent* zu.</translation>
+    </message>
+    <message>
+        <location line="+35"/>
+        <source>⚠ %1</source>
+        <translation>⚠ %1</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Stopped.</source>
+        <translation>Angehalten.</translation>
+    </message>
+</context>
+<context>
     <name>lumen::ui::BrushTool</name>
     <message>
         <location filename="../src/ui/canvas/Tools.cpp" line="+153"/>
@@ -3024,7 +3280,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::CreatePage</name>
     <message>
-        <location filename="../src/ui/pages/CreatePage.cpp" line="-687"/>
+        <location filename="../src/ui/pages/CreatePage.cpp" line="-695"/>
         <source>Director</source>
         <translation>Regie</translation>
     </message>
@@ -3035,12 +3291,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+269"/>
+        <location line="+270"/>
         <source>New session</source>
         <translation>Neue Sitzung</translation>
     </message>
     <message>
-        <location line="-245"/>
+        <location line="-246"/>
         <source>Describe what you need, e.g. &quot;3 images of my character for a Live2D avatar: neutral front A-pose, eyes closed and mouth open variants&quot;. Attach reference images above. Enter sends, Shift+Enter = new line.</source>
         <translation>Beschreiben Sie, was Sie benötigen, z. B. „3 Bilder meines Charakters für einen Live2D-Avatar: neutrale A-Pose von vorn, Varianten mit geschlossenen Augen und offenem Mund“. Hängen Sie oben Referenzbilder an. Eingabe sendet, Umschalt+Eingabe = neue Zeile.</translation>
     </message>
@@ -3066,29 +3322,29 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+415"/>
+        <location line="+416"/>
         <source>Send</source>
         <translation>Senden</translation>
     </message>
     <message>
-        <location line="-397"/>
-        <location line="+767"/>
+        <location line="-398"/>
+        <location line="+959"/>
         <source>Character</source>
         <translation>Charakter</translation>
     </message>
     <message>
-        <location line="-763"/>
+        <location line="-955"/>
         <source>Edit sheet</source>
         <translation>Steckbrief bearbeiten</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+359"/>
+        <location line="+360"/>
         <source>Analyze references</source>
         <translation>Referenzen analysieren</translation>
     </message>
     <message>
-        <location line="-356"/>
+        <location line="-357"/>
         <source>Library</source>
         <translation>Bibliothek</translation>
     </message>
@@ -3109,12 +3365,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+20"/>
-        <location line="+344"/>
+        <location line="+345"/>
         <source>Shot plan</source>
         <translation>Aufnahmeplan</translation>
     </message>
     <message>
-        <location line="-341"/>
+        <location line="-342"/>
         <source>Generator</source>
         <translation>Generator</translation>
     </message>
@@ -3185,7 +3441,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Ungültiges JSON: %1</translation>
     </message>
     <message>
-        <location line="+171"/>
+        <location line="+172"/>
         <source>Start by attaching reference images of your character and describing the images you need.</source>
         <translation>Hängen Sie zunächst Referenzbilder Ihres Charakters an und beschreiben Sie die benötigten Bilder.</translation>
     </message>
@@ -3246,7 +3502,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         </translation>
     </message>
     <message>
-        <location line="+40"/>
+        <location line="+38"/>
+        <source>There is no director session.</source>
+        <translation>Es gibt keine Regie-Sitzung.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
         <source>Planning shots and poses…</source>
         <translation>Aufnahmen und Posen werden geplant…</translation>
     </message>
@@ -3256,7 +3517,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Plan wird überarbeitet…</translation>
     </message>
     <message>
-        <location line="+73"/>
+        <location line="+33"/>
+        <source>Planning was cancelled.</source>
+        <translation>Die Planung wurde abgebrochen.</translation>
+    </message>
+    <message>
+        <location line="+44"/>
         <source>Add an image provider in Settings → Providers first.</source>
         <translation>Fügen Sie zuerst unter Einstellungen → Anbieter einen Bildanbieter hinzu.</translation>
     </message>
@@ -3266,12 +3532,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Wird vorbereitet…</translation>
     </message>
     <message>
-        <location line="+85"/>
+        <location line="+88"/>
         <source>Critic is reviewing…</source>
         <translation>Kritiker bewertet…</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+14"/>
         <source>Critic failed: %1</source>
         <translation>Kritiker fehlgeschlagen: %1</translation>
     </message>
@@ -3294,7 +3560,48 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         </translation>
     </message>
     <message>
-        <location line="+52"/>
+        <location line="+96"/>
+        <source>The session has no reference images.</source>
+        <translation>Die Sitzung hat keine Referenzbilder.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <location line="+33"/>
+        <source>The session was closed.</source>
+        <translation>Die Sitzung wurde geschlossen.</translation>
+    </message>
+    <message>
+        <location line="-17"/>
+        <source>The director is busy; try again when it has finished.</source>
+        <translation>Die Regie ist beschäftigt; versuchen Sie es erneut, wenn sie fertig ist.</translation>
+    </message>
+    <message>
+        <location line="+27"/>
+        <source>There is no shot &quot;%1&quot;.</source>
+        <translation>Es gibt keine Einstellung „%1“.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>The shot no longer exists.</source>
+        <translation>Die Einstellung existiert nicht mehr.</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>There is no shot plan yet; plan the shots first.</source>
+        <translation>Es gibt noch keinen Einstellungsplan; planen Sie zuerst die Einstellungen.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>No image provider is configured.</source>
+        <translation>Es ist kein Bildanbieter konfiguriert.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>None of the requested shots exist.</source>
+        <translation>Keine der angeforderten Einstellungen existiert.</translation>
+    </message>
+    <message>
+        <location line="+40"/>
         <source>Attach references or create a character sheet first.</source>
         <translation>Fügen Sie zuerst Referenzen hinzu oder erstellen Sie ein Figurenblatt.</translation>
     </message>
@@ -4754,7 +5061,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::MainWindow</name>
     <message>
-        <location filename="../src/ui/MainWindow.cpp" line="+128"/>
+        <location filename="../src/ui/MainWindow.cpp" line="+129"/>
         <source>Create</source>
         <translation>Erstellen</translation>
     </message>
@@ -4824,14 +5131,14 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Zu %1 wechseln</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+35"/>
         <location line="+1"/>
-        <location line="+182"/>
+        <location line="+212"/>
         <source>Queue</source>
         <translation>Warteschlange</translation>
     </message>
     <message>
-        <location line="-176"/>
+        <location line="-206"/>
         <source>Show running and finished jobs</source>
         <translation>Laufende und abgeschlossene Aufträge anzeigen</translation>
     </message>
@@ -4847,12 +5154,25 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Anbieter, Modelle und Einstellungen (Strg+,)</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="-33"/>
+        <location line="+41"/>
         <source>General</source>
         <translation>Allgemein</translation>
     </message>
     <message>
+        <location line="-48"/>
+        <location line="+1"/>
+        <location line="+6"/>
+        <source>Assistant</source>
+        <translation>Assistent</translation>
+    </message>
+    <message>
         <location line="+4"/>
+        <source>Ask the assistant to plan, generate, edit and pose for you</source>
+        <translation>Lassen Sie den Assistenten für Sie planen, generieren, bearbeiten und posieren</translation>
+    </message>
+    <message>
+        <location line="+41"/>
         <source>&amp;File</source>
         <translation>&amp;Datei</translation>
     </message>
@@ -4918,12 +5238,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+3"/>
-        <location line="+209"/>
+        <location line="+240"/>
         <source>Quit</source>
         <translation>Beenden</translation>
     </message>
     <message>
-        <location line="-207"/>
+        <location line="-238"/>
         <source>&amp;Edit</source>
         <translation>&amp;Bearbeiten</translation>
     </message>
@@ -5024,7 +5344,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Schließen</translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location line="+66"/>
         <source>Idle</source>
         <translation>Leerlauf</translation>
     </message>
@@ -5034,12 +5354,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>%1 laufend · %2 in Warteschlange</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>Queue (%1)</source>
         <translation>Warteschlange (%1)</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+9"/>
         <source>Project: %1</source>
         <translation>Projekt: %1</translation>
     </message>

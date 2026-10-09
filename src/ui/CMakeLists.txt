@@ -3,6 +3,9 @@ add_library(lumen_ui STATIC
     Icons.h Icons.cpp
     Shortcuts.h Shortcuts.cpp
     Accessibility.h Accessibility.cpp
+    assistant/DirectorActions.h
+    assistant/AssistantTools.h assistant/AssistantTools.cpp
+    assistant/AssistantPanel.h assistant/AssistantPanel.cpp
     Studio.h Studio.cpp
     MainWindow.h MainWindow.cpp
     PageFactory.h PageFactory.cpp

@@ -7,6 +7,7 @@
 #include "ui/Icons.h"
 #include "ui/PageFactory.h"
 #include "ui/Shortcuts.h"
+#include "ui/assistant/AssistantPanel.h"
 #include "ui/Theme.h"
 #include "ui/canvas/ContextBar.h"
 #include "ui/canvas/EditorState.h"
@@ -156,6 +157,26 @@ QWidget *MainWindow::buildNavRail()
     }
     connect(m_nav, &QButtonGroup::idClicked, this, [this](int id) { showPage(static_cast<Page>(id)); });
     v->addStretch();
+    m_assistantButton = new QToolButton(rail);
+    m_assistantButton->setIcon(Icons::get(QStringLiteral("chat")));
+    m_assistantButton->setIconSize(QSize(20, 20));
+    double assistantSize = 8.0;
+    m_assistantButton->setText(fitLabel(tr("Assistant"), 68, &assistantSize));
+    m_assistantButton->setAccessibleName(tr("Assistant"));
+    m_assistantButton->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+    m_assistantButton->setFixedSize(74, 52);
+    m_assistantButton->setProperty("role", QStringLiteral("nav"));
+    m_assistantButton->setStyleSheet(QStringLiteral("font-size: %1pt;").arg(assistantSize));
+    m_assistantButton->setCheckable(true);
+    Shortcuts::instance().bind(Shortcuts::Info{QStringLiteral("app.assistant"), tr("General"), tr("Assistant"), QStringLiteral("global"),
+                                               {QKeySequence(QStringLiteral("Ctrl+Shift+A"))}},
+                               m_assistantButton, [this](const QList<QKeySequence> &keys) {
+                                   m_assistantButton->setShortcut(keys.value(0));
+                                   const QString tip = tr("Ask the assistant to plan, generate, edit and pose for you");
+                                   m_assistantButton->setToolTip(keys.isEmpty() ? tip : QStringLiteral("%1 (%2)").arg(tip, Shortcuts::toText(keys)));
+                               });
+    connect(m_assistantButton, &QToolButton::clicked, this, &MainWindow::toggleAssistant);
+    v->addWidget(m_assistantButton, 0, Qt::AlignHCenter);
     m_queueButton = new QToolButton(rail);
     m_queueButton->setIcon(Icons::get(QStringLiteral("queue")));
     m_queueButton->setIconSize(QSize(20, 20));
@@ -335,6 +356,35 @@ void MainWindow::toggleQueue()
         m_queuePanel->raise();
 }
 
+void MainWindow::toggleAssistant()
+{
+    if (!m_assistant) {
+        m_assistant = new AssistantPanel(m_studio, centralWidget());
+        connect(m_assistant, &AssistantPanel::closeRequested, this, [this] {
+            m_assistantButton->setChecked(false);
+            m_assistant->hide();
+        });
+    }
+    m_assistant->setVisible(m_assistantButton->isChecked());
+    placeAssistant();
+}
+
+void MainWindow::placeAssistant()
+{
+    if (!m_assistant || !m_assistant->isVisible())
+        return;
+    const QSize area = centralWidget()->size();
+    const int width = std::min(460, std::max(320, area.width() / 3));
+    m_assistant->setGeometry(area.width() - width - 12, 12, width, area.height() - 24);
+    m_assistant->raise();
+}
+
+void MainWindow::resizeEvent(QResizeEvent *e)
+{
+    QMainWindow::resizeEvent(e);
+    placeAssistant();
+}
+
 void MainWindow::updateJobSummary()
 {
     const int active = m_studio->jobs()->activeCount();
@@ -343,7 +393,9 @@ void MainWindow::updateJobSummary()
         m_jobLabel->setText(tr("Idle"));
     else
         m_jobLabel->setText(tr("%1 running · %2 queued").arg(active).arg(pending));
-    m_queueButton->setText(active + pending > 0 ? tr("Queue (%1)").arg(active + pending) : tr("Queue"));
+    double pointSize = 8.0;
+    m_queueButton->setText(fitLabel(active + pending > 0 ? tr("Queue (%1)").arg(active + pending) : tr("Queue"), 68, &pointSize));
+    m_queueButton->setStyleSheet(QStringLiteral("font-size: %1pt;").arg(pointSize));
 }
 
 void MainWindow::updateTitle()

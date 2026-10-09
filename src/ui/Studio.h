@@ -17,6 +17,8 @@
 
 namespace lumen::ui {
 
+class DirectorActions;
+
 // Values are persisted (last page); new pages are appended.
 enum class Page { Create, Generate, Editor, Poses, Library, Parts };
 
@@ -36,6 +38,13 @@ public:
     ai::Director *director() { return &m_director; }
     ai::PartService *parts() { return &m_parts; }
     doc::Project *project() { return m_project; }
+    // The director workflow (the Create page), used by the assistant. May be null.
+    DirectorActions *directorActions() const { return m_directorOwner ? m_directorActions : nullptr; }
+    void setDirectorActions(DirectorActions *actions, QObject *owner)
+    {
+        m_directorActions = actions;
+        m_directorOwner = owner;
+    }
     // Characters shared by all projects.
     doc::CharacterLibrary *characters() { return &m_characters; }
 
@@ -115,6 +124,8 @@ private:
     ai::PartService m_parts;
     QPointer<doc::Project> m_project;
     doc::CharacterLibrary m_characters{doc::CharacterLibrary::defaultDirectory()};
+    DirectorActions *m_directorActions = nullptr;
+    QPointer<QObject> m_directorOwner;
     QList<doc::Document *> m_documents;
     QPointer<doc::Document> m_active;
     QTimer m_autosave;

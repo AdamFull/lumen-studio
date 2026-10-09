@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ui/assistant/DirectorActions.h"
 #include "ui/director/DirectorSession.h"
 
 #include <QHash>
@@ -25,16 +26,28 @@ class ThumbnailCache;
 
 // AI director workspace: chat with attachments → character sheet → shot plan with editable poses →
 // reference- and pose-guided generation of every shot.
-class CreatePage : public QWidget
+class CreatePage : public QWidget, public DirectorActions
 {
     Q_OBJECT
 public:
     explicit CreatePage(Studio *studio, QWidget *parent = nullptr);
 
+    // DirectorActions (the assistant drives the director through these).
+    QJsonObject directorState() const override;
+    void analyzeReferences(const QStringList &assetIds, const QString &notes,
+                           std::function<void(QJsonObject sheet, QString error)> done) override;
+    void planShots(const QString &request, const QString &purpose, int count,
+                   std::function<void(QJsonObject plan, QString error)> done) override;
+    void revisePose(const QString &shotId, const QString &instruction, std::function<void(QJsonObject shot, QString error)> done) override;
+    void generateShots(const QStringList &shotIds, std::function<void(QStringList assets, QString error)> done) override;
+
 private:
     void send();
     void analyze(std::function<void()> then);
-    void plan(const QString &instruction);
+    void plan(const QString &instruction, std::function<void(QString error)> done = {});
+    // A shot has no generation or critic round running any more.
+    void shotSettled(const QString &shotId);
+    void shotFailed(const QString &shotId, const QString &error);
     // attempt > 0: a Critic retry with `shotOverride` (the shot with the critic's revised prompt).
     void generateShot(const QString &shotId, int attempt = 0, const QJsonObject &shotOverride = {});
     // Critic: reviews new results of a shot and retries it while the best score is below the threshold.
@@ -82,6 +95,14 @@ private:
     QHash<QString, QPointer<ShotCard>> m_cards;
     QHash<QString, int> m_running;
     bool m_busy = false;
+    struct ShotWaiter
+    {
+        QStringList pending;
+        QHash<QString, int> baseline; // results per shot when the generation started
+        QStringList errors;
+        std::function<void(QStringList, QString)> done;
+    };
+    QList<std::shared_ptr<ShotWaiter>> m_waiters;
 };
 
 } // namespace lumen::ui

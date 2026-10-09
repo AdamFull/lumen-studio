@@ -8,7 +8,7 @@ Anthropic, Gemini, OpenRouter) plan shots and edit poses.
 ## 1. Installing
 
 * **Installer** (`LumenStudio-<version>-win64.exe`): installs to *Program Files* and adds Start-menu
-  and desktop shortcuts. Settings and data are stored per user (see §10).
+  and desktop shortcuts. Settings and data are stored per user (see §12).
 * **Portable ZIP** (`LumenStudio-<version>-win64-portable.zip`): unzip anywhere (for example a USB
   drive) and run `LumenStudio.exe`. The `portable.txt` file next to the executable keeps settings,
   logs, cache and projects in the `userdata` folder beside it. Delete `portable.txt` to use the
@@ -42,10 +42,10 @@ The left bar switches pages (`Alt+1` … `Alt+6`).
 |---|---|
 | **Create** | chat with the director: describe a character or a story, attach references, get a character sheet and a shot plan with editable poses, then generate every shot |
 | **Generate** | classic prompt → images, with references, a control pose, size, seed, steps and batch |
-| **Edit** | the layered editor with AI editing (§4, §5) |
+| **Edit** | the layered editor with AI editing (§5, §6) |
 | **Poses** | edit OpenPose skeletons, use presets (including the Live2D category), detect poses from images, ask the LLM to change a pose |
-| **Parts** | slice a character into parts for Live2D (§7) |
-| **Library** | every generated, imported and edited image with its full parameters (§6) |
+| **Parts** | slice a character into parts for Live2D (§8) |
+| **Library** | every generated, imported and edited image with its full parameters (§7) |
 
 `Ctrl+Return` starts the generation on the Create and Generate pages.
 
@@ -66,7 +66,28 @@ accepted and an amber one otherwise; hover them to read the scores and the issue
 stored in the image's library entry. The critic uses the model assigned to *Vision analysis*
 (Settings → Models & roles).
 
-## 4. The editor
+## 4. The assistant
+
+**Assistant** in the left rail (`Ctrl+Shift+A`) opens a chat that works on every page. Describe
+what you want in your own words, and the assistant acts through the studio's tools:
+
+* look at the project and the library;
+* generate images, with references for character consistency;
+* change an image by instruction or repaint a region;
+* remove backgrounds, upscale, and open results in the editor;
+* run the director: analyse references, plan shots, adjust poses and generate the shots, with
+  Critic retries when the Critic is on.
+
+Every step shows as a card with its result; click a thumbnail to open the image in the editor. Results
+are new images in the library, and originals are never overwritten. **Stop** interrupts a run;
+**+** starts a new chat.
+
+The assistant uses the model assigned to the *Assistant* role (Settings → Models & roles). Models
+with tool calling are used natively (llama.cpp started with `--jinja`, Ollama, LM Studio, OpenAI,
+Anthropic, Gemini). Others follow a JSON protocol; for those, turn off *Tool calling* in the
+provider settings.
+
+## 5. The editor
 
 Open images with **File → Open image…** (`Ctrl+O`) or drag them onto the window. PSD files open with their layers;
 **File → Export image…** (`Ctrl+Shift+E`) writes PNG, JPEG, WebP or a layered PSD.
@@ -102,7 +123,7 @@ place uses moves to the new action (the page tells you which one lost it); *Rese
 | Fit / 100 % / zoom in / zoom out | `Ctrl+0` / `Ctrl+1` / `Ctrl+=` / `Ctrl+-` |
 | Swap colours | `X` |
 
-## 5. AI editing
+## 6. AI editing
 
 Make a selection or paint a mask, then either:
 
@@ -117,14 +138,14 @@ Results are added as new layers, so the original stays untouched. Only the maske
 Lumen crops the region around the mask, generates it at the model's working resolution and
 blends it back.
 
-## 6. Library
+## 7. Library
 
 * Filter by kind, favourites or text; the inspector shows the prompt and all parameters.
 * Right-click selected images to open them in the editor, use them as references, slice them into
   parts, export them, or run **Remove background** / **Upscale 2×** on all of them at once. Each
   result becomes a new library image linked to its source.
 
-## 7. Character part slicing (Live2D)
+## 8. Character part slicing (Live2D)
 
 The **Parts** page turns a character illustration into a layered PSD for rigging:
 
@@ -145,7 +166,7 @@ the Live2D Cubism Core; click **Locate Cubism Core…** and pick `Live2DCubismCo
 crossfades expressions, applies poses and physics (with optional wind), follows the mouse, can
 lip-sync a talking loop, and exposes every parameter as a slider.
 
-## 8. Projects
+## 9. Projects
 
 Everything lives in a project file (`.lumen`): the library images and the editor documents. Modified
 documents are saved into the project a few seconds after your last change, every 60 seconds, and
@@ -154,7 +175,7 @@ after a crash. In that case Lumen tells you, and a crash report (`crash-*.txt` w
 minidump) is in the log folder. Closed documents stay in the **Documents** view of the Library.
 **File → Open project…** (`Ctrl+Shift+O`) switches projects; the last one opens on start.
 
-## 9. Command line
+## 10. Command line
 
 ```
 LumenStudio [--project file.lumen] [--page editor|generate|create|poses|parts|library]
@@ -162,7 +183,7 @@ LumenStudio [--project file.lumen] [--page editor|generate|create|poses|parts|li
             [--cubism model.model3.json]
 ```
 
-## 10. Language, themes and accessibility
+## 11. Language, themes and accessibility
 
 * **Language**: Lumen Studio is available in English and German. **Settings → General → Language**
   picks one ("System default" follows Windows); restart to apply. Numbers follow the language's format.
@@ -172,18 +193,18 @@ LumenStudio [--project file.lumen] [--page editor|generate|create|poses|parts|li
   ratios for text (4.5:1, 7:1 in high contrast).
 * **Screen readers**: every button and field has an accessible name, including icon-only buttons.
 
-## 11. Where data is stored
+## 12. Where data is stored
 
 | What | Installed | Portable |
 |---|---|---|
-| Settings, provider configuration, logs | `%LOCALAPPDATA%\Lumen\Lumen Studio` | `userdata\` |
+| Settings, provider configuration, logs, character library | `%LOCALAPPDATA%\Lumen\Lumen Studio` | `userdata\` |
 | Cache (thumbnails) | `%LOCALAPPDATA%\Lumen\Lumen Studio\cache` | `userdata\cache` |
 | Projects | `Documents\Lumen Studio` | `userdata\projects` |
 | API keys | Windows Credential Manager | Windows Credential Manager |
 
 The environment variable `LUMEN_DATA_DIR` overrides both (useful for separate profiles).
 
-## 12. Troubleshooting
+## 13. Troubleshooting
 
 * **"No provider configured"**: add one in Settings → Providers, then use **Test connection**.
 * **A local server is not found**: check that it is running and started with its API enabled

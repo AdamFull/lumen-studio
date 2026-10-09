@@ -5,6 +5,7 @@
 #include "ai/PromptStyle.h"
 #include "core/Error.h"
 #include "core/Settings.h"
+#include "pose/Rig.h"
 #include "core/JsonUtil.h"
 #include "core/JobQueue.h"
 #include "ui/Icons.h"
@@ -30,6 +31,7 @@
 #include <QMessageBox>
 #include <QPlainTextEdit>
 #include <QPushButton>
+#include <QScopeGuard>
 #include <QScrollArea>
 #include <QScrollBar>
 #include <QSpinBox>
@@ -292,6 +294,7 @@ CreatePage::CreatePage(Studio *studio, QWidget *parent)
         loadSessions();
     else
         newSession();
+    studio->setDirectorActions(this, this);
 }
 
 // ---- sessions --------------------------------------------------------------------------------------------
@@ -632,10 +635,13 @@ void CreatePage::analyze(std::function<void()> then)
     });
 }
 
-void CreatePage::plan(const QString &instruction)
+void CreatePage::plan(const QString &instruction, std::function<void(QString error)> done)
 {
-    if (!m_session)
+    if (!m_session) {
+        if (done)
+            done(tr("There is no director session."));
         return;
+    }
     ChatEntry status;
     status.kind = ChatEntry::Kind::Status;
     status.text = m_session->plan().isEmpty() ? tr("Planning shots and poses…") : tr("Revising the plan…");
@@ -660,16 +666,20 @@ void CreatePage::plan(const QString &instruction)
     in.style = ai::promptStyleFor(m_provider->imageProvider());
     QPointer<CreatePage> self(this);
     QPointer<DirectorSession> session = m_session;
-    auto run = [self, session, in](QList<QImage> images) mutable {
+    auto run = [self, session, in, done](QList<QImage> images) mutable {
         if (!self || !session)
             return;
         in.references = images;
         ai::StructuredChatOperation *op = self->m_studio->director()->planShots(in);
-        QObject::connect(op, &ai::Operation::finished, self, [self, session, op] {
+        QObject::connect(op, &ai::Operation::finished, self, [self, session, op, done] {
             if (!self || !session)
                 return;
             self->setBusy(false);
-            ChatEntry done;
+            if (done)
+                done(op->state() == ai::Operation::State::Succeeded ? QString()
+                     : op->state() == ai::Operation::State::Cancelled ? tr("Planning was cancelled.")
+                                                                       : op->errorString());
+            ChatEntry entry;
             if (op->state() == ai::Operation::State::Succeeded) {
                 const QJsonObject plan = op->result();
                 session->setPlan(plan);
@@ -684,16 +694,16 @@ void CreatePage::plan(const QString &instruction)
                                                                   s.value(QStringLiteral("description")).toString());
                 }
                 lines << QObject::tr("Review and adjust the poses on the right, then press **Generate all** (or generate shots one by one).");
-                done.kind = ChatEntry::Kind::Assistant;
-                done.text = lines.join(QStringLiteral("\n\n"));
+                entry.kind = ChatEntry::Kind::Assistant;
+                entry.text = lines.join(QStringLiteral("\n\n"));
             } else if (op->state() == ai::Operation::State::Cancelled) {
-                done.kind = ChatEntry::Kind::Error;
-                done.text = QObject::tr("Planning cancelled.");
+                entry.kind = ChatEntry::Kind::Error;
+                entry.text = QObject::tr("Planning cancelled.");
             } else {
-                done.kind = ChatEntry::Kind::Error;
-                done.text = QObject::tr("Planning failed: %1").arg(op->errorString());
+                entry.kind = ChatEntry::Kind::Error;
+                entry.text = QObject::tr("Planning failed: %1").arg(op->errorString());
             }
-            session->replaceLastStatus(done);
+            session->replaceLastStatus(entry);
         });
     };
     // Without a character sheet, vision-capable directors look at the references directly.
@@ -782,7 +792,10 @@ void CreatePage::generateShot(const QString &shotId, int attempt, const QJsonObj
                 if (card)
                     card->setBusy(false, j->errorString());
                 self->m_studio->notify(j->errorString(), QStringLiteral("error"));
+                self->shotFailed(shotId, j->errorString());
             }
+            if (self->m_running.value(shotId) == 0)
+                self->shotSettled(shotId);
         });
     });
 }
@@ -813,6 +826,11 @@ void CreatePage::critique(const QString &shotId, const QStringList &assetIds, in
         if (!self || --round->remaining > 0)
             return;
         self->m_running[shotId] = std::max(0, self->m_running.value(shotId) - 1);
+        // Settles the shot unless a retry started.
+        auto settle = qScopeGuard([self, shotId] {
+            if (self && self->m_running.value(shotId) == 0)
+                self->shotSettled(shotId);
+        });
         ShotCard *card = self->m_cards.value(shotId);
         if (round->bestScore < 0) {
             if (card)
@@ -878,6 +896,182 @@ void CreatePage::critique(const QString &shotId, const QStringList &assetIds, in
                 });
         }
     });
+}
+
+// ---- DirectorActions ----------------------------------------------------------------------------------------
+
+QJsonObject CreatePage::directorState() const
+{
+    QJsonObject state;
+    if (!m_session)
+        return state;
+    state.insert(QStringLiteral("references"), json::toArray(m_session->references()));
+    const QJsonObject c = m_session->character();
+    if (!c.isEmpty())
+        state.insert(QStringLiteral("character"), QJsonObject{{QStringLiteral("name"), c.value(QStringLiteral("name"))},
+                                                              {QStringLiteral("summary"), c.value(QStringLiteral("summary"))}});
+    state.insert(QStringLiteral("purpose"), m_session->purpose());
+    QJsonArray purposes;
+    for (const ai::PurposeProfile &p : ai::purposeProfiles())
+        purposes.append(QJsonObject{{QStringLiteral("id"), p.id}, {QStringLiteral("name"), p.name}});
+    state.insert(QStringLiteral("purposes"), purposes);
+    state.insert(QStringLiteral("plan_title"), m_session->plan().value(QStringLiteral("title")));
+    QJsonArray shots;
+    for (const ShotState &s : m_session->shots()) {
+        QJsonObject o{{QStringLiteral("id"), s.id()},
+                      {QStringLiteral("title"), s.shot.value(QStringLiteral("title"))},
+                      {QStringLiteral("description"), s.shot.value(QStringLiteral("description"))},
+                      {QStringLiteral("prompt"), s.shot.value(QStringLiteral("prompt"))},
+                      {QStringLiteral("approved"), s.approved},
+                      {QStringLiteral("results"), json::toArray(s.results)},
+                      {QStringLiteral("generating"), m_running.value(s.id()) > 0}};
+        int best = -1;
+        for (const QString &id : s.results)
+            best = std::max(best, s.critiques.value(id).toObject().value(QStringLiteral("score")).toInt(-1));
+        if (best >= 0)
+            o.insert(QStringLiteral("best_critic_score"), best);
+        shots.append(o);
+    }
+    state.insert(QStringLiteral("shots"), shots);
+    if (ai::ImageProvider *p = m_provider->imageProvider())
+        state.insert(QStringLiteral("image_provider"), p->displayName());
+    return state;
+}
+
+void CreatePage::analyzeReferences(const QStringList &assetIds, const QString &notes,
+                                   std::function<void(QJsonObject, QString)> done)
+{
+    if (!m_session)
+        newSession();
+    m_session->addReferences(assetIds);
+    if (m_session->references().isEmpty()) {
+        done({}, tr("The session has no reference images."));
+        return;
+    }
+    if (!notes.isEmpty()) {
+        ChatEntry entry;
+        entry.kind = ChatEntry::Kind::User;
+        entry.text = notes;
+        m_session->addMessage(entry);
+    }
+    QPointer<DirectorSession> session = m_session;
+    analyze([session, done] {
+        if (!session) {
+            done({}, tr("The session was closed."));
+            return;
+        }
+        const QList<ChatEntry> &messages = session->messages();
+        if (!messages.isEmpty() && messages.last().kind == ChatEntry::Kind::Error)
+            done({}, messages.last().text);
+        else
+            done(session->character(), QString());
+    });
+}
+
+void CreatePage::planShots(const QString &request, const QString &purpose, int count, std::function<void(QJsonObject, QString)> done)
+{
+    if (!m_session)
+        newSession();
+    if (m_busy) {
+        done({}, tr("The director is busy; try again when it has finished."));
+        return;
+    }
+    if (!purpose.isEmpty()) {
+        const int index = m_purpose->findData(purpose);
+        if (index >= 0)
+            m_purpose->setCurrentIndex(index);
+    }
+    m_count->setValue(std::max(0, count));
+    ChatEntry entry;
+    entry.kind = ChatEntry::Kind::User;
+    entry.text = request;
+    m_session->setPurpose(m_purpose->currentData().toString());
+    m_session->addMessage(entry);
+    QPointer<DirectorSession> session = m_session;
+    plan(request, [session, done](const QString &error) {
+        if (!error.isEmpty() || !session)
+            done({}, error.isEmpty() ? tr("The session was closed.") : error);
+        else
+            done(session->plan(), QString());
+    });
+}
+
+void CreatePage::revisePose(const QString &shotId, const QString &instruction, std::function<void(QJsonObject, QString)> done)
+{
+    ShotState *shot = m_session ? m_session->shot(shotId) : nullptr;
+    if (!shot) {
+        done({}, tr("There is no shot \"%1\".").arg(shotId));
+        return;
+    }
+    QPointer<DirectorSession> session = m_session;
+    ai::StructuredChatOperation *op = m_studio->director()->revisePose(shot->shot, instruction);
+    connect(op, &ai::Operation::finished, this, [this, session, op, shotId, done] {
+        ShotState *s = session ? session->shot(shotId) : nullptr;
+        if (op->state() != ai::Operation::State::Succeeded || !s) {
+            done({}, op->state() == ai::Operation::State::Succeeded ? tr("The shot no longer exists.") : op->errorString());
+            return;
+        }
+        const pose::RigParams rig = pose::RigParams::fromJson(op->result(), s->rig());
+        s->shot.insert(QStringLiteral("pose"), rig.toJson());
+        s->editedPose.reset();
+        session->notifyShotChanged(shotId);
+        if (ShotCard *card = m_cards.value(shotId))
+            card->refresh();
+        done(s->shot, QString());
+    });
+}
+
+void CreatePage::generateShots(const QStringList &shotIds, std::function<void(QStringList, QString)> done)
+{
+    if (!m_session || m_session->shots().isEmpty()) {
+        done({}, tr("There is no shot plan yet; plan the shots first."));
+        return;
+    }
+    if (!m_provider->imageProvider()) {
+        done({}, tr("No image provider is configured."));
+        return;
+    }
+    QStringList ids;
+    for (const ShotState &s : m_session->shots()) {
+        if (shotIds.isEmpty() ? s.approved : shotIds.contains(s.id()))
+            ids << s.id();
+    }
+    if (ids.isEmpty()) {
+        done({}, tr("None of the requested shots exist."));
+        return;
+    }
+    auto waiter = std::make_shared<ShotWaiter>();
+    waiter->pending = ids;
+    waiter->done = std::move(done);
+    for (const QString &id : ids)
+        waiter->baseline.insert(id, int(m_session->shot(id)->results.size()));
+    m_waiters << waiter;
+    for (const QString &id : ids)
+        generateShot(id);
+}
+
+void CreatePage::shotFailed(const QString &shotId, const QString &error)
+{
+    for (const auto &w : std::as_const(m_waiters)) {
+        if (w->pending.contains(shotId))
+            w->errors << QStringLiteral("%1: %2").arg(shotId, error);
+    }
+}
+
+void CreatePage::shotSettled(const QString &shotId)
+{
+    const auto waiters = m_waiters;
+    for (const auto &w : waiters) {
+        if (!w->pending.removeAll(shotId) || !w->pending.isEmpty())
+            continue;
+        QStringList assets;
+        for (auto it = w->baseline.cbegin(); it != w->baseline.cend(); ++it) {
+            if (const ShotState *s = m_session ? m_session->shot(it.key()) : nullptr)
+                assets += s->results.mid(it.value());
+        }
+        m_waiters.removeAll(w);
+        w->done(assets, assets.isEmpty() ? w->errors.join(QStringLiteral("; ")) : QString());
+    }
 }
 
 void CreatePage::saveCharacterToLibrary()

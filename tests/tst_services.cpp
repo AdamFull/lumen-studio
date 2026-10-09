@@ -1,5 +1,6 @@
 #include "MockHttpServer.h"
 
+#include "ai/Agent.h"
 #include "ai/Director.h"
 #include "ai/GenerationService.h"
 #include "ai/ProviderCatalog.h"
@@ -12,6 +13,7 @@
 
 #include <QJsonArray>
 #include <QTemporaryDir>
+#include <QSignalSpy>
 #include <QtTest>
 
 using namespace lumen;
@@ -38,6 +40,8 @@ private slots:
     void generationServiceRegionEndToEnd();
     void utilityOnAssets();
     void directorCritique();
+    void agentNativeTools();
+    void agentJsonProtocol();
 
 private:
     net::HttpClient m_http;
@@ -348,6 +352,172 @@ void TestServices::directorCritique()
     // An empty revision keeps the prompt.
     QCOMPARE(Director::applyCritique(shot, QJsonObject{}).value(QStringLiteral("prompt")).toString(), QStringLiteral("1girl, a-pose"));
     QFile::remove(registry.configPath());
+}
+
+namespace {
+
+ToolSet testTools(int *calls)
+{
+    ToolSet tools;
+    tools.add(ToolDefinition{QStringLiteral("add_numbers"), QStringLiteral("Adds two numbers."),
+                             QJsonObject{{QStringLiteral("type"), QStringLiteral("object")},
+                                         {QStringLiteral("properties"), QJsonObject{{QStringLiteral("a"), QJsonObject{{QStringLiteral("type"), QStringLiteral("number")}}},
+                                                                                    {QStringLiteral("b"), QJsonObject{{QStringLiteral("type"), QStringLiteral("number")}}}}}}},
+              [calls](const QJsonObject &args) {
+                  ++*calls;
+                  ToolResult r;
+                  r.data.insert(QStringLiteral("sum"), args.value(QStringLiteral("a")).toDouble() + args.value(QStringLiteral("b")).toDouble());
+                  return QtFuture::makeReadyValueFuture(r);
+              });
+    tools.add(ToolDefinition{QStringLiteral("make_image"), QStringLiteral("Makes an image."), QJsonObject{{QStringLiteral("type"), QStringLiteral("object")}}},
+              [calls](const QJsonObject &) {
+                  ++*calls;
+                  ToolResult r;
+                  r.assetIds << QStringLiteral("asset1");
+                  return QtFuture::makeReadyValueFuture(r);
+              });
+    return tools;
+}
+
+MockResponse chatReply(const QJsonObject &message, const QString &finish)
+{
+    return MockResponse::json({{QStringLiteral("choices"), QJsonArray{QJsonObject{{QStringLiteral("message"), message},
+                                                                                 {QStringLiteral("finish_reason"), finish}}}}});
+}
+
+} // namespace
+
+void TestServices::agentNativeTools()
+{
+    MockHttpServer server;
+    QList<QJsonObject> requests;
+    int mode = 0; // 0: tools then reply, 1: always call a tool, 2: unknown tool then reply
+    server.route("POST", QStringLiteral("/v1/chat/completions"), [&](const MockRequest &req) {
+        requests << req.json();
+        const int n = int(requests.size());
+        auto call = [](const QString &id, const QString &name, const QString &args) {
+            return QJsonObject{{QStringLiteral("id"), id}, {QStringLiteral("type"), QStringLiteral("function")},
+                               {QStringLiteral("function"), QJsonObject{{QStringLiteral("name"), name}, {QStringLiteral("arguments"), args}}}};
+        };
+        const bool callTools = mode == 1 || n == 1;
+        if (callTools) {
+            const QJsonArray calls = mode == 2 ? QJsonArray{call(QStringLiteral("c1"), QStringLiteral("fly"), QStringLiteral("{}"))}
+                                               : QJsonArray{call(QStringLiteral("c1"), QStringLiteral("add_numbers"), QStringLiteral("{\"a\":2,\"b\":3}")),
+                                                            call(QStringLiteral("c2"), QStringLiteral("make_image"), QStringLiteral("{}"))};
+            return chatReply(QJsonObject{{QStringLiteral("content"), QJsonValue()}, {QStringLiteral("tool_calls"), calls}}, QStringLiteral("tool_calls"));
+        }
+        return chatReply(QJsonObject{{QStringLiteral("content"), QStringLiteral("Done: 5")}}, QStringLiteral("stop"));
+    });
+    OpenAiChatProvider llm(OpenAiChatProvider::describe(OpenAiChatProvider::Flavor::LlamaCpp), QStringLiteral("l"), &m_http, nullptr);
+    llm.configure({{QStringLiteral("url"), server.baseUrl().toString() + QStringLiteral("/v1")}});
+    QVERIFY(llm.capabilities().tools);
+    int calls = 0;
+    const QList<ChatMessage> history{ChatMessage::system(QStringLiteral("You are a test.")), ChatMessage::user(QStringLiteral("add 2 and 3"))};
+
+    auto *run = new AgentRun(&llm, QString(), testTools(&calls), history);
+    run->setAutoDelete(false);
+    QSignalSpy started(run, &AgentRun::toolStarted);
+    QSignalSpy finished(run, &AgentRun::toolFinished);
+    run->start();
+    QTRY_VERIFY_WITH_TIMEOUT(run->isFinished(), 5000);
+    QVERIFY2(run->state() == Operation::State::Succeeded, qPrintable(run->errorString()));
+    QVERIFY(run->usesNativeTools());
+    QCOMPARE(run->reply(), QStringLiteral("Done: 5"));
+    QCOMPARE(run->producedAssets(), QStringList{QStringLiteral("asset1")});
+    QCOMPARE(calls, 2);
+    QCOMPARE(started.size(), 2);
+    QCOMPARE(finished.size(), 2);
+    QCOMPARE(run->steps(), 2);
+    // Tools are declared, and the second request carries both tool results.
+    QCOMPARE(requests[0].value(QStringLiteral("tools")).toArray().size(), 2);
+    const QJsonArray second = requests[1].value(QStringLiteral("messages")).toArray();
+    QStringList toolContents;
+    for (const QJsonValue &m : second) {
+        if (m.toObject().value(QStringLiteral("role")).toString() == QLatin1String("tool"))
+            toolContents << m.toObject().value(QStringLiteral("content")).toString();
+    }
+    QCOMPARE(toolContents.size(), 2);
+    QVERIFY(toolContents[0].contains(QLatin1String("\"sum\":5")));
+    QVERIFY(toolContents[1].contains(QLatin1String("asset1")));
+    QCOMPARE(run->messages().size(), history.size() + 4); // assistant (calls), 2 results, final answer
+    delete run;
+
+    // The step limit ends a run that never stops calling tools.
+    requests.clear();
+    mode = 1;
+    run = new AgentRun(&llm, QString(), testTools(&calls), history, 3);
+    run->setAutoDelete(false);
+    run->start();
+    QTRY_VERIFY_WITH_TIMEOUT(run->isFinished(), 5000);
+    QCOMPARE(run->state(), Operation::State::Succeeded);
+    QCOMPARE(int(requests.size()), 3);
+    QVERIFY(run->reply().contains(QLatin1String("3")));
+    delete run;
+
+    // An unknown tool is reported back to the model, which then answers.
+    requests.clear();
+    mode = 2;
+    run = new AgentRun(&llm, QString(), testTools(&calls), history);
+    run->setAutoDelete(false);
+    run->start();
+    QTRY_VERIFY_WITH_TIMEOUT(run->isFinished(), 5000);
+    QCOMPARE(run->state(), Operation::State::Succeeded);
+    QVERIFY(QJsonDocument(requests[1]).toJson().contains("unknown tool"));
+    delete run;
+
+    // Cancelling stops the run.
+    mode = 1;
+    run = new AgentRun(&llm, QString(), testTools(&calls), history, 50);
+    run->setAutoDelete(false);
+    run->start();
+    QTRY_VERIFY_WITH_TIMEOUT(requests.size() >= 4, 5000);
+    run->cancel();
+    QCOMPARE(run->state(), Operation::State::Cancelled);
+    delete run;
+
+    // Without a provider the run fails with a clear message.
+    run = new AgentRun(nullptr, QString(), testTools(&calls), history);
+    run->setAutoDelete(false);
+    run->start();
+    QTRY_VERIFY(run->isFinished());
+    QCOMPARE(run->state(), Operation::State::Failed);
+    delete run;
+}
+
+void TestServices::agentJsonProtocol()
+{
+    MockHttpServer server;
+    QList<QJsonObject> requests;
+    server.route("POST", QStringLiteral("/v1/chat/completions"), [&](const MockRequest &req) {
+        requests << req.json();
+        const QString content = requests.size() == 1
+                                    ? QStringLiteral("{\"action\": \"add_numbers\", \"arguments\": {\"a\": 1, \"b\": 1}}")
+                                    : QStringLiteral("{\"action\": \"reply\", \"reply\": \"It is 2.\"}");
+        return chatReply(QJsonObject{{QStringLiteral("content"), content}}, QStringLiteral("stop"));
+    });
+    OpenAiChatProvider llm(OpenAiChatProvider::describe(OpenAiChatProvider::Flavor::LlamaCpp), QStringLiteral("l"), &m_http, nullptr);
+    llm.configure({{QStringLiteral("url"), server.baseUrl().toString() + QStringLiteral("/v1")}, {QStringLiteral("tools"), false}});
+    QVERIFY(!llm.capabilities().tools);
+    int calls = 0;
+    auto *run = new AgentRun(&llm, QString(), testTools(&calls), {ChatMessage::user(QStringLiteral("1+1?"))});
+    run->setAutoDelete(false);
+    QSignalSpy text(run, &AgentRun::textDelta);
+    run->start();
+    QTRY_VERIFY_WITH_TIMEOUT(run->isFinished(), 5000);
+    QVERIFY2(run->state() == Operation::State::Succeeded, qPrintable(run->errorString()));
+    QVERIFY(!run->usesNativeTools());
+    QCOMPARE(run->reply(), QStringLiteral("It is 2."));
+    QCOMPARE(calls, 1);
+    QCOMPARE(text.size(), 1);
+    // The protocol is described in a system message; no native tools are sent.
+    const QJsonArray first = requests[0].value(QStringLiteral("messages")).toArray();
+    QCOMPARE(first[0].toObject().value(QStringLiteral("role")).toString(), QStringLiteral("system"));
+    QVERIFY(first[0].toObject().value(QStringLiteral("content")).toString().contains(QLatin1String("add_numbers")));
+    QVERIFY(!requests[0].contains(QStringLiteral("tools")));
+    QVERIFY(QJsonDocument(requests[1]).toJson().contains("Result of add_numbers"));
+    // The transcript ends with the plain reply.
+    QCOMPARE(run->messages().last().text, QStringLiteral("It is 2."));
+    delete run;
 }
 
 QTEST_MAIN(TestServices)

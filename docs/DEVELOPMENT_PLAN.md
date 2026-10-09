@@ -308,7 +308,7 @@ before ticking a milestone.
 - [x] Director → Shot Plan (schema-validated, repair loop), purpose profiles (Live2D, sticker set, turnaround sheet, portrait set…)
 - [x] Pose drafts board; per-shot approve/edit/regenerate pose
 - [x] Batch generation with reference strategies; review board
-- [ ] Tool-calling assistant (plan, generate, edit, pose) — **AC**: reference scenario (§1.1) completes with SD WebUI + llama.cpp and with a cloud provider.
+- [x] Tool-calling assistant (plan, generate, edit, pose): `ai::AgentRun` loop (native tool calls, JSON-protocol fallback, step limit, cancel); studio tools (state, library, generate, edit, inpaint region, background removal, upscale, open, director: analyse references → plan shots → revise pose → generate shots); Assistant drawer on every page; the reference scenario runs end-to-end in `tst_canvas` against mock llama.cpp + SD WebUI — **AC**: reference scenario (§1.1) completes with SD WebUI + llama.cpp and with a cloud provider.
 
 ### M8 — Additional providers
 - [x] ComfyUI adapter (workflow templates + bindings, uploads, WebSocket progress/previews, interrupt, object_info discovery) + bundled workflows
