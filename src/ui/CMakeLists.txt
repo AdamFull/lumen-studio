@@ -1,0 +1,33 @@
+add_library(lumen_ui STATIC
+    Theme.h Theme.cpp
+    Icons.h Icons.cpp
+    Studio.h Studio.cpp
+    MainWindow.h MainWindow.cpp
+    PageFactory.h PageFactory.cpp
+    canvas/EditorState.h canvas/EditorState.cpp
+    canvas/CanvasView.h canvas/CanvasView.cpp
+    canvas/Tool.h
+    canvas/Tools.h canvas/Tools.cpp
+    widgets/Controls.h widgets/Controls.cpp
+    widgets/ReferenceStrip.h widgets/ReferenceStrip.cpp
+    widgets/LayersPanel.h widgets/LayersPanel.cpp
+    widgets/ProviderCombo.h widgets/ProviderCombo.cpp
+    widgets/JobCard.h widgets/JobCard.cpp
+    widgets/Toasts.h widgets/Toasts.cpp
+    pages/AiPanel.h pages/AiPanel.cpp
+    pages/EditorPage.h pages/EditorPage.cpp
+    dialogs/SettingsDialog.h dialogs/SettingsDialog.cpp
+    dialogs/PoseEditDialog.h dialogs/PoseEditDialog.cpp
+    widgets/ThumbnailCache.h widgets/ThumbnailCache.cpp
+    pose/PoseCanvas.h pose/PoseCanvas.cpp
+    director/DirectorSession.h director/DirectorSession.cpp
+    director/ShotCard.h director/ShotCard.cpp
+    pages/LibraryPage.h pages/LibraryPage.cpp
+    pages/GeneratePage.h pages/GeneratePage.cpp
+    pages/PosePage.h pages/PosePage.cpp
+    pages/CreatePage.h pages/CreatePage.cpp
+)
+target_include_directories(lumen_ui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
+target_link_libraries(lumen_ui PUBLIC lumen_ai lumen_doc lumen_pose lumen_core
+    Qt6::Widgets Qt6::Svg Qt6::OpenGL Qt6::OpenGLWidgets)
+lumen_configure_target(lumen_ui)

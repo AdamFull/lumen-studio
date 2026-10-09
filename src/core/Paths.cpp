@@ -6,13 +6,26 @@
 
 namespace lumen::paths {
 
+namespace {
+// LUMEN_DATA_DIR relocates all writable data (portable installs, tests, separate profiles).
+QString overrideRoot()
+{
+    static const QString root = qEnvironmentVariable("LUMEN_DATA_DIR");
+    return root;
+}
+} // namespace
+
 QString appData()
 {
+    if (!overrideRoot().isEmpty())
+        return overrideRoot();
     return QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
 }
 
 QString cache()
 {
+    if (!overrideRoot().isEmpty())
+        return overrideRoot() + QStringLiteral("/cache");
     return QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
 }
 
@@ -28,6 +41,8 @@ QString userPresets()
 
 QString defaultProjects()
 {
+    if (!overrideRoot().isEmpty())
+        return overrideRoot() + QStringLiteral("/projects");
     return QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + QStringLiteral("/Lumen Studio");
 }
 

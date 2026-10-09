@@ -1,0 +1,79 @@
+#pragma once
+
+#include "pose/Skeleton.h"
+
+#include <QPointer>
+#include <QWidget>
+
+#include <optional>
+
+class QButtonGroup;
+class QCheckBox;
+class QComboBox;
+class QLabel;
+class QListWidget;
+class QPushButton;
+class QSpinBox;
+class QVBoxLayout;
+
+namespace lumen::ui {
+
+class AutoTextEdit;
+class ProviderCombo;
+class ReferenceStrip;
+class SliderField;
+class Studio;
+
+// Classic generation workspace: prompt + parameters + references + pose → results grid.
+class GeneratePage : public QWidget
+{
+    Q_OBJECT
+public:
+    explicit GeneratePage(Studio *studio, QWidget *parent = nullptr);
+
+    void setPose(const std::optional<pose::Pose> &pose);
+
+private:
+    void generate();
+    void enhancePrompt();
+    void providerChanged();
+    void updateSizeLabel();
+    QSize requestedSize() const;
+    void rerun(const QString &assetId);
+    void addResult(const QString &assetId, const QImage &image, const QString &prompt);
+    void setInitImage(const QImage &image, const QString &assetId = QString());
+
+    Studio *m_studio;
+    ProviderCombo *m_provider;
+    QComboBox *m_model;
+    AutoTextEdit *m_prompt;
+    AutoTextEdit *m_negative;
+    QButtonGroup *m_aspects;
+    QSpinBox *m_width;
+    QSpinBox *m_height;
+    QCheckBox *m_customSize;
+    QLabel *m_sizeLabel;
+    QSpinBox *m_batch;
+    QSpinBox *m_seed;
+    QCheckBox *m_randomSeed;
+    SliderField *m_steps;
+    SliderField *m_cfg;
+    QComboBox *m_sampler;
+    QComboBox *m_scheduler;
+    QComboBox *m_quality;
+    QCheckBox *m_transparent;
+    ReferenceStrip *m_refs;
+    QLabel *m_poseThumb;
+    SliderField *m_poseWeight;
+    std::optional<pose::Pose> m_pose;
+    QLabel *m_initThumb;
+    QImage m_init;
+    SliderField *m_denoise;
+    QWidget *m_samplingBox;
+    QPushButton *m_go;
+    QVBoxLayout *m_jobs;
+    QListWidget *m_results;
+    QLabel *m_capsLabel;
+};
+
+} // namespace lumen::ui

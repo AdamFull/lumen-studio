@@ -381,8 +381,9 @@ QFuture<QList<DetectedServer>> ProviderRegistry::detectLocalServers()
     state->promise.start();
     QFuture<QList<DetectedServer>> future = state->promise.future();
     net::CallOptions opts;
-    opts.timeoutMs = 1500;
+    opts.timeoutMs = 2500;
     opts.maxRetries = 0;
+    opts.quiet = true;
     for (const Probe &probe : probes) {
         if (!type(probe.typeId)) {
             if (--state->remaining == 0) {

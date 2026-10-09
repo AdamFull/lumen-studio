@@ -1,0 +1,5 @@
+qt_add_executable(lumen WIN32 MACOSX_BUNDLE main.cpp)
+set_target_properties(lumen PROPERTIES OUTPUT_NAME "LumenStudio")
+target_link_libraries(lumen PRIVATE lumen_ui)
+target_compile_definitions(lumen PRIVATE LUMEN_VERSION="${PROJECT_VERSION}")
+lumen_configure_target(lumen)

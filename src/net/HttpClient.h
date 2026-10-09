@@ -21,6 +21,7 @@ struct CallOptions
     int retryBaseDelayMs = 800; // exponential back-off base
     bool streaming = false;     // emit chunk() as data arrives; no retry after first chunk
     bool autoDelete = true;     // deleteLater() after finished() was emitted
+    bool quiet = false;         // don't log failures (probes, polling)
 };
 
 // One logical HTTP request, including its retries. Lives on the GUI thread; fully asynchronous.

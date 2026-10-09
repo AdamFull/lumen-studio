@@ -691,6 +691,7 @@ void ComfyUiProvider::runGraph(ImageOperation *op, std::function<QJsonObject(con
                 net::CallOptions po;
                 po.timeoutMs = 10000;
                 po.maxRetries = 0;
+                po.quiet = true;
                 net::HttpCall *h = self->http()->get(self->request(QStringLiteral("/history/") + run->promptId), po);
                 QObject::connect(h, &net::HttpCall::finished, op, [h, run, fetchResults, busy] {
                     *busy = false;

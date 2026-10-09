@@ -122,6 +122,8 @@ void HttpCall::attempt()
     m_reply = reply;
     m_url = reply->url();
     connect(reply, &QNetworkReply::readyRead, this, [this, reply] {
+        if (!reply->isOpen())
+            return;
         const QByteArray data = reply->readAll();
         m_body.append(data);
         if (m_options.streaming && !data.isEmpty()) {
@@ -143,7 +145,8 @@ void HttpCall::onReplyFinished()
     if (!reply)
         return;
     m_reply = nullptr;
-    m_body.append(reply->readAll());
+    if (reply->isOpen())
+        m_body.append(reply->readAll());
     m_status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
     m_netError = reply->error();
     m_netErrorString = reply->errorString();
@@ -162,7 +165,7 @@ void HttpCall::onReplyFinished()
         m_retryTimer.start(delay);
         return;
     }
-    if (!ok())
+    if (!ok() && !m_options.quiet)
         qCWarning(lcNet).noquote() << "Request failed:" << m_url.toDisplayString(QUrl::RemoveQuery) << "-" << log::redact(errorString());
     finish();
 }

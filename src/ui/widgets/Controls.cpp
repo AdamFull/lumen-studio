@@ -1,0 +1,212 @@
+#include "ui/widgets/Controls.h"
+
+#include "ui/Icons.h"
+#include "ui/Theme.h"
+
+#include <QColorDialog>
+#include <QDoubleSpinBox>
+#include <QHBoxLayout>
+#include <QKeyEvent>
+#include <QPainter>
+#include <QPainterPath>
+#include <QSlider>
+#include <QTextBlock>
+
+#include <cmath>
+
+namespace lumen::ui {
+
+SliderField::SliderField(const QString &label, double min, double max, double value, int decimals, const QString &suffix, QWidget *parent)
+    : QWidget(parent)
+    , m_scale(std::pow(10.0, decimals))
+{
+    auto *layout = new QHBoxLayout(this);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(8);
+    m_label = new QLabel(label, this);
+    m_label->setProperty("role", QStringLiteral("muted"));
+    m_label->setMinimumWidth(64);
+    m_slider = new QSlider(Qt::Horizontal, this);
+    m_slider->setRange(int(std::lround(min * m_scale)), int(std::lround(max * m_scale)));
+    m_spin = new QDoubleSpinBox(this);
+    m_spin->setDecimals(decimals);
+    m_spin->setRange(min, max);
+    m_spin->setSuffix(suffix);
+    m_spin->setButtonSymbols(QAbstractSpinBox::NoButtons);
+    m_spin->setFixedWidth(64);
+    m_spin->setAlignment(Qt::AlignRight);
+    m_spin->setKeyboardTracking(false);
+    layout->addWidget(m_label);
+    layout->addWidget(m_slider, 1);
+    layout->addWidget(m_spin);
+    if (label.isEmpty())
+        m_label->hide();
+    setValue(value);
+    connect(m_slider, &QSlider::valueChanged, this, [this](int v) {
+        const double d = v / m_scale;
+        if (std::abs(m_spin->value() - d) > 0.5 / m_scale) {
+            QSignalBlocker b(m_spin);
+            m_spin->setValue(d);
+        }
+        emit valueChanged(d);
+    });
+    connect(m_spin, &QDoubleSpinBox::valueChanged, this, [this](double d) {
+        QSignalBlocker b(m_slider);
+        m_slider->setValue(int(std::lround(d * m_scale)));
+        emit valueChanged(d);
+    });
+}
+
+double SliderField::value() const
+{
+    return m_spin->value();
+}
+
+void SliderField::setValue(double v)
+{
+    QSignalBlocker b1(m_slider), b2(m_spin);
+    m_spin->setValue(v);
+    m_slider->setValue(int(std::lround(v * m_scale)));
+}
+
+void SliderField::setRange(double min, double max)
+{
+    QSignalBlocker b1(m_slider), b2(m_spin);
+    m_spin->setRange(min, max);
+    m_slider->setRange(int(std::lround(min * m_scale)), int(std::lround(max * m_scale)));
+}
+
+void SliderField::setCompact(bool compact)
+{
+    m_label->setMinimumWidth(compact ? 0 : 64);
+    m_slider->setMinimumWidth(compact ? 80 : 120);
+}
+
+// ---- ColorSwatch --------------------------------------------------------------------------------------
+
+ColorSwatch::ColorSwatch(const QColor &color, QWidget *parent)
+    : QToolButton(parent)
+    , m_color(color)
+{
+    setFixedSize(28, 28);
+    setCursor(Qt::PointingHandCursor);
+    connect(this, &QToolButton::clicked, this, [this] {
+        const QColor c = QColorDialog::getColor(m_color, this, tr("Choose colour"), QColorDialog::ShowAlphaChannel);
+        if (c.isValid())
+            setColor(c);
+    });
+}
+
+void ColorSwatch::setColor(const QColor &c)
+{
+    if (c == m_color)
+        return;
+    m_color = c;
+    setToolTip(c.name(QColor::HexArgb));
+    update();
+    emit colorChanged(c);
+}
+
+void ColorSwatch::paintEvent(QPaintEvent *)
+{
+    QPainter p(this);
+    p.setRenderHint(QPainter::Antialiasing);
+    const QRectF r = QRectF(rect()).adjusted(2, 2, -2, -2);
+    QPainterPath path;
+    path.addRoundedRect(r, 6, 6);
+    p.setClipPath(path);
+    // Checker under transparent colours.
+    for (int y = 0; y < height(); y += 6)
+        for (int x = 0; x < width(); x += 6)
+            p.fillRect(x, y, 6, 6, ((x + y) / 6) % 2 ? QColor(200, 200, 200) : Qt::white);
+    p.fillRect(r, m_color);
+    p.setClipping(false);
+    p.setPen(QPen(underMouse() ? Theme::palette().accent : Theme::palette().borderStrong, 1.5));
+    p.drawPath(path);
+}
+
+// ---- AutoTextEdit ---------------------------------------------------------------------------------------
+
+AutoTextEdit::AutoTextEdit(QWidget *parent, int minLines, int maxLines)
+    : QPlainTextEdit(parent)
+    , m_minLines(minLines)
+    , m_maxLines(maxLines)
+{
+    setTabChangesFocus(true);
+    setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    connect(this, &QPlainTextEdit::textChanged, this, &AutoTextEdit::adjustHeight);
+    adjustHeight();
+}
+
+void AutoTextEdit::adjustHeight()
+{
+    const QFontMetrics fm(font());
+    int lines = 0;
+    for (QTextBlock b = document()->begin(); b.isValid(); b = b.next())
+        lines += std::max(1, b.layout() ? b.layout()->lineCount() : 1);
+    lines = std::clamp(lines, m_minLines, m_maxLines);
+    const int h = lines * fm.lineSpacing() + 18;
+    if (h != height())
+        setFixedHeight(h);
+}
+
+void AutoTextEdit::keyPressEvent(QKeyEvent *e)
+{
+    const bool enter = e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter;
+    if (enter && ((e->modifiers() & Qt::ControlModifier) || (m_enterSubmits && !(e->modifiers() & Qt::ShiftModifier)))) {
+        emit submitted();
+        return;
+    }
+    QPlainTextEdit::keyPressEvent(e);
+    adjustHeight();
+}
+
+// ---- helpers ---------------------------------------------------------------------------------------------
+
+QLabel *sectionLabel(const QString &text, QWidget *parent)
+{
+    auto *l = new QLabel(text.toUpper(), parent);
+    l->setProperty("role", QStringLiteral("section"));
+    return l;
+}
+
+QLabel *mutedLabel(const QString &text, QWidget *parent)
+{
+    auto *l = new QLabel(text, parent);
+    l->setProperty("role", QStringLiteral("muted"));
+    l->setWordWrap(true);
+    return l;
+}
+
+QToolButton *iconButton(const QString &icon, const QString &tooltip, QWidget *parent, bool checkable)
+{
+    auto *b = new QToolButton(parent);
+    b->setIcon(Icons::get(icon));
+    b->setIconSize(QSize(18, 18));
+    b->setToolTip(tooltip);
+    b->setCheckable(checkable);
+    b->setAutoRaise(true);
+    b->setCursor(Qt::PointingHandCursor);
+    return b;
+}
+
+QFrame *card(QWidget *parent)
+{
+    auto *f = new QFrame(parent);
+    f->setProperty("card", QStringLiteral("true"));
+    return f;
+}
+
+QFrame *separator(Qt::Orientation orientation, QWidget *parent)
+{
+    auto *f = new QFrame(parent);
+    f->setFrameShape(orientation == Qt::Horizontal ? QFrame::HLine : QFrame::VLine);
+    f->setStyleSheet(QStringLiteral("color: %1; background: %1; border: none;").arg(Theme::palette().border.name()));
+    if (orientation == Qt::Horizontal)
+        f->setFixedHeight(1);
+    else
+        f->setFixedWidth(1);
+    return f;
+}
+
+} // namespace lumen::ui

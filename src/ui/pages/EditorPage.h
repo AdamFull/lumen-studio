@@ -1,0 +1,77 @@
+#pragma once
+
+#include "doc/Document.h"
+
+#include <QHash>
+#include <QPointer>
+#include <QWidget>
+
+class QActionGroup;
+class QLabel;
+class QStackedWidget;
+class QTabBar;
+class QTabWidget;
+class QUndoView;
+class QHBoxLayout;
+
+namespace lumen::ui {
+
+class AiPanel;
+class CanvasView;
+class ColorSwatch;
+class EditorState;
+class LayersPanel;
+class Studio;
+class Tool;
+
+// Layered image editor with AI-assisted editing.
+class EditorPage : public QWidget
+{
+    Q_OBJECT
+public:
+    explicit EditorPage(Studio *studio, QWidget *parent = nullptr);
+
+    CanvasView *canvas() const { return m_canvas; }
+    void selectTool(const QString &id);
+
+    // Actions also exposed through the main window menus.
+    void newDocumentDialog();
+    void exportImage();
+    void saveToLibrary();
+    void copyMerged();
+    void pasteAsLayer();
+    void importAsLayer();
+
+protected:
+    void dragEnterEvent(QDragEnterEvent *e) override;
+    void dropEvent(QDropEvent *e) override;
+
+private:
+    void setDocument(doc::Document *doc);
+    void rebuildTabs();
+    void updateStatus();
+    void deleteSelectionPixels();
+
+    Studio *m_studio;
+    EditorState *m_state;
+    CanvasView *m_canvas;
+    QTabBar *m_tabs;
+    QHBoxLayout *m_optionsHost;
+    QWidget *m_options = nullptr;
+    QList<Tool *> m_tools;
+    QHash<QString, QAction *> m_toolActions;
+    QActionGroup *m_toolGroup;
+    LayersPanel *m_layers;
+    AiPanel *m_ai;
+    QUndoView *m_history;
+    QTabWidget *m_side;
+    QLabel *m_zoomLabel;
+    QLabel *m_infoLabel;
+    QLabel *m_hintLabel;
+    ColorSwatch *m_fg;
+    ColorSwatch *m_bg;
+    QPointer<doc::Document> m_doc;
+    bool m_rebuildingTabs = false;
+};
+
+} // namespace lumen::ui

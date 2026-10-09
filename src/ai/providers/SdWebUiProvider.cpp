@@ -394,6 +394,7 @@ ImageOperation *SdWebUiProvider::generate(const ImageRequest &r)
                         net::CallOptions po;
                         po.timeoutMs = 5000;
                         po.maxRetries = 0;
+                        po.quiet = true;
                         net::HttpCall *poll = self->http()->get(self->request(QStringLiteral("/sdapi/v1/progress?skip_current_image=false")), po);
                         QObject::connect(poll, &net::HttpCall::finished, op, [op, poll, polling] {
                             *polling = false;

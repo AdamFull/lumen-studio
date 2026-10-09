@@ -1,0 +1,73 @@
+#pragma once
+
+#include "ai/GenerationService.h"
+#include "doc/Document.h"
+
+#include <QPointer>
+#include <QWidget>
+
+class QButtonGroup;
+class QCheckBox;
+class QComboBox;
+class QLabel;
+class QPushButton;
+class QSpinBox;
+class QStackedWidget;
+class QVBoxLayout;
+
+namespace lumen::ui {
+
+class AutoTextEdit;
+class ProviderCombo;
+class ReferenceStrip;
+class SliderField;
+class Studio;
+
+// Generative editing panel of the editor: inpaint selection, variations, instruction edits,
+// outpainting, upscaling, background removal and pose detection on the active document.
+class AiPanel : public QWidget
+{
+    Q_OBJECT
+public:
+    enum class Mode { Inpaint, Variation, Edit, Expand, Upscale, RemoveBackground, DetectPose };
+
+    explicit AiPanel(Studio *studio, QWidget *parent = nullptr);
+    void setDocument(doc::Document *doc);
+    void setMode(Mode mode);
+
+private:
+    void run();
+    void updateUi();
+    void submitWithComposite(std::function<void(QImage composite)> fn);
+    void trackJob(Job *job, std::function<void(doc::Document *, const ai::GenerationOutput &)> apply);
+    void addResultLayers(doc::Document *doc, const QList<QImage> &images, const QString &name, const QJsonObject &meta);
+    ai::ImageRequest baseRequest() const;
+
+    Studio *m_studio;
+    QPointer<doc::Document> m_doc;
+    Mode m_mode = Mode::Inpaint;
+    ProviderCombo *m_provider;
+    QButtonGroup *m_modes;
+    QLabel *m_modeHint;
+    AutoTextEdit *m_prompt;
+    AutoTextEdit *m_negative;
+    QWidget *m_promptBox;
+    SliderField *m_strength;
+    QWidget *m_expandBox;
+    QCheckBox *m_expandLeft, *m_expandRight, *m_expandTop, *m_expandBottom;
+    QSpinBox *m_expandAmount;
+    QComboBox *m_upscaleFactor;
+    QWidget *m_upscaleBox;
+    ReferenceStrip *m_refs;
+    QWidget *m_refsBox;
+    QCheckBox *m_usePose;
+    QSpinBox *m_variants;
+    SliderField *m_padding;
+    SliderField *m_feather;
+    QCheckBox *m_colorMatch;
+    QPushButton *m_run;
+    QVBoxLayout *m_jobs;
+    QLabel *m_capsWarning;
+};
+
+} // namespace lumen::ui
