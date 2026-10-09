@@ -117,6 +117,11 @@ bool CubismModel::setParameter(const QString &id, float value)
     return true;
 }
 
+float *CubismModel::parameterValues()
+{
+    return CubismCore::instance().api().getParameterValues(m_model);
+}
+
 void CubismModel::resetParameters()
 {
     float *values = CubismCore::instance().api().getParameterValues(m_model);

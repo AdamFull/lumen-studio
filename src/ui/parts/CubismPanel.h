@@ -43,6 +43,8 @@ private:
     QCheckBox *m_motion;
     QCheckBox *m_follow;
     QCheckBox *m_talk;
+    QCheckBox *m_physics;
+    SliderField *m_wind;
     QPushButton *m_reset;
     QWidget *m_paramHost;
     QVBoxLayout *m_params;

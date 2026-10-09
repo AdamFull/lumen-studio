@@ -1,6 +1,7 @@
 add_library(lumen_live2d STATIC
     CubismCore.h CubismCore.cpp
     Motion.h Motion.cpp
+    Physics.h Physics.cpp
     CubismModel.h CubismModel.cpp
     CubismRenderer.h CubismRenderer.cpp
 )

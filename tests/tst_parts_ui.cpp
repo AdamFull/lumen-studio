@@ -281,6 +281,13 @@ void TestPartsUi::cubismViewAnimates()
     QSignalSpy frames(&view, &CubismView::framePresented);
     QTRY_VERIFY_WITH_TIMEOUT(frames.size() >= 3, 5000);
     QVERIFY(view.value(0) != 0.0f); // the Idle curve moves ParamAngleX
+    // The fake model's physics3.json swings ParamHairFront while ParamAngleX moves.
+    QVERIFY(view.hasPhysics());
+    QTRY_VERIFY_WITH_TIMEOUT(std::abs(view.value(1)) > 0.02f, 5000);
+    view.setPhysicsEnabled(false);
+    view.setPlayMotion(false);
+    view.setAutoIdle(false);
+    QTRY_COMPARE(view.value(1), 0.0f);
     view.clear();
     QVERIFY(!view.hasModel());
     lumen::live2d::CubismCore::instance().unload();

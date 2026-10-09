@@ -35,9 +35,10 @@ using lumen::live2d::CsmIsVisible;
 namespace fake {
 
 constexpr int kDrawables = 7;
-float params[1] = {0.0f};
-const float paramMin[1] = {-30.0f}, paramMax[1] = {30.0f}, paramDef[1] = {0.0f};
-const char *paramIds[1] = {"ParamAngleX"};
+// ParamHairFront has no geometry; it is driven by the physics in fake.physics3.json.
+float params[2] = {0.0f, 0.0f};
+const float paramMin[2] = {-30.0f, -1.0f}, paramMax[2] = {30.0f, 1.0f}, paramDef[2] = {0.0f, 0.0f};
+const char *paramIds[2] = {"ParamAngleX", "ParamHairFront"};
 const char *partIds[1] = {"PartRoot"};
 float partOpacity[1] = {1.0f};
 const char *drawableIds[kDrawables] = {"Back", "Eye", "Glow", "TopBand", "Mask", "LowBand", "Hidden"};
@@ -99,7 +100,7 @@ void readCanvasInfo(const void *, CsmVector2 *size, CsmVector2 *origin, float *p
     *origin = {100, 100};
     *ppu = 100;
 }
-int getParameterCount(const void *) { return 1; }
+int getParameterCount(const void *) { return 2; }
 const char **getParameterIds(const void *) { return paramIds; }
 const float *getMin(const void *) { return paramMin; }
 const float *getMax(const void *) { return paramMax; }
@@ -178,6 +179,42 @@ inline QImage solid(const QColor &c)
     return im;
 }
 
+// One strand: ParamAngleX moves its root sideways, the swing drives ParamHairFront.
+inline QJsonObject physicsJson(double fps = 30.0, double scale = 1.5, double weight = 100.0)
+{
+    auto vertex = [](double mobility, double delay, double acceleration, double radius) {
+        return QJsonObject{{QStringLiteral("Position"), QJsonObject{{QStringLiteral("X"), 0}, {QStringLiteral("Y"), radius}}},
+                           {QStringLiteral("Mobility"), mobility}, {QStringLiteral("Delay"), delay},
+                           {QStringLiteral("Acceleration"), acceleration}, {QStringLiteral("Radius"), radius}};
+    };
+    auto range = [] { return QJsonObject{{QStringLiteral("Minimum"), -10}, {QStringLiteral("Default"), 0}, {QStringLiteral("Maximum"), 10}}; };
+    const QJsonObject forces{{QStringLiteral("Gravity"), QJsonObject{{QStringLiteral("X"), 0}, {QStringLiteral("Y"), -1}}},
+                             {QStringLiteral("Wind"), QJsonObject{{QStringLiteral("X"), 0}, {QStringLiteral("Y"), 0}}}};
+    const QJsonObject meta{{QStringLiteral("PhysicsSettingCount"), 1},
+                           {QStringLiteral("Fps"), fps},
+                           {QStringLiteral("EffectiveForces"), forces},
+                           {QStringLiteral("PhysicsDictionary"), QJsonArray{QJsonObject{{QStringLiteral("Id"), QStringLiteral("PhysicsSetting1")},
+                                                                                         {QStringLiteral("Name"), QStringLiteral("Front hair")}}}}};
+    const QJsonObject input{{QStringLiteral("Source"), QJsonObject{{QStringLiteral("Target"), QStringLiteral("Parameter")},
+                                                                   {QStringLiteral("Id"), QStringLiteral("ParamAngleX")}}},
+                            {QStringLiteral("Weight"), 100},
+                            {QStringLiteral("Type"), QStringLiteral("X")},
+                            {QStringLiteral("Reflect"), false}};
+    const QJsonObject output{{QStringLiteral("Destination"), QJsonObject{{QStringLiteral("Target"), QStringLiteral("Parameter")},
+                                                                         {QStringLiteral("Id"), QStringLiteral("ParamHairFront")}}},
+                             {QStringLiteral("VertexIndex"), 1},
+                             {QStringLiteral("Scale"), scale},
+                             {QStringLiteral("Weight"), weight},
+                             {QStringLiteral("Type"), QStringLiteral("Angle")},
+                             {QStringLiteral("Reflect"), false}};
+    const QJsonObject setting{{QStringLiteral("Id"), QStringLiteral("PhysicsSetting1")},
+                              {QStringLiteral("Input"), QJsonArray{input}},
+                              {QStringLiteral("Output"), QJsonArray{output}},
+                              {QStringLiteral("Vertices"), QJsonArray{vertex(1, 1, 1, 0), vertex(0.95, 0.9, 1.5, 15)}},
+                              {QStringLiteral("Normalization"), QJsonObject{{QStringLiteral("Position"), range()}, {QStringLiteral("Angle"), range()}}}};
+    return QJsonObject{{QStringLiteral("Version"), 3}, {QStringLiteral("Meta"), meta}, {QStringLiteral("PhysicsSettings"), QJsonArray{setting}}};
+}
+
 // Writes fake.model3.json (moc, four textures, an Idle motion, EyeBlink group); returns its path.
 inline QString writeModel(const QString &dir)
 {
@@ -202,6 +239,7 @@ inline QString writeModel(const QString &dir)
                                      {QStringLiteral("Curves"), QJsonArray{QJsonObject{{QStringLiteral("Target"), QStringLiteral("Parameter")},
                                                                                        {QStringLiteral("Id"), QStringLiteral("ParamAngleX")},
                                                                                        {QStringLiteral("Segments"), QJsonArray{0, -30, 0, 2, 30}}}}}});
+    ok = ok && writeJson(dir + QStringLiteral("/fake.physics3.json"), physicsJson());
     const QString model3 = dir + QStringLiteral("/fake.model3.json");
     ok = ok && writeJson(model3, QJsonObject{
         {QStringLiteral("Version"), 3},

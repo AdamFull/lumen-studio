@@ -61,6 +61,11 @@ public:
     void setParameter(int index, float value);
     bool setParameter(const QString &id, float value);
     void resetParameters();
+    // Raw parameter arrays (Core memory / cached ranges) for bulk updates such as physics.
+    float *parameterValues();
+    const float *parameterMinimums() const { return m_min.constData(); }
+    const float *parameterMaximums() const { return m_max.constData(); }
+    const float *parameterDefaults() const { return m_default.constData(); }
 
     const QStringList &partIds() const { return m_partIds; }
     bool setPartOpacity(const QString &id, float value);

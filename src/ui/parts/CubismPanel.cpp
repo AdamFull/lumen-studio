@@ -61,6 +61,16 @@ CubismPanel::CubismPanel(Studio *studio, CubismView *view, QWidget *parent)
     toggles->addWidget(m_talk);
     toggles->addStretch();
     v->addLayout(toggles);
+    auto *physicsRow = new QHBoxLayout;
+    m_physics = new QCheckBox(tr("Physics"), this);
+    m_physics->setChecked(true);
+    m_physics->setToolTip(tr("Simulate the model's physics3.json (hair, clothes and accessories swing with the motion)"));
+    m_wind = new SliderField(tr("Wind"), -100, 100, 0, 0, QStringLiteral(" %"), this);
+    m_wind->setCompact(true);
+    m_wind->setToolTip(tr("Horizontal wind applied to every physics strand"));
+    physicsRow->addWidget(m_physics);
+    physicsRow->addWidget(m_wind, 1);
+    v->addLayout(physicsRow);
 
     auto *paramHeader = new QHBoxLayout;
     paramHeader->addWidget(sectionLabel(tr("Parameters"), this));
@@ -79,8 +89,7 @@ CubismPanel::CubismPanel(Studio *studio, CubismView *view, QWidget *parent)
     m_params->addStretch();
     scroll->setWidget(m_paramHost);
     v->addWidget(scroll, 1);
-    auto *note = mutedLabel(tr("Physics are not simulated. Live2D Cubism Core is provided by Live2D Inc. under its own licence; "
-                               "Lumen only loads your copy."), this);
+    auto *note = mutedLabel(tr("Live2D Cubism Core is provided by Live2D Inc. under its own licence; Lumen only loads your copy."), this);
     note->setWordWrap(true);
     v->addWidget(note);
 
@@ -93,6 +102,8 @@ CubismPanel::CubismPanel(Studio *studio, CubismView *view, QWidget *parent)
     connect(m_follow, &QCheckBox::toggled, m_view, &CubismView::setFollowMouse);
     connect(m_talk, &QCheckBox::toggled, m_view, &CubismView::setTalking);
     connect(m_reset, &QPushButton::clicked, m_view, &CubismView::clearManual);
+    connect(m_physics, &QCheckBox::toggled, m_view, &CubismView::setPhysicsEnabled);
+    connect(m_wind, &SliderField::valueChanged, this, [this](double v) { m_view->setWind(QPointF(v / 100.0 * 0.5, 0.0)); });
     connect(m_view, &CubismView::modelChanged, this, [this] {
         rebuildParameters();
         refreshStatus();
@@ -125,10 +136,16 @@ void CubismPanel::refreshStatus()
     } else {
         live2d::CubismModel *m = m_view->model();
         text = tr("<b>%1</b> · %n parameter(s) · Core %2", nullptr, m->parameterCount()).arg(m_view->modelName().toHtmlEscaped(), core.versionString());
+        if (m_view->hasPhysics())
+            text += QStringLiteral(" · ") + tr("%n physics setting(s)", nullptr, int(m_view->physics()->settings().size()));
+        else if (!m_view->physicsError().isEmpty())
+            text += QStringLiteral("<br>") + tr("Physics unavailable: %1").arg(m_view->physicsError().toHtmlEscaped());
     }
     m_status->setText(text);
     m_open->setEnabled(core.isLoaded());
     m_motion->setEnabled(m_view->hasIdleMotion());
+    m_physics->setEnabled(m_view->hasPhysics());
+    m_wind->setEnabled(m_view->hasPhysics());
     m_reset->setEnabled(m_view->hasModel());
 }
 
@@ -169,6 +186,7 @@ bool CubismPanel::openModel(const QString &path)
     m_view->setPlayMotion(m_motion->isChecked());
     m_view->setFollowMouse(m_follow->isChecked());
     m_view->setTalking(m_talk->isChecked());
+    m_view->setPhysicsEnabled(m_physics->isChecked());
     return true;
 }
 

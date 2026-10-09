@@ -50,6 +50,19 @@ bool CubismView::loadModel(const QString &model3Path, QString *error)
         QString motionError;
         m_idle = live2d::Motion::load(idle, &motionError);
     }
+    m_physics.reset();
+    m_physicsError.clear();
+    if (!m_model->settings().physics.isEmpty()) {
+        m_physics = live2d::Physics::load(m_model->settings().physics, &m_physicsError);
+        if (m_physics) {
+            m_physics->bind(m_model->parameterIds());
+            m_physics->setWind(m_wind);
+            // Start at rest: settle the strands for the default pose.
+            m_model->resetParameters();
+            m_physics->stabilize(m_model->parameterValues(), m_model->parameterMinimums(), m_model->parameterMaximums(),
+                                 m_model->parameterDefaults());
+        }
+    }
     m_name = QFileInfo(model3Path).completeBaseName().remove(QStringLiteral(".model3"));
     m_manual.clear();
     m_zoom = 1.0;
@@ -66,6 +79,7 @@ void CubismView::clear()
 {
     m_model.reset();
     m_idle.reset();
+    m_physics.reset();
     m_image = QImage();
     m_manual.clear();
     ++m_generation;
@@ -98,6 +112,21 @@ void CubismView::setPlayMotion(bool on)
     updateTimer();
 }
 
+void CubismView::setPhysicsEnabled(bool on)
+{
+    m_physicsEnabled = on;
+    if (on && m_physics)
+        m_physics->reset();
+    updateTimer();
+}
+
+void CubismView::setWind(const QPointF &wind)
+{
+    m_wind = wind;
+    if (m_physics)
+        m_physics->setWind(wind);
+}
+
 void CubismView::setManual(int parameterIndex, float value)
 {
     m_manual.insert(parameterIndex, value);
@@ -119,7 +148,8 @@ float CubismView::value(int parameterIndex) const
 
 void CubismView::updateTimer()
 {
-    const bool animate = m_model && isVisible() && (m_autoIdle || m_follow || m_talking || (m_playMotion && m_idle));
+    const bool animate = m_model && isVisible()
+                         && (m_autoIdle || m_follow || m_talking || (m_playMotion && m_idle) || (m_physicsEnabled && m_physics));
     if (animate && !m_timer.isActive()) {
         m_lastT = m_clock.elapsed() / 1000.0;
         m_timer.start();
@@ -222,6 +252,12 @@ void CubismView::applyAnimation(double t, double dt)
         for (const QString &id : std::as_const(lips))
             m.setParameter(id, mouth);
     }
+    // Manual inputs drive the physics too (dragging an angle slider swings the hair).
+    for (auto it = m_manual.cbegin(); it != m_manual.cend(); ++it)
+        m.setParameter(it.key(), it.value());
+    if (m_physicsEnabled && m_physics)
+        m_physics->evaluate(m.parameterValues(), m.parameterMinimums(), m.parameterMaximums(), m.parameterDefaults(), dt);
+    // A manually set physics output stays where the user put it.
     for (auto it = m_manual.cbegin(); it != m_manual.cend(); ++it)
         m.setParameter(it.key(), it.value());
 }

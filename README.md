@@ -50,7 +50,7 @@ Live2D Cubism, in four steps:
 4. **Preview & export**: animate the result as a 2.5D puppet, then export a layered PSD, a PNG folder
    with `parts.json`, or editor layers. The *Cubism model* tab previews a model rigged in Cubism Editor
    (`.model3.json`). It uses the Cubism Core library from your own copy of the Live2D Cubism SDK for
-   Native, which Lumen loads at runtime; physics are not simulated.
+   Native, which Lumen loads at runtime. Physics (`physics3.json`) are simulated, with optional wind.
 
 A layered PSD can also start a session (*Open layered PSD…*): every visible layer becomes a complete
 part. The editor opens and exports layered PSDs too.
