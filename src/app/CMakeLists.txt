@@ -35,6 +35,36 @@ add_custom_command(TARGET lumen POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory "${PROJECT_SOURCE_DIR}/resources/workflows" "$<TARGET_FILE_DIR:lumen>/data/workflows"
     COMMENT "Copying bundled workflows")
 
+# ---- Runnable build tree (Windows) ---------------------------------------------------------------
+# Copies the Qt DLLs, plugins and the MinGW runtime next to the built executable, so it starts by
+# double-click or from an IDE without Qt on PATH. windeployqt only copies files that changed.
+if(WIN32)
+    option(LUMEN_DEPLOY_ON_BUILD "Copy the Qt and compiler runtime next to LumenStudio.exe after each build" ON)
+    if(LUMEN_DEPLOY_ON_BUILD)
+        find_program(LUMEN_WINDEPLOYQT NAMES windeployqt6 windeployqt
+                     HINTS "${QT6_INSTALL_PREFIX}/${QT6_INSTALL_BINS}" "${Qt6_DIR}/../../../bin" NO_DEFAULT_PATH)
+        if(LUMEN_WINDEPLOYQT)
+            add_custom_command(TARGET lumen POST_BUILD
+                COMMAND "${LUMEN_WINDEPLOYQT}" --verbose 0 --no-compiler-runtime
+                        --exclude-plugins qsqlibase,qsqlmimer,qsqloci,qsqlodbc,qsqlpsql
+                        "$<TARGET_FILE:lumen>"
+                COMMENT "Deploying the Qt runtime next to LumenStudio.exe")
+        else()
+            message(WARNING "windeployqt not found: run LumenStudio.exe with Qt's bin directory on PATH")
+        endif()
+        # The MinGW runtime from the compiler that built the executable.
+        if(MINGW)
+            get_filename_component(LUMEN_COMPILER_DIR "${CMAKE_CXX_COMPILER}" DIRECTORY)
+            foreach(dll libstdc++-6.dll libgcc_s_seh-1.dll libwinpthread-1.dll)
+                if(EXISTS "${LUMEN_COMPILER_DIR}/${dll}")
+                    add_custom_command(TARGET lumen POST_BUILD
+                        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${LUMEN_COMPILER_DIR}/${dll}" "$<TARGET_FILE_DIR:lumen>")
+                endif()
+            endforeach()
+        endif()
+    endif()
+endif()
+
 # ---- Installation / deployment ------------------------------------------------------------------
 # `cmake --install <build> --prefix <dir>` produces a self-contained folder: the executable at the
 # top level, Qt and compiler runtime DLLs deployed by windeployqt, bundled data in data/.

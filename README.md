@@ -33,6 +33,10 @@ cmake --build --preset mingw-debug
 scripts/run-tests.sh build/mingw-debug
 ```
 
+After each build the Qt DLLs, plugins and the MinGW runtime are copied next to
+`build/<preset>/bin/LumenStudio.exe` (windeployqt), so it starts without Qt on PATH. Turn this off
+with `-DLUMEN_DEPLOY_ON_BUILD=OFF`.
+
 To keep machine-specific paths out of the repository, put them in a `CMakeUserPresets.json`
 (it is git-ignored) that inherits `mingw-debug` and sets `QT_ROOT` and `PATH`.
 
