@@ -124,7 +124,13 @@ struct ImageCapabilities
     qint64 maxPixels = 2048 * 2048;
 };
 
-enum class Utility { Upscale, RemoveBackground, DetectPose, Caption };
+// SegmentParts splits a character illustration into semantic parts.
+//   params: {"parts": [{"tag": "front hair", "prompt": "bangs"}, ...] (empty = everything the model knows),
+//            "resolution": int (optional), "seed": int (optional)}
+//   result: one GeneratedImage per part, sized like the input image. info: {"label": tag or model label,
+//           "kind": "layer" (RGBA, possibly with completed hidden areas) | "mask" (Grayscale8),
+//           "order": back-to-front index (optional), "depth": 0 back .. 1 front (optional), "score": 0..1 (optional)}
+enum class Utility { Upscale, RemoveBackground, DetectPose, Caption, SegmentParts };
 QString utilityName(Utility u);
 
 // ---- Chat / LLM ---------------------------------------------------------------------------------

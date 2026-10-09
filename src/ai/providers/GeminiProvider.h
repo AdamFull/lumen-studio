@@ -33,6 +33,12 @@ public:
     QFuture<QStringList> listModels() override;
     ImageCapabilities capabilities() const override;
     ImageOperation *generate(const ImageRequest &request) override;
+    bool supportsUtility(Utility u) const override;
+    ImageOperation *runUtility(Utility utility, const QImage &image, const QJsonObject &params) override;
+
+    // Segmentation (Gemini 2.5+ returns labelled boxes with mask PNGs). Exposed for tests.
+    static QJsonObject buildSegmentationBody(const QImage &image, const QJsonArray &parts);
+    static ImageResult parseSegmentation(const QByteArray &body, const QSize &canvas);
 
     // Builds the multimodal prompt (instruction + ordered images) for a request. Exposed for tests.
     static QJsonObject buildBody(const ImageRequest &request, const QStringList &aspectRatios);

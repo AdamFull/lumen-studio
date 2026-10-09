@@ -35,6 +35,13 @@ struct ComfyTemplate
     int maxReferences = 0;
     bool poseControl = false;
     qint64 nativePixels = 1024 * 1024;
+    // Part segmentation templates (mode "segment_parts"): output node id -> part label, and whether
+    // outputs are RGBA layers, masks, or decided per image ("auto").
+    QJsonObject outputs;
+    QString outputKind = QStringLiteral("auto");
+
+    bool isSegmentation() const { return modes.contains(QStringLiteral("segment_parts")); }
+    bool isGeneration() const { return modes.size() > (isSegmentation() ? 1 : 0); }
 
     static std::optional<ComfyTemplate> fromJson(const QJsonObject &json, const QString &id, QString *error = nullptr);
 };
@@ -79,6 +86,8 @@ private:
     QFuture<QStringList> nodeOptions(const QString &nodeClass, const QString &input);
     QFuture<bool> hasNode(const QString &nodeClass);
     std::optional<ComfyTemplate> activeTemplate() const;
+    std::optional<ComfyTemplate> segmentationTemplate() const;
+    ImageOperation *segmentParts(const QImage &image, const QJsonObject &params);
     void runGraph(ImageOperation *op, std::function<QJsonObject(const UploadedImages &)> buildGraph, const QList<QPair<QString, QImage>> &uploads);
 
     QString m_clientId;

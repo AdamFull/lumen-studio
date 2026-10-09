@@ -11,11 +11,14 @@ add_library(lumen_ai STATIC
     providers/OpenAiImageProvider.h providers/OpenAiImageProvider.cpp
     providers/StabilityProvider.h providers/StabilityProvider.cpp
     providers/ComfyUiProvider.h providers/ComfyUiProvider.cpp
+    providers/PartServerProvider.h providers/PartServerProvider.cpp
     ProviderCatalog.h ProviderCatalog.cpp
     StructuredChat.h StructuredChat.cpp
     PromptStyle.h PromptStyle.cpp
     GenerationService.h GenerationService.cpp
     Director.h Director.cpp
+    PartPipeline.h PartPipeline.cpp
+    PartService.h PartService.cpp
 )
 target_include_directories(lumen_ai PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
 target_link_libraries(lumen_ai PUBLIC lumen_core lumen_net lumen_pose lumen_doc Qt6::Gui)

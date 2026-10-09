@@ -6,6 +6,7 @@
 #include "ai/providers/GeminiProvider.h"
 #include "ai/providers/OpenAiChatProvider.h"
 #include "ai/providers/OpenAiImageProvider.h"
+#include "ai/providers/PartServerProvider.h"
 #include "ai/providers/SdWebUiProvider.h"
 #include "ai/providers/StabilityProvider.h"
 
@@ -31,6 +32,7 @@ void registerBuiltInProviders(ProviderRegistry &registry)
     registry.registerType(OpenAiImageProvider::describe(), factory<OpenAiImageProvider>());
     registry.registerType(GeminiImageProvider::describe(), factory<GeminiImageProvider>());
     registry.registerType(StabilityProvider::describe(), factory<StabilityProvider>());
+    registry.registerType(PartServerProvider::describe(), factory<PartServerProvider>());
     // LLM back-ends.
     for (const ProviderType &t : OpenAiChatProvider::describeAll())
         registry.registerType(t, factory<OpenAiChatProvider>());

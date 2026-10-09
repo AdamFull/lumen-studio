@@ -8,6 +8,7 @@
 #include <QObject>
 #include <QPointer>
 
+#include <functional>
 #include <optional>
 
 namespace lumen {
@@ -74,6 +75,12 @@ public:
     doc::Project *project() const { return m_project; }
 
     Job *submit(const GenerationSpec &spec);
+    // Runs a generation inside an existing job (progress, previews, cancellation) and hands the
+    // output to `onOutput` instead of storing assets. `used` carries the request values actually sent.
+    using OutputHandler = std::function<void(Job *job, const GenerationSpec &used, GenerationOutput output)>;
+    void execute(Job *job, const GenerationSpec &spec, OutputHandler onOutput);
+    // Queue group (concurrency bucket) of a provider id; empty = default image provider.
+    QString groupFor(const QString &providerId) const;
     Job *submitUtility(const QString &providerId, Utility utility, const QImage &image, const QJsonObject &params,
                        const QString &title, bool saveAsset = true);
 

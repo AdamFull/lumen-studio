@@ -52,6 +52,92 @@ QList<PosePreset> buildPresets()
                      r.leftHand = r.rightHand = QStringLiteral("relaxed");
                      r.perspective = 0.0;
                  });
+    // ---- Live2D: rig-ready source art (front-facing, limbs clear of the body, neutral face) ----------
+    const QString live2d = QStringLiteral("Live2D");
+    auto live2dBase = [](RigParams &r) {
+        r.leftArm = r.rightArm = limb(32, 90, 6);
+        r.leftLeg = r.rightLeg = limb(5, 90);
+        r.leftHand = r.rightHand = QStringLiteral("open");
+        r.expression = QStringLiteral("neutral");
+        r.perspective = 0.0;
+    };
+    list << make(QStringLiteral("live2d_full"), QStringLiteral("Live2D Full Body"), live2d,
+                 QStringLiteral("Front view A-pose, arms 30 degrees away from the torso, open hands, legs slightly apart, "
+                                "neutral face. Every part is separable."),
+                 live2dBase);
+    list << make(QStringLiteral("live2d_knees"), QStringLiteral("Live2D Knees Up"), live2d,
+                 QStringLiteral("A-pose framed from the knees up: larger face and hands for detailed rigs."), [&](RigParams &r) {
+                     live2dBase(r);
+                     r.framing = QStringLiteral("knees_up");
+                 });
+    list << make(QStringLiteral("live2d_vtuber"), QStringLiteral("VTuber Half Body"), live2d,
+                 QStringLiteral("Waist-up VTuber framing, arms relaxed and slightly out so the torso stays visible."),
+                 [&](RigParams &r) {
+                     live2dBase(r);
+                     r.leftArm = r.rightArm = limb(20, 90, 12);
+                     r.leftHand = r.rightHand = QStringLiteral("relaxed");
+                     r.framing = QStringLiteral("upper_body");
+                 });
+    list << make(QStringLiteral("live2d_hands"), QStringLiteral("VTuber Hands Visible"), live2d,
+                 QStringLiteral("Waist-up with both hands open in front of the body at chest height, palms visible, for "
+                                "hand-tracking rigs."),
+                 [&](RigParams &r) {
+                     live2dBase(r);
+                     r.leftArm = r.rightArm = limb(28, 35, 95, 20);
+                     r.framing = QStringLiteral("cowboy_shot");
+                 });
+    list << make(QStringLiteral("live2d_face"), QStringLiteral("Live2D Face Base"), live2d,
+                 QStringLiteral("Front bust, neutral expression, eyes open, mouth closed: base for expression parts."),
+                 [&](RigParams &r) {
+                     live2dBase(r);
+                     r.leftArm = r.rightArm = limb(12, 90, 6);
+                     r.framing = QStringLiteral("bust");
+                 });
+    list << make(QStringLiteral("live2d_three_quarter_left"), QStringLiteral("Live2D 3/4 Left"), live2d,
+                 QStringLiteral("A-pose turned 15 degrees to the viewer's left (angle reference for head and body turns)."),
+                 [&](RigParams &r) {
+                     live2dBase(r);
+                     r.yaw = -15;
+                 });
+    list << make(QStringLiteral("live2d_three_quarter_right"), QStringLiteral("Live2D 3/4 Right"), live2d,
+                 QStringLiteral("A-pose turned 15 degrees to the viewer's right."), [&](RigParams &r) {
+                     live2dBase(r);
+                     r.yaw = 15;
+                 });
+    list << make(QStringLiteral("live2d_arms_up"), QStringLiteral("Live2D Arms Raised"), live2d,
+                 QStringLiteral("Arms raised to 70 degrees: reveals sleeves, armpits and the torso sides for clean arm parts."),
+                 [&](RigParams &r) {
+                     live2dBase(r);
+                     r.leftArm = r.rightArm = limb(70, 90, 8);
+                 });
+    list << make(QStringLiteral("live2d_seated"), QStringLiteral("Live2D Seated"), live2d,
+                 QStringLiteral("Front-facing seated pose with knees forward and hands resting apart on the thighs."),
+                 [&](RigParams &r) {
+                     live2dBase(r);
+                     r.leftLeg = r.rightLeg = limb(88, 8, 92);
+                     r.leftArm = r.rightArm = limb(14, 30, 50, 25);
+                     r.leftHand = r.rightHand = QStringLiteral("relaxed");
+                     r.framing = QStringLiteral("full_body");
+                 });
+    {
+        PosePreset p;
+        p.id = QStringLiteral("live2d_turnaround");
+        p.name = QStringLiteral("Live2D Turnaround");
+        p.category = live2d;
+        p.description = QStringLiteral("Front, side and back A-pose views for consistent parts and hair behind the head.");
+        const double yaws[3] = {0, 90, 180};
+        for (int i = 0; i < 3; ++i) {
+            RigParams r;
+            live2dBase(r);
+            r.name = QStringLiteral("View %1").arg(i + 1);
+            r.yaw = yaws[i];
+            r.positionX = 1.0 / 6.0 + i / 3.0;
+            r.scale = 0.95;
+            p.rigs << r;
+        }
+        list << p;
+    }
+
     list << make(QStringLiteral("t_pose"), QStringLiteral("T-Pose"), standing, QStringLiteral("Arms horizontal, front view."),
                  [](RigParams &r) {
                      r.leftArm = r.rightArm = limb(90, 90);

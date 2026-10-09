@@ -165,7 +165,8 @@ void HttpCall::onReplyFinished()
         m_retryTimer.start(delay);
         return;
     }
-    if (!ok() && !m_options.quiet)
+    const bool succeeded = m_netError == QNetworkReply::NoError && m_status >= 200 && m_status < 300;
+    if (!succeeded && !m_options.quiet)
         qCWarning(lcNet).noquote() << "Request failed:" << m_url.toDisplayString(QUrl::RemoveQuery) << "-" << log::redact(errorString());
     finish();
 }

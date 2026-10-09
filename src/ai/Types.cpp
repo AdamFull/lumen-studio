@@ -67,6 +67,7 @@ QString utilityName(Utility u)
     case Utility::RemoveBackground: return QStringLiteral("remove_background");
     case Utility::DetectPose: return QStringLiteral("detect_pose");
     case Utility::Caption: return QStringLiteral("caption");
+    case Utility::SegmentParts: return QStringLiteral("segment_parts");
     }
     return {};
 }

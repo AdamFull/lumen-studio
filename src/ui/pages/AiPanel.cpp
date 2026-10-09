@@ -384,7 +384,7 @@ void AiPanel::run()
         const bool colorMatch = m_colorMatch->isChecked();
         ai::ImageProvider *provider = m_provider->imageProvider();
         const ai::ImageCapabilities caps = provider ? provider->capabilities() : ai::ImageCapabilities();
-        submitWithComposite([=](QImage composite) {
+        submitWithComposite([=, this](QImage composite) {
             if (!doc)
                 return;
             ai::GenerationSpec spec;
@@ -446,7 +446,7 @@ void AiPanel::run()
         req.denoise = 1.0;
         const int feather = int(m_feather->value());
         const bool colorMatch = m_colorMatch->isChecked();
-        submitWithComposite([=](QImage composite) {
+        submitWithComposite([=, this](QImage composite) {
             if (!doc)
                 return;
             ai::GenerationSpec spec;
@@ -462,7 +462,7 @@ void AiPanel::run()
     }
     case Mode::Upscale: {
         const double factor = m_upscaleFactor->currentData().toDouble();
-        submitWithComposite([=](QImage composite) {
+        submitWithComposite([=, this](QImage composite) {
             Job *job = gen->submitUtility(providerId, ai::Utility::Upscale, composite, QJsonObject{{QStringLiteral("factor"), factor}},
                                           tr("Upscale %1×").arg(factor));
             trackJob(job, [this](doc::Document *d, const ai::GenerationOutput &out) {
@@ -473,7 +473,7 @@ void AiPanel::run()
         break;
     }
     case Mode::RemoveBackground: {
-        submitWithComposite([=](QImage composite) {
+        submitWithComposite([=, this](QImage composite) {
             Job *job = gen->submitUtility(providerId, ai::Utility::RemoveBackground, img::flatten(composite, Qt::white), {}, tr("Remove background"));
             trackJob(job, [this](doc::Document *d, const ai::GenerationOutput &out) {
                 if (out.images.isEmpty())
@@ -491,7 +491,7 @@ void AiPanel::run()
         break;
     }
     case Mode::DetectPose: {
-        submitWithComposite([=](QImage composite) {
+        submitWithComposite([=, this](QImage composite) {
             Job *job = gen->submitUtility(providerId, ai::Utility::DetectPose, img::flatten(composite, Qt::white), {}, tr("Detect pose"));
             trackJob(job, [this](doc::Document *d, const ai::GenerationOutput &out) {
                 const QJsonObject json = out.info.value(QStringLiteral("openpose")).toObject();

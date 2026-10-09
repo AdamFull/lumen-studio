@@ -166,100 +166,23 @@ Job *GenerationService::submit(const GenerationSpec &specIn)
     ImageProvider *provider = specIn.providerId.isEmpty() ? m_registry->defaultImageProvider() : m_registry->imageProvider(specIn.providerId);
     const QString group = provider ? provider->instanceId() : QStringLiteral("none");
     const QString title = specIn.title.isEmpty() ? specIn.request.prompt.left(60) : specIn.title;
-    QPointer<ImageProvider> providerGuard(provider);
     QPointer<GenerationService> self(this);
     GenerationSpec spec = specIn;
     if (provider)
         spec.providerId = provider->instanceId();
 
-    Job *job = m_queue->submit(title.isEmpty() ? tr("Image generation") : title, group, [self, providerGuard, spec](Job *job) {
-        if (!providerGuard) {
-            job->fail(tr("No image provider is configured. Add one in Settings → Providers."));
+    Job *job = m_queue->submit(title.isEmpty() ? tr("Image generation") : title, group, [self, spec](Job *job) {
+        if (!self) {
+            job->fail(tr("The generation service is no longer available"));
             return;
         }
-        ImageProvider *provider = providerGuard;
-        const ImageCapabilities caps = provider->capabilities();
-        job->setProgress(-1.0, tr("Preparing..."));
-
-        auto launch = [self, job, providerGuard, spec](ImageRequest request, std::optional<RegionPlan> plan) {
-            if (!providerGuard || !self) {
-                job->fail(tr("The provider is no longer available"));
+        self->execute(job, spec, [self](Job *job, const GenerationSpec &used, GenerationOutput out) {
+            if (!self) {
+                job->succeed(QVariant::fromValue(out));
                 return;
             }
-            ImageOperation *op = providerGuard->generate(request);
-            job->setCancelHandler([op = QPointer<ImageOperation>(op), job] {
-                if (op)
-                    op->cancel();
-                else
-                    job->reportCancelled();
-            });
-            QObject::connect(op, &Operation::progress, job, [job](double f, const QString &s) { job->setProgress(f, s); });
-            QObject::connect(op, &Operation::preview, job, [job](const QImage &img) { job->setPreview(img); });
-            GenerationSpec used = spec;
-            used.request.mode = request.mode;
-            used.request.denoise = request.denoise;
-            used.request.seed = request.seed;
-            QObject::connect(op, &Operation::finished, job, [self, job, op, spec = used, request, plan, providerGuard] {
-                if (op->state() == Operation::State::Cancelled) {
-                    job->reportCancelled();
-                    return;
-                }
-                if (op->state() == Operation::State::Failed) {
-                    job->fail(op->errorString());
-                    return;
-                }
-                const ImageResult result = op->result();
-                job->metadata().insert(QStringLiteral("request"), request.describe());
-                if (!spec.region) {
-                    GenerationOutput out;
-                    for (const GeneratedImage &g : result.images) {
-                        out.images << g.image;
-                        out.rawImages << g.image;
-                    }
-                    out.text = result.text;
-                    out.info = result.info;
-                    if (self)
-                        self->finishWithAssets(job, spec, out, providerGuard);
-                    return;
-                }
-                job->setProgress(-1.0, tr("Blending result..."));
-                const RegionInput region = *spec.region;
-                const RegionPlan rp = *plan;
-                async::run([result, region, rp] {
-                    GenerationOutput out;
-                    out.region = rp.rect;
-                    out.text = result.text;
-                    out.info = result.info;
-                    for (const GeneratedImage &g : result.images) {
-                        out.rawImages << g.image;
-                        out.images << compositeRegionResult(g.image, region, rp);
-                    }
-                    return out;
-                }).then(job, [self, job, spec, providerGuard](GenerationOutput out) {
-                    if (self)
-                        self->finishWithAssets(job, spec, out, providerGuard);
-                }).onFailed(job, [job](const std::exception &e) { job->fail(describeException(e)); });
-            });
-        };
-
-        if (!spec.region) {
-            ImageRequest req = spec.request;
-            if (req.mode == GenMode::Inpaint && !caps.inpaint && !caps.edit)
-                req.mode = GenMode::ImageToImage;
-            launch(req, std::nullopt);
-            return;
-        }
-        const RegionInput region = *spec.region;
-        const ImageRequest base = spec.request;
-        async::run([region, base, caps] {
-            const QRect bounds = img::maskBounds(region.mask, 8);
-            if (bounds.isEmpty())
-                throw ProviderError(QObject::tr("The selection is empty - paint a mask or make a selection first."));
-            const RegionPlan plan = planRegion(bounds, region.source.size(), region.padding, caps);
-            return std::make_pair(prepareRegionRequest(base, region, plan, caps), plan);
-        })
-            .then(job, [launch](std::pair<ImageRequest, RegionPlan> prepared) { launch(prepared.first, prepared.second); })
-            .onFailed(job, [job](const std::exception &e) { job->fail(describeException(e)); });
+            self->finishWithAssets(job, used, out, self->m_registry->imageProvider(used.providerId));
+        });
     }, QStringLiteral("generation"));
     job->metadata().insert(QStringLiteral("prompt"), spec.request.prompt);
     job->metadata().insert(QStringLiteral("provider"), provider ? provider->displayName() : QString());
@@ -267,6 +190,104 @@ Job *GenerationService::submit(const GenerationSpec &specIn)
         job->metadata().insert(it.key(), it.value().toVariant());
     connect(job, &Job::finished, this, &GenerationService::generationFinished);
     return job;
+}
+
+QString GenerationService::groupFor(const QString &providerId) const
+{
+    ImageProvider *provider = providerId.isEmpty() ? m_registry->defaultImageProvider() : m_registry->imageProvider(providerId);
+    return provider ? provider->instanceId() : QStringLiteral("none");
+}
+
+void GenerationService::execute(Job *job, const GenerationSpec &specIn, OutputHandler onOutput)
+{
+    ImageProvider *provider = specIn.providerId.isEmpty() ? m_registry->defaultImageProvider() : m_registry->imageProvider(specIn.providerId);
+    if (!provider) {
+        job->fail(tr("No image provider is configured. Add one in Settings → Providers."));
+        return;
+    }
+    QPointer<ImageProvider> providerGuard(provider);
+    GenerationSpec spec = specIn;
+    spec.providerId = provider->instanceId();
+    const ImageCapabilities caps = provider->capabilities();
+    job->setProgress(-1.0, tr("Preparing..."));
+
+    auto launch = [job, providerGuard, spec, onOutput](ImageRequest request, std::optional<RegionPlan> plan) {
+        if (!providerGuard) {
+            job->fail(tr("The provider is no longer available"));
+            return;
+        }
+        ImageOperation *op = providerGuard->generate(request);
+        job->setCancelHandler([op = QPointer<ImageOperation>(op), job] {
+            if (op)
+                op->cancel();
+            else
+                job->reportCancelled();
+        });
+        QObject::connect(op, &Operation::progress, job, [job](double f, const QString &s) { job->setProgress(f, s); });
+        QObject::connect(op, &Operation::preview, job, [job](const QImage &img) { job->setPreview(img); });
+        GenerationSpec used = spec;
+        used.request.mode = request.mode;
+        used.request.denoise = request.denoise;
+        used.request.seed = request.seed;
+        QObject::connect(op, &Operation::finished, job, [job, op, spec = used, request, plan, onOutput] {
+            if (op->state() == Operation::State::Cancelled) {
+                job->reportCancelled();
+                return;
+            }
+            if (op->state() == Operation::State::Failed) {
+                job->fail(op->errorString());
+                return;
+            }
+            const ImageResult result = op->result();
+            job->metadata().insert(QStringLiteral("request"), request.describe());
+            if (!spec.region) {
+                GenerationOutput out;
+                for (const GeneratedImage &g : result.images) {
+                    out.images << g.image;
+                    out.rawImages << g.image;
+                }
+                out.text = result.text;
+                out.info = result.info;
+                onOutput(job, spec, out);
+                return;
+            }
+            job->setProgress(-1.0, tr("Blending result..."));
+            const RegionInput region = *spec.region;
+            const RegionPlan rp = *plan;
+            async::run([result, region, rp] {
+                GenerationOutput out;
+                out.region = rp.rect;
+                out.text = result.text;
+                out.info = result.info;
+                for (const GeneratedImage &g : result.images) {
+                    out.rawImages << g.image;
+                    out.images << compositeRegionResult(g.image, region, rp);
+                }
+                return out;
+            }).then(job, [job, spec, onOutput](GenerationOutput out) {
+                onOutput(job, spec, out);
+            }).onFailed(job, [job](const std::exception &e) { job->fail(describeException(e)); });
+        });
+    };
+
+    if (!spec.region) {
+        ImageRequest req = spec.request;
+        if (req.mode == GenMode::Inpaint && !caps.inpaint && !caps.edit)
+            req.mode = GenMode::ImageToImage;
+        launch(req, std::nullopt);
+        return;
+    }
+    const RegionInput region = *spec.region;
+    const ImageRequest base = spec.request;
+    async::run([region, base, caps] {
+        const QRect bounds = img::maskBounds(region.mask, 8);
+        if (bounds.isEmpty())
+            throw ProviderError(QObject::tr("The selection is empty - paint a mask or make a selection first."));
+        const RegionPlan plan = planRegion(bounds, region.source.size(), region.padding, caps);
+        return std::make_pair(prepareRegionRequest(base, region, plan, caps), plan);
+    })
+        .then(job, [launch](std::pair<ImageRequest, RegionPlan> prepared) { launch(prepared.first, prepared.second); })
+        .onFailed(job, [job](const std::exception &e) { job->fail(describeException(e)); });
 }
 
 void GenerationService::finishWithAssets(Job *job, const GenerationSpec &spec, GenerationOutput output, ImageProvider *provider)

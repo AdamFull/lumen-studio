@@ -84,6 +84,8 @@ std::optional<ComfyTemplate> ComfyTemplate::fromJson(const QJsonObject &json, co
     t.poseControl = json.value(QStringLiteral("pose_control")).toBool(t.bindings.contains(QStringLiteral("pose_image")));
     const int native = json.value(QStringLiteral("native_resolution")).toInt(1024);
     t.nativePixels = qint64(native) * native;
+    t.outputs = json.value(QStringLiteral("outputs")).toObject();
+    t.outputKind = json.value(QStringLiteral("output_kind")).toString(QStringLiteral("auto"));
     if (t.workflow.isEmpty()) {
         if (error)
             *error = QStringLiteral("template has no \"workflow\" (export it with Save (API Format))");
@@ -114,8 +116,13 @@ ProviderType ComfyUiProvider::describe()
     t.documentation = QUrl(QStringLiteral("https://docs.comfy.org/development/comfyui-server/comms_routes"));
     using F = SettingField::Type;
     QStringList workflows{QString::fromLatin1(kBuiltin)};
-    for (const ComfyTemplate &tpl : loadTemplates())
-        workflows << tpl.id;
+    QStringList segmenters{QString::fromLatin1(kAuto)};
+    for (const ComfyTemplate &tpl : loadTemplates()) {
+        if (tpl.isGeneration())
+            workflows << tpl.id;
+        if (tpl.isSegmentation())
+            segmenters << tpl.id;
+    }
     t.fields = {
         {QStringLiteral("url"), tr("Server URL"), F::Url, QStringLiteral("http://127.0.0.1:8188"), QString(), {}, 0, 0, true},
         {QStringLiteral("workflow"), tr("Workflow"), F::Choice, QString::fromLatin1(kBuiltin),
@@ -131,6 +138,9 @@ ProviderType ComfyUiProvider::describe()
          {QStringLiteral("PLUS (high strength)"), QStringLiteral("STANDARD (medium strength)"), QStringLiteral("PLUS FACE (portraits)"),
           QStringLiteral("FULL FACE - SD1.5 only (portraits stronger)"), QStringLiteral("none")}},
         {QStringLiteral("upscale_model"), tr("Upscale model"), F::Model, QString::fromLatin1(kAuto), tr("From models/upscale_models.")},
+        {QStringLiteral("segment_workflow"), tr("Part segmentation workflow"), F::Choice, QString::fromLatin1(kAuto),
+         tr("Template used to segment character parts (Live2D slicing). 'auto' picks the first segmentation template."),
+         segmenters, 0, 0, false, true},
         {QStringLiteral("timeout_min"), tr("Timeout (minutes)"), F::Integer, 30, QString(), {}, 1, 240, false, true},
         {QStringLiteral("concurrency"), tr("Parallel jobs"), F::Integer, 1, QString(), {}, 1, 8, false, true},
     };
@@ -278,6 +288,21 @@ std::optional<ComfyTemplate> ComfyUiProvider::activeTemplate() const
             return t;
     }
     return std::nullopt;
+}
+
+std::optional<ComfyTemplate> ComfyUiProvider::segmentationTemplate() const
+{
+    const QString wanted = text(QStringLiteral("segment_workflow"));
+    std::optional<ComfyTemplate> first;
+    for (const ComfyTemplate &t : loadTemplates()) {
+        if (!t.isSegmentation())
+            continue;
+        if (t.id == wanted)
+            return t;
+        if (!first)
+            first = t;
+    }
+    return first;
 }
 
 ImageCapabilities ComfyUiProvider::capabilities() const
@@ -487,6 +512,7 @@ void ComfyUiProvider::runGraph(ImageOperation *op, std::function<QJsonObject(con
     struct Run
     {
         UploadedImages images;
+        QJsonObject graph;
         int pendingUploads = 0;
         QString promptId;
         bool cancelled = false;
@@ -558,10 +584,17 @@ void ComfyUiProvider::runGraph(ImageOperation *op, std::function<QJsonObject(con
                 return;
             }
             QList<QJsonObject> files;
+            QList<QJsonObject> fileInfo;
             const QJsonObject outputs = entry.value(QStringLiteral("outputs")).toObject();
             for (auto it = outputs.begin(); it != outputs.end(); ++it) {
-                for (const QJsonValue &img : it.value().toObject().value(QStringLiteral("images")).toArray())
+                const QJsonObject node = run->graph.value(it.key()).toObject();
+                const QJsonObject info{{QStringLiteral("node"), it.key()},
+                                       {QStringLiteral("class_type"), node.value(QStringLiteral("class_type")).toString()},
+                                       {QStringLiteral("title"), node.value(QStringLiteral("_meta")).toObject().value(QStringLiteral("title")).toString()}};
+                for (const QJsonValue &img : it.value().toObject().value(QStringLiteral("images")).toArray()) {
                     files.append(img.toObject());
+                    fileInfo.append(info);
+                }
             }
             if (files.isEmpty()) {
                 op->fail(tr("The workflow finished without image outputs (add a SaveImage or PreviewImage node)."));
@@ -578,7 +611,7 @@ void ComfyUiProvider::runGraph(ImageOperation *op, std::function<QJsonObject(con
                 url.setQuery(q);
                 net::HttpCall *dl = self->http()->get(net::HttpClient::makeRequest(url));
                 run->calls << dl;
-                QObject::connect(dl, &net::HttpCall::finished, op, [op, dl, results, remaining, i] {
+                QObject::connect(dl, &net::HttpCall::finished, op, [op, dl, results, remaining, i, fileInfo] {
                     if (op->isFinished())
                         return;
                     if (!dl->ok()) {
@@ -588,11 +621,12 @@ void ComfyUiProvider::runGraph(ImageOperation *op, std::function<QJsonObject(con
                     (*results)[i] = dl->body();
                     if (--*remaining > 0)
                         return;
-                    async::run([results] {
+                    async::run([results, fileInfo] {
                         ImageResult r;
-                        for (const QByteArray &bytes : *results) {
+                        for (int k = 0; k < results->size(); ++k) {
                             GeneratedImage g;
-                            g.image = decodeImageBytes(bytes);
+                            g.image = decodeImageBytes(results->at(k));
+                            g.info = fileInfo.value(k);
                             if (!g.image.isNull())
                                 r.images.append(g);
                         }
@@ -615,6 +649,7 @@ void ComfyUiProvider::runGraph(ImageOperation *op, std::function<QJsonObject(con
         QJsonObject graph;
         try {
             graph = buildGraph(run->images);
+            run->graph = graph;
         } catch (const std::exception &e) {
             op->fail(describeException(e));
             return;
@@ -817,11 +852,15 @@ ImageOperation *ComfyUiProvider::generate(const ImageRequest &r)
 
 bool ComfyUiProvider::supportsUtility(Utility u) const
 {
+    if (u == Utility::SegmentParts)
+        return segmentationTemplate().has_value();
     return u == Utility::Upscale || u == Utility::DetectPose;
 }
 
 ImageOperation *ComfyUiProvider::runUtility(Utility utility, const QImage &image, const QJsonObject &params)
 {
+    if (utility == Utility::SegmentParts)
+        return segmentParts(image, params);
     auto *op = new ImageOperation(this);
     QPointer<ComfyUiProvider> self(this);
     if (utility == Utility::Upscale) {
@@ -883,6 +922,190 @@ ImageOperation *ComfyUiProvider::runUtility(Utility utility, const QImage &image
         return op;
     }
     failLater(op, tr("This utility is not available for ComfyUI"));
+    return op;
+}
+
+// ---- Part segmentation ------------------------------------------------------------------------------
+
+namespace {
+
+// Normalises one workflow output into a part layer (RGBA) or mask (Grayscale8) on the source canvas.
+GeneratedImage segmentOutput(const GeneratedImage &g, const QString &label, const QString &kindIn, int order, const QSize &canvas)
+{
+    QImage image = g.image;
+    if (image.size() != canvas)
+        image = image.scaled(canvas, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    QString kind = kindIn;
+    if (kind != QLatin1String("mask") && kind != QLatin1String("layer")) {
+        kind = QStringLiteral("mask");
+        if (image.hasAlphaChannel()) {
+            const QImage argb = image.convertToFormat(QImage::Format_ARGB32);
+            for (int y = 0; y < argb.height() && kind == QLatin1String("mask"); y += 4) {
+                const QRgb *row = reinterpret_cast<const QRgb *>(argb.constScanLine(y));
+                for (int x = 0; x < argb.width(); x += 4) {
+                    if (qAlpha(row[x]) < 250) {
+                        kind = QStringLiteral("layer");
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    GeneratedImage out;
+    out.image = kind == QLatin1String("mask") ? img::maskFromLuminance(image) : img::normalized(image);
+    out.info = QJsonObject{{QStringLiteral("label"), label}, {QStringLiteral("kind"), kind}, {QStringLiteral("order"), order}};
+    return out;
+}
+
+QString outputLabel(const ComfyTemplate &t, const GeneratedImage &g)
+{
+    const QString node = g.info.value(QStringLiteral("node")).toString();
+    if (!t.outputs.isEmpty())
+        return t.outputs.value(node).toString();
+    const QString title = g.info.value(QStringLiteral("title")).toString();
+    return title.isEmpty() ? QStringLiteral("%1 %2").arg(g.info.value(QStringLiteral("class_type")).toString(), node) : title;
+}
+
+ImageRequest segmentationRequest(const QImage &image, const QString &prompt, const QJsonObject &params)
+{
+    ImageRequest req;
+    req.mode = GenMode::ImageToImage;
+    req.prompt = prompt;
+    req.initImage = image;
+    req.size = image.size();
+    req.seed = params.value(QStringLiteral("seed")).toInt(-1);
+    req.denoise = 1.0;
+    return req;
+}
+
+} // namespace
+
+ImageOperation *ComfyUiProvider::segmentParts(const QImage &image, const QJsonObject &params)
+{
+    auto *op = new ImageOperation(this);
+    const std::optional<ComfyTemplate> tpl = segmentationTemplate();
+    if (!tpl) {
+        failLater(op, tr("No ComfyUI part segmentation template found. Add one with mode \"segment_parts\" to %1.")
+                          .arg(QDir::toNativeSeparators(workflowDirectory())));
+        return op;
+    }
+    const ComfyTemplate t = *tpl;
+    const QJsonArray parts = params.value(QStringLiteral("parts")).toArray();
+    const QSize canvas = image.size();
+
+    // Whole-character templates (e.g. a decomposition graph): one run, outputs labelled by node.
+    if (!t.bindings.contains(QStringLiteral("prompt"))) {
+        auto *child = new ImageOperation(op);
+        child->setAutoDelete(false);
+        op->onCancel([child] { child->cancel(); });
+        connect(child, &Operation::progress, op, &Operation::reportProgress);
+        connect(child, &Operation::finished, op, [op, child, t, canvas] {
+            child->deleteLater();
+            if (child->state() == Operation::State::Cancelled) {
+                op->reportCancelled();
+                return;
+            }
+            if (child->state() == Operation::State::Failed) {
+                op->fail(child->errorString());
+                return;
+            }
+            ImageResult r;
+            int order = 0;
+            for (const GeneratedImage &g : child->result().images) {
+                const QString label = outputLabel(t, g);
+                if (label.isEmpty() || label == QLatin1String("ignore"))
+                    continue;
+                r.images.append(segmentOutput(g, label, t.outputKind, order++, canvas));
+            }
+            if (r.images.isEmpty())
+                op->fail(tr("The segmentation workflow produced no labelled outputs (check its \"outputs\" map)."));
+            else
+                op->succeed(r);
+        });
+        const ImageRequest req = segmentationRequest(image, QString(), params);
+        runGraph(child, [t, req](const UploadedImages &images) { return applyTemplate(t, req, images); },
+                 {{QStringLiteral("init"), image}});
+        return op;
+    }
+
+    // Text-prompted templates (e.g. Grounding DINO + SAM): one run per requested part.
+    if (parts.isEmpty()) {
+        failLater(op, tr("Choose the parts to segment."));
+        return op;
+    }
+    struct State
+    {
+        int index = 0;
+        ImageResult result;
+        QStringList failures;
+        QPointer<ImageOperation> current;
+        std::function<void()> next;
+    };
+    auto state = std::make_shared<State>();
+    QPointer<ComfyUiProvider> self(this);
+    // `next` holds only a weak reference: the operation's handlers own the state (no cycle).
+    state->next = [self, op, weak = std::weak_ptr<State>(state), parts, image, canvas, t, params] {
+        const std::shared_ptr<State> state = weak.lock();
+        if (!state || !self || op->isFinished())
+            return;
+        if (state->index >= parts.size()) {
+            if (state->result.images.isEmpty()) {
+                op->fail(state->failures.isEmpty() ? tr("None of the requested parts was found") : state->failures.first());
+            } else {
+                state->result.info.insert(QStringLiteral("failures"), json::toArray(state->failures));
+                op->succeed(state->result);
+            }
+            return;
+        }
+        const QJsonObject part = parts[state->index].toObject();
+        const QString tag = part.value(QStringLiteral("tag")).toString();
+        QString prompt = part.value(QStringLiteral("prompt")).toString();
+        if (prompt.isEmpty())
+            prompt = tag;
+        op->reportProgress(double(state->index) / double(parts.size()),
+                           tr("Segmenting %1 (%2 of %3)").arg(tag).arg(state->index + 1).arg(parts.size()));
+        auto *child = new ImageOperation(op);
+        child->setAutoDelete(false);
+        state->current = child;
+        connect(child, &Operation::finished, op, [op, child, state, tag, canvas, t] {
+            child->deleteLater();
+            if (child->state() == Operation::State::Cancelled)
+                return;
+            if (child->state() == Operation::State::Succeeded && !child->result().images.isEmpty()) {
+                GeneratedImage chosen = child->result().images.first();
+                for (const GeneratedImage &g : child->result().images) {
+                    if (t.outputs.contains(g.info.value(QStringLiteral("node")).toString())) {
+                        chosen = g;
+                        break;
+                    }
+                }
+                const GeneratedImage out = segmentOutput(chosen, tag, t.outputKind, state->index, canvas);
+                const QImage coverage = out.info.value(QStringLiteral("kind")).toString() == QLatin1String("mask")
+                                            ? out.image
+                                            : img::maskFromAlpha(out.image);
+                if (!img::maskIsEmpty(coverage, 128))
+                    state->result.images.append(out);
+            } else if (child->state() == Operation::State::Failed) {
+                state->failures << QStringLiteral("%1: %2").arg(tag, child->errorString());
+            }
+            ++state->index;
+            if (state->next)
+                state->next();
+        });
+        const ImageRequest req = segmentationRequest(image, prompt, params);
+        self->runGraph(child, [t, req](const UploadedImages &images) { return applyTemplate(t, req, images); },
+                       {{QStringLiteral("init"), image}});
+    };
+    op->onCancel([state, op] {
+        state->next = nullptr;
+        if (state->current)
+            state->current->cancel();
+        op->reportCancelled();
+    });
+    QTimer::singleShot(0, op, [state] {
+        if (state->next)
+            state->next();
+    });
     return op;
 }
 

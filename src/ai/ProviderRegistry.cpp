@@ -369,6 +369,7 @@ QFuture<QList<DetectedServer>> ProviderRegistry::detectLocalServers()
         {QStringLiteral("ollama"), QStringLiteral("Ollama"), QStringLiteral("http://127.0.0.1:11434"), QStringLiteral("/api/tags")},
         {QStringLiteral("lmstudio"), QStringLiteral("LM Studio"), QStringLiteral("http://127.0.0.1:1234"), QStringLiteral("/v1/models")},
         {QStringLiteral("koboldcpp"), QStringLiteral("KoboldCpp"), QStringLiteral("http://127.0.0.1:5001"), QStringLiteral("/v1/models")},
+        {QStringLiteral("partserver"), QStringLiteral("Lumen Part Server"), QStringLiteral("http://127.0.0.1:7870"), QStringLiteral("/v1/info")},
     };
     struct State
     {

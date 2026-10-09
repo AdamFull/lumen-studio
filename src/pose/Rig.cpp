@@ -312,8 +312,26 @@ Person solveRig(const RigParams &params, const QSize &canvas)
             bottom = neckY - 0.06;
         const double top = headTop.y() + 0.015;
         const double regionH = std::max(0.05, top - bottom);
-        pixelsPerUnit = H * (1.0 - margin) / regionH * params.scale;
-        anchor = QPointF(p2[Neck].x(), top);
+        pixelsPerUnit = H * (1.0 - margin) / regionH;
+        // Keep everything inside the framed band (arms, hands) within the canvas width too.
+        double minX = headTop.x(), maxX = headTop.x();
+        auto include = [&](const QPointF &p) {
+            if (p.y() < bottom)
+                return;
+            minX = std::min(minX, p.x());
+            maxX = std::max(maxX, p.x());
+        };
+        for (const QPointF &p : p2)
+            include(p);
+        for (auto [el, wr] : {std::pair{LElbow, LWrist}, std::pair{RElbow, RWrist}}) {
+            const QPointF fore = p2[static_cast<size_t>(wr)] - p2[static_cast<size_t>(el)];
+            const double len = std::hypot(fore.x(), fore.y());
+            if (len > 1e-6 && params.includeHands)
+                include(p2[static_cast<size_t>(wr)] + fore / len * kHand);
+        }
+        const double bw = std::max(0.05, maxX - minX + 0.06);
+        pixelsPerUnit = std::min(pixelsPerUnit, W * (1.0 - 2 * margin) / bw) * params.scale;
+        anchor = QPointF((minX + maxX) / 2.0, top);
         target = QPointF(params.positionX * W, margin * H + params.positionY * H);
     }
     auto toCanvas = [&](const QPointF &p) {
