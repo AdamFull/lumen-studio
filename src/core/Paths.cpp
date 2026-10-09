@@ -2,18 +2,32 @@
 
 #include <QCoreApplication>
 #include <QDir>
+#include <QFile>
 #include <QStandardPaths>
 
 namespace lumen::paths {
 
 namespace {
-// LUMEN_DATA_DIR relocates all writable data (portable installs, tests, separate profiles).
+// LUMEN_DATA_DIR relocates all writable data (tests, separate profiles). A portable.txt file next to
+// the executable (the portable ZIP) keeps everything in <exe dir>/userdata.
 QString overrideRoot()
 {
-    static const QString root = qEnvironmentVariable("LUMEN_DATA_DIR");
+    static const QString root = [] {
+        const QString env = qEnvironmentVariable("LUMEN_DATA_DIR");
+        if (!env.isEmpty())
+            return env;
+        if (QCoreApplication::instance() && isPortable())
+            return QCoreApplication::applicationDirPath() + QStringLiteral("/userdata");
+        return QString();
+    }();
     return root;
 }
 } // namespace
+
+bool isPortable()
+{
+    return QFile::exists(QCoreApplication::applicationDirPath() + QStringLiteral("/portable.txt"));
+}
 
 QString appData()
 {

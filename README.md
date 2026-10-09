@@ -14,7 +14,8 @@ It covers:
 Local back-ends (Stable Diffusion WebUI / Forge, ComfyUI, llama.cpp, Ollama, LM Studio) and cloud
 APIs (OpenAI, Gemini, Anthropic, Stability AI, fal.ai, OpenRouter) both work.
 
-See [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md) for the architecture, the technology stack and the roadmap.
+The [user guide](docs/USER_GUIDE.md) explains every page, tool and shortcut. See
+[docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md) for the architecture, the technology stack and the roadmap.
 
 ## Building (Windows, MinGW)
 
@@ -32,6 +33,21 @@ scripts/run-tests.sh build/mingw-debug
 
 To keep machine-specific paths out of the repository, put them in a `CMakeUserPresets.json`
 (it is git-ignored) that inherits `mingw-debug` and sets `QT_ROOT` and `PATH`.
+
+### Packaging
+
+```bash
+scripts/package.sh
+```
+
+It builds a release, deploys Qt and the MinGW runtime with `windeployqt` into
+`dist/LumenStudio-<version>-win64/`, and writes:
+
+* `dist/LumenStudio-<version>-win64-portable.zip`. Its `portable.txt` marker keeps settings, cache
+  and projects in a `userdata` folder next to the executable.
+* `dist/LumenStudio-<version>-win64.exe`, an NSIS installer, when `makensis` is installed.
+
+`scripts/make-icon.py` regenerates the application icon.
 
 ## Character slicing for Live2D
 

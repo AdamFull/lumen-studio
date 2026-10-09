@@ -1,4 +1,12 @@
-qt_add_executable(lumen WIN32 MACOSX_BUNDLE main.cpp)
+set(LUMEN_APP_SOURCES main.cpp)
+if(WIN32)
+    # Executable icon and version information.
+    set(LUMEN_ICON_PATH "${PROJECT_SOURCE_DIR}/resources/app/lumen.ico")
+    configure_file("${PROJECT_SOURCE_DIR}/resources/app/lumen.rc.in" "${CMAKE_CURRENT_BINARY_DIR}/lumen.rc" @ONLY)
+    list(APPEND LUMEN_APP_SOURCES "${CMAKE_CURRENT_BINARY_DIR}/lumen.rc")
+endif()
+
+qt_add_executable(lumen WIN32 MACOSX_BUNDLE ${LUMEN_APP_SOURCES})
 set_target_properties(lumen PROPERTIES OUTPUT_NAME "LumenStudio")
 target_link_libraries(lumen PRIVATE lumen_ui)
 target_compile_definitions(lumen PRIVATE LUMEN_VERSION="${PROJECT_VERSION}")
@@ -8,3 +16,23 @@ lumen_configure_target(lumen)
 add_custom_command(TARGET lumen POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory "${PROJECT_SOURCE_DIR}/resources/workflows" "$<TARGET_FILE_DIR:lumen>/data/workflows"
     COMMENT "Copying bundled workflows")
+
+# ---- Installation / deployment ------------------------------------------------------------------
+# `cmake --install <build> --prefix <dir>` produces a self-contained folder: the executable at the
+# top level, Qt and compiler runtime DLLs deployed by windeployqt, bundled data in data/.
+install(TARGETS lumen
+    RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
+    BUNDLE DESTINATION .)
+install(DIRECTORY "${PROJECT_SOURCE_DIR}/resources/workflows/" DESTINATION "${CMAKE_INSTALL_BINDIR}/data/workflows")
+install(FILES "${PROJECT_SOURCE_DIR}/README.md" "${PROJECT_SOURCE_DIR}/docs/USER_GUIDE.md" DESTINATION "${CMAKE_INSTALL_BINDIR}/docs")
+
+qt_generate_deploy_app_script(
+    TARGET lumen
+    OUTPUT_SCRIPT LUMEN_DEPLOY_SCRIPT
+    NO_TRANSLATIONS
+    NO_UNSUPPORTED_PLATFORM_ERROR
+    # Only the SQLite driver is used.
+    DEPLOY_TOOL_OPTIONS --exclude-plugins qsqlibase,qsqlmimer,qsqloci,qsqlodbc,qsqlpsql)
+# QtDeploySupport.cmake was generated before CMAKE_INSTALL_BINDIR was flattened: pass it explicitly.
+install(CODE "set(QT_DEPLOY_BIN_DIR \"${CMAKE_INSTALL_BINDIR}\")")
+install(SCRIPT "${LUMEN_DEPLOY_SCRIPT}")

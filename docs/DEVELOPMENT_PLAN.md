@@ -324,7 +324,7 @@ before ticking a milestone.
 - [ ] Onboarding wizard (detect local servers, add cloud keys), keyboard shortcuts editor
 - [ ] Autosave/crash recovery hardening, performance profiling pass, latency watchdog
 - [ ] i18n (Qt Linguist), accessibility names, high-contrast check
-- [ ] Packaging (windeployqt, NSIS installer, portable ZIP), user guide
+- [x] Packaging (windeployqt via the CMake deploy API, NSIS installer through CPack, portable ZIP with a `portable.txt` marker → data in `userdata/`, exe icon and version info), user guide (`docs/USER_GUIDE.md`)
 
 ### M11 — Character part slicing for Live2D
 

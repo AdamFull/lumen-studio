@@ -35,7 +35,41 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 
+include(GNUInstallDirs)
+# Windows installs are flat: the executable and its DLLs at the top of the install folder
+# (a normal variable, so it wins over the "bin" cache entry GNUInstallDirs creates).
+if(WIN32)
+    set(CMAKE_INSTALL_BINDIR ".")
+endif()
+
 add_subdirectory(src)
+
+# ---- Packaging (cpack): NSIS installer when makensis is available, a plain ZIP otherwise ----------
+set(CPACK_PACKAGE_NAME "LumenStudio")
+set(CPACK_PACKAGE_VENDOR "Lumen")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "${PROJECT_DESCRIPTION}")
+set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
+set(CPACK_PACKAGE_INSTALL_DIRECTORY "Lumen Studio")
+set(CPACK_PACKAGE_FILE_NAME "LumenStudio-${PROJECT_VERSION}-win64")
+set(CPACK_PACKAGE_EXECUTABLES "LumenStudio;Lumen Studio")
+# scripts/package.sh builds the portable ZIP itself (it adds the portable.txt marker).
+find_program(LUMEN_MAKENSIS makensis PATHS "C:/Program Files (x86)/NSIS" "C:/Program Files/NSIS")
+if(LUMEN_MAKENSIS)
+    set(CPACK_GENERATOR "NSIS")
+else()
+    set(CPACK_GENERATOR "ZIP")
+endif()
+set(CPACK_NSIS_DISPLAY_NAME "Lumen Studio")
+set(CPACK_NSIS_PACKAGE_NAME "Lumen Studio ${PROJECT_VERSION}")
+set(CPACK_NSIS_MUI_ICON "${CMAKE_CURRENT_SOURCE_DIR}/resources/app/lumen.ico")
+set(CPACK_NSIS_MUI_UNIICON "${CMAKE_CURRENT_SOURCE_DIR}/resources/app/lumen.ico")
+set(CPACK_NSIS_INSTALLED_ICON_NAME "LumenStudio.exe")
+set(CPACK_NSIS_MUI_FINISHPAGE_RUN "LumenStudio.exe")
+set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL ON)
+set(CPACK_NSIS_CREATE_ICONS_EXTRA "CreateShortCut '$DESKTOP\\\\Lumen Studio.lnk' '$INSTDIR\\\\LumenStudio.exe'")
+set(CPACK_NSIS_DELETE_ICONS_EXTRA "Delete '$DESKTOP\\\\Lumen Studio.lnk'")
+set(CPACK_ARCHIVE_COMPONENT_INSTALL OFF)
+include(CPack)
 
 if(LUMEN_BUILD_TESTS)
     enable_testing()

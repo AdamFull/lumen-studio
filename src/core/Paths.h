@@ -4,6 +4,9 @@
 
 namespace lumen::paths {
 
+// True when a portable.txt marker sits next to the executable: writable data then lives in
+// <exe dir>/userdata (LUMEN_DATA_DIR still takes precedence). Resolved once, after QApplication exists.
+bool isPortable();
 // Per-user writable application data (settings, provider configs, user presets).
 QString appData();
 // Disposable cache (thumbnails, temporary renders).

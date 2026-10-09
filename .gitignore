@@ -2,6 +2,7 @@
 /build/
 /out/
 /install/
+/dist/
 CMakeUserPresets.json
 CMakeLists.txt.user*
 compile_commands.json
