@@ -16,6 +16,9 @@
 #include "ui/canvas/CanvasView.h"
 #include "ui/canvas/EditorState.h"
 #include "ui/canvas/Tools.h"
+#include "live2d/CubismCore.h"
+#include "ui/parts/CubismPanel.h"
+#include "ui/parts/CubismView.h"
 #include "ui/parts/PartTools.h"
 #include "ui/parts/PuppetPreview.h"
 #include "ui/widgets/Controls.h"
@@ -42,6 +45,7 @@
 #include <QSplitter>
 #include <QStackedWidget>
 #include <QStandardPaths>
+#include <QTabWidget>
 #include <QToolButton>
 #include <QVBoxLayout>
 
@@ -324,8 +328,10 @@ PartsPage::PartsPage(Studio *studio, QWidget *parent)
     m_center = new QStackedWidget(center);
     m_canvas = new CanvasView(m_state, m_center);
     m_preview = new PuppetPreview(m_center);
+    m_cubism = new CubismView(m_center);
     m_center->addWidget(m_canvas);
     m_center->addWidget(m_preview);
+    m_center->addWidget(m_cubism);
     canvasRow->addWidget(m_center, 1);
     cv->addLayout(canvasRow, 1);
 
@@ -391,7 +397,10 @@ PartsPage::PartsPage(Studio *studio, QWidget *parent)
         if (!id.isEmpty() && (!m_set || id != m_set->id()))
             openSession(id);
     });
-    connect(m_steps, &QButtonGroup::idClicked, this, &PartsPage::setStep);
+    connect(m_steps, &QButtonGroup::idClicked, this, [this](int step) {
+        m_holdPreview = false;
+        setStep(step);
+    });
     connect(undo, &QToolButton::clicked, this, [this] {
         if (m_set)
             m_set->undoStack()->undo();
@@ -743,7 +752,12 @@ QWidget *PartsPage::buildExportPanel()
     auto *v = new QVBoxLayout(w);
     v->setContentsMargins(14, 14, 14, 14);
     v->setSpacing(10);
-    v->addWidget(sectionLabel(tr("Puppet preview")));
+    m_previewTabs = new QTabWidget(w);
+    m_previewTabs->setDocumentMode(true);
+    auto *puppetTab = new QWidget;
+    auto *pv = new QVBoxLayout(puppetTab);
+    pv->setContentsMargins(0, 8, 0, 0);
+    pv->setSpacing(6);
     auto *toggles = new QHBoxLayout;
     m_idle = new QCheckBox(tr("Idle motion"), w);
     m_idle->setChecked(true);
@@ -753,7 +767,7 @@ QWidget *PartsPage::buildExportPanel()
     toggles->addWidget(m_follow);
     toggles->addWidget(m_talk);
     toggles->addStretch();
-    v->addLayout(toggles);
+    pv->addLayout(toggles);
     struct Spec
     {
         QString label;
@@ -772,7 +786,7 @@ QWidget *PartsPage::buildExportPanel()
         auto *slider = new SliderField(s.label, s.min, s.max, s.field == &PuppetPreview::Params::eyeOpen ? 100 : 0, 0,
                                        percent ? QStringLiteral(" %") : QStringLiteral("°"), w);
         slider->setCompact(true);
-        v->addWidget(slider);
+        pv->addWidget(slider);
         m_paramSliders.append(slider);
         const auto field = s.field;
         connect(slider, &SliderField::valueChanged, this, [this, field, percent](double value) {
@@ -797,6 +811,14 @@ QWidget *PartsPage::buildExportPanel()
     connect(m_idle, &QCheckBox::toggled, m_preview, &PuppetPreview::setAutoIdle);
     connect(m_follow, &QCheckBox::toggled, m_preview, &PuppetPreview::setFollowMouse);
     connect(m_talk, &QCheckBox::toggled, m_preview, &PuppetPreview::setTalking);
+    pv->addStretch();
+    m_cubismPanel = new CubismPanel(m_studio, m_cubism, w);
+    m_previewTabs->addTab(puppetTab, Icons::get(QStringLiteral("parts")), tr("Lumen puppet"));
+    m_previewTabs->addTab(m_cubismPanel, Icons::get(QStringLiteral("person")), tr("Cubism model"));
+    m_previewTabs->setTabToolTip(0, tr("2.5D preview of the sliced parts"));
+    m_previewTabs->setTabToolTip(1, tr("Preview a model rigged in Live2D Cubism Editor (.model3.json)"));
+    v->addWidget(m_previewTabs, 1);
+    connect(m_previewTabs, &QTabWidget::currentChanged, this, &PartsPage::showPreviewWidget);
 
     v->addSpacing(8);
     v->addWidget(sectionLabel(tr("Export")));
@@ -885,7 +907,7 @@ void PartsPage::openSession(const QString &recordId)
                         auto *set = new doc::PartSet(self);
                         set->restore(recordId, snap, loaded.first, loaded.second);
                         self->attach(set);
-                        self->setStep(snap.step);
+                        self->setStep(self->m_holdPreview ? int(ExportStep) : snap.step);
                     })
                     .onFailed(self, [self](const std::exception &e) {
                         if (self)
@@ -977,7 +999,8 @@ void PartsPage::attach(doc::PartSet *set)
 
 void PartsPage::setStep(int step)
 {
-    if (!m_set || !m_set->hasSource())
+    // The preview step also hosts the Cubism model preview, which needs no slicing session.
+    if ((!m_set || !m_set->hasSource()) && step != ExportStep)
         step = SourceStep;
     step = std::clamp(step, 0, 3);
     if (QAbstractButton *b = m_steps->button(step))
@@ -985,7 +1008,10 @@ void PartsPage::setStep(int step)
     m_panels->setCurrentIndex(step);
     m_stepHint->setText(stepHint(step));
     const bool preview = step == ExportStep;
-    m_center->setCurrentWidget(preview ? static_cast<QWidget *>(m_preview) : m_canvas);
+    if (preview)
+        showPreviewWidget();
+    else
+        m_center->setCurrentWidget(m_canvas);
     m_palette->setVisible(step == MasksStep || step == GenerateStep);
     m_overlayMode->setVisible(step != SourceStep && !preview);
     m_overlayOpacity->setVisible(step != SourceStep && !preview);
@@ -1014,7 +1040,7 @@ void PartsPage::updateStepAvailability()
     const bool hasParts = hasSource && !m_set->parts().isEmpty();
     m_steps->button(MasksStep)->setEnabled(hasSource);
     m_steps->button(GenerateStep)->setEnabled(hasParts);
-    m_steps->button(ExportStep)->setEnabled(hasParts);
+    m_steps->button(ExportStep)->setEnabled(true);
     m_segment->setEnabled(hasSource);
     m_generateAll->setEnabled(hasParts);
     m_generateSelected->setEnabled(hasParts);
@@ -1670,6 +1696,26 @@ void PartsPage::updateCard(int label)
 }
 
 // ---- Preview & export ------------------------------------------------------------------------------------------
+
+void PartsPage::previewCubismModel(const QString &model3Path)
+{
+    m_holdPreview = true;
+    setStep(ExportStep);
+    m_previewTabs->setCurrentIndex(1);
+    showPreviewWidget();
+    if (!model3Path.isEmpty() && live2d::CubismCore::instance().isLoaded())
+        m_cubismPanel->openModel(model3Path);
+}
+
+void PartsPage::showPreviewWidget()
+{
+    if (m_panels->currentIndex() != ExportStep)
+        return;
+    const bool cubism = m_previewTabs && m_previewTabs->currentIndex() == 1;
+    m_center->setCurrentWidget(cubism ? static_cast<QWidget *>(m_cubism) : m_preview);
+    if (cubism)
+        m_cubismPanel->activate();
+}
 
 void PartsPage::refreshPreview()
 {

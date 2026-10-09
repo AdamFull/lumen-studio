@@ -45,13 +45,26 @@ Live2D Cubism, in four steps:
 3. **Generate**: complete the hidden areas of every part, the selected parts, or a single part.
    Methods: inpainting with any image provider, see-through model layers, or cut-out only. Expression
    variants (eyes closed, mouth shapes) can be generated for blinking and lip-sync.
+   With ComfyUI and the ComfyUI-layerdiffuse nodes, the LayerDiffuse method generates the hidden areas
+   with real transparency.
 4. **Preview & export**: animate the result as a 2.5D puppet, then export a layered PSD, a PNG folder
-   with `parts.json`, or editor layers.
+   with `parts.json`, or editor layers. The *Cubism model* tab previews a model rigged in Cubism Editor
+   (`.model3.json`). It uses the Cubism Core library from your own copy of the Live2D Cubism SDK for
+   Native, which Lumen loads at runtime; physics are not simulated.
+
+A layered PSD can also start a session (*Open layered PSD…*): every visible layer becomes a complete
+part. The editor opens and exports layered PSDs too.
 
 Sessions are saved in the project. To start one from the command line:
 
 ```bash
 LumenStudio --slice character.png
+```
+
+To preview a Cubism model directly:
+
+```bash
+LumenStudio --cubism path/to/model.model3.json
 ```
 
 ## Repository layout
@@ -62,7 +75,8 @@ LumenStudio --slice character.png
 | `src/net` | HTTP client (retry, streaming, multipart), SSE parser |
 | `src/pose` | OpenPose skeleton, renderer, FK/IK editing, 3D generation rig, presets |
 | `src/doc` | projects (SQLite), assets, layered documents, undo |
-| `src/ai` | provider framework, provider adapters, director pipeline |
+| `src/ai` | provider framework, provider adapters, director pipeline, part slicing |
+| `src/live2d` | Cubism Core runtime binding, model/motion loading, software renderer |
 | `src/ui` | main window, canvas, tools, panels, dialogs |
 | `src/app` | executable entry point |
 | `tests` | unit and contract tests (mock HTTP server) |

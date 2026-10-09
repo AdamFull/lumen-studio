@@ -315,7 +315,7 @@ before ticking a milestone.
 - [ ] OpenAI Images, Google Gemini (LLM + image), Anthropic LLM, Stability AI ✔ — fal.ai pending — **AC**: contract tests for every adapter; manual smoke test per provider.
 
 ### M9 — Live2D & advanced
-- [ ] Layered PSD export (RLE) ✔ (M11); import of PSD layers into the editor pending (reader exists)
+- [x] Layered PSD export (RLE) and import: editor documents (groups resolved, blend modes, opacity) and slicing sessions from layered PSDs
 - [x] Expression/mouth/eye variant generation via masked inpainting (M11)
 - [ ] Background removal batch (part separation moved to M11)
 - [ ] Character library reuse across projects; Critic loop
@@ -429,7 +429,7 @@ Post-processing for all segmenters:
    * Prompt = part description.
    * ControlNet/IP-Adapter references from the source where the provider supports them.
 2. **see-through layers**: use the cached decomposition layer(s) of the matching kind, clipped to the part's visible ∪ extension masks. This is how user-split masks (e.g. left/right arm) still benefit from the model.
-3. **LayerDiffuse via ComfyUI** (planned): transparent generation conditioned on the part crop (template).
+3. **LayerDiffuse via ComfyUI**: the bundled `complete_part_layerdiffuse.json` template (SDXL + ComfyUI-layerdiffuse) inpaints the hidden area and decodes RGBA, so the part's alpha comes from the model instead of colour keying. Selected per request (`extras.comfy_template`), never as the provider's main workflow.
 4. **Cut only**: no generation, visible pixels only; instant and local.
 
 #### 11.5 Live2D pose presets
@@ -464,19 +464,19 @@ profile.
   * **Mouse-follow** (look at cursor).
   * Parameter sliders named like Cubism standard parameters (`ParamAngleX/Y/Z`, `ParamEyeLOpen`, `ParamMouthOpenY`, `ParamBreath`, `ParamHairFront`).
   * Renders at display refresh on a timer only while visible.
-* **Cubism model preview** (optional, later): when the user points Settings to a local Cubism SDK for Native (proprietary licence; cannot be bundled), a plug-in loads `.model3.json` exported from Cubism Editor, so the rigged result can be previewed inside Lumen. Built only with `LUMEN_WITH_CUBISM`.
+* **Cubism model preview**: the Cubism Core (proprietary; cannot be bundled) is loaded at runtime from the user's Cubism SDK for Native, so no build flag or SDK is needed to build Lumen. Lumen parses `.model3.json` / `.motion3.json`, drives the model through the Core C API and renders the drawables with its own band-parallel software renderer (textured meshes, normal/additive/multiplicative blending, clipping and inverted masks, multiply/screen colours). Plays the Idle motion, animates the standard parameters (angles, breath, blink, lip-sync), follows the mouse, and exposes every parameter as a slider. Physics (`physics3.json`) are not simulated.
 
 #### 11.7 Implementation steps
 - [x] Taxonomy + part-set model (`lumen_doc`): parts, masks (compressed), extension masks, results, record persistence, undo commands
 - [x] Mask algorithms (`lumen_core`): connected components, left/right split, skeleton split, cut-line split, exclusivity resolution, island cleanup, adaptive extension masks, magic wand
 - [x] Layered PSD writer (RLE, groups, names) and a minimal reader for round-trip tests
 - [x] Segmenter framework (`lumen_ai`): `Utility::SegmentParts`, ComfyUI segmentation templates (bundled Grounding DINO + SAM; see-through graphs via the generic template mechanism), Lumen Part Server protocol + reference Python server, Gemini segmentation, local skeleton segmenter
-- [x] Part completion service: inpaint / see-through layers / cut-only, per-part jobs, variants — LayerDiffuse template pending
+- [x] Part completion service: inpaint / see-through layers / LayerDiffuse (ComfyUI) / cut-only, per-part jobs, variants
 - [x] Parts page: stepper, part list, mask overlay canvas tools, split/merge/add, generation review grid, export
 - [x] Live2D pose presets + Director `live2d` profile wiring
 - [x] Puppet preview widget (parallax, mesh warp, blink/mouth, idle, mouse-follow)
 - [x] Expression variant generation (eyes closed, mouth shapes)
-- [ ] Optional Cubism SDK preview plug-in (`LUMEN_WITH_CUBISM`) — **AC**: a generated A-pose character is segmented, its arm mask split left/right and re-generated for one side only, exported as a layered PSD that opens in Photoshop/Krita/Cubism with correctly named, ordered parts; the preview animates it; the UI never stalls during segmentation or generation.
+- [x] Cubism model preview: runtime Core binding (`lumen_live2d`), model3/motion3 loading, software renderer, Parts page tab — **AC**: a generated A-pose character is segmented, its arm mask split left/right and re-generated for one side only, exported as a layered PSD that opens in Photoshop/Krita/Cubism with correctly named, ordered parts; the preview animates it; the UI never stalls during segmentation or generation.
 
 ---
 
@@ -499,5 +499,5 @@ profile.
 | Memory pressure with large images | tiles, implicit sharing, bounded undo, thumbnail cache, lazy loading |
 | Local server unavailable / slow | health checks, clear status indicators, queue persistence, cancellation |
 | Part segmentation models are heavy (8–16 GB VRAM, Python) | out-of-process via ComfyUI / sidecar, cloud and heuristic fallbacks, every step editable by hand |
-| Live2D Cubism SDK licence | built-in puppet preview needs no SDK; Cubism plug-in optional, user-supplied SDK |
+| Live2D Cubism SDK licence | built-in puppet preview needs no SDK; the Cubism Core is loaded at runtime from the user's own SDK copy |
 | Missing optional Qt modules | CMake feature detection, graceful degradation (polling progress, PNG/JPEG only) |

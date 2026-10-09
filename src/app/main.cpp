@@ -38,7 +38,8 @@ int main(int argc, char *argv[])
     QCommandLineOption sliceStepOpt(QStringLiteral("slice-step"),
                                     QStringLiteral("With --slice: open this step (1 source, 2 masks, 3 generate, 4 preview); 2+ segments with the skeleton."),
                                     QStringLiteral("step"));
-    parser.addOptions({projectOpt, screenshotOpt, pageOpt, imageOpt, sizeOpt, sliceOpt, sliceStepOpt});
+    QCommandLineOption cubismOpt(QStringLiteral("cubism"), QStringLiteral("Preview a Live2D Cubism model (.model3.json)."), QStringLiteral("path"));
+    parser.addOptions({projectOpt, screenshotOpt, pageOpt, imageOpt, sizeOpt, sliceOpt, sliceStepOpt, cubismOpt});
     parser.process(app);
 
     paths::ensure();
@@ -90,6 +91,11 @@ int main(int argc, char *argv[])
             start();
         else
             QObject::connect(&studio, &ui::Studio::projectOpened, &studio, start, Qt::SingleShotConnection);
+    }
+    if (parser.isSet(cubismOpt)) {
+        window.showPage(ui::Page::Parts);
+        if (auto *parts = qobject_cast<ui::PartsPage *>(window.pageWidget(ui::Page::Parts)))
+            parts->previewCubismModel(QFileInfo(parser.value(cubismOpt)).absoluteFilePath());
     }
     if (parser.isSet(sizeOpt)) {
         const QStringList wh = parser.value(sizeOpt).split(u'x');

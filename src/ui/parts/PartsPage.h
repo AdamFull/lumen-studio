@@ -18,6 +18,7 @@ class QLabel;
 class QPushButton;
 class QSpinBox;
 class QStackedWidget;
+class QTabWidget;
 class QToolButton;
 class QVBoxLayout;
 
@@ -33,6 +34,8 @@ namespace lumen::ui {
 
 class AutoTextEdit;
 class CanvasView;
+class CubismPanel;
+class CubismView;
 class EditorState;
 class PartEditContext;
 class PartCard;
@@ -56,6 +59,8 @@ public:
     // Scripted runs (smoke tests, screenshots): once the next source is loaded, optionally segment it
     // with the local skeleton segmenter, cut out every part and go to `step`.
     void automate(bool segment, int step);
+    // Opens step 4 with the Cubism model preview, loading `model3Path` when given.
+    void previewCubismModel(const QString &model3Path);
 
 protected:
     void dragEnterEvent(QDragEnterEvent *e) override;
@@ -97,6 +102,7 @@ private:
 
     // Preview / export.
     void refreshPreview();
+    void showPreviewWidget();
     void exportPsd();
     void exportPngs();
     void openInEditor();
@@ -132,6 +138,9 @@ private:
     QStackedWidget *m_center;
     CanvasView *m_canvas;
     PuppetPreview *m_preview;
+    CubismView *m_cubism;
+    CubismPanel *m_cubismPanel = nullptr;
+    QTabWidget *m_previewTabs = nullptr;
     QWidget *m_palette;
     QHBoxLayout *m_optionsHost;
     QWidget *m_options = nullptr;
@@ -185,6 +194,7 @@ private:
     int m_solo = 0;
     bool m_showUnassigned = false;
     bool m_loading = false;
+    bool m_holdPreview = false; // an explicit Cubism preview request survives session restores
     struct Automation
     {
         bool active = false;

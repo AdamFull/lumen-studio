@@ -1,13 +1,17 @@
+#include "FakeCubismCore.h"
 #include "core/ImageOps.h"
 #include "core/MaskOps.h"
 #include "doc/Document.h"
 #include "doc/Parts.h"
 #include "ui/canvas/CanvasView.h"
 #include "ui/canvas/EditorState.h"
+#include "live2d/CubismRenderer.h"
+#include "ui/parts/CubismView.h"
 #include "ui/parts/PartTools.h"
 #include "ui/parts/PuppetPreview.h"
 
 #include <QPainter>
+#include <QTemporaryDir>
 #include <QtTest>
 
 using namespace lumen;
@@ -56,6 +60,7 @@ private slots:
     void cutLineSplits();
     void hiddenAreaBrush();
     void puppetRenders();
+    void cubismViewAnimates();
 
 private:
     EditorState *m_state = nullptr;
@@ -243,6 +248,42 @@ void TestPartsUi::puppetRenders()
     p.angleX = -25;
     preview.setParams(p);
     QVERIFY(preview.renderFrame(QSize(200, 200)) != shut); // head parallax moves the layers
+}
+
+void TestPartsUi::cubismViewAnimates()
+{
+    QTemporaryDir dir;
+    const QString model3 = fake::writeModel(dir.path());
+    QVERIFY(!model3.isEmpty());
+    lumen::live2d::CubismCore::instance().setApiForTesting(fake::api(), QStringLiteral("fake"));
+    CubismView view;
+    QString error;
+    QVERIFY(!view.loadModel(dir.filePath(QStringLiteral("missing.model3.json")), &error));
+    QVERIFY(!error.isEmpty());
+    QSignalSpy changed(&view, &CubismView::modelChanged);
+    QVERIFY2(view.loadModel(model3, &error), qPrintable(error));
+    QCOMPARE(changed.size(), 1);
+    QCOMPARE(view.modelName(), QStringLiteral("fake"));
+    QVERIFY(view.hasIdleMotion());
+
+    // Manual values override the animation; the idle motion drives the parameter otherwise.
+    view.setAutoIdle(false);
+    view.setManual(0, 30.0f);
+    QCOMPARE(view.value(0), 30.0f);
+    const QImage manual = view.renderNow(QSize(200, 200));
+    QCOMPARE(manual.pixelColor(150, 90), QColor(0, 0, 255)); // eye moved right
+    view.clearManual();
+    view.setPlayMotion(false);
+    QCOMPARE(view.value(0), 0.0f);
+    view.setPlayMotion(true);
+    view.resize(320, 320);
+    view.show();
+    QSignalSpy frames(&view, &CubismView::framePresented);
+    QTRY_VERIFY_WITH_TIMEOUT(frames.size() >= 3, 5000);
+    QVERIFY(view.value(0) != 0.0f); // the Idle curve moves ParamAngleX
+    view.clear();
+    QVERIFY(!view.hasModel());
+    lumen::live2d::CubismCore::instance().unload();
 }
 
 QTEST_MAIN(TestPartsUi)
