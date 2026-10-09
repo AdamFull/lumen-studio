@@ -250,7 +250,7 @@ QJsonObject OpenAiChatProvider::buildBody(const ChatRequest &r) const
 
     // Prompt-level schema guidance for modes without hard enforcement.
     if (!r.jsonSchema.isEmpty() && mode != QLatin1String("json_schema")) {
-        const QString guide = tr("Respond with a single JSON object (no prose, no code fences) that validates against this JSON schema:\n%1")
+        const QString guide = QStringLiteral("Respond with a single JSON object (no prose, no code fences) that validates against this JSON schema:\n%1")
                                   .arg(QString::fromUtf8(json::compact(r.jsonSchema)));
         messages.append(QJsonObject{{QStringLiteral("role"), QStringLiteral("system")}, {QStringLiteral("content"), guide}});
     }

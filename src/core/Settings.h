@@ -21,7 +21,9 @@ public:
     void sync();
 
     // Typed accessors for commonly used settings.
-    QString theme() const { return value(QStringLiteral("ui/theme"), QStringLiteral("dark")).toString(); }
+    QString theme() const { return value(QStringLiteral("ui/theme"), QStringLiteral("auto")).toString(); }
+    // UI language ("" = the system language).
+    QString language() const { return value(QStringLiteral("ui/language")).toString(); }
     int workerThreads() const;
     qint64 undoMemoryLimitMb() const { return value(QStringLiteral("perf/undoMemoryMb"), 1024).toLongLong(); }
     int autosaveIntervalSec() const { return value(QStringLiteral("doc/autosaveSec"), 60).toInt(); }

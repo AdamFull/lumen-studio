@@ -145,7 +145,17 @@ LumenStudio [--project file.lumen] [--page editor|generate|create|poses|parts|li
             [--cubism model.model3.json]
 ```
 
-## 10. Where data is stored
+## 10. Language, themes and accessibility
+
+* **Language**: Lumen Studio is available in English and German. **Settings → General → Language**
+  picks one ("System default" follows Windows); restart to apply. Numbers follow the language's format.
+* **Theme**: *Automatic* (the default) uses the dark theme, or the high-contrast theme when Windows high
+  contrast is on. *Dark*, *Light* and *High contrast* can be chosen explicitly (restart to apply). The
+  high-contrast theme uses the Windows high-contrast colours. All themes meet the WCAG 2.1 contrast
+  ratios for text (4.5:1, 7:1 in high contrast).
+* **Screen readers**: every button and field has an accessible name, including icon-only buttons.
+
+## 11. Where data is stored
 
 | What | Installed | Portable |
 |---|---|---|
@@ -156,7 +166,7 @@ LumenStudio [--project file.lumen] [--page editor|generate|create|poses|parts|li
 
 The environment variable `LUMEN_DATA_DIR` overrides both (useful for separate profiles).
 
-## 11. Troubleshooting
+## 12. Troubleshooting
 
 * **"No provider configured"**: add one in Settings → Providers, then use **Test connection**.
 * **A local server is not found**: check that it is running and started with its API enabled

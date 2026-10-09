@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 3.25)
 
+if(POLICY CMP0177)
+    cmake_policy(SET CMP0177 NEW) # normalized install() destinations
+endif()
+
 project(LumenStudio
     VERSION 0.1.0
     DESCRIPTION "AI-assisted image generation and editing studio"

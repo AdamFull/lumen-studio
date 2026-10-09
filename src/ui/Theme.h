@@ -31,7 +31,9 @@ struct Palette
     QColor selection;   // translucent accent for selections
 };
 
-// Application-wide look: Fusion style + palette + stylesheet, light and dark variants.
+// Application-wide look: Fusion style + palette + stylesheet. Themes: "dark", "light",
+// "high-contrast" (follows the Windows high-contrast colours when that mode is on) and "auto"
+// (high contrast when the system asks for it, dark otherwise).
 class Theme : public QObject
 {
     Q_OBJECT
@@ -40,6 +42,13 @@ public:
     static const Palette &palette() { return instance().m_palette; }
 
     void apply(QApplication &app, const QString &name);
+    // Theme actually used for a setting value ("auto" resolved).
+    static QString resolve(const QString &name);
+    static Palette paletteFor(const QString &resolvedName);
+    // Windows "high contrast" accessibility mode.
+    static bool systemHighContrast();
+    // WCAG 2 contrast ratio of two opaque colours (1 … 21).
+    static double contrastRatio(const QColor &a, const QColor &b);
     QString name() const { return m_name; }
     bool isDark() const { return m_palette.dark; }
 
@@ -54,6 +63,7 @@ private:
     Theme() = default;
     static Palette makeDark();
     static Palette makeLight();
+    static Palette makeHighContrast();
     QString styleSheet() const;
 
     Palette m_palette = makeDark();

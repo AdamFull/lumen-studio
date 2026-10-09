@@ -14,6 +14,7 @@
 
 #include <QCheckBox>
 #include <QComboBox>
+#include <QDir>
 #include <QDesktopServices>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
@@ -546,13 +547,31 @@ QWidget *SettingsDialog::buildGeneralTab()
     form->setVerticalSpacing(12);
     Settings &s = Settings::instance();
     auto *theme = new QComboBox(w);
+    theme->addItem(tr("Automatic (high contrast when Windows uses it)"), QStringLiteral("auto"));
     theme->addItem(tr("Dark"), QStringLiteral("dark"));
     theme->addItem(tr("Light"), QStringLiteral("light"));
-    theme->setCurrentIndex(s.theme() == QLatin1String("light") ? 1 : 0);
+    theme->addItem(tr("High contrast"), QStringLiteral("high-contrast"));
+    theme->setCurrentIndex(std::max(0, theme->findData(s.theme())));
     connect(theme, &QComboBox::currentIndexChanged, this, [theme] {
         Settings::instance().setValue(QStringLiteral("ui/theme"), theme->currentData().toString());
     });
     form->addRow(tr("Theme (restart)"), theme);
+    auto *language = new QComboBox(w);
+    language->addItem(tr("System default"), QString());
+    language->addItem(QStringLiteral("English"), QStringLiteral("en"));
+    for (const QString &file : QDir(QStringLiteral(":/i18n")).entryList({QStringLiteral("lumen_*.qm")})) {
+        const QString code = file.mid(6, file.size() - 9); // lumen_<code>.qm
+        const QLocale locale(code);
+        QString name = locale.nativeLanguageName();
+        if (!name.isEmpty())
+            name[0] = name[0].toUpper();
+        language->addItem(name.isEmpty() ? code : name, code);
+    }
+    language->setCurrentIndex(std::max(0, language->findData(s.language())));
+    connect(language, &QComboBox::currentIndexChanged, this, [language] {
+        Settings::instance().setValue(QStringLiteral("ui/language"), language->currentData().toString());
+    });
+    form->addRow(tr("Language (restart)"), language);
     auto *threads = new QSpinBox(w);
     threads->setRange(0, 64);
     threads->setSpecialValueText(tr("Automatic (%1)").arg(std::max(2, QThread::idealThreadCount() - 1)));

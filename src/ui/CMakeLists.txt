@@ -2,6 +2,7 @@ add_library(lumen_ui STATIC
     Theme.h Theme.cpp
     Icons.h Icons.cpp
     Shortcuts.h Shortcuts.cpp
+    Accessibility.h Accessibility.cpp
     Studio.h Studio.cpp
     MainWindow.h MainWindow.cpp
     PageFactory.h PageFactory.cpp

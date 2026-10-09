@@ -5,10 +5,13 @@
 #include "ui/canvas/EditorState.h"
 #include "ui/canvas/TransformTool.h"
 #include "core/Settings.h"
+#include "ui/Accessibility.h"
 #include "ui/MainWindow.h"
+#include "ui/Theme.h"
 #include "ui/Shortcuts.h"
 #include "ui/Studio.h"
 #include "ui/dialogs/ShortcutsPage.h"
+#include "ui/widgets/Controls.h"
 
 #include <QJsonArray>
 #include <QAction>
@@ -55,6 +58,9 @@ private slots:
     void studioRestoresSession();
     void shortcutRegistry();
     void shortcutsHaveNoConflicts();
+    void themeContrast();
+    void accessibleNames();
+    void fitLabelWraps();
 
 private:
     ToolEvent at(double x, double y, Qt::KeyboardModifiers mods = Qt::NoModifier) const
@@ -405,6 +411,82 @@ void TestCanvas::shortcutsHaveNoConflicts()
     QVERIFY(sc.contains(QStringLiteral("editor.tool.transform")));
     QVERIFY(sc.contains(QStringLiteral("parts.tool.part-lasso")) || sc.contains(QStringLiteral("parts.tool.lasso")));
     QVERIFY(sc.contains(QStringLiteral("app.settings")));
+}
+
+void TestCanvas::themeContrast()
+{
+    QCOMPARE(qRound(Theme::contrastRatio(Qt::black, Qt::white) * 10), 210);
+    QCOMPARE(Theme::contrastRatio(QColor(0x777777), QColor(0x777777)), 1.0);
+    QCOMPARE(Theme::resolve(QStringLiteral("light")), QStringLiteral("light"));
+    QCOMPARE(Theme::resolve(QStringLiteral("auto")),
+             Theme::systemHighContrast() ? QStringLiteral("high-contrast") : QStringLiteral("dark"));
+    for (const QString &name : {QStringLiteral("dark"), QStringLiteral("light"), QStringLiteral("high-contrast")}) {
+        const Palette p = Theme::paletteFor(name);
+        const bool hc = name == QLatin1String("high-contrast");
+        auto check = [&](const char *what, const QColor &fg, const QColor &bg, double minimum) {
+            const double ratio = Theme::contrastRatio(fg, bg);
+            QVERIFY2(ratio >= minimum, qPrintable(QStringLiteral("%1 %2: %3 < %4").arg(name, QLatin1String(what)).arg(ratio, 0, 'f', 2).arg(minimum)));
+        };
+        // WCAG 2.1: body text AA 4.5:1 (AAA 7:1 for high contrast), UI components 3:1.
+        for (const QColor &bg : {p.window, p.panel, p.surface, p.raised}) {
+            check("text", p.text, bg, 7.0);
+            check("muted text", p.textMuted, bg, hc ? 7.0 : 4.5);
+        }
+        for (const QColor &bg : {p.window, p.panel, p.surface}) {
+            check("danger", p.danger, bg, 4.5);
+            check("success", p.success, bg, 4.5);
+            check("warning", p.warning, bg, 4.5);
+            check("accent", p.accent, bg, 3.0);
+        }
+        check("text on accent", p.accentText, p.accent, hc ? 7.0 : 4.5);
+        check("text on accent hover", p.accentText, p.accentHover, 4.5);
+        if (hc)
+            check("border", p.border, p.window, 3.0);
+    }
+}
+
+void TestCanvas::accessibleNames()
+{
+    Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
+    Accessibility::install();
+    Studio studio;
+    MainWindow window(&studio);
+    window.resize(1400, 900);
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    // Every page (and its widgets) gets polished once shown.
+    for (Page page : {Page::Create, Page::Generate, Page::Editor, Page::Poses, Page::Parts, Page::Library}) {
+        window.showPage(page);
+        QTest::qWait(30);
+    }
+    QStringList missing;
+    for (QWidget *w : Accessibility::unnamed(&window)) {
+        if (w->isVisibleTo(&window))
+        {
+            QStringList chain;
+            for (QWidget *p = w->parentWidget(); p && p != &window; p = p->parentWidget())
+                chain << QLatin1String(p->metaObject()->className()) + (p->objectName().isEmpty() ? QString() : u':' + p->objectName());
+            missing << QStringLiteral("%1 '%2' in %3").arg(QLatin1String(w->metaObject()->className()), w->objectName(),
+                                                         chain.join(QStringLiteral(" < ")));
+        }
+    }
+    QVERIFY2(missing.isEmpty(), qPrintable(missing.join(QStringLiteral("\n"))));
+    // An icon-only button gets its tool tip (without the shortcut suffix) as its name.
+    QToolButton icon(&window);
+    icon.setToolTip(QStringLiteral("Zoom in (Ctrl+=)"));
+    QCOMPARE(Accessibility::ensureName(&icon), QStringLiteral("Zoom in"));
+}
+
+void TestCanvas::fitLabelWraps()
+{
+    double pt = 8.0;
+    QCOMPARE(fitLabel(QStringLiteral("Edit"), 68, &pt), QStringLiteral("Edit"));
+    QCOMPARE(pt, 8.0);
+    const QString two = fitLabel(QStringLiteral("Per Anweisung bearbeiten"), 68, &pt);
+    QVERIFY(two.contains(u'\n'));
+    pt = 8.0;
+    fitLabel(QStringLiteral("Warteschlangenverwaltung"), 40, &pt);
+    QVERIFY(pt < 8.0 && pt >= 7.0);
 }
 
 QTEST_MAIN(TestCanvas)

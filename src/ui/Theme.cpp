@@ -12,6 +12,15 @@
 #include <QStyleFactory>
 #include <QWidget>
 
+#include <cmath>
+
+#ifdef Q_OS_WIN
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
+
 namespace lumen::ui {
 
 Theme &Theme::instance()
@@ -33,14 +42,15 @@ Palette Theme::makeDark()
     p.text = QColor(0xe7e9ef);
     p.textMuted = QColor(0x969db0);
     p.icon = QColor(0xb9bfcc);
-    p.accent = QColor(0x8b6cff);
-    p.accentHover = QColor(0x9d83ff);
+    // WCAG: white on the accent ≥ 4.5:1, the accent against the window ≥ 3:1 (tst_canvas checks).
+    p.accent = QColor(0x7452f0);
+    p.accentHover = QColor(0x6a48ee);
     p.accentText = QColor(0xffffff);
     p.success = QColor(0x34c38f);
     p.warning = QColor(0xf2a93b);
-    p.danger = QColor(0xf0566a);
+    p.danger = QColor(0xf36b7c);
     p.canvas = QColor(0x0d0f13);
-    p.selection = QColor(139, 108, 255, 70);
+    p.selection = QColor(116, 82, 240, 80);
     return p;
 }
 
@@ -58,14 +68,91 @@ Palette Theme::makeLight()
     p.textMuted = QColor(0x646b7c);
     p.icon = QColor(0x4a5060);
     p.accent = QColor(0x6d4cf5);
-    p.accentHover = QColor(0x7d60f7);
+    p.accentHover = QColor(0x5e3fe6);
     p.accentText = QColor(0xffffff);
-    p.success = QColor(0x1f9d6f);
-    p.warning = QColor(0xc77f12);
-    p.danger = QColor(0xd93b51);
+    p.success = QColor(0x16734f);
+    p.warning = QColor(0x8f5600);
+    p.danger = QColor(0xc22a40);
     p.canvas = QColor(0xe2e4ea);
     p.selection = QColor(109, 76, 245, 60);
     return p;
+}
+
+Palette Theme::makeHighContrast()
+{
+    // Black and white with a bright accent; the Windows high-contrast colours when that mode is on.
+    Palette p;
+    p.dark = true;
+    QColor window(0, 0, 0), text(255, 255, 255), highlight(0xff, 0xd4, 0x00), highlightText(0, 0, 0), disabled(0xc8, 0xc8, 0xc8);
+#ifdef Q_OS_WIN
+    if (systemHighContrast()) {
+        auto sys = [](int index) {
+            const DWORD c = GetSysColor(index);
+            return QColor(GetRValue(c), GetGValue(c), GetBValue(c));
+        };
+        window = sys(COLOR_WINDOW);
+        text = sys(COLOR_WINDOWTEXT);
+        highlight = sys(COLOR_HIGHLIGHT);
+        highlightText = sys(COLOR_HIGHLIGHTTEXT);
+        disabled = sys(COLOR_GRAYTEXT);
+    }
+#endif
+    p.dark = window.lightness() < 128;
+    p.window = window;
+    p.panel = window;
+    p.surface = window;
+    p.raised = mix(window, text, 0.18);
+    p.border = text;
+    p.borderStrong = text;
+    p.text = text;
+    p.textMuted = disabled;
+    p.icon = text;
+    p.accent = highlight;
+    p.accentHover = mix(highlight, text, 0.25);
+    p.accentText = highlightText;
+    p.success = p.dark ? QColor(0x3ff23f) : QColor(0x006400);
+    p.warning = p.dark ? QColor(0xffd400) : QColor(0x7a4b00);
+    p.danger = p.dark ? QColor(0xff6b6b) : QColor(0xa30000);
+    p.canvas = window;
+    p.selection = QColor(highlight.red(), highlight.green(), highlight.blue(), 90);
+    return p;
+}
+
+bool Theme::systemHighContrast()
+{
+#ifdef Q_OS_WIN
+    HIGHCONTRASTW hc;
+    hc.cbSize = sizeof hc;
+    if (SystemParametersInfoW(SPI_GETHIGHCONTRAST, sizeof hc, &hc, 0))
+        return (hc.dwFlags & HCF_HIGHCONTRASTON) != 0;
+#endif
+    return false;
+}
+
+QString Theme::resolve(const QString &name)
+{
+    if (name == QLatin1String("light") || name == QLatin1String("dark") || name == QLatin1String("high-contrast"))
+        return name;
+    return systemHighContrast() ? QStringLiteral("high-contrast") : QStringLiteral("dark");
+}
+
+Palette Theme::paletteFor(const QString &resolvedName)
+{
+    if (resolvedName == QLatin1String("light"))
+        return makeLight();
+    if (resolvedName == QLatin1String("high-contrast"))
+        return makeHighContrast();
+    return makeDark();
+}
+
+double Theme::contrastRatio(const QColor &a, const QColor &b)
+{
+    auto luminance = [](const QColor &c) {
+        auto channel = [](double v) { return v <= 0.03928 ? v / 12.92 : std::pow((v + 0.055) / 1.055, 2.4); };
+        return 0.2126 * channel(c.redF()) + 0.7152 * channel(c.greenF()) + 0.0722 * channel(c.blueF());
+    };
+    const double la = luminance(a), lb = luminance(b);
+    return (std::max(la, lb) + 0.05) / (std::min(la, lb) + 0.05);
 }
 
 QColor Theme::mix(const QColor &a, const QColor &b, double t)
@@ -83,8 +170,8 @@ void Theme::setRole(QWidget *w, const QString &role)
 
 void Theme::apply(QApplication &app, const QString &name)
 {
-    m_name = name == QLatin1String("light") ? QStringLiteral("light") : QStringLiteral("dark");
-    m_palette = m_name == QLatin1String("light") ? makeLight() : makeDark();
+    m_name = resolve(name);
+    m_palette = paletteFor(m_name);
     Icons::clearCache();
     app.setStyle(QStyleFactory::create(QStringLiteral("Fusion")));
     QPalette qp;

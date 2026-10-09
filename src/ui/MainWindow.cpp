@@ -137,12 +137,14 @@ QWidget *MainWindow::buildNavRail()
         auto *b = new QToolButton(rail);
         b->setIcon(Icons::get(icon));
         b->setIconSize(QSize(22, 22));
-        b->setText(label);
+        double pointSize = 8.0;
+        b->setText(fitLabel(label, 68, &pointSize));
+        b->setAccessibleName(label);
         b->setCheckable(true);
         b->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
         b->setFixedSize(74, 58);
         b->setProperty("role", QStringLiteral("nav"));
-        b->setStyleSheet(QStringLiteral("font-size: 8pt;"));
+        b->setStyleSheet(QStringLiteral("font-size: %1pt;").arg(pointSize));
         Shortcuts::Info info{QStringLiteral("nav.%1").arg(icon), tr("Pages"), tr("Go to %1").arg(label), QStringLiteral("global"),
                              {QKeySequence(QStringLiteral("Alt+%1").arg(++index))}};
         Shortcuts::instance().bind(info, b, [b, tip](const QList<QKeySequence> &keys) {
@@ -157,11 +159,13 @@ QWidget *MainWindow::buildNavRail()
     m_queueButton = new QToolButton(rail);
     m_queueButton->setIcon(Icons::get(QStringLiteral("queue")));
     m_queueButton->setIconSize(QSize(20, 20));
-    m_queueButton->setText(tr("Queue"));
+    double queueSize = 8.0;
+    m_queueButton->setText(fitLabel(tr("Queue"), 68, &queueSize));
+    m_queueButton->setAccessibleName(tr("Queue"));
     m_queueButton->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
     m_queueButton->setFixedSize(74, 52);
     m_queueButton->setProperty("role", QStringLiteral("nav"));
-    m_queueButton->setStyleSheet(QStringLiteral("font-size: 8pt;"));
+    m_queueButton->setStyleSheet(QStringLiteral("font-size: %1pt;").arg(queueSize));
     m_queueButton->setCheckable(true);
     m_queueButton->setToolTip(tr("Show running and finished jobs"));
     connect(m_queueButton, &QToolButton::clicked, this, &MainWindow::toggleQueue);
@@ -169,11 +173,13 @@ QWidget *MainWindow::buildNavRail()
     auto *settings = new QToolButton(rail);
     settings->setIcon(Icons::get(QStringLiteral("settings")));
     settings->setIconSize(QSize(20, 20));
-    settings->setText(tr("Settings"));
+    double settingsSize = 8.0;
+    settings->setText(fitLabel(tr("Settings"), 68, &settingsSize));
+    settings->setAccessibleName(tr("Settings"));
     settings->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
     settings->setFixedSize(74, 52);
     settings->setProperty("role", QStringLiteral("nav"));
-    settings->setStyleSheet(QStringLiteral("font-size: 8pt;"));
+    settings->setStyleSheet(QStringLiteral("font-size: %1pt;").arg(settingsSize));
     settings->setToolTip(tr("Providers, models and preferences (Ctrl+,)"));
     connect(settings, &QToolButton::clicked, this, [this] { openSettings(); });
     v->addWidget(settings, 0, Qt::AlignHCenter);

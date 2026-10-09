@@ -4,6 +4,7 @@
 #include "core/Log.h"
 #include "core/Paths.h"
 #include "core/Settings.h"
+#include "ui/Accessibility.h"
 #include "ui/MainWindow.h"
 #include "ui/pages/EditorPage.h"
 #include "ui/parts/PartsPage.h"
@@ -15,6 +16,9 @@
 #include <QElapsedTimer>
 #include <QFontDatabase>
 #include <QImageReader>
+#include <QLibraryInfo>
+#include <QLocale>
+#include <QTranslator>
 #include <QFileInfo>
 #include <QTimer>
 
@@ -53,6 +57,21 @@ int main(int argc, char *argv[])
 
     paths::ensure();
     log::install(paths::logs());
+    // UI language: Qt's own strings (dialog buttons...) and Lumen's.
+    {
+        const QString lang = Settings::instance().language();
+        const QLocale locale = lang.isEmpty() ? QLocale::system() : QLocale(lang);
+        QLocale::setDefault(locale);
+        auto *qtTranslator = new QTranslator(&app);
+        // Deployed builds ship the combined qt_<lang>.qm; a Qt installation also has qtbase_<lang>.qm.
+        const QString qtDir = QLibraryInfo::path(QLibraryInfo::TranslationsPath);
+        if (qtTranslator->load(locale, QStringLiteral("qt"), QStringLiteral("_"), qtDir)
+            || qtTranslator->load(locale, QStringLiteral("qtbase"), QStringLiteral("_"), qtDir))
+            app.installTranslator(qtTranslator);
+        auto *lumenTranslator = new QTranslator(&app);
+        if (lumenTranslator->load(locale, QStringLiteral("lumen"), QStringLiteral("_"), QStringLiteral(":/i18n")))
+            app.installTranslator(lumenTranslator);
+    }
     crash::installHandlers(paths::logs());
     crash::SessionLock session(paths::appData());
     if (session.previousSessionCrashed())
@@ -80,6 +99,7 @@ int main(int argc, char *argv[])
     }
     app.setFont(font);
     ui::Theme::instance().apply(app, Settings::instance().theme());
+    ui::Accessibility::install();
 
     ui::Studio studio;
     ui::MainWindow window(&studio);

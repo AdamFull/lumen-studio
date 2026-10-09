@@ -83,6 +83,10 @@ private:
 QLabel *sectionLabel(const QString &text, QWidget *parent = nullptr);
 QLabel *mutedLabel(const QString &text, QWidget *parent = nullptr);
 QToolButton *iconButton(const QString &icon, const QString &tooltip, QWidget *parent = nullptr, bool checkable = false);
+// Fits a label into `width` pixels at `pointSize` (labels of fixed-width text-under-icon buttons,
+// which translations make longer): breaks it onto two lines at the space nearest its middle, and
+// for a single long word lowers the point size (down to 7 pt). `pointSize` returns the size to use.
+QString fitLabel(const QString &text, int width, double *pointSize);
 QFrame *card(QWidget *parent = nullptr);
 QFrame *separator(Qt::Orientation orientation, QWidget *parent = nullptr);
 

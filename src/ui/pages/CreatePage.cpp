@@ -604,7 +604,7 @@ void CreatePage::plan(const QString &instruction)
     if (m_session->plan().isEmpty()) {
         in.request = requests.join(QStringLiteral("\n"));
     } else {
-        in.request = tr("Current plan:\n%1\n\nRevise the plan according to this new request (keep shot ids that remain): %2")
+        in.request = QStringLiteral("Current plan:\n%1\n\nRevise the plan according to this new request (keep shot ids that remain): %2")
                          .arg(QString::fromUtf8(QJsonDocument(m_session->plan()).toJson(QJsonDocument::Compact)), instruction);
     }
     in.character = m_session->character();

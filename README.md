@@ -11,6 +11,8 @@ It covers:
 * an asset library with batch background removal and upscaling;
 * character part slicing for Live2D.
 
+The interface is available in English and German, with dark, light and high-contrast themes.
+
 Local back-ends (Stable Diffusion WebUI / Forge, ComfyUI, llama.cpp, Ollama, LM Studio) and cloud
 APIs (OpenAI, Gemini, Anthropic, Stability AI, fal.ai, OpenRouter) both work.
 
@@ -48,6 +50,13 @@ It builds a release, deploys Qt and the MinGW runtime with `windeployqt` into
 * `dist/LumenStudio-<version>-win64.exe`, an NSIS installer, when `makensis` is installed.
 
 `scripts/make-icon.py` regenerates the application icon.
+
+### Translations
+
+`cmake --build build/<dir> --target update_translations` refreshes `translations/*.ts` from the
+sources. Edit them with Qt Linguist, then run `python scripts/check-translations.py`; it reports
+unfinished entries and broken placeholders, tags or accelerators. Prompts sent to AI models are kept
+out of `tr()` on purpose.
 
 ## Character slicing for Live2D
 

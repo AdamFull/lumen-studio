@@ -387,6 +387,8 @@ LibraryPage::LibraryPage(Studio *studio, QWidget *parent)
     iv->addWidget(m_preview);
     auto *nameRow = new QHBoxLayout;
     m_name = new QLineEdit(m_inspector);
+    m_name->setAccessibleName(tr("Image name"));
+    m_name->setPlaceholderText(tr("Name"));
     m_star = iconButton(QStringLiteral("star"), tr("Favourite"), m_inspector, true);
     nameRow->addWidget(m_name, 1);
     nameRow->addWidget(m_star);
@@ -397,11 +399,13 @@ LibraryPage::LibraryPage(Studio *studio, QWidget *parent)
     iv->addWidget(sectionLabel(tr("Prompt")));
     m_prompt = new QPlainTextEdit(m_inspector);
     m_prompt->setReadOnly(true);
+    m_prompt->setAccessibleName(tr("Prompt"));
     m_prompt->setMaximumHeight(110);
     iv->addWidget(m_prompt);
     iv->addWidget(sectionLabel(tr("Parameters")));
     m_params = new QPlainTextEdit(m_inspector);
     m_params->setReadOnly(true);
+    m_params->setAccessibleName(tr("Parameters"));
     iv->addWidget(m_params, 1);
     auto *actions = new QGridLayout;
     actions->setSpacing(6);

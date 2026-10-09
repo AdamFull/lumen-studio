@@ -70,18 +70,24 @@ AiPanel::AiPanel(Studio *studio, QWidget *parent)
     for (const auto &[mode, icon, label, tip] : modes) {
         auto *b = new QToolButton(content);
         b->setIcon(Icons::get(icon));
-        b->setText(label);
+        double pointSize = 8.5;
+        const QString text = fitLabel(label, 72, &pointSize);
+        b->setText(text);
+        b->setAccessibleName(label);
         b->setToolTip(tip);
         b->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
         b->setIconSize(QSize(20, 20));
         b->setCheckable(true);
-        b->setMinimumSize(78, 54);
+        b->setMinimumSize(78, text.contains(u'\n') ? 66 : 54);
         b->setProperty("role", QStringLiteral("chip"));
-        b->setStyleSheet(QStringLiteral("QToolButton { border-radius: 9px; font-size: 8.5pt; }"));
+        b->setStyleSheet(QStringLiteral("QToolButton { border-radius: 9px; font-size: %1pt; }").arg(pointSize));
+        b->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         m_modes->addButton(b, static_cast<int>(mode));
         grid->addWidget(b, i / 3, i % 3);
         ++i;
     }
+    for (int c = 0; c < 3; ++c)
+        grid->setColumnStretch(c, 1);
     m_modes->button(0)->setChecked(true);
     v->addLayout(grid);
     m_modeHint = mutedLabel(QString(), content);

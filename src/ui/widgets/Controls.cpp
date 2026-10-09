@@ -3,8 +3,10 @@
 #include "ui/Icons.h"
 #include "ui/Theme.h"
 
+#include <QApplication>
 #include <QColorDialog>
 #include <QDoubleSpinBox>
+#include <QFontMetrics>
 #include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QPainter>
@@ -12,6 +14,7 @@
 #include <QSlider>
 #include <QTextBlock>
 
+#include <climits>
 #include <cmath>
 
 namespace lumen::ui {
@@ -176,6 +179,37 @@ QLabel *mutedLabel(const QString &text, QWidget *parent)
     l->setProperty("role", QStringLiteral("muted"));
     l->setWordWrap(true);
     return l;
+}
+
+QString fitLabel(const QString &text, int width, double *pointSize)
+{
+    auto widthAt = [](const QString &line, double pt) {
+        QFont f = QApplication::font();
+        f.setPointSizeF(pt);
+        return QFontMetrics(f).horizontalAdvance(line);
+    };
+    auto widest = [&](const QString &t, double pt) {
+        int w = 0;
+        for (const QString &line : t.split(u'\n'))
+            w = std::max(w, widthAt(line, pt));
+        return w;
+    };
+    QString out = text;
+    if (widest(out, *pointSize) > width && text.contains(u' ')) {
+        // Break at the space that gives the narrowest two lines.
+        int best = -1, bestWidth = INT_MAX;
+        for (int i = text.indexOf(u' '); i >= 0; i = text.indexOf(u' ', i + 1)) {
+            const int w = std::max(widthAt(text.left(i), *pointSize), widthAt(text.mid(i + 1), *pointSize));
+            if (w < bestWidth) {
+                bestWidth = w;
+                best = i;
+            }
+        }
+        out = text.left(best) + u'\n' + text.mid(best + 1);
+    }
+    while (widest(out, *pointSize) > width && *pointSize > 7.0)
+        *pointSize -= 0.5;
+    return out;
 }
 
 QToolButton *iconButton(const QString &icon, const QString &tooltip, QWidget *parent, bool checkable)

@@ -56,7 +56,7 @@ void StructuredChatOperation::runAttempt()
             value = op->result().toolCalls.first().arguments;
         QStringList errors;
         if (!value.isObject()) {
-            errors << tr("the reply was not a JSON object (%1)").arg(parseError);
+            errors << QStringLiteral("the reply was not a JSON object (%1)").arg(parseError);
         } else {
             json::SchemaValidator validator(m_request.jsonSchema);
             validator.validate(value, &errors);
@@ -74,7 +74,7 @@ void StructuredChatOperation::runAttempt()
         // Repair loop: show the model its answer and the exact validation errors.
         m_request.messages.append(ChatMessage::assistant(m_raw.left(20000)));
         m_request.messages.append(ChatMessage::user(
-            tr("Your previous reply is invalid:\n- %1\nReply again with ONLY the complete corrected JSON object.")
+            QStringLiteral("Your previous reply is invalid:\n- %1\nReply again with ONLY the complete corrected JSON object.")
                 .arg(errors.mid(0, 20).join(QStringLiteral("\n- ")))));
         runAttempt();
     });
