@@ -2,6 +2,7 @@
 
 #include "ai/Director.h"
 #include "ai/GenerationService.h"
+#include "ai/PartService.h"
 #include "ai/ProviderRegistry.h"
 #include "core/JobQueue.h"
 #include "doc/Document.h"
@@ -15,7 +16,8 @@
 
 namespace lumen::ui {
 
-enum class Page { Create, Generate, Editor, Poses, Library };
+// Values are persisted (last page); new pages are appended.
+enum class Page { Create, Generate, Editor, Poses, Library, Parts };
 
 // Application context shared by all UI components: services, the open project, open documents
 // and cross-page actions ("open this image in the editor", "use this pose for generation"...).
@@ -31,6 +33,7 @@ public:
     JobQueue *jobs() { return &m_jobs; }
     ai::GenerationService *generation() { return &m_generation; }
     ai::Director *director() { return &m_director; }
+    ai::PartService *parts() { return &m_parts; }
     doc::Project *project() { return m_project; }
 
     // ---- project lifecycle --------------------------------------------------------------------
@@ -58,6 +61,12 @@ public:
     void editPose(const pose::Pose &pose, const QString &context = QString()) { emit poseEditRequested(pose, context); }
     void usePrompt(const QString &prompt, const QString &negative) { emit promptRequested(prompt, negative); }
     void rerunAsset(const QString &assetId) { emit rerunRequested(assetId); }
+    // Starts a part slicing session (Live2D) from an image asset.
+    void sliceAsset(const QString &assetId)
+    {
+        showPage(Page::Parts);
+        emit sliceRequested(assetId);
+    }
 
     void notify(const QString &message, const QString &level = QStringLiteral("info")) { emit notification(message, level); }
 
@@ -72,6 +81,7 @@ signals:
     void poseEditRequested(const lumen::pose::Pose &pose, const QString &context);
     void promptRequested(const QString &prompt, const QString &negative);
     void rerunRequested(const QString &assetId);
+    void sliceRequested(const QString &assetId);
     void notification(const QString &message, const QString &level);
 
 private:
@@ -84,6 +94,7 @@ private:
     JobQueue m_jobs;
     ai::GenerationService m_generation;
     ai::Director m_director;
+    ai::PartService m_parts;
     QPointer<doc::Project> m_project;
     QList<doc::Document *> m_documents;
     QPointer<doc::Document> m_active;

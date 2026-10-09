@@ -247,7 +247,11 @@ void AssetFilter::setSearch(const QString &text)
 bool AssetFilter::filterAcceptsRow(int row, const QModelIndex &parent) const
 {
     const QModelIndex idx = sourceModel()->index(row, 0, parent);
-    if (m_kind >= 0 && idx.data(AssetModel::InfoRole).toInt() != m_kind)
+    const int kind = idx.data(AssetModel::InfoRole).toInt();
+    if (m_kind >= 0 && kind != m_kind)
+        return false;
+    // Sliced character parts are intermediate results with their own filter.
+    if (m_kind < 0 && kind == static_cast<int>(doc::AssetKind::Part))
         return false;
     if (m_favorites && !idx.data(AssetModel::FavoriteRole).toBool())
         return false;
@@ -295,6 +299,7 @@ LibraryPage::LibraryPage(Studio *studio, QWidget *parent)
         {tr("Imported"), static_cast<int>(doc::AssetKind::Import)},
         {tr("Poses"), static_cast<int>(doc::AssetKind::Pose)},
         {tr("Exports"), static_cast<int>(doc::AssetKind::Export)},
+        {tr("Parts"), static_cast<int>(doc::AssetKind::Part)},
         {tr("Documents"), kDocumentsFilter},
     };
     for (const auto &k : kinds) {
@@ -507,6 +512,9 @@ LibraryPage::LibraryPage(Studio *studio, QWidget *parent)
         menu.addAction(Icons::get(QStringLiteral("link")), tr("Use as reference"), this, [this] {
             for (const QString &id : selectedIds())
                 m_studio->useAsReference(id);
+        });
+        menu.addAction(Icons::get(QStringLiteral("parts")), tr("Slice into parts (Live2D)"), this, [this] {
+            m_studio->sliceAsset(selectedIds().first());
         });
         menu.addAction(Icons::get(QStringLiteral("copy")), tr("Copy image"), this, [this] {
             if (doc::Project *p = m_studio->project())

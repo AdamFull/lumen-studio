@@ -25,6 +25,7 @@ public:
     ~MainWindow() override;
 
     void showPage(Page page);
+    QWidget *pageWidget(Page page) const { return m_pageWidgets.value(page); }
     void openSettings(const QString &tab = QString());
     // Renders the window into a PNG (used by automated UI checks).
     bool saveScreenshot(const QString &path);

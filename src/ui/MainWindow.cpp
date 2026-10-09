@@ -52,7 +52,7 @@ MainWindow::MainWindow(Studio *studio, QWidget *parent)
     h->addWidget(m_pages, 1);
     setCentralWidget(central);
 
-    for (Page page : {Page::Create, Page::Generate, Page::Editor, Page::Poses, Page::Library}) {
+    for (Page page : {Page::Create, Page::Generate, Page::Editor, Page::Poses, Page::Parts, Page::Library}) {
         QWidget *w = createPage(page, studio, m_pages);
         m_pages->addWidget(w);
         m_pageWidgets.insert(page, w);
@@ -98,7 +98,7 @@ MainWindow::MainWindow(Studio *studio, QWidget *parent)
     if (!geometry.isEmpty())
         restoreGeometry(geometry);
     const int lastPage = Settings::instance().value(QStringLiteral("ui/page"), static_cast<int>(Page::Create)).toInt();
-    showPage(static_cast<Page>(std::clamp(lastPage, 0, 4)));
+    showPage(static_cast<Page>(std::clamp(lastPage, 0, static_cast<int>(Page::Parts))));
     updateTitle();
     updateJobSummary();
     QTimer::singleShot(400, this, &MainWindow::maybeShowOnboarding);
@@ -126,7 +126,8 @@ QWidget *MainWindow::buildNavRail()
         {Page::Generate, QStringLiteral("sparkles"), tr("Generate"), tr("Text/image to image generation (Alt+2)")},
         {Page::Editor, QStringLiteral("brush"), tr("Edit"), tr("Layered editor with inpainting and AI tools (Alt+3)")},
         {Page::Poses, QStringLiteral("person"), tr("Poses"), tr("Pose editor and library (Alt+4)")},
-        {Page::Library, QStringLiteral("gallery"), tr("Library"), tr("All images of the project (Alt+5)")},
+        {Page::Parts, QStringLiteral("parts"), tr("Parts"), tr("Slice a character into parts for Live2D (Alt+5)")},
+        {Page::Library, QStringLiteral("gallery"), tr("Library"), tr("All images of the project (Alt+6)")},
     };
     int index = 0;
     for (const auto &[page, icon, label, tip] : items) {

@@ -314,150 +314,160 @@ QList<Job *> PartService::complete(doc::PartSet *setIn, const QList<int> &labels
             const int label = part.label;
             set->setPartState(label, doc::PartState::Generating);
             const QImage source = set->source();
-            const QImage visible = set->partMask(label);
-            const QImage extension = set->extensionMask(label);
-            QJsonObject meta{{QStringLiteral("part_set"), set->id()},
-                             {QStringLiteral("part_id"), partId},
-                             {QStringLiteral("tag"), part.tag},
-                             {QStringLiteral("side"), part.side},
-                             {QStringLiteral("strategy"), completionStrategyName(options.strategy)}};
-
-            if (options.strategy == CompletionStrategy::CutOnly) {
-                async::run([source, visible] { return parts::cutOutPart(source, visible); })
-                    .then(job, [self, job, set, label, partId, meta](QImage layer) {
-                        if (self)
-                            self->storeResult(job, set, label, partId, layer, meta);
-                    });
-                return;
-            }
-
-            if (options.strategy == CompletionStrategy::Decomposition) {
-                const doc::PartKind *kind = set->taxonomy().find(part.tag);
-                const QString tag = kind ? kind->tag : part.tag;
-                QJsonArray entries = set->decomposition().value(tag).toArray();
-                if (entries.isEmpty()) {
-                    job->fail(tr("No model layer for \"%1\". Run a model segmentation (see-through) first or use Inpaint.").arg(part.displayName()));
-                    return;
-                }
-                QPointer<doc::Project> project = self->m_generation->project();
-                if (!project) {
-                    job->fail(tr("No project is open"));
-                    return;
-                }
-                // Several model layers may map to one kind; stack them in model order.
-                auto images = std::make_shared<QList<std::pair<QJsonObject, QImage>>>();
-                auto remaining = std::make_shared<int>(int(entries.size()));
-                for (const QJsonValue &v : entries) {
-                    const QJsonObject e = v.toObject();
-                    project->loadImage(e.value(QStringLiteral("asset")).toString())
-                        .then(job, [self, job, set, label, partId, meta, source, visible, extension, images, remaining, e](QImage img) {
-                            images->append({e, img});
-                            if (--*remaining > 0)
-                                return;
-                            const QList<std::pair<QJsonObject, QImage>> all = *images;
-                            async::run([all, source, visible, extension] {
-                                QImage layer(source.size(), QImage::Format_ARGB32_Premultiplied);
-                                layer.fill(Qt::transparent);
-                                QList<std::pair<QJsonObject, QImage>> sorted = all;
-                                std::sort(sorted.begin(), sorted.end(), [](const auto &a, const auto &b) {
-                                    return a.first.value(QStringLiteral("order")).toInt() < b.first.value(QStringLiteral("order")).toInt();
-                                });
-                                QPainter painter(&layer);
-                                for (const auto &[entry, image] : sorted)
-                                    painter.drawImage(QPoint(entry.value(QStringLiteral("x")).toInt(), entry.value(QStringLiteral("y")).toInt()), image);
-                                painter.end();
-                                return parts::partFromLayer(layer, source, visible, extension);
-                            }).then(job, [self, job, set, label, partId, meta](QImage layer) {
-                                if (self)
-                                    self->storeResult(job, set, label, partId, layer, meta);
-                            });
-                        })
-                        .onFailed(job, [job](const std::exception &ex) { job->fail(describeException(ex)); });
-                }
-                return;
-            }
-
-            // Inpaint: build the isolated context, generate the hidden area, key out the background.
-            const doc::PartKind *kind = set->taxonomy().find(part.tag);
-            const doc::PartKind kindCopy = kind ? *kind : doc::PartKind();
-            const bool hasKind = kind != nullptr;
+            const doc::PartSet::Snapshot snapshot = set->snapshot();
+            const QImage silhouette = set->silhouette();
+            const QJsonObject meta{{QStringLiteral("part_set"), set->id()},
+                                   {QStringLiteral("part_id"), partId},
+                                   {QStringLiteral("tag"), part.tag},
+                                   {QStringLiteral("side"), part.side},
+                                   {QStringLiteral("strategy"), completionStrategyName(options.strategy)}};
             job->setProgress(-1.0, tr("Preparing part..."));
-            async::run([source, visible, extension] { return parts::buildCompletionContext(source, visible, extension); })
-                .then(job, [self, job, set, label, partId, meta, options, part, kindCopy, hasKind, source, visible, extension](parts::CompletionContext ctx) {
-                    if (!self || !set) {
-                        job->fail(tr("The part set is no longer open"));
+            async::run([snapshot, silhouette, label] {
+                return std::make_pair(img::maskForLabel(snapshot.labels, label), doc::PartSet::extensionMaskFor(snapshot, silhouette, label));
+            }).then(job, [self, job, set, partId, options, part, label, source, meta](std::pair<QImage, QImage> masks) {
+                if (!self || !set) {
+                    job->fail(tr("The part set is no longer open"));
+                    return;
+                }
+                const QImage visible = masks.first;
+                const QImage extension = masks.second;
+
+                if (options.strategy == CompletionStrategy::CutOnly) {
+                    async::run([source, visible] { return parts::cutOutPart(source, visible); })
+                        .then(job, [self, job, set, label, partId, meta](QImage layer) {
+                            if (self)
+                                self->storeResult(job, set, label, partId, layer, meta);
+                        });
+                    return;
+                }
+
+                if (options.strategy == CompletionStrategy::Decomposition) {
+                    const doc::PartKind *kind = set->taxonomy().find(part.tag);
+                    const QString tag = kind ? kind->tag : part.tag;
+                    QJsonArray entries = set->decomposition().value(tag).toArray();
+                    if (entries.isEmpty()) {
+                        job->fail(tr("No model layer for \"%1\". Run a model segmentation (see-through) first or use Inpaint.").arg(part.displayName()));
                         return;
                     }
-                    if (img::maskIsEmpty(ctx.mask, 128)) {
-                        // Nothing hidden: the visible pixels are the whole part.
-                        async::run([source, visible] { return parts::cutOutPart(source, visible); })
-                            .then(job, [self, job, set, label, partId, meta](QImage layer) {
-                                if (self)
-                                    self->storeResult(job, set, label, partId, layer, meta);
-                            });
+                    QPointer<doc::Project> project = self->m_generation->project();
+                    if (!project) {
+                        job->fail(tr("No project is open"));
                         return;
                     }
-                    GenerationSpec spec;
-                    spec.providerId = options.providerId;
-                    spec.title = job->title();
-                    spec.saveAssets = false;
-                    spec.request.mode = GenMode::Inpaint;
-                    spec.request.prompt = parts::completionPrompt(part, hasKind ? &kindCopy : nullptr, options.characterSummary, ctx.key);
-                    spec.request.negativePrompt = options.negativePrompt;
-                    spec.request.steps = options.steps;
-                    spec.request.cfg = options.cfg;
-                    spec.request.denoise = options.denoise;
-                    spec.request.model = options.model;
-                    spec.request.batchCount = std::max(1, options.variants);
-                    spec.request.initImage = ctx.image;
-                    spec.request.mask = ctx.mask;
-                    RegionInput region;
-                    region.source = ctx.image;
-                    region.mask = ctx.mask;
-                    region.padding = 64;
-                    region.grow = 4;
-                    region.feather = 6;
-                    region.colorMatch = false;
-                    spec.region = region;
-                    QJsonObject fullMeta = meta;
-                    fullMeta.insert(QStringLiteral("prompt"), spec.request.prompt);
-                    fullMeta.insert(QStringLiteral("key_color"), ctx.key.name());
-                    const QImage contextImage = ctx.image;
-                    const QColor key = ctx.key;
-                    self->m_generation->execute(job, spec, [self, set, label, partId, fullMeta, contextImage, key, source, visible, extension](
-                                                               Job *job, const GenerationSpec &used, GenerationOutput out) {
-                        if (out.images.isEmpty()) {
-                            job->fail(out.text.isEmpty() ? tr("The provider returned no images") : out.text);
+                    // Several model layers may map to one kind; stack them in model order.
+                    auto images = std::make_shared<QList<std::pair<QJsonObject, QImage>>>();
+                    auto remaining = std::make_shared<int>(int(entries.size()));
+                    for (const QJsonValue &v : entries) {
+                        const QJsonObject e = v.toObject();
+                        project->loadImage(e.value(QStringLiteral("asset")).toString())
+                            .then(job, [self, job, set, label, partId, meta, source, visible, extension, images, remaining, e](QImage img) {
+                                images->append({e, img});
+                                if (--*remaining > 0)
+                                    return;
+                                const QList<std::pair<QJsonObject, QImage>> all = *images;
+                                async::run([all, source, visible, extension] {
+                                    QImage layer(source.size(), QImage::Format_ARGB32_Premultiplied);
+                                    layer.fill(Qt::transparent);
+                                    QList<std::pair<QJsonObject, QImage>> sorted = all;
+                                    std::sort(sorted.begin(), sorted.end(), [](const auto &a, const auto &b) {
+                                        return a.first.value(QStringLiteral("order")).toInt() < b.first.value(QStringLiteral("order")).toInt();
+                                    });
+                                    QPainter painter(&layer);
+                                    for (const auto &[entry, image] : sorted)
+                                        painter.drawImage(QPoint(entry.value(QStringLiteral("x")).toInt(), entry.value(QStringLiteral("y")).toInt()), image);
+                                    painter.end();
+                                    return parts::partFromLayer(layer, source, visible, extension);
+                                }).then(job, [self, job, set, label, partId, meta](QImage layer) {
+                                    if (self)
+                                        self->storeResult(job, set, label, partId, layer, meta);
+                                });
+                            })
+                            .onFailed(job, [job](const std::exception &ex) { job->fail(describeException(ex)); });
+                    }
+                    return;
+                }
+
+                // Inpaint: build the isolated context, generate the hidden area, key out the background.
+                const doc::PartKind *kind = set->taxonomy().find(part.tag);
+                const doc::PartKind kindCopy = kind ? *kind : doc::PartKind();
+                const bool hasKind = kind != nullptr;
+                async::run([source, visible, extension] { return parts::buildCompletionContext(source, visible, extension); })
+                    .then(job, [self, job, set, label, partId, meta, options, part, kindCopy, hasKind, source, visible, extension](parts::CompletionContext ctx) {
+                        if (!self || !set) {
+                            job->fail(tr("The part set is no longer open"));
                             return;
                         }
-                        QJsonObject m = fullMeta;
-                        m.insert(QStringLiteral("request"), used.request.describe());
-                        const QList<QImage> generated = out.images;
-                        job->setProgress(-1.0, tr("Extracting part..."));
-                        async::run([generated, contextImage, key, source, visible, extension] {
-                            QList<QImage> layers;
-                            for (const QImage &g : generated) {
-                                QImage full = contextImage;
-                                QPainter painter(&full);
-                                painter.drawImage(0, 0, g);
-                                painter.end();
-                                layers.append(parts::extractCompletedPart(full, source, visible, extension, key));
-                            }
-                            return layers;
-                        }).then(job, [self, job, set, label, partId, m](QList<QImage> layers) {
-                            if (!self)
+                        if (img::maskIsEmpty(ctx.mask, 128)) {
+                            // Nothing hidden: the visible pixels are the whole part.
+                            async::run([source, visible] { return parts::cutOutPart(source, visible); })
+                                .then(job, [self, job, set, label, partId, meta](QImage layer) {
+                                    if (self)
+                                        self->storeResult(job, set, label, partId, layer, meta);
+                                });
+                            return;
+                        }
+                        GenerationSpec spec;
+                        spec.providerId = options.providerId;
+                        spec.title = job->title();
+                        spec.saveAssets = false;
+                        spec.request.mode = GenMode::Inpaint;
+                        spec.request.prompt = parts::completionPrompt(part, hasKind ? &kindCopy : nullptr, options.characterSummary, ctx.key);
+                        spec.request.negativePrompt = options.negativePrompt;
+                        spec.request.steps = options.steps;
+                        spec.request.cfg = options.cfg;
+                        spec.request.denoise = options.denoise;
+                        spec.request.model = options.model;
+                        spec.request.batchCount = std::max(1, options.variants);
+                        spec.request.initImage = ctx.image;
+                        spec.request.mask = ctx.mask;
+                        RegionInput region;
+                        region.source = ctx.image;
+                        region.mask = ctx.mask;
+                        region.padding = 64;
+                        region.grow = 4;
+                        region.feather = 6;
+                        region.colorMatch = false;
+                        spec.region = region;
+                        QJsonObject fullMeta = meta;
+                        fullMeta.insert(QStringLiteral("prompt"), spec.request.prompt);
+                        fullMeta.insert(QStringLiteral("key_color"), ctx.key.name());
+                        const QImage contextImage = ctx.image;
+                        const QColor key = ctx.key;
+                        self->m_generation->execute(job, spec, [self, set, label, partId, fullMeta, contextImage, key, source, visible, extension](
+                                                                   Job *job, const GenerationSpec &used, GenerationOutput out) {
+                            if (out.images.isEmpty()) {
+                                job->fail(out.text.isEmpty() ? tr("The provider returned no images") : out.text);
                                 return;
-                            // Every variant is stored; the first becomes the chosen result and the job
-                            // completes with the last one.
-                            for (int i = 0; i < layers.size(); ++i) {
-                                QJsonObject vm = m;
-                                vm.insert(QStringLiteral("variant"), i);
-                                self->storeResult(i == layers.size() - 1 ? job : nullptr, set, label, partId, layers[i], vm, i == 0);
                             }
+                            QJsonObject m = fullMeta;
+                            m.insert(QStringLiteral("request"), used.request.describe());
+                            const QList<QImage> generated = out.images;
+                            job->setProgress(-1.0, tr("Extracting part..."));
+                            async::run([generated, contextImage, key, source, visible, extension] {
+                                QList<QImage> layers;
+                                for (const QImage &g : generated) {
+                                    QImage full = contextImage;
+                                    QPainter painter(&full);
+                                    painter.drawImage(0, 0, g);
+                                    painter.end();
+                                    layers.append(parts::extractCompletedPart(full, source, visible, extension, key));
+                                }
+                                return layers;
+                            }).then(job, [self, job, set, label, partId, m](QList<QImage> layers) {
+                                if (!self)
+                                    return;
+                                // Every variant is stored; the first becomes the chosen result and the job
+                                // completes with the last one.
+                                for (int i = 0; i < layers.size(); ++i) {
+                                    QJsonObject vm = m;
+                                    vm.insert(QStringLiteral("variant"), i);
+                                    self->storeResult(i == layers.size() - 1 ? job : nullptr, set, label, partId, layers[i], vm, i == 0);
+                                }
+                            });
                         });
-                    });
-                })
-                .onFailed(job, [job](const std::exception &e) { job->fail(describeException(e)); });
+                    })
+                    .onFailed(job, [job](const std::exception &e) { job->fail(describeException(e)); });
+            }).onFailed(job, [job](const std::exception &e) { job->fail(describeException(e)); });
         }, QStringLiteral("parts"));
         connect(job, &Job::finished, this, [set, partId](Job *j) {
             if (!set)

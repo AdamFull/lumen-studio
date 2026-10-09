@@ -26,6 +26,10 @@ add_library(lumen_ui STATIC
     pages/GeneratePage.h pages/GeneratePage.cpp
     pages/PosePage.h pages/PosePage.cpp
     pages/CreatePage.h pages/CreatePage.cpp
+    parts/PartTools.h parts/PartTools.cpp
+    parts/PartListPanel.h parts/PartListPanel.cpp
+    parts/PuppetPreview.h parts/PuppetPreview.cpp
+    parts/PartsPage.h parts/PartsPage.cpp
 )
 target_include_directories(lumen_ui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
 target_link_libraries(lumen_ui PUBLIC lumen_ai lumen_doc lumen_pose lumen_core

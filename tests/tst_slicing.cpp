@@ -85,6 +85,7 @@ private slots:
     void partServerResponse();
     void geminiSegmentation();
     void endToEnd();
+    void cutOutsTileWithoutGaps();
 
 private:
     net::HttpClient m_http;
@@ -410,6 +411,44 @@ void TestSlicing::endToEnd()
     QCOMPARE(snap.parts.size(), 2);
     QCOMPARE(snap.labels, set.labels());
     QFile::remove(registry.configPath());
+}
+
+void TestSlicing::cutOutsTileWithoutGaps()
+{
+    // Skeleton masks + cut-outs must reassemble the character exactly (no seams between parts).
+    const QImage source = figure();
+    PartSet set;
+    set.setSource(source, QStringLiteral("src"), img::silhouetteMask(source));
+    const pose::Person person = parts::fitSkeleton(set.silhouette());
+    const QList<parts::BoneGroup> groups = parts::skeletonGroups(person, set.taxonomyId());
+    const QList<QImage> masks = parts::splitBySkeleton(set.silhouette(), groups);
+    QList<parts::SegmentLayer> layers;
+    for (int i = 0; i < groups.size(); ++i)
+        layers.append({groups[i].tag, groups[i].side, QStringLiteral("mask"), masks[i], -1, -1});
+    const parts::SegmentOutcome out = parts::mergeSegmentation(set.snapshot(), set.silhouette(), set.taxonomy(), layers, {});
+    set.replaceParts(out.labels, out.parts, QStringLiteral("seg"));
+    QHash<QString, QImage> results;
+    PartSet::Snapshot snap = set.snapshot();
+    for (doc::Part &p : snap.parts) {
+        QImage cut = parts::cutOutPart(source, set.partMask(p.label));
+        const QRect rect = parts::cropToContent(cut);
+        const QString id = QStringLiteral("a%1").arg(p.label);
+        p.variants = {id};
+        p.variantRects = {rect};
+        p.chosen = 0;
+        results.insert(id, cut);
+    }
+    QImage assembled(source.size(), QImage::Format_ARGB32_Premultiplied);
+    assembled.fill(Qt::transparent);
+    QPainter painter(&assembled);
+    for (const parts::ExportLayer &l : parts::exportLayers(snap, source, results, true))
+        painter.drawImage(l.rect.topLeft(), l.image);
+    painter.end();
+    int mismatches = 0;
+    for (int y = 0; y < source.height(); ++y)
+        for (int x = 0; x < source.width(); ++x)
+            mismatches += assembled.pixel(x, y) != source.pixel(x, y);
+    QCOMPARE(mismatches, 0);
 }
 
 QTEST_MAIN(TestSlicing)

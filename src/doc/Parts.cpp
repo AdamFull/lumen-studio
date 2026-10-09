@@ -674,7 +674,7 @@ void PartSet::mergeParts(const QList<int> &labels)
 }
 
 QList<int> PartSet::splitPart(int label, const QList<QImage> &pieces, const QStringList &names, const QStringList &sides,
-                              const QString &undoText)
+                              const QString &undoText, const QStringList &tags)
 {
     const Part *orig = part(label);
     if (!orig || pieces.size() < 2)
@@ -690,6 +690,12 @@ QList<int> PartSet::splitPart(int label, const QList<QImage> &pieces, const QStr
         if (!sides.value(0).isNull())
             first->side = sides.value(0);
         first->provenance = QStringLiteral("split");
+        if (!tags.value(0).isEmpty() && tags.value(0) != first->tag) {
+            first->tag = tags.value(0);
+            if (const PartKind *k = taxonomy().find(first->tag))
+                first->order = k->order * 4;
+            first->color = suggestColor(first->tag);
+        }
         first->extensionAuto = true;
         first->extension = QImage();
         first->extensionRect = QRect();
@@ -697,10 +703,12 @@ QList<int> PartSet::splitPart(int label, const QList<QImage> &pieces, const QStr
             first->state = PartState::Masked;
     }
     for (int i = 1; i < pieces.size(); ++i) {
-        Part p = makePart(base.tag, names.value(i, base.name), sides.value(i, base.side));
+        const QString tag = tags.value(i).isEmpty() ? base.tag : tags.value(i);
+        Part p = makePart(tag, names.value(i, base.name), sides.value(i, base.side));
         if (p.label == 0)
             break;
-        p.order = base.order;
+        if (tag == base.tag)
+            p.order = base.order;
         p.prompt = base.prompt;
         p.provenance = QStringLiteral("split");
         p.state = PartState::Masked;
@@ -799,17 +807,26 @@ QImage PartSet::unassignedMask() const
 
 QImage PartSet::occluderMask(int label) const
 {
-    const Part *p = part(label);
-    QImage out = img::createMask(m_labels.size(), 0);
+    return occluderMaskFor(snapshot(), label);
+}
+
+QImage PartSet::occluderMaskFor(const Snapshot &s, int label)
+{
+    QImage out = img::createMask(s.labels.size(), 0);
+    const Part *p = nullptr;
+    for (const Part &o : s.parts) {
+        if (o.label == label)
+            p = &o;
+    }
     if (!p)
         return out;
     QVector<bool> front(256, false);
-    for (const Part &o : m_parts)
+    for (const Part &o : s.parts)
         front[o.label] = o.label != label && o.order > p->order;
-    for (int y = 0; y < m_labels.height(); ++y) {
-        const uchar *l = m_labels.constScanLine(y);
+    for (int y = 0; y < s.labels.height(); ++y) {
+        const uchar *l = s.labels.constScanLine(y);
         uchar *o = out.scanLine(y);
-        for (int x = 0; x < m_labels.width(); ++x)
+        for (int x = 0; x < s.labels.width(); ++x)
             o[x] = front[l[x]] ? 255 : 0;
     }
     return out;
@@ -869,34 +886,52 @@ QVector<bool> PartSet::lockedLabels() const
 
 QImage PartSet::autoExtensionMask(int label) const
 {
-    const QImage own = partMask(label);
-    const Part *p = part(label);
-    if (!p)
-        return own;
-    const PartKind *k = taxonomy().find(p->tag);
-    if (k && !k->occludable)
-        return own;
-    const qint64 area = p->pixels;
-    QImage ext = img::extensionMask(own, occluderMask(label), img::adaptiveExtensionRadius(area));
-    // The part never extends outside the character silhouette (grown slightly for anti-aliasing).
-    if (!m_silhouette.isNull() && m_silhouette.size() == ext.size())
-        ext = img::combineMasks(ext, img::dilateMask(m_silhouette, 2), img::MaskOp::Intersect);
-    return ext;
+    return autoExtensionMaskFor(snapshot(), m_silhouette, label);
 }
 
 QImage PartSet::extensionMask(int label) const
 {
-    const Part *p = part(label);
+    return extensionMaskFor(snapshot(), m_silhouette, label);
+}
+
+QImage PartSet::autoExtensionMaskFor(const Snapshot &s, const QImage &silhouette, int label)
+{
+    const QImage own = img::maskForLabel(s.labels, label);
+    const Part *p = nullptr;
+    for (const Part &o : s.parts) {
+        if (o.label == label)
+            p = &o;
+    }
     if (!p)
-        return img::createMask(m_labels.size(), 0);
+        return own;
+    const PartKind *k = partTaxonomy(s.taxonomy).find(p->tag);
+    if (k && !k->occludable)
+        return own;
+    QImage ext = img::extensionMask(own, occluderMaskFor(s, label), img::adaptiveExtensionRadius(p->pixels));
+    // The part never extends outside the character silhouette (grown slightly for anti-aliasing).
+    if (!silhouette.isNull() && silhouette.size() == ext.size())
+        ext = img::combineMasks(ext, img::dilateMask(silhouette, 2), img::MaskOp::Intersect);
+    return ext;
+}
+
+QImage PartSet::extensionMaskFor(const Snapshot &s, const QImage &silhouette, int label)
+{
+    const Part *p = nullptr;
+    for (const Part &o : s.parts) {
+        if (o.label == label)
+            p = &o;
+    }
+    if (!p)
+        return img::createMask(s.labels.size(), 0);
     if (p->extensionAuto || p->extension.isNull())
-        return autoExtensionMask(label);
-    QImage full = img::createMask(m_labels.size(), 0);
-    QPainter painter(&full);
-    painter.drawImage(p->extensionRect.topLeft(), p->extension);
-    painter.end();
+        return autoExtensionMaskFor(s, silhouette, label);
+    QImage full = img::createMask(s.labels.size(), 0);
+    const QRect r = p->extensionRect.intersected(full.rect());
+    for (int y = r.top(); y <= r.bottom(); ++y)
+        memcpy(full.scanLine(y) + r.left(), p->extension.constScanLine(y - p->extensionRect.top()) + (r.left() - p->extensionRect.left()),
+               size_t(r.width()));
     // The visible pixels always belong to the part.
-    return img::combineMasks(full, partMask(label), img::MaskOp::Union);
+    return img::combineMasks(full, img::maskForLabel(s.labels, label), img::MaskOp::Union);
 }
 
 void PartSet::setExtension(int label, const QImage &fullMask, const QString &undoText)

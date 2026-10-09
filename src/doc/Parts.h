@@ -141,8 +141,9 @@ public:
     void mergeParts(const QList<int> &labels);
     // pieces[0] stays with the part; every further piece becomes a new part named by `names`.
     // Returns the labels of all pieces (the original first).
+    // `tags` (optional) assigns taxonomy kinds to the pieces (draw order and colour follow the kind).
     QList<int> splitPart(int label, const QList<QImage> &pieces, const QStringList &names = {},
-                         const QStringList &sides = {}, const QString &undoText = QString());
+                         const QStringList &sides = {}, const QString &undoText = QString(), const QStringList &tags = {});
     // Metadata edit (name, tag, side, colour, order, visible, locked, prompt).
     void updatePart(const Part &part, const QString &undoText = QString());
     // Draw order from a list of labels, back to front.
@@ -208,6 +209,11 @@ public:
     void bind(Project *project);
     void saveSoon();
     QFuture<void> saveNow();
+
+    // Thread-safe variants working on a snapshot (for worker threads).
+    static QImage occluderMaskFor(const Snapshot &snapshot, int label);
+    static QImage autoExtensionMaskFor(const Snapshot &snapshot, const QImage &silhouette, int label);
+    static QImage extensionMaskFor(const Snapshot &snapshot, const QImage &silhouette, int label);
 
     // Undo machinery (used by the commands).
     struct MaskState

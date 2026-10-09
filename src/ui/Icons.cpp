@@ -86,6 +86,8 @@ const QHash<QString, QString> &iconData()
         {QStringLiteral("adjust"), QStringLiteral("<path d='M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6'/>")},
         {QStringLiteral("outpaint"), QStringLiteral("<rect x='7' y='7' width='10' height='10' rx='1'/><path d='M3 3h3M3 3v3M21 3h-3M21 3v3M3 21h3M3 21v-3M21 21h-3M21 21v-3'/>")},
         {QStringLiteral("variation"), QStringLiteral("<rect x='3' y='3' width='8' height='8' rx='1.5'/><path d='M14 7h4a3 3 0 0 1 3 3v4'/><path d='M18 18h-4a3 3 0 0 1-3-3v-1'/><rect x='13' y='13' width='8' height='8' rx='1.5'/>")},
+        {QStringLiteral("parts"), QStringLiteral("<circle cx='12' cy='4.8' r='2.6'/><path d='M8.6 10h6.8l.9 5.6H7.7z'/><path d='M5.2 9.6l2 4.4M18.8 9.6l-2 4.4'/><path d='M10 18.4l-.8 3.6M14 18.4l.8 3.6'/>")},
+        {QStringLiteral("split"), QStringLiteral("<rect x='3' y='5' width='7.5' height='14' rx='2'/><rect x='13.5' y='5' width='7.5' height='14' rx='2'/><path d='M12 2v20' stroke-dasharray='2 2'/>")},
         {QStringLiteral("logo"), QStringLiteral("<path d='M12 2l2.6 6.4L21 11l-6.4 2.6L12 20l-2.6-6.4L3 11l6.4-2.6z'/><circle cx='12' cy='11' r='2'/>")},
     };
     return data;

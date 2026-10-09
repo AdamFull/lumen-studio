@@ -18,6 +18,7 @@ Studio::Studio(QObject *parent)
     , m_registry(&m_http)
     , m_generation(&m_registry, &m_jobs)
     , m_director(&m_registry)
+    , m_parts(&m_registry, &m_jobs, &m_generation)
 {
     ai::registerBuiltInProviders(m_registry);
     m_registry.load();
