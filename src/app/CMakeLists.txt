@@ -45,7 +45,8 @@ if(WIN32)
                      HINTS "${QT6_INSTALL_PREFIX}/${QT6_INSTALL_BINS}" "${Qt6_DIR}/../../../bin" NO_DEFAULT_PATH)
         if(LUMEN_WINDEPLOYQT)
             add_custom_command(TARGET lumen POST_BUILD
-                COMMAND "${LUMEN_WINDEPLOYQT}" --verbose 0 --no-compiler-runtime
+                # qoffscreen: tests and headless runs (QT_QPA_PLATFORM=offscreen) use the same folder.
+                COMMAND "${LUMEN_WINDEPLOYQT}" --verbose 0 --no-compiler-runtime --include-plugins qoffscreen
                         --exclude-plugins qsqlibase,qsqlmimer,qsqloci,qsqlodbc,qsqlpsql
                         "$<TARGET_FILE:lumen>"
                 COMMENT "Deploying the Qt runtime next to LumenStudio.exe")
