@@ -9,6 +9,7 @@ add_library(lumen_core STATIC
     ImageOps.h ImageOps.cpp
     JsonSchema.h JsonSchema.cpp
     JsonUtil.h JsonUtil.cpp
+    PngText.h PngText.cpp
     LatencyWatchdog.h LatencyWatchdog.cpp
 )
 target_include_directories(lumen_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
