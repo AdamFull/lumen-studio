@@ -1,0 +1,5 @@
+foreach(module core net pose doc ai ui app)
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${module}/CMakeLists.txt")
+        add_subdirectory(${module})
+    endif()
+endforeach()

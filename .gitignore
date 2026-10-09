@@ -1,0 +1,18 @@
+# Build output
+/build/
+/out/
+/install/
+CMakeUserPresets.json
+CMakeLists.txt.user*
+compile_commands.json
+.cache/
+.vs/
+.vscode/
+.idea/
+*.user
+*.autosave
+
+# Runtime artefacts
+*.lumen-wal
+*.lumen-shm
+/logs/

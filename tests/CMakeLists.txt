@@ -1,0 +1,12 @@
+function(lumen_add_test name)
+    cmake_parse_arguments(ARG "" "" "SOURCES;LIBS" ${ARGN})
+    add_executable(${name} ${ARG_SOURCES})
+    target_link_libraries(${name} PRIVATE Qt6::Test ${ARG_LIBS})
+    lumen_configure_target(${name})
+    add_test(NAME ${name} COMMAND ${name})
+    set_tests_properties(${name} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+endfunction()
+
+lumen_add_test(tst_core SOURCES tst_core.cpp LIBS lumen_core)
+lumen_add_test(tst_net SOURCES tst_net.cpp MockHttpServer.h LIBS lumen_net)
+lumen_add_test(tst_pose SOURCES tst_pose.cpp LIBS lumen_pose)

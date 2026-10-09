@@ -1,0 +1,44 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 25, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CMAKE_PREFIX_PATH": "$env{QT_ROOT}"
+      }
+    },
+    {
+      "name": "mingw-base",
+      "hidden": true,
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_CXX_COMPILER": "g++"
+      }
+    },
+    {
+      "name": "mingw-debug",
+      "displayName": "MinGW Debug",
+      "description": "Requires QT_ROOT (e.g. C:/Qt/6.9.2/mingw_64) and MinGW + Ninja on PATH",
+      "inherits": "mingw-base",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug", "LUMEN_BUILD_TESTS": "ON" }
+    },
+    {
+      "name": "mingw-release",
+      "displayName": "MinGW Release",
+      "inherits": "mingw-base",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release", "LUMEN_BUILD_TESTS": "ON" }
+    }
+  ],
+  "buildPresets": [
+    { "name": "mingw-debug", "configurePreset": "mingw-debug" },
+    { "name": "mingw-release", "configurePreset": "mingw-release" }
+  ],
+  "testPresets": [
+    { "name": "mingw-debug", "configurePreset": "mingw-debug", "output": { "outputOnFailure": true } }
+  ]
+}
