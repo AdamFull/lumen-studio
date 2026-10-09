@@ -92,6 +92,9 @@ CompletionContext buildCompletionContext(const QImage &source, const QImage &vis
 // visible pixels from the source, generated pixels inside the extension with the key colour removed.
 QImage extractCompletedPart(const QImage &generated, const QImage &source, const QImage &visible,
                             const QImage &extension, const QColor &key);
+// Same from a transparent generated layer (LayerDiffuse): the model's alpha replaces colour keying.
+QImage extractTransparentPart(const QImage &generatedLayer, const QImage &source, const QImage &visible, const QImage &extension);
+bool hasTransparency(const QImage &image);
 // Visible pixels only.
 QImage cutOutPart(const QImage &source, const QImage &visible);
 // A decomposition layer limited to the part's extension, with the visible pixels taken from the source.

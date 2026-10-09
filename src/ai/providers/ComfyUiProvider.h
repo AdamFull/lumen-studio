@@ -40,8 +40,13 @@ struct ComfyTemplate
     QJsonObject outputs;
     QString outputKind = QStringLiteral("auto");
 
+    int sizeMultiple = 8;         // LayerDiffuse decoding needs multiples of 64
+
     bool isSegmentation() const { return modes.contains(QStringLiteral("segment_parts")); }
-    bool isGeneration() const { return modes.size() > (isSegmentation() ? 1 : 0); }
+    // Transparent part completion (LayerDiffuse); selected per request, never the main workflow.
+    bool isLayerDiffuse() const { return modes.contains(QStringLiteral("layer_diffuse")); }
+    bool isGeneration() const { return !isLayerDiffuse() && modes.size() > (isSegmentation() ? 1 : 0); }
+    ImageCapabilities capabilities() const;
 
     static std::optional<ComfyTemplate> fromJson(const QJsonObject &json, const QString &id, QString *error = nullptr);
 };
@@ -65,7 +70,13 @@ public:
     QFuture<QStringList> listSchedulers() override;
 
     ImageCapabilities capabilities() const override;
+    ImageCapabilities capabilitiesFor(const ImageRequest &request) const override;
     ImageOperation *generate(const ImageRequest &request) override;
+
+    // Request extra selecting a template for one request: extras["comfy_template"] = template id.
+    static constexpr const char *kTemplateExtra = "comfy_template";
+    static std::optional<ComfyTemplate> findTemplate(const QString &id);
+    static std::optional<ComfyTemplate> layerDiffuseTemplate();
     bool supportsUtility(Utility u) const override;
     ImageOperation *runUtility(Utility utility, const QImage &image, const QJsonObject &params) override;
 
@@ -86,6 +97,7 @@ private:
     QFuture<QStringList> nodeOptions(const QString &nodeClass, const QString &input);
     QFuture<bool> hasNode(const QString &nodeClass);
     std::optional<ComfyTemplate> activeTemplate() const;
+    std::optional<ComfyTemplate> templateFor(const ImageRequest &request) const;
     std::optional<ComfyTemplate> segmentationTemplate() const;
     ImageOperation *segmentParts(const QImage &image, const QJsonObject &params);
     void runGraph(ImageOperation *op, std::function<QJsonObject(const UploadedImages &)> buildGraph, const QList<QPair<QString, QImage>> &uploads);

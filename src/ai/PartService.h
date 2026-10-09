@@ -15,7 +15,8 @@ namespace lumen::ai {
 enum class CompletionStrategy {
     Inpaint,       // generate the hidden areas with an image provider (region pipeline)
     Decomposition, // use the layers of the last model decomposition (e.g. see-through)
-    CutOnly        // visible pixels only, no generation
+    CutOnly,       // visible pixels only, no generation
+    LayerDiffuse   // transparent generation through a ComfyUI LayerDiffuse workflow
 };
 QString completionStrategyName(CompletionStrategy s);
 CompletionStrategy completionStrategyFromName(const QString &name);
@@ -62,6 +63,9 @@ public:
 
     // Image providers that can segment parts.
     QList<ImageProvider *> segmenters() const;
+    // ComfyUI provider used for LayerDiffuse completion (the preferred one when it is a ComfyUI
+    // provider) or null; `templateId` receives the workflow template.
+    ImageProvider *layerDiffuseProvider(const QString &preferredId, QString *templateId = nullptr) const;
 
     Job *segment(doc::PartSet *set, const QString &providerId, const parts::SegmentOptions &options);
     // Local segmentation from a body skeleton (no model needed).

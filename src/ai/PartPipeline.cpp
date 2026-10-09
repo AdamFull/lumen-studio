@@ -535,6 +535,47 @@ QImage extractCompletedPart(const QImage &generatedIn, const QImage &sourceIn, c
     return out;
 }
 
+QImage extractTransparentPart(const QImage &generatedIn, const QImage &sourceIn, const QImage &visible, const QImage &extension)
+{
+    const QImage generated = img::normalized(generatedIn);
+    const QImage source = img::normalized(sourceIn);
+    QImage out(source.size(), QImage::Format_ARGB32_Premultiplied);
+    out.fill(0);
+    for (int y = 0; y < source.height(); ++y) {
+        const uchar *vm = visible.constScanLine(y);
+        const uchar *em = extension.constScanLine(y);
+        const QRgb *src = reinterpret_cast<const QRgb *>(source.constScanLine(y));
+        const QRgb *gen = reinterpret_cast<const QRgb *>(generated.constScanLine(y));
+        QRgb *dst = reinterpret_cast<QRgb *>(out.scanLine(y));
+        for (int x = 0; x < source.width(); ++x) {
+            if (vm[x] >= 128) {
+                dst[x] = src[x];
+            } else if (em[x]) {
+                // Premultiplied: scaling every channel scales the alpha.
+                const int f = em[x];
+                const QRgb c = gen[x];
+                dst[x] = qRgba(qRed(c) * f / 255, qGreen(c) * f / 255, qBlue(c) * f / 255, qAlpha(c) * f / 255);
+            }
+        }
+    }
+    return out;
+}
+
+bool hasTransparency(const QImage &imageIn)
+{
+    if (!imageIn.hasAlphaChannel())
+        return false;
+    const QImage image = imageIn.convertToFormat(QImage::Format_ARGB32);
+    for (int y = 0; y < image.height(); ++y) {
+        const QRgb *row = reinterpret_cast<const QRgb *>(image.constScanLine(y));
+        for (int x = 0; x < image.width(); ++x) {
+            if (qAlpha(row[x]) < 250)
+                return true;
+        }
+    }
+    return false;
+}
+
 QImage cutOutPart(const QImage &source, const QImage &visible)
 {
     return img::applyMaskToAlpha(img::normalized(source), visible);

@@ -645,9 +645,12 @@ QWidget *PartsPage::buildGeneratePanel()
     m_strategy->addItem(tr("Generate (inpaint)"), ai::completionStrategyName(ai::CompletionStrategy::Inpaint));
     m_strategy->addItem(tr("Model layers (see-through)"), ai::completionStrategyName(ai::CompletionStrategy::Decomposition));
     m_strategy->addItem(tr("Cut out only (no AI)"), ai::completionStrategyName(ai::CompletionStrategy::CutOnly));
+    m_strategy->addItem(tr("Transparent (LayerDiffuse, ComfyUI)"), ai::completionStrategyName(ai::CompletionStrategy::LayerDiffuse));
     m_strategy->setItemData(0, tr("Paints the parts of each part hidden behind others with an image provider."), Qt::ToolTipRole);
     m_strategy->setItemData(1, tr("Uses the complete layers returned by a see-through segmentation."), Qt::ToolTipRole);
     m_strategy->setItemData(2, tr("Keeps only the visible pixels; instant."), Qt::ToolTipRole);
+    m_strategy->setItemData(3, tr("Generates the hidden areas with real transparency (ComfyUI-layerdiffuse nodes and an SDXL checkpoint)."),
+                            Qt::ToolTipRole);
     m_provider = new ProviderCombo(m_studio->providers(), ai::ProviderKind::Image, w);
     m_variants = new QSpinBox(w);
     m_variants->setRange(1, 4);
@@ -697,9 +700,11 @@ QWidget *PartsPage::buildGeneratePanel()
     v->addWidget(next);
 
     auto updateVisibility = [this] {
-        m_provider->setEnabled(m_strategy->currentIndex() == 0);
-        m_variants->setEnabled(m_strategy->currentIndex() == 0);
-        m_character->setEnabled(m_strategy->currentIndex() == 0);
+        const ai::CompletionStrategy s = ai::completionStrategyFromName(m_strategy->currentData().toString());
+        const bool generates = s == ai::CompletionStrategy::Inpaint || s == ai::CompletionStrategy::LayerDiffuse;
+        m_provider->setEnabled(generates);
+        m_variants->setEnabled(s == ai::CompletionStrategy::Inpaint);
+        m_character->setEnabled(generates);
     };
     updateVisibility();
     connect(m_strategy, &QComboBox::currentIndexChanged, this, [this, updateVisibility] {

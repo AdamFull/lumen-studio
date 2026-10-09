@@ -208,7 +208,7 @@ void GenerationService::execute(Job *job, const GenerationSpec &specIn, OutputHa
     QPointer<ImageProvider> providerGuard(provider);
     GenerationSpec spec = specIn;
     spec.providerId = provider->instanceId();
-    const ImageCapabilities caps = provider->capabilities();
+    const ImageCapabilities caps = provider->capabilitiesFor(specIn.request);
     job->setProgress(-1.0, tr("Preparing..."));
 
     auto launch = [job, providerGuard, spec, onOutput](ImageRequest request, std::optional<RegionPlan> plan) {

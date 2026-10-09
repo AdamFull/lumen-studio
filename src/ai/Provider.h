@@ -95,6 +95,12 @@ public:
     using Provider::Provider;
 
     virtual ImageCapabilities capabilities() const = 0;
+    // Capabilities for a specific request (e.g. a workflow selected through request extras).
+    virtual ImageCapabilities capabilitiesFor(const ImageRequest &request) const
+    {
+        Q_UNUSED(request);
+        return capabilities();
+    }
     virtual ImageOperation *generate(const ImageRequest &request) = 0;
 
     virtual bool supportsUtility(Utility) const { return false; }

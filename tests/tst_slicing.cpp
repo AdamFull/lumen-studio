@@ -89,6 +89,7 @@ private slots:
     void cutOutsTileWithoutGaps();
     void comfySegmentationTemplate();
     void expressionVariant();
+    void layerDiffuseCompletion();
 
 private:
     net::HttpClient m_http;
@@ -595,6 +596,113 @@ void TestSlicing::expressionVariant()
         }
     }
     QVERIFY(found);
+    QFile::remove(registry.configPath());
+}
+
+void TestSlicing::layerDiffuseCompletion()
+{
+    // Transparent extraction keeps the model's alpha in the hidden area.
+    {
+        const QSize size(20, 10);
+        QImage source(size, QImage::Format_ARGB32_Premultiplied);
+        source.fill(Qt::red);
+        QImage generated(size, QImage::Format_ARGB32_Premultiplied);
+        generated.fill(Qt::transparent);
+        QPainter p(&generated);
+        p.fillRect(QRect(10, 0, 5, 10), Qt::blue);
+        p.end();
+        const QImage part = parts::extractTransparentPart(generated, source, rectMask(size, QRect(0, 0, 10, 10)), rectMask(size, QRect(0, 0, 20, 10)));
+        QCOMPARE(part.pixelColor(5, 5), QColor(Qt::red));
+        QCOMPARE(part.pixelColor(12, 5), QColor(Qt::blue));
+        QCOMPARE(part.pixelColor(17, 5).alpha(), 0);
+        QVERIFY(parts::hasTransparency(generated));
+        QVERIFY(!parts::hasTransparency(source));
+    }
+
+    // Bundled template + mock ComfyUI returning an RGBA image.
+    QDir().mkpath(ComfyUiProvider::workflowDirectory());
+    const QString tplPath = ComfyUiProvider::workflowDirectory() + QStringLiteral("/complete_part_layerdiffuse.json");
+    QFile::remove(tplPath);
+    QVERIFY(QFile::copy(QStringLiteral(LUMEN_SOURCE_DIR "/resources/workflows/comfyui/complete_part_layerdiffuse.json"), tplPath));
+    const auto tpl = ComfyUiProvider::layerDiffuseTemplate();
+    QVERIFY(tpl.has_value());
+    QVERIFY(!tpl->isGeneration()); // never offered as the main workflow
+    QCOMPARE(tpl->capabilities().sizeMultiple, 64);
+
+    MockHttpServer server;
+    QJsonObject graph;
+    int uploads = 0;
+    server.route("POST", QStringLiteral("/upload/image"), [&](const MockRequest &) {
+        ++uploads;
+        return MockResponse::json({{QStringLiteral("name"), QStringLiteral("u%1.png").arg(uploads)}, {QStringLiteral("subfolder"), QString()},
+                                   {QStringLiteral("type"), QStringLiteral("input")}});
+    });
+    server.route("POST", QStringLiteral("/prompt"), [&](const MockRequest &req) {
+        graph = req.json().value(QStringLiteral("prompt")).toObject();
+        return MockResponse::json({{QStringLiteral("prompt_id"), QStringLiteral("ld")}});
+    });
+    server.route("GET", QStringLiteral("/history/ld"), [](const MockRequest &) {
+        return MockResponse::json({{QStringLiteral("ld"), QJsonObject{
+            {QStringLiteral("status"), QJsonObject{{QStringLiteral("status_str"), QStringLiteral("success")}}},
+            {QStringLiteral("outputs"), QJsonObject{{QStringLiteral("13"), QJsonObject{{QStringLiteral("images"), QJsonArray{
+                QJsonObject{{QStringLiteral("filename"), QStringLiteral("t.png")}, {QStringLiteral("subfolder"), QString()},
+                            {QStringLiteral("type"), QStringLiteral("temp")}}}}}}}}}}});
+    });
+    server.route("GET", QStringLiteral("/view"), [](const MockRequest &) {
+        // Opaque torso colour on the left half, transparent on the right half.
+        QImage out(512, 512, QImage::Format_ARGB32);
+        out.fill(Qt::transparent);
+        QPainter p(&out);
+        p.fillRect(QRect(0, 0, 256, 512), QColor(60, 90, 170));
+        p.end();
+        MockResponse r;
+        r.contentType = "image/png";
+        r.body = img::encode(out);
+        return r;
+    });
+
+    QTemporaryDir dir;
+    doc::Project project;
+    auto opened = project.open(dir.filePath(QStringLiteral("p.lumen")));
+    QTRY_VERIFY(opened.isFinished());
+    ProviderRegistry registry(&m_http);
+    registerBuiltInProviders(registry);
+    QFile::remove(registry.configPath());
+    Provider *comfy = registry.addProvider(QStringLiteral("comfyui"), QStringLiteral("Comfy"),
+                                           {{QStringLiteral("url"), server.baseUrl().toString()},
+                                            {QStringLiteral("model"), QStringLiteral("animagineXL.safetensors")}});
+    QVERIFY(comfy);
+    JobQueue queue;
+    GenerationService generation(&registry, &queue);
+    generation.setProject(&project);
+    PartService service(&registry, &queue, &generation);
+    QString templateId;
+    QCOMPARE(service.layerDiffuseProvider(QString(), &templateId), static_cast<ImageProvider *>(comfy));
+    QCOMPARE(templateId, QStringLiteral("complete_part_layerdiffuse"));
+
+    const QImage source = figure();
+    PartSet set;
+    set.bind(&project);
+    set.setSource(source, QStringLiteral("src"), img::silhouetteMask(source));
+    const int torso = set.addPart(QStringLiteral("topwear"), {}, {}, rectMask(source.size(), QRect(85, 90, 70, 130)));
+    set.addPart(QStringLiteral("handwear"), {}, {}, rectMask(source.size(), QRect(40, 95, 160, 18)));
+    QVERIFY(img::maskCoverage(set.extensionMask(torso)) > img::maskCoverage(set.partMask(torso)));
+
+    CompletionOptions options;
+    options.strategy = CompletionStrategy::LayerDiffuse;
+    const QList<Job *> jobs = service.complete(&set, {torso}, options);
+    QCOMPARE(jobs.size(), 1);
+    QTRY_VERIFY_WITH_TIMEOUT(jobs.first()->isFinished(), 15000);
+    QFile::remove(tplPath);
+    QVERIFY2(jobs.first()->state() == Job::State::Succeeded, qPrintable(jobs.first()->errorString()));
+    QCOMPARE(uploads, 2); // context + hidden-area mask
+    const QByteArray g = QJsonDocument(graph).toJson();
+    QVERIFY(g.contains("LayeredDiffusionApply"));
+    QVERIFY(g.contains("animagineXL.safetensors")); // provider checkpoint
+    QVERIFY(g.contains("u2.png"));                   // mask bound to the mask loader
+    const QImage result = set.resultImage(torso);
+    QVERIFY(!result.isNull());
+    QVERIFY(parts::hasTransparency(result));
     QFile::remove(registry.configPath());
 }
 

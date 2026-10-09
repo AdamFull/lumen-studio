@@ -6,6 +6,7 @@
 #include "core/Log.h"
 #include "core/MaskOps.h"
 #include "core/Psd.h"
+#include "ai/providers/ComfyUiProvider.h"
 
 #include <QDir>
 #include <QFile>
@@ -52,6 +53,7 @@ QString completionStrategyName(CompletionStrategy s)
     case CompletionStrategy::Inpaint: return QStringLiteral("inpaint");
     case CompletionStrategy::Decomposition: return QStringLiteral("decomposition");
     case CompletionStrategy::CutOnly: return QStringLiteral("cut");
+    case CompletionStrategy::LayerDiffuse: return QStringLiteral("layerdiffuse");
     }
     return QStringLiteral("inpaint");
 }
@@ -62,6 +64,8 @@ CompletionStrategy completionStrategyFromName(const QString &name)
         return CompletionStrategy::Decomposition;
     if (name == QLatin1String("cut"))
         return CompletionStrategy::CutOnly;
+    if (name == QLatin1String("layerdiffuse"))
+        return CompletionStrategy::LayerDiffuse;
     return CompletionStrategy::Inpaint;
 }
 
@@ -82,6 +86,23 @@ QList<ImageProvider *> PartService::segmenters() const
             list.append(p);
     }
     return list;
+}
+
+ImageProvider *PartService::layerDiffuseProvider(const QString &preferredId, QString *templateId) const
+{
+    const auto tpl = ComfyUiProvider::layerDiffuseTemplate();
+    if (templateId)
+        *templateId = tpl ? tpl->id : QString();
+    if (!tpl)
+        return nullptr;
+    ImageProvider *preferred = m_registry->imageProvider(preferredId);
+    if (preferred && qobject_cast<ComfyUiProvider *>(preferred))
+        return preferred;
+    for (ImageProvider *p : m_registry->imageProviders()) {
+        if (qobject_cast<ComfyUiProvider *>(p))
+            return p;
+    }
+    return nullptr;
 }
 
 // ---- Segmentation -----------------------------------------------------------------------------------
@@ -289,9 +310,16 @@ void PartService::applySegmentation(Job *job, QPointer<doc::PartSet> set, QList<
 
 // ---- Completion -------------------------------------------------------------------------------------
 
-QList<Job *> PartService::complete(doc::PartSet *setIn, const QList<int> &labels, const CompletionOptions &options)
+QList<Job *> PartService::complete(doc::PartSet *setIn, const QList<int> &labels, const CompletionOptions &optionsIn)
 {
     QList<Job *> jobs;
+    CompletionOptions options = optionsIn;
+    QString layerDiffuseTemplate;
+    if (options.strategy == CompletionStrategy::LayerDiffuse) {
+        ImageProvider *comfy = layerDiffuseProvider(options.providerId, &layerDiffuseTemplate);
+        options.providerId = comfy ? comfy->instanceId() : QString();
+        options.variants = 1; // the workflow decodes one transparent image per run
+    }
     QPointer<doc::PartSet> set(setIn);
     QPointer<PartService> self(this);
     for (int label : labels) {
@@ -299,9 +327,10 @@ QList<Job *> PartService::complete(doc::PartSet *setIn, const QList<int> &labels
         if (!part || part->pixels == 0)
             continue;
         const QString partId = part->id;
-        const QString group = options.strategy == CompletionStrategy::Inpaint ? m_generation->groupFor(options.providerId) : kLocalGroup;
+        const bool generates = options.strategy == CompletionStrategy::Inpaint || options.strategy == CompletionStrategy::LayerDiffuse;
+        const QString group = generates ? m_generation->groupFor(options.providerId) : kLocalGroup;
         setIn->setPartState(label, doc::PartState::Queued);
-        Job *job = m_queue->submit(tr("Part · %1").arg(part->displayName()), group, [self, set, partId, options](Job *job) {
+        Job *job = m_queue->submit(tr("Part · %1").arg(part->displayName()), group, [self, set, partId, options, layerDiffuseTemplate](Job *job) {
             if (!self || !set) {
                 job->fail(tr("The part set is no longer open"));
                 return;
@@ -324,7 +353,7 @@ QList<Job *> PartService::complete(doc::PartSet *setIn, const QList<int> &labels
             job->setProgress(-1.0, tr("Preparing part..."));
             async::run([snapshot, silhouette, label] {
                 return std::make_pair(img::maskForLabel(snapshot.labels, label), doc::PartSet::extensionMaskFor(snapshot, silhouette, label));
-            }).then(job, [self, job, set, partId, options, part, label, source, meta](std::pair<QImage, QImage> masks) {
+            }).then(job, [self, job, set, partId, options, part, label, source, meta, layerDiffuseTemplate](std::pair<QImage, QImage> masks) {
                 if (!self || !set) {
                     job->fail(tr("The part set is no longer open"));
                     return;
@@ -387,12 +416,21 @@ QList<Job *> PartService::complete(doc::PartSet *setIn, const QList<int> &labels
                     return;
                 }
 
-                // Inpaint: build the isolated context, generate the hidden area, key out the background.
+                // Inpaint / LayerDiffuse: build the isolated context, generate the hidden area, then key out
+                // the background (or take the model's alpha).
+                const bool layerDiffuse = options.strategy == CompletionStrategy::LayerDiffuse;
+                if (layerDiffuse && (options.providerId.isEmpty() || layerDiffuseTemplate.isEmpty())) {
+                    job->fail(layerDiffuseTemplate.isEmpty()
+                                  ? tr("The LayerDiffuse workflow template is missing (data/workflows/comfyui/complete_part_layerdiffuse.json).")
+                                  : tr("LayerDiffuse needs a ComfyUI provider with the ComfyUI-layerdiffuse nodes."));
+                    return;
+                }
                 const doc::PartKind *kind = set->taxonomy().find(part.tag);
                 const doc::PartKind kindCopy = kind ? *kind : doc::PartKind();
                 const bool hasKind = kind != nullptr;
                 async::run([source, visible, extension] { return parts::buildCompletionContext(source, visible, extension); })
-                    .then(job, [self, job, set, label, partId, meta, options, part, kindCopy, hasKind, source, visible, extension](parts::CompletionContext ctx) {
+                    .then(job, [self, job, set, label, partId, meta, options, part, kindCopy, hasKind, source, visible, extension, layerDiffuse,
+                                layerDiffuseTemplate](parts::CompletionContext ctx) {
                         if (!self || !set) {
                             job->fail(tr("The part set is no longer open"));
                             return;
@@ -418,6 +456,10 @@ QList<Job *> PartService::complete(doc::PartSet *setIn, const QList<int> &labels
                         spec.request.denoise = options.denoise;
                         spec.request.model = options.model;
                         spec.request.batchCount = std::max(1, options.variants);
+                        if (layerDiffuse) {
+                            spec.request.extras.insert(QLatin1String(ComfyUiProvider::kTemplateExtra), layerDiffuseTemplate);
+                            spec.request.transparentBackground = true;
+                        }
                         spec.request.initImage = ctx.image;
                         spec.request.mask = ctx.mask;
                         RegionInput region;
@@ -433,8 +475,8 @@ QList<Job *> PartService::complete(doc::PartSet *setIn, const QList<int> &labels
                         fullMeta.insert(QStringLiteral("key_color"), ctx.key.name());
                         const QImage contextImage = ctx.image;
                         const QColor key = ctx.key;
-                        self->m_generation->execute(job, spec, [self, set, label, partId, fullMeta, contextImage, key, source, visible, extension](
-                                                                   Job *job, const GenerationSpec &used, GenerationOutput out) {
+                        self->m_generation->execute(job, spec, [self, set, label, partId, fullMeta, contextImage, key, source, visible, extension,
+                                                                layerDiffuse](Job *job, const GenerationSpec &used, GenerationOutput out) {
                             if (out.images.isEmpty()) {
                                 job->fail(out.text.isEmpty() ? tr("The provider returned no images") : out.text);
                                 return;
@@ -442,10 +484,24 @@ QList<Job *> PartService::complete(doc::PartSet *setIn, const QList<int> &labels
                             QJsonObject m = fullMeta;
                             m.insert(QStringLiteral("request"), used.request.describe());
                             const QList<QImage> generated = out.images;
+                            const QList<QImage> raw = out.rawImages;
+                            const QRect region = out.region;
                             job->setProgress(-1.0, tr("Extracting part..."));
-                            async::run([generated, contextImage, key, source, visible, extension] {
+                            async::run([generated, raw, region, layerDiffuse, contextImage, key, source, visible, extension] {
                                 QList<QImage> layers;
-                                for (const QImage &g : generated) {
+                                for (int i = 0; i < generated.size(); ++i) {
+                                    const QImage &g = generated[i];
+                                    if (layerDiffuse && i < raw.size() && !region.isEmpty() && parts::hasTransparency(raw[i])) {
+                                        // The model returned a transparent crop: place it back on the canvas.
+                                        QImage full(source.size(), QImage::Format_ARGB32_Premultiplied);
+                                        full.fill(Qt::transparent);
+                                        QPainter painter(&full);
+                                        painter.setRenderHint(QPainter::SmoothPixmapTransform);
+                                        painter.drawImage(QRectF(region), img::normalized(raw[i]));
+                                        painter.end();
+                                        layers.append(parts::extractTransparentPart(full, source, visible, extension));
+                                        continue;
+                                    }
                                     QImage full = contextImage;
                                     QPainter painter(&full);
                                     painter.drawImage(0, 0, g);

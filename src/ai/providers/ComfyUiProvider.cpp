@@ -84,6 +84,7 @@ std::optional<ComfyTemplate> ComfyTemplate::fromJson(const QJsonObject &json, co
     t.poseControl = json.value(QStringLiteral("pose_control")).toBool(t.bindings.contains(QStringLiteral("pose_image")));
     const int native = json.value(QStringLiteral("native_resolution")).toInt(1024);
     t.nativePixels = qint64(native) * native;
+    t.sizeMultiple = std::max(1, json.value(QStringLiteral("size_multiple")).toInt(8));
     t.outputs = json.value(QStringLiteral("outputs")).toObject();
     t.outputKind = json.value(QStringLiteral("output_kind")).toString(QStringLiteral("auto"));
     if (t.workflow.isEmpty()) {
@@ -305,23 +306,70 @@ std::optional<ComfyTemplate> ComfyUiProvider::segmentationTemplate() const
     return first;
 }
 
+ImageCapabilities ComfyTemplate::capabilities() const
+{
+    ImageCapabilities c;
+    c.negativePrompt = c.seed = c.steps = c.cfg = true;
+    c.maxPixels = 2048 * 2048;
+    c.sizeMultiple = sizeMultiple;
+    c.textToImage = modes.contains(QStringLiteral("txt2img"));
+    c.imageToImage = modes.contains(QStringLiteral("img2img"));
+    c.inpaint = modes.contains(QStringLiteral("inpaint"));
+    c.edit = modes.contains(QStringLiteral("edit"));
+    c.maxReferences = maxReferences;
+    c.poseControl = poseControl;
+    c.nativePixels = nativePixels;
+    c.samplers = bindings.contains(QStringLiteral("sampler"));
+    c.batch = bindings.contains(QStringLiteral("batch"));
+    c.transparentBackground = isLayerDiffuse();
+    return c;
+}
+
+std::optional<ComfyTemplate> ComfyUiProvider::findTemplate(const QString &id)
+{
+    for (const ComfyTemplate &t : loadTemplates()) {
+        if (t.id == id)
+            return t;
+    }
+    return std::nullopt;
+}
+
+std::optional<ComfyTemplate> ComfyUiProvider::layerDiffuseTemplate()
+{
+    for (const ComfyTemplate &t : loadTemplates()) {
+        if (t.isLayerDiffuse())
+            return t;
+    }
+    return std::nullopt;
+}
+
+std::optional<ComfyTemplate> ComfyUiProvider::templateFor(const ImageRequest &request) const
+{
+    const QString id = request.extras.value(QLatin1String(kTemplateExtra)).toString();
+    if (!id.isEmpty()) {
+        if (auto t = findTemplate(id))
+            return t;
+    }
+    return activeTemplate();
+}
+
+ImageCapabilities ComfyUiProvider::capabilitiesFor(const ImageRequest &request) const
+{
+    if (request.extras.contains(QLatin1String(kTemplateExtra))) {
+        if (auto t = templateFor(request))
+            return t->capabilities();
+    }
+    return capabilities();
+}
+
 ImageCapabilities ComfyUiProvider::capabilities() const
 {
+    if (auto tpl = activeTemplate())
+        return tpl->capabilities();
     ImageCapabilities c;
     c.negativePrompt = c.seed = c.steps = c.cfg = c.samplers = true;
     c.sizeMultiple = 8;
     c.maxPixels = 2048 * 2048;
-    if (auto tpl = activeTemplate()) {
-        c.textToImage = tpl->modes.contains(QStringLiteral("txt2img"));
-        c.imageToImage = tpl->modes.contains(QStringLiteral("img2img"));
-        c.inpaint = tpl->modes.contains(QStringLiteral("inpaint"));
-        c.edit = tpl->modes.contains(QStringLiteral("edit"));
-        c.maxReferences = tpl->maxReferences;
-        c.poseControl = tpl->poseControl;
-        c.nativePixels = tpl->nativePixels;
-        c.samplers = tpl->bindings.contains(QStringLiteral("sampler"));
-        return c;
-    }
     c.textToImage = c.imageToImage = c.inpaint = true;
     c.edit = false;
     c.poseControl = true;
@@ -810,9 +858,14 @@ ImageOperation *ComfyUiProvider::generate(const ImageRequest &r)
         uploads.append({QStringLiteral("ref%1").arg(i), img::thumbnail(r.references[i].image, 1024)});
 
     QPointer<ComfyUiProvider> self(this);
-    if (auto tpl = activeTemplate()) {
+    if (auto tpl = templateFor(r)) {
         const ComfyTemplate t = *tpl;
-        runGraph(op, [t, r](const UploadedImages &images) { return applyTemplate(t, r, images); }, uploads);
+        ImageRequest req = r;
+        req.extras.remove(QLatin1String(kTemplateExtra));
+        // Per-request templates (LayerDiffuse) use the provider's checkpoint unless the request names one.
+        if (req.model.isEmpty() && r.extras.contains(QLatin1String(kTemplateExtra)))
+            req.model = text(QStringLiteral("model"));
+        runGraph(op, [t, req](const UploadedImages &images) { return applyTemplate(t, req, images); }, uploads);
         return op;
     }
     // The built-in graph needs to know which optional components are installed.
