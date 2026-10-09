@@ -129,6 +129,8 @@ repair loop (re-prompt with validation errors, max 2 attempts) → user-visible 
 | Background removal | rembg extension / ComfyUI / Stability remove-background | ONNX RMBG / BiRefNet (optional) |
 | Upscaling | A1111 extras, ComfyUI upscale models, Stability upscale | Lanczos (local) |
 | Smart selection | — | ONNX SAM / MobileSAM (optional, late milestone) |
+| Character part segmentation (M11) | see-through (LayerDiff 3D + Marigold + body-parsing SAM) via ComfyUI-See-through or the Lumen Part Server sidecar | Grounding DINO + SAM/SAM2 ComfyUI template (text-prompted per part), Gemini segmentation, local heuristics (skeleton/side/component splits) |
+| Occluded part completion (M11) | see-through layers, inpainting on any image provider (§3.6) | LayerDiffuse ComfyUI template, cut-only (no generation) |
 
 #### Character-consistency strategies (chosen automatically from provider capabilities)
 
@@ -315,7 +317,7 @@ before ticking a milestone.
 ### M9 — Live2D & advanced
 - [ ] Layered PSD export (RLE), import of PSD layers
 - [ ] Expression/mouth/eye variant generation via masked inpainting
-- [ ] Background removal batch, part-separation assistant (mask per part → layers)
+- [ ] Background removal batch (part separation moved to M11)
 - [ ] Character library reuse across projects; Critic loop
 
 ### M10 — Polish & release
@@ -323,6 +325,158 @@ before ticking a milestone.
 - [ ] Autosave/crash recovery hardening, performance profiling pass, latency watchdog
 - [ ] i18n (Qt Linguist), accessibility names, high-contrast check
 - [ ] Packaging (windeployqt, NSIS installer, portable ZIP), user guide
+
+### M11 — Character part slicing for Live2D
+
+Goal: turn one finished character illustration into a clean, layered set of body parts that a
+rigger can import into Live2D Cubism (or StretchyStudio / Anime2.5DRig), with occluded areas
+painted in. The approach follows [see-through](https://github.com/shitagaki-lab/see-through)
+(SIGGRAPH 2026: LayerDiff 3D for transparent layer completion, Marigold for per-layer depth and
+draw order, a body-parsing SAM for part masks; up to 23 semantic layers). see-through runs as one
+monolithic pass. Lumen splits the job into **reviewable steps**: the user fixes the masks before
+any expensive generation and can regenerate one part without touching the others.
+
+Other references:
+* ComfyUI-See-through (node-based decomposition plus PSD export).
+* Grounding DINO + SAM/SAM2 (text-prompted masks).
+* LayerDiffuse (native transparent generation).
+* CubismPartExtr and the see-through `heuristic_partseg` (depth and left/right splits).
+* PachiPakuGen (blink/lip-sync variants).
+* StretchyStudio and Anime2.5DRig (in-browser 2.5D puppets from layered PSDs; model for our preview).
+
+#### 11.1 Concepts
+
+| Concept | Description |
+|---|---|
+| **Part set** | A slicing session bound to one source image and stored as a project record (`parts`). Holds the taxonomy, parts, settings and the cached decomposition. |
+| **Taxonomy** | Ordered list of part kinds, with name, group (head/body/extra), default draw order, default colour, whether it is usually occluded, an LLM-ready description, and a parallax depth for the preview. Presets: **Live2D standard** (see-through V3 tags: back hair, front hair, headwear, face, irides, eyebrow, eyewhite, eyelash, eyewear, ears, earwear, nose, mouth, neck, neckwear, topwear, handwear, bottomwear, legwear, footwear, tail, wings, objects), **Live2D detailed** (adds L/R splits, upper/lower arm, side hair), **Simple** (hair, head, body, arms, legs, accessories), and **Custom**. |
+| **Part** | id, name, kind (taxonomy tag), side (L/R/centre), colour, draw order, visibility/lock, **visible mask** (pixels of the part that are visible in the source; masks are mutually exclusive), **extension mask** (area where the part may continue behind other parts; generated there), state (*Empty → Masked → Queued → Generating → Ready → Approved*, or *Failed*), result layer (RGBA, full canvas), result variants, prompt override, provenance (auto/manual/split/merge). |
+| **Decomposition cache** | Raw RGBA layers and depth returned by a see-through run, keyed by source image hash. Reused when the user re-applies masks or regenerates "from decomposition" without re-running the model. |
+
+#### 11.2 Workflow (four steps, shown as a stepper on the **Parts** page)
+
+1. **Source.**
+   * Pick an image from the library, the editor or a file.
+   * Optional one-click prep:
+     * Background removal (alpha drives everything later).
+     * Upscale to ≥ 1536 px on the long side.
+     * Trim margins.
+   * Choose a taxonomy preset.
+   * The page explains the Live2D-friendly input requirements and links to the **Live2D pose presets** (11.5) so the user can generate a better source first.
+2. **Masks.**
+   * **Auto-segment** fills masks for every taxonomy entry, or for the selected ones, using the chosen segmenter (11.3). The result shows instantly as a coloured overlay; parts that came back empty are flagged.
+   * Mask editing tools, all undoable:
+     * **Paint / erase** on the selected part. Exclusive by default: painting a part removes those pixels from every other part, so masks never overlap. Alt-drag temporarily allows overlap.
+     * **Lasso / polygon** assign; **magic wand** (colour similarity within the character alpha); **grow / shrink / smooth / fill holes**.
+     * **Add part**: pick a taxonomy kind or name a custom one, then paint or lasso.
+     * **Split part**:
+       * *by left/right* (centre line from the detected skeleton, or the mask's centre);
+       * *by connected components* (each island becomes a part);
+       * *by skeleton* (pixels assigned to the nearest bone: upper arm / forearm / hand / thigh / shin / foot, using the pose detector or the editable skeleton);
+       * *by cut line* (user draws a polyline that cuts the mask; each side becomes a part);
+       * *by brush* (paint the subset that should become a new part).
+     * **Merge parts**, **reassign kind**, **rename**, **duplicate**, **delete** (pixels return to "unassigned").
+     * **Unassigned** pseudo-part: shows character pixels not covered by any mask, so the user can see at a glance what is missing.
+     * **Extension mask** brush (hatched overlay): marks where a part continues behind others. Defaulted automatically: the part's own mask grown by an adaptive radius, intersected with the parts drawn in front of it (hair behind the face, neck under the chin, torso under the arms, irides under the eyelids). Editable per part.
+   * Part list (left panel):
+     * Tree grouped Head / Body / Extras, with colour chip, eye (solo/hide), lock, draw-order drag handle, state badge and pixel-coverage indicator.
+     * Multi-select supports bulk actions.
+     * Filter "needs attention" (empty, tiny, overlapping, not generated).
+3. **Generate.**
+   * Scope buttons: **Generate all**, **Generate selected**, **Generate this part** (in the part's context menu and on its card).
+   * Parts are queued as normal jobs (cancellable, retryable, one per part, honouring provider concurrency). Each job:
+     1. Isolates the part: visible pixels kept; the extension area is the inpaint mask; everything else becomes neutral or transparent.
+     2. Completes the hidden area with the chosen strategy (11.4).
+     3. Cuts out the result: alpha = visible ∪ (extension ∩ generated alpha), feathered edges, colour-matched to the source.
+     4. Stores the result layer and variants.
+   * Prompts per part are composed from the taxonomy description, the character sheet (Director) and an optional per-part override. An LLM can draft them all at once ("Describe parts").
+   * Review grid: one card per part with the result on a checkerboard, a before/after toggle, variant picker, *Approve*, *Regenerate*, *Edit mask* (jumps back to step 2 with the part selected) and *Open in editor*. Approval is optional; the stack preview updates live.
+4. **Preview & export.**
+   * **Live2D-style preview** (11.6) of the assembled stack.
+   * Export:
+     * **Layered PSD**: one layer per part in draw order, grouped Head/Body, named with the taxonomy/Cubism-friendly names, original canvas size.
+     * **PNG folder + `parts.json` manifest**: name, kind, draw order, bounds, depth.
+     * **Send to editor** as a layered document.
+     * **Generate expression variants** (eyes closed, mouth open A/I/U/E/O, brows): masked inpaint on the eye/mouth parts, exported as extra layers. This is the PachiPakuGen-style material Live2D needs for blink and lip-sync.
+
+The session saves automatically, so closing the page and coming back restores masks, results and
+the current step. Every step is skippable: an advanced user can paint masks manually and go
+straight to export ("cut only").
+
+#### 11.3 Segmenters (pluggable, chosen in the step-2 toolbar)
+
+| Segmenter | How | Notes |
+|---|---|---|
+| see-through via ComfyUI | Bundled workflow template (`see_through_decompose.json`) with `SeeThrough Load LayerDiff Model` → `SeeThrough Decompose` → per-layer outputs. Lumen downloads each RGBA layer; alpha → visible mask (after exclusivity resolution by depth); RGB → decomposition cache. | Best quality; needs the ComfyUI-See-through custom node and 8–16 GB VRAM. |
+| Lumen Part Server (sidecar) | Small documented HTTP protocol (`GET /v1/info`, `POST /v1/segment`, `POST /v1/complete`; base64 PNG in/out). A reference Python server wrapping see-through ships in `tools/partserver/`. | For users without ComfyUI; also lets other segmenters be plugged in. |
+| Grounding DINO + SAM via ComfyUI | Template with a text prompt binding; one run per selected part kind using the taxonomy's segmentation prompt. | Generic; good for accessories, weaker on fine facial parts. |
+| Gemini segmentation | Vision LLM returns labelled boxes plus mask PNGs per requested label. | Cloud fallback without a local GPU. |
+| Local heuristics | Character alpha + skeleton (pose detector) → coarse head/torso/arms/legs masks; colour clustering for hair. | Always available, instant; a starting point for manual editing. |
+
+Post-processing for all segmenters:
+* Resolve overlaps by draw order/depth.
+* Drop islands smaller than a threshold.
+* Fill pinholes.
+* Clip to the character alpha.
+* Map returned labels to the taxonomy.
+* Report unmatched labels as extra parts.
+
+#### 11.4 Completion strategies (chosen in step 3, per run)
+
+1. **Inpaint** (default; works with every inpaint-capable provider via the §3.6 region pipeline):
+   * Mask = extension minus visible.
+   * Context image = the isolated part over a neutral background.
+   * Prompt = part description.
+   * ControlNet/IP-Adapter references from the source where the provider supports them.
+2. **see-through layers**: use the cached decomposition layer(s) of the matching kind, clipped to the part's visible ∪ extension masks. This is how user-split masks (e.g. left/right arm) still benefit from the model.
+3. **LayerDiffuse via ComfyUI**: transparent generation conditioned on the part crop (template).
+4. **Cut only**: no generation, visible pixels only; instant and local.
+
+#### 11.5 Live2D pose presets
+
+Category **Live2D** in the pose library, used by the Director's `live2d` purpose profile.
+Requirements built into every preset:
+* Front-facing (or a slight 3/4 view).
+* Arms held away from the torso, hands open with fingers visible.
+* Legs slightly apart.
+* Neutral face, eyes open, mouth closed, hair kept off the face.
+
+Presets:
+* A-pose full body.
+* A-pose knees (for half-body models).
+* Bust-up VTuber (arms relaxed, slightly out).
+* Waist-up with hands visible.
+* Slight 3/4 left / right (yaw ±15°).
+* Arms raised for sleeve separation.
+* Seated front.
+* Turnaround (front/side/back).
+
+Matching prompt hints ("flat lighting, no motion blur, simple background") are attached to the
+profile.
+
+#### 11.6 Live2D-style preview
+
+* **Built-in puppet preview** (no external SDK). A GPU-free, QPainter-based 2.5D renderer over the part stack:
+  * Per-part depth (taxonomy defaults, overridden by see-through depth) drives **parallax** for head angle X/Y and body angle.
+  * **Mesh warp** (grid deformation) for hair sway and breathing.
+  * **Blink** and **mouth open** by swapping in or interpolating the expression-variant layers (or scaling the eyelid parts when no variants exist).
+  * **Auto idle** animation.
+  * **Mouse-follow** (look at cursor).
+  * Parameter sliders named like Cubism standard parameters (`ParamAngleX/Y/Z`, `ParamEyeLOpen`, `ParamMouthOpenY`, `ParamBreath`, `ParamHairFront`).
+  * Renders at display refresh on a timer only while visible.
+* **Cubism model preview** (optional, later): when the user points Settings to a local Cubism SDK for Native (proprietary licence; cannot be bundled), a plug-in loads `.model3.json` exported from Cubism Editor, so the rigged result can be previewed inside Lumen. Built only with `LUMEN_WITH_CUBISM`.
+
+#### 11.7 Implementation steps
+- [ ] Taxonomy + part-set model (`lumen_doc`): parts, masks (compressed), extension masks, results, record persistence, undo commands
+- [ ] Mask algorithms (`lumen_core`): connected components, left/right split, skeleton split, cut-line split, exclusivity resolution, island cleanup, adaptive extension masks, magic wand
+- [ ] Layered PSD writer (RLE, groups, names) and a minimal reader for round-trip tests
+- [ ] Segmenter framework (`lumen_ai`): see-through ComfyUI template, Grounding DINO + SAM template, Lumen Part Server protocol + reference Python server, Gemini segmentation, local heuristics
+- [ ] Part completion service: inpaint / see-through layers / LayerDiffuse / cut-only, per-part jobs, variants
+- [ ] Parts page: stepper, part list, mask overlay canvas tools, split/merge/add, generation review grid, export
+- [ ] Live2D pose presets + Director `live2d` profile wiring
+- [ ] Puppet preview widget (parallax, mesh warp, blink/mouth, idle, mouse-follow)
+- [ ] Expression variant generation (eyes closed, mouth shapes)
+- [ ] Optional Cubism SDK preview plug-in (`LUMEN_WITH_CUBISM`) — **AC**: a generated A-pose character is segmented, its arm mask split left/right and re-generated for one side only, exported as a layered PSD that opens in Photoshop/Krita/Cubism with correctly named, ordered parts; the preview animates it; the UI never stalls during segmentation or generation.
 
 ---
 
@@ -344,4 +498,6 @@ before ticking a milestone.
 | Provider API drift | isolated adapters, contract tests, provider-specific "extras" passthrough, ComfyUI templates as data files |
 | Memory pressure with large images | tiles, implicit sharing, bounded undo, thumbnail cache, lazy loading |
 | Local server unavailable / slow | health checks, clear status indicators, queue persistence, cancellation |
+| Part segmentation models are heavy (8–16 GB VRAM, Python) | out-of-process via ComfyUI / sidecar, cloud and heuristic fallbacks, every step editable by hand |
+| Live2D Cubism SDK licence | built-in puppet preview needs no SDK; Cubism plug-in optional, user-supplied SDK |
 | Missing optional Qt modules | CMake feature detection, graceful degradation (polling progress, PNG/JPEG only) |
