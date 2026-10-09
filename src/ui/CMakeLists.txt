@@ -32,6 +32,6 @@ add_library(lumen_ui STATIC
     parts/PartsPage.h parts/PartsPage.cpp
 )
 target_include_directories(lumen_ui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
-target_link_libraries(lumen_ui PUBLIC lumen_ai lumen_doc lumen_pose lumen_core
+target_link_libraries(lumen_ui PUBLIC lumen_ai lumen_live2d lumen_doc lumen_pose lumen_core
     Qt6::Widgets Qt6::Svg Qt6::OpenGL Qt6::OpenGLWidgets)
 lumen_configure_target(lumen_ui)
