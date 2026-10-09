@@ -83,6 +83,7 @@ private:
     // Masks.
     void autoSegment();
     void splitPart(int label, PartListPanel::Split mode);
+    void detectSkeleton();
     void selectTool(const QString &id);
 
     // Generation.

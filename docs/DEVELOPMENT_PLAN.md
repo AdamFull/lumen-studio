@@ -252,71 +252,71 @@ Each milestone ends with a buildable, tested, committed state. Acceptance criter
 before ticking a milestone.
 
 ### M0 — Foundations
-- [ ] Git repo, `.gitignore`, `.gitattributes`, README, this plan
-- [ ] CMake project, presets (`mingw-debug`, `mingw-release`), warnings, module libraries
-- [ ] Application skeleton: `QApplication`, organisation/app names, high-DPI, single main window
-- [ ] Theme engine: dark/light palettes, QSS, SVG icon set tinted to theme
-- [ ] Logging (categories, rotating file log, redaction), crash-safe log flush
-- [ ] Settings service, paths (AppData, cache, logs)
-- [ ] Test harness (Qt Test, CTest) — **AC**: `cmake --preset mingw-debug && ctest` green, app launches with themed empty window.
+- [x] Git repo, `.gitignore`, `.gitattributes`, README, this plan
+- [x] CMake project, presets (`mingw-debug`, `mingw-release`), warnings, module libraries
+- [x] Application skeleton: `QApplication`, organisation/app names, high-DPI, single main window
+- [x] Theme engine: dark/light palettes, QSS, SVG icon set tinted to theme
+- [x] Logging (categories, rotating file log, redaction), crash-safe log flush
+- [x] Settings service, paths (AppData, cache, logs)
+- [x] Test harness (Qt Test, CTest) — **AC**: `cmake --preset mingw-debug && ctest` green, app launches with themed empty window.
 
 ### M1 — Core infrastructure
-- [ ] Async utilities (`runAsync`, `then` on GUI thread, cancellation token)
-- [ ] Job & JobQueue with per-provider concurrency, cancel, retry
-- [ ] HTTP client: JSON helpers, timeouts, retry/back-off, multipart, SSE parser, error mapping
-- [ ] SecretStore (wincred) + fallback interface
-- [ ] Image ops: async decode/encode, base64, scaling, mask dilate/erode/feather, compositing
-- [ ] JSON-Schema-subset validator
-- [ ] Mock HTTP server for tests — **AC**: unit tests for SSE, multipart, retry, mask ops, schema validator.
+- [x] Async utilities (`runAsync`, `then` on GUI thread, cancellation token)
+- [x] Job & JobQueue with per-provider concurrency, cancel, retry
+- [x] HTTP client: JSON helpers, timeouts, retry/back-off, multipart, SSE parser, error mapping
+- [x] SecretStore (wincred) + fallback interface
+- [x] Image ops: async decode/encode, base64, scaling, mask dilate/erode/feather, compositing
+- [x] JSON-Schema-subset validator
+- [x] Mock HTTP server for tests — **AC**: unit tests for SSE, multipart, retry, mask ops, schema validator.
 
 ### M2 — Provider framework + first adapters
-- [ ] Interfaces, request/response model, capabilities, registry, settings schema
-- [ ] SD WebUI adapter (txt2img/img2img/inpaint/ControlNet/progress/interrupt/discovery/upscale)
-- [ ] OpenAI-compatible LLM adapter (streaming, vision, json_schema, tools, model list)
-- [ ] Providers settings dialog (auto-generated forms, test connection, refresh models)
-- [ ] Auto-detection of local servers on default ports — **AC**: contract tests against mock servers; manual test with real A1111 and llama.cpp.
+- [x] Interfaces, request/response model, capabilities, registry, settings schema
+- [x] SD WebUI adapter (txt2img/img2img/inpaint/ControlNet/progress/interrupt/discovery/upscale)
+- [x] OpenAI-compatible LLM adapter (streaming, vision, json_schema, tools, model list)
+- [x] Providers settings dialog (auto-generated forms, test connection, refresh models)
+- [x] Auto-detection of local servers on default ports — **AC**: contract tests against mock servers; manual test with real A1111 and llama.cpp.
 
 ### M3 — Canvas & editor core
-- [ ] Tiled raster layer, document, composite cache
-- [ ] GPU canvas view: zoom/pan/rotate, fit, checkerboard, pixel grid, overlays
-- [ ] Tools: move, brush, eraser, rect/ellipse/lasso selection, mask brush/eraser, eyedropper, fill, crop, transform
-- [ ] Layers panel (opacity, blend, visibility, lock, reorder, duplicate, merge)
-- [ ] Undo/redo with tile-delta commands, history panel
-- [ ] Open/import/export (PNG/JPEG/WebP), clipboard, drag & drop — **AC**: 60 fps brush on 4096² doc, undo memory bounded.
+- [x] Tiled raster layer, document, composite cache
+- [x] GPU canvas view: zoom/pan/rotate, fit, checkerboard, pixel grid, overlays
+- [ ] Tools: move, brush, eraser, rect/ellipse/lasso selection, mask brush/eraser, eyedropper, fill, crop ✔ — free transform pending
+- [x] Layers panel (opacity, blend, visibility, lock, reorder, duplicate, merge)
+- [x] Undo/redo with tile-delta commands, history panel
+- [x] Open/import/export (PNG/JPEG/WebP), clipboard, drag & drop — **AC**: 60 fps brush on 4096² doc, undo memory bounded.
 
 ### M4 — Generation workspace
-- [ ] Project store (SQLite) + asset library + thumbnails (async)
-- [ ] Generation panel: provider/model picker, prompt/negative, size presets, seed, steps, cfg, sampler, batch, references, controls — capability-driven
-- [ ] Queue panel with live previews, cancel/retry
-- [ ] Gallery: virtualised grid, filters, favourites, metadata inspector, "send to editor/use as reference/re-run"
-- [ ] PNG metadata (A1111 `parameters` chunk) read/write — **AC**: end-to-end txt2img with SD WebUI, UI never stalls.
+- [x] Project store (SQLite) + asset library + thumbnails (async)
+- [x] Generation panel: provider/model picker, prompt/negative, size presets, seed, steps, cfg, sampler, batch, references, controls — capability-driven
+- [x] Queue panel with live previews, cancel/retry
+- [x] Gallery: virtualised grid, filters, favourites, metadata inspector, "send to editor/use as reference/re-run"
+- [x] PNG metadata (A1111 `parameters` chunk) read/write — **AC**: end-to-end txt2img with SD WebUI, UI never stalls.
 
 ### M5 — AI editing
-- [ ] Inpaint pipeline (§3.6) for all image providers; outpaint; img2img variations
-- [ ] Instruction edit (edit-capable providers), upscale, background removal
+- [x] Inpaint pipeline (§3.6) for all image providers; outpaint; img2img variations
+- [x] Instruction edit (edit-capable providers), upscale, background removal
 - [ ] Contextual generative toolbar on the canvas (prompt field near selection) — **AC**: inpainting a 4096² image modifies only the masked area; result on new layer.
 
 ### M6 — Pose system
-- [ ] Skeleton model, OpenPose renderer, JSON import/export
-- [ ] Pose editor: drag/FK/IK, mirror, presets, multi-person, hands/face toggles, reference underlay
-- [ ] 3D FK generation rig + projection; preset library
-- [ ] Pose detection from image (provider-based; ONNX optional) — **AC**: pose map works as ControlNet OpenPose input in A1111 and ComfyUI.
+- [x] Skeleton model, OpenPose renderer, JSON import/export
+- [x] Pose editor: drag/FK/IK, mirror, presets, multi-person, hands/face toggles, reference underlay
+- [x] 3D FK generation rig + projection; preset library
+- [x] Pose detection from image (provider-based; ONNX optional) — **AC**: pose map works as ControlNet OpenPose input in A1111 and ComfyUI.
 
 ### M7 — Chat & Director
-- [ ] Chat panel: threads, streaming markdown, attachments (drag & drop, paste), image previews
-- [ ] Vision analyst → Character Sheet (editable, stored in library)
-- [ ] Director → Shot Plan (schema-validated, repair loop), purpose profiles (Live2D, sticker set, turnaround sheet, portrait set…)
-- [ ] Pose drafts board; per-shot approve/edit/regenerate pose
-- [ ] Batch generation with reference strategies; review board
+- [x] Chat panel: threads, streaming markdown, attachments (drag & drop, paste), image previews
+- [x] Vision analyst → Character Sheet (editable, stored in library)
+- [x] Director → Shot Plan (schema-validated, repair loop), purpose profiles (Live2D, sticker set, turnaround sheet, portrait set…)
+- [x] Pose drafts board; per-shot approve/edit/regenerate pose
+- [x] Batch generation with reference strategies; review board
 - [ ] Tool-calling assistant (plan, generate, edit, pose) — **AC**: reference scenario (§1.1) completes with SD WebUI + llama.cpp and with a cloud provider.
 
 ### M8 — Additional providers
-- [ ] ComfyUI adapter (workflow templates + bindings, uploads, WebSocket progress/previews, interrupt, object_info discovery) + bundled workflows
-- [ ] OpenAI Images, Google Gemini (LLM + image), Anthropic LLM, Stability AI, fal.ai — **AC**: contract tests for every adapter; manual smoke test per provider.
+- [x] ComfyUI adapter (workflow templates + bindings, uploads, WebSocket progress/previews, interrupt, object_info discovery) + bundled workflows
+- [ ] OpenAI Images, Google Gemini (LLM + image), Anthropic LLM, Stability AI ✔ — fal.ai pending — **AC**: contract tests for every adapter; manual smoke test per provider.
 
 ### M9 — Live2D & advanced
-- [ ] Layered PSD export (RLE), import of PSD layers
-- [ ] Expression/mouth/eye variant generation via masked inpainting
+- [ ] Layered PSD export (RLE) ✔ (M11); import of PSD layers into the editor pending (reader exists)
+- [x] Expression/mouth/eye variant generation via masked inpainting (M11)
 - [ ] Background removal batch (part separation moved to M11)
 - [ ] Character library reuse across projects; Critic loop
 
@@ -366,7 +366,7 @@ Other references:
 2. **Masks.**
    * **Auto-segment** fills masks for every taxonomy entry, or for the selected ones, using the chosen segmenter (11.3). The result shows instantly as a coloured overlay; parts that came back empty are flagged.
    * Mask editing tools, all undoable:
-     * **Paint / erase** on the selected part. Exclusive by default: painting a part removes those pixels from every other part, so masks never overlap. Alt-drag temporarily allows overlap.
+     * **Paint / erase** on the selected part. Masks are stored as one label map, so they never overlap: painting a part takes the pixels from other parts (locked parts are protected, and *Only inside the character* keeps strokes within the silhouette). Overlap between parts is expressed by the hidden-area (extension) masks.
      * **Lasso / polygon** assign; **magic wand** (colour similarity within the character alpha); **grow / shrink / smooth / fill holes**.
      * **Add part**: pick a taxonomy kind or name a custom one, then paint or lasso.
      * **Split part**:
@@ -411,7 +411,7 @@ straight to export ("cut only").
 | Lumen Part Server (sidecar) | Small documented HTTP protocol (`GET /v1/info`, `POST /v1/segment`, `POST /v1/complete`; base64 PNG in/out). A reference Python server wrapping see-through ships in `tools/partserver/`. | For users without ComfyUI; also lets other segmenters be plugged in. |
 | Grounding DINO + SAM via ComfyUI | Template with a text prompt binding; one run per selected part kind using the taxonomy's segmentation prompt. | Generic; good for accessories, weaker on fine facial parts. |
 | Gemini segmentation | Vision LLM returns labelled boxes plus mask PNGs per requested label. | Cloud fallback without a local GPU. |
-| Local heuristics | Character alpha + skeleton (pose detector) → coarse head/torso/arms/legs masks; colour clustering for hair. | Always available, instant; a starting point for manual editing. |
+| Skeleton (local) | Character silhouette + body skeleton (fitted A-pose, detected by a pose provider, or placed by hand) → head/torso/limb masks by nearest bone (sided). | Always available, instant; a starting point for manual editing. |
 
 Post-processing for all segmenters:
 * Resolve overlaps by draw order/depth.
@@ -429,7 +429,7 @@ Post-processing for all segmenters:
    * Prompt = part description.
    * ControlNet/IP-Adapter references from the source where the provider supports them.
 2. **see-through layers**: use the cached decomposition layer(s) of the matching kind, clipped to the part's visible ∪ extension masks. This is how user-split masks (e.g. left/right arm) still benefit from the model.
-3. **LayerDiffuse via ComfyUI**: transparent generation conditioned on the part crop (template).
+3. **LayerDiffuse via ComfyUI** (planned): transparent generation conditioned on the part crop (template).
 4. **Cut only**: no generation, visible pixels only; instant and local.
 
 #### 11.5 Live2D pose presets
@@ -467,15 +467,15 @@ profile.
 * **Cubism model preview** (optional, later): when the user points Settings to a local Cubism SDK for Native (proprietary licence; cannot be bundled), a plug-in loads `.model3.json` exported from Cubism Editor, so the rigged result can be previewed inside Lumen. Built only with `LUMEN_WITH_CUBISM`.
 
 #### 11.7 Implementation steps
-- [ ] Taxonomy + part-set model (`lumen_doc`): parts, masks (compressed), extension masks, results, record persistence, undo commands
-- [ ] Mask algorithms (`lumen_core`): connected components, left/right split, skeleton split, cut-line split, exclusivity resolution, island cleanup, adaptive extension masks, magic wand
-- [ ] Layered PSD writer (RLE, groups, names) and a minimal reader for round-trip tests
-- [ ] Segmenter framework (`lumen_ai`): see-through ComfyUI template, Grounding DINO + SAM template, Lumen Part Server protocol + reference Python server, Gemini segmentation, local heuristics
-- [ ] Part completion service: inpaint / see-through layers / LayerDiffuse / cut-only, per-part jobs, variants
-- [ ] Parts page: stepper, part list, mask overlay canvas tools, split/merge/add, generation review grid, export
-- [ ] Live2D pose presets + Director `live2d` profile wiring
-- [ ] Puppet preview widget (parallax, mesh warp, blink/mouth, idle, mouse-follow)
-- [ ] Expression variant generation (eyes closed, mouth shapes)
+- [x] Taxonomy + part-set model (`lumen_doc`): parts, masks (compressed), extension masks, results, record persistence, undo commands
+- [x] Mask algorithms (`lumen_core`): connected components, left/right split, skeleton split, cut-line split, exclusivity resolution, island cleanup, adaptive extension masks, magic wand
+- [x] Layered PSD writer (RLE, groups, names) and a minimal reader for round-trip tests
+- [x] Segmenter framework (`lumen_ai`): `Utility::SegmentParts`, ComfyUI segmentation templates (bundled Grounding DINO + SAM; see-through graphs via the generic template mechanism), Lumen Part Server protocol + reference Python server, Gemini segmentation, local skeleton segmenter
+- [x] Part completion service: inpaint / see-through layers / cut-only, per-part jobs, variants — LayerDiffuse template pending
+- [x] Parts page: stepper, part list, mask overlay canvas tools, split/merge/add, generation review grid, export
+- [x] Live2D pose presets + Director `live2d` profile wiring
+- [x] Puppet preview widget (parallax, mesh warp, blink/mouth, idle, mouse-follow)
+- [x] Expression variant generation (eyes closed, mouth shapes)
 - [ ] Optional Cubism SDK preview plug-in (`LUMEN_WITH_CUBISM`) — **AC**: a generated A-pose character is segmented, its arm mask split left/right and re-generated for one side only, exported as a layered PSD that opens in Photoshop/Krita/Cubism with correctly named, ordered parts; the preview animates it; the UI never stalls during segmentation or generation.
 
 ---

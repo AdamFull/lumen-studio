@@ -581,6 +581,15 @@ QWidget *PartsPage::buildMasksPanel()
     m_segmentHint->setWordWrap(true);
     v->addWidget(m_segmentHint);
 
+    auto *skeletonRow = new QHBoxLayout;
+    auto *placeSkeleton = new QPushButton(Icons::get(QStringLiteral("person")), tr("Edit skeleton"), w);
+    placeSkeleton->setToolTip(tr("Show the body skeleton used by the skeleton segmenter and skeleton splits (K)"));
+    auto *detect = new QPushButton(Icons::get(QStringLiteral("target")), tr("Detect skeleton"), w);
+    detect->setToolTip(tr("Detect the pose from the image with a pose-detection provider (DWPose/OpenPose)"));
+    skeletonRow->addWidget(placeSkeleton);
+    skeletonRow->addWidget(detect);
+    v->addLayout(skeletonRow);
+
     v->addSpacing(8);
     v->addWidget(sectionLabel(tr("Fix the masks")));
     auto *help = mutedLabel(tr("Select a part in the list, then:\n"
@@ -618,6 +627,8 @@ QWidget *PartsPage::buildMasksPanel()
     connect(m_segmenter, &QComboBox::currentIndexChanged, this, updateHint);
     connect(m_studio->providers(), &ai::ProviderRegistry::providersChanged, this, updateHint);
     connect(m_segment, &QPushButton::clicked, this, &PartsPage::autoSegment);
+    connect(placeSkeleton, &QPushButton::clicked, this, [this] { selectTool(QStringLiteral("part-skeleton")); });
+    connect(detect, &QPushButton::clicked, this, &PartsPage::detectSkeleton);
     connect(next, &QPushButton::clicked, this, [this] { setStep(GenerateStep); });
     return w;
 }
@@ -1249,6 +1260,50 @@ void PartsPage::autoSegment()
         if (j->state() == Job::State::Failed)
             self->m_studio->notify(j->errorString(), QStringLiteral("error"));
         self->m_segmentHint->setText(j->state() == Job::State::Succeeded ? j->result().toString() : j->errorString());
+    });
+}
+
+void PartsPage::detectSkeleton()
+{
+    if (!m_set || !m_set->hasSource())
+        return;
+    if (!m_studio->generation()->providerForUtility(ai::Utility::DetectPose)) {
+        m_studio->notify(tr("No provider can detect poses (SD WebUI with ControlNet, or ComfyUI with controlnet_aux). "
+                            "Place the skeleton by hand instead."), QStringLiteral("warning"));
+        selectTool(QStringLiteral("part-skeleton"));
+        return;
+    }
+    Job *job = m_studio->generation()->submitUtility(QString(), ai::Utility::DetectPose, img::flatten(m_set->source(), Qt::white), {},
+                                                     tr("Detect skeleton"), false);
+    QPointer<PartsPage> self(this);
+    const QSize size = m_set->size();
+    connect(job, &Job::finished, this, [self, size](Job *j) {
+        if (!self)
+            return;
+        if (j->state() != Job::State::Succeeded) {
+            if (j->state() == Job::State::Failed)
+                self->m_studio->notify(j->errorString(), QStringLiteral("error"));
+            return;
+        }
+        const ai::GenerationOutput out = ai::GenerationService::outputOf(j);
+        const auto pose = pose::Pose::fromOpenPoseJson(out.info.value(QStringLiteral("openpose")).toObject(), nullptr, size);
+        if (!pose || pose->people.isEmpty()) {
+            self->m_studio->notify(tr("The detector returned no keypoints. Place the skeleton by hand (K)."), QStringLiteral("warning"));
+            self->selectTool(QStringLiteral("part-skeleton"));
+            return;
+        }
+        // Keypoints come in the detector's canvas; map them to the source size.
+        pose::Pose scaled = *pose;
+        scaled.resizeCanvas(size, true);
+        // The largest detected person is the character.
+        pose::Person best = scaled.people.first();
+        for (const pose::Person &p : scaled.people) {
+            if (p.bounds().width() * p.bounds().height() > best.bounds().width() * best.bounds().height())
+                best = p;
+        }
+        self->m_context->setSkeleton(best);
+        self->selectTool(QStringLiteral("part-skeleton"));
+        self->m_studio->notify(tr("Skeleton detected - adjust the joints if needed."), QStringLiteral("success"));
     });
 }
 
