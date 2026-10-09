@@ -10,6 +10,7 @@ add_library(lumen_ai STATIC
     providers/GeminiProvider.h providers/GeminiProvider.cpp
     providers/OpenAiImageProvider.h providers/OpenAiImageProvider.cpp
     providers/StabilityProvider.h providers/StabilityProvider.cpp
+    providers/FalProvider.h providers/FalProvider.cpp
     providers/ComfyUiProvider.h providers/ComfyUiProvider.cpp
     providers/PartServerProvider.h providers/PartServerProvider.cpp
     ProviderCatalog.h ProviderCatalog.cpp

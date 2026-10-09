@@ -98,7 +98,7 @@ pose authoring and LLM-driven planning** in one responsive application, working 
 | **OpenAI Images** | `/v1/images/generations`, `/v1/images/edits` (multipart, multiple `image[]`, mask) | GPT-Image models: text-to-image, multi-reference edit, masked edit, transparent background |
 | **Google Gemini / Imagen** | `generateContent` (inline image parts), Imagen `predict` | multi-image reference editing, instruction edits |
 | **Stability AI** | REST v2beta `stable-image/*` (multipart) | generate (core/ultra/SD3.5), inpaint, outpaint, search-and-replace, control/structure, sketch, remove-background, upscale |
-| **fal.ai** | queue REST API | FLUX (pro/dev/Kontext), other hosted models; generic JSON mapping |
+| **fal.ai** | queue REST API (submit → poll `status_url` → `response_url`, `cancel_url`) | FLUX dev/schnell/pro/ultra text-to-image, FLUX image-to-image, FLUX Fill inpainting, FLUX Kontext edits, BiRefNet background removal, ESRGAN upscale; one configurable endpoint id per mode, `extras` merged into the input |
 
 #### LLM back-ends
 
@@ -312,7 +312,7 @@ before ticking a milestone.
 
 ### M8 — Additional providers
 - [x] ComfyUI adapter (workflow templates + bindings, uploads, WebSocket progress/previews, interrupt, object_info discovery) + bundled workflows
-- [ ] OpenAI Images, Google Gemini (LLM + image), Anthropic LLM, Stability AI ✔ — fal.ai pending — **AC**: contract tests for every adapter; manual smoke test per provider.
+- [x] OpenAI Images, Google Gemini (LLM + image), Anthropic LLM, Stability AI, fal.ai — **AC**: contract tests for every adapter; manual smoke test per provider.
 
 ### M9 — Live2D & advanced
 - [x] Layered PSD export (RLE) and import: editor documents (groups resolved, blend modes, opacity) and slicing sessions from layered PSDs

@@ -11,7 +11,7 @@ It covers:
 * character part slicing for Live2D.
 
 Local back-ends (Stable Diffusion WebUI / Forge, ComfyUI, llama.cpp, Ollama, LM Studio) and cloud
-APIs (OpenAI, Gemini, Anthropic, Stability AI, OpenRouter) both work.
+APIs (OpenAI, Gemini, Anthropic, Stability AI, fal.ai, OpenRouter) both work.
 
 See [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md) for the architecture, the technology stack and the roadmap.
 

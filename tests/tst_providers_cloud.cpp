@@ -2,6 +2,7 @@
 
 #include "ai/providers/AnthropicProvider.h"
 #include "ai/providers/ComfyUiProvider.h"
+#include "ai/providers/FalProvider.h"
 #include "ai/providers/GeminiProvider.h"
 #include "ai/providers/OpenAiImageProvider.h"
 #include "ai/providers/StabilityProvider.h"
@@ -42,6 +43,9 @@ private slots:
     void comfyStandardGraph();
     void comfyEndToEnd();
     void comfyTemplateBindings();
+    void falBuildCall();
+    void falQueueRoundTrip();
+    void falErrorsAndCancel();
 
 private:
     net::HttpClient m_http;
@@ -361,6 +365,173 @@ void TestProvidersCloud::comfyTemplateBindings()
     QCOMPARE(wf.value(QStringLiteral("4")).toObject().value(QStringLiteral("inputs")).toObject().value(QStringLiteral("seed")).toInt(), 42);
     QCOMPARE(wf.value(QStringLiteral("2")).toObject().value(QStringLiteral("inputs")).toObject().value(QStringLiteral("image")).toString(), QStringLiteral("lumen/a.png"));
     QVERIFY(!ComfyTemplate::fromJson(QJsonObject{{QStringLiteral("workflow"), QJsonObject{{QStringLiteral("1"), QJsonObject{{QStringLiteral("type"), 1}}}}}}, QStringLiteral("x")).has_value());
+}
+
+void TestProvidersCloud::falBuildCall()
+{
+    FalProvider p(FalProvider::describe(), QStringLiteral("f"), &m_http, nullptr);
+    p.configure({{QStringLiteral("api_key"), QStringLiteral("k")}});
+    ImageRequest r;
+    r.prompt = QStringLiteral("a fox");
+    r.size = QSize(1024, 768);
+    r.seed = 5;
+    r.batchCount = 2;
+    FalProvider::Call c = p.buildCall(r);
+    QCOMPARE(c.model, QStringLiteral("fal-ai/flux/dev"));
+    QCOMPARE(c.input.value(QStringLiteral("image_size")).toObject().value(QStringLiteral("height")).toInt(), 768);
+    QCOMPARE(c.input.value(QStringLiteral("num_images")).toInt(), 2);
+    QCOMPARE(c.input.value(QStringLiteral("seed")).toInt(), 5);
+    r.model = QStringLiteral("fal-ai/flux-pro/v1.1-ultra");
+    c = p.buildCall(r);
+    QCOMPARE(c.input.value(QStringLiteral("aspect_ratio")).toString(), QStringLiteral("4:3"));
+    QVERIFY(!c.input.contains(QStringLiteral("image_size")));
+
+    r.mode = GenMode::Inpaint;
+    r.initImage = solid(Qt::white, QSize(64, 48));
+    r.mask = img::createMask(QSize(64, 48), 255);
+    r.extras = {{QStringLiteral("safety_tolerance"), QStringLiteral("5")}};
+    c = p.buildCall(r);
+    QCOMPARE(c.model, QStringLiteral("fal-ai/flux-pro/v1/fill"));
+    QVERIFY(c.input.value(QStringLiteral("image_url")).toString().startsWith(QLatin1String("data:image/png;base64,")));
+    const QImage mask = img::fromBase64(c.input.value(QStringLiteral("mask_url")).toString().toLatin1());
+    QCOMPARE(mask.size(), QSize(64, 48));
+    QCOMPARE(qGray(mask.pixel(10, 10)), 255);
+    QCOMPARE(c.input.value(QStringLiteral("safety_tolerance")).toString(), QStringLiteral("5")); // extras last
+    r.mode = GenMode::Edit;
+    QCOMPARE(p.buildCall(r).model, QStringLiteral("fal-ai/flux-pro/kontext"));
+
+    QCOMPARE(FalProvider::imageUrls(QJsonObject{{QStringLiteral("images"), QJsonArray{QJsonObject{{QStringLiteral("url"), QStringLiteral("a")}},
+                                                                                     QJsonObject{{QStringLiteral("url"), QStringLiteral("b")}}}}}),
+             (QStringList{QStringLiteral("a"), QStringLiteral("b")}));
+    QCOMPARE(FalProvider::imageUrls(QJsonObject{{QStringLiteral("image"), QJsonObject{{QStringLiteral("url"), QStringLiteral("c")}}}}),
+             QStringList{QStringLiteral("c")});
+}
+
+void TestProvidersCloud::falQueueRoundTrip()
+{
+    MockHttpServer server;
+    const QString base = server.baseUrl().toString();
+    QJsonObject submitted;
+    QByteArray auth;
+    int polls = 0;
+    // Sub-path models are rooted at the app id; the provider must use the URLs from the submit response.
+    server.route("POST", QStringLiteral("/fal-ai/flux/dev"), [&](const MockRequest &req) {
+        submitted = req.json();
+        auth = req.headers.value("authorization");
+        return MockResponse::json({{QStringLiteral("request_id"), QStringLiteral("r1")},
+                                   {QStringLiteral("status_url"), base + QStringLiteral("/fal-ai/flux/requests/r1/status")},
+                                   {QStringLiteral("response_url"), base + QStringLiteral("/fal-ai/flux/requests/r1")},
+                                   {QStringLiteral("cancel_url"), base + QStringLiteral("/fal-ai/flux/requests/r1/cancel")}});
+    });
+    server.route("GET", QStringLiteral("/fal-ai/flux/requests/r1/status"), [&](const MockRequest &) {
+        ++polls;
+        if (polls == 1)
+            return MockResponse::json({{QStringLiteral("status"), QStringLiteral("IN_QUEUE")}, {QStringLiteral("queue_position"), 0}});
+        return MockResponse::json({{QStringLiteral("status"), QStringLiteral("COMPLETED")}});
+    });
+    server.route("GET", QStringLiteral("/fal-ai/flux/requests/r1"), [&](const MockRequest &) {
+        return MockResponse::json(
+            {{QStringLiteral("seed"), 42},
+             {QStringLiteral("images"), QJsonArray{QJsonObject{{QStringLiteral("url"), base + QStringLiteral("/files/one.png")}},
+                                                   QJsonObject{{QStringLiteral("url"), img::toDataUrl(solid(Qt::green))}}}}});
+    });
+    server.route("GET", QStringLiteral("/files/one.png"), [&](const MockRequest &) {
+        MockResponse r;
+        r.contentType = "image/png";
+        r.body = pngBytes(Qt::red);
+        return r;
+    });
+    FalProvider p(FalProvider::describe(), QStringLiteral("f"), &m_http, nullptr);
+    p.configure({{QStringLiteral("url"), base}, {QStringLiteral("api_key"), QStringLiteral("secret")}});
+    ImageRequest r;
+    r.prompt = QStringLiteral("p");
+    r.batchCount = 2;
+    ImageOperation *op = p.generate(r);
+    op->setAutoDelete(false);
+    QStringList statuses;
+    connect(op, &Operation::progress, this, [&](double, const QString &s) { statuses << s; });
+    QTRY_VERIFY_WITH_TIMEOUT(op->isFinished(), 10000);
+    QVERIFY2(op->state() == Operation::State::Succeeded, qPrintable(op->errorString()));
+    QCOMPARE(auth, QByteArray("Key secret"));
+    QCOMPARE(submitted.value(QStringLiteral("prompt")).toString(), QStringLiteral("p"));
+    QCOMPARE(op->result().images.size(), 2);
+    QCOMPARE(op->result().images[0].image.pixelColor(2, 2), QColor(Qt::red));
+    QCOMPARE(op->result().images[1].image.pixelColor(2, 2), QColor(Qt::green));
+    QCOMPARE(op->result().images[1].seed, 43);
+    QVERIFY(statuses.contains(QStringLiteral("Queued (position 1)")));
+    delete op;
+}
+
+void TestProvidersCloud::falErrorsAndCancel()
+{
+    MockHttpServer server;
+    const QString base = server.baseUrl().toString();
+    bool cancelled = false;
+    // No URLs in the submit response: the provider derives them from the model id.
+    server.route("POST", QStringLiteral("/fal-ai/flux-pro/v1/fill"), [&](const MockRequest &) {
+        return MockResponse::json({{QStringLiteral("request_id"), QStringLiteral("r2")}});
+    });
+    server.route("GET", QStringLiteral("/fal-ai/flux-pro/v1/fill/requests/r2/status"), [&](const MockRequest &) {
+        return MockResponse::json({{QStringLiteral("status"), QStringLiteral("COMPLETED")}, {QStringLiteral("error"), QStringLiteral("bad mask")}});
+    });
+    server.route("POST", QStringLiteral("/fal-ai/flux/dev"), [&](const MockRequest &) {
+        return MockResponse::json({{QStringLiteral("request_id"), QStringLiteral("r3")}});
+    });
+    server.route("GET", QStringLiteral("/fal-ai/flux/dev/requests/r3/status"), [&](const MockRequest &) {
+        return MockResponse::json({{QStringLiteral("status"), QStringLiteral("IN_PROGRESS")}});
+    });
+    server.route("PUT", QStringLiteral("/fal-ai/flux/dev/requests/r3/cancel"), [&](const MockRequest &) {
+        cancelled = true;
+        return MockResponse::json({{QStringLiteral("status"), QStringLiteral("CANCELLATION_REQUESTED")}}, 202);
+    });
+    FalProvider p(FalProvider::describe(), QStringLiteral("f"), &m_http, nullptr);
+    p.configure({{QStringLiteral("url"), base}, {QStringLiteral("api_key"), QStringLiteral("k")}});
+
+    ImageRequest inpaint;
+    inpaint.mode = GenMode::Inpaint;
+    inpaint.initImage = solid(Qt::white, QSize(32, 32));
+    inpaint.mask = img::createMask(QSize(32, 32), 255);
+    ImageOperation *op = p.generate(inpaint);
+    op->setAutoDelete(false);
+    QTRY_VERIFY_WITH_TIMEOUT(op->isFinished(), 10000);
+    QCOMPARE(op->state(), Operation::State::Failed);
+    QVERIFY(op->errorString().contains(QLatin1String("bad mask")));
+    delete op;
+
+    ImageRequest t2i;
+    t2i.prompt = QStringLiteral("p");
+    op = p.generate(t2i);
+    op->setAutoDelete(false);
+    QStringList statuses;
+    connect(op, &Operation::progress, this, [&](double, const QString &s) { statuses << s; });
+    QTRY_VERIFY_WITH_TIMEOUT(statuses.contains(QStringLiteral("Generating")), 10000);
+    op->cancel();
+    QCOMPARE(op->state(), Operation::State::Cancelled);
+    QTRY_VERIFY_WITH_TIMEOUT(cancelled, 5000);
+    delete op;
+
+    // Connection test: an unknown request id answers 404 when the key is valid, 401 when it is not.
+    server.route("GET", QStringLiteral("/fal-ai/flux/dev/requests/00000000-0000-0000-0000-000000000000/status"), [&](const MockRequest &req) {
+        const bool good = req.headers.value("authorization") == "Key k";
+        return MockResponse::json({{QStringLiteral("detail"), good ? QStringLiteral("Request not found") : QStringLiteral("Unauthorized")}},
+                                  good ? 404 : 401);
+    });
+    QFuture<QString> test = p.testConnection();
+    QTRY_VERIFY_WITH_TIMEOUT(test.isFinished(), 5000);
+    QCOMPARE(test.result(), QStringLiteral("Connected to fal.ai"));
+    FalProvider wrongKey(FalProvider::describe(), QStringLiteral("w"), &m_http, nullptr);
+    wrongKey.configure({{QStringLiteral("url"), base}, {QStringLiteral("api_key"), QStringLiteral("bad")}});
+    test = wrongKey.testConnection();
+    QTRY_VERIFY_WITH_TIMEOUT(test.isFinished(), 5000);
+    QVERIFY_THROWS_EXCEPTION(ProviderError, test.result());
+
+    // No key: fails without a request.
+    FalProvider noKey(FalProvider::describe(), QStringLiteral("n"), &m_http, nullptr);
+    op = noKey.generate(t2i);
+    op->setAutoDelete(false);
+    QTRY_VERIFY(op->isFinished());
+    QCOMPARE(op->state(), Operation::State::Failed);
+    delete op;
 }
 
 QTEST_MAIN(TestProvidersCloud)
