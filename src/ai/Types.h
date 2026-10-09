@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QImage>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QList>
 #include <QSize>
@@ -152,11 +153,17 @@ struct ChatMessage
     QList<ToolCall> toolCalls; // assistant messages
     QString toolCallId;        // tool result messages
     QString toolName;
+    // Provider-native assistant content (e.g. Anthropic content blocks incl. thinking) that must be
+    // echoed back unchanged on the next turn. Used only when talking to the same provider type.
+    QJsonArray providerContent;
+    QString providerType;
 
     static ChatMessage system(const QString &text);
     static ChatMessage user(const QString &text, const QList<QImage> &images = {});
     static ChatMessage assistant(const QString &text);
     static ChatMessage toolResult(const QString &callId, const QString &name, const QString &content);
+    // Assistant message reproducing a provider result (text, tool calls, native content).
+    static ChatMessage fromResult(const struct ChatResult &result);
 };
 
 struct ToolDefinition
@@ -181,6 +188,8 @@ struct ChatRequest
 struct ChatResult
 {
     QString text;
+    QJsonArray providerContent; // see ChatMessage::providerContent
+    QString providerType;
     QString reasoning;
     QList<ToolCall> toolCalls;
     QString finishReason;

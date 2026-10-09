@@ -147,4 +147,15 @@ ChatMessage ChatMessage::toolResult(const QString &callId, const QString &name, 
     return m;
 }
 
+ChatMessage ChatMessage::fromResult(const ChatResult &result)
+{
+    ChatMessage m;
+    m.role = ChatRole::Assistant;
+    m.text = result.text;
+    m.toolCalls = result.toolCalls;
+    m.providerContent = result.providerContent;
+    m.providerType = result.providerType;
+    return m;
+}
+
 } // namespace lumen::ai
