@@ -27,6 +27,7 @@ EditorState::EditorState(QObject *parent)
     m_maskHardness = s.value(key("maskHardness"), m_maskHardness).toDouble();
     m_tolerance = s.value(key("tolerance"), m_tolerance).toInt();
     m_sampleMerged = s.value(key("sampleMerged"), m_sampleMerged).toBool();
+    m_contextBar = s.value(key("contextBar"), m_contextBar).toBool();
 }
 
 void EditorState::persist()
@@ -44,6 +45,7 @@ void EditorState::persist()
     s.setValue(key("maskHardness"), m_maskHardness);
     s.setValue(key("tolerance"), m_tolerance);
     s.setValue(key("sampleMerged"), m_sampleMerged);
+    s.setValue(key("contextBar"), m_contextBar);
     emit changed();
 }
 
@@ -93,6 +95,7 @@ LUMEN_SETTER(setFillTolerance, m_tolerance)
 LUMEN_SETTER(setSampleMerged, m_sampleMerged)
 LUMEN_SETTER(setShowSelectionOverlay, m_overlay)
 LUMEN_SETTER(setShowPoseOverlay, m_poseOverlay)
+LUMEN_SETTER(setShowContextBar, m_contextBar)
 
 #undef LUMEN_SETTER
 

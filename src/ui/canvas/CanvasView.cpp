@@ -175,6 +175,7 @@ void CanvasView::setDocument(doc::Document *doc)
         rebuildSelectionOverlay(doc->bounds());
         QTimer::singleShot(0, this, &CanvasView::fitToView);
     }
+    emit documentChanged(doc);
     updateAll();
 }
 
@@ -187,7 +188,10 @@ void CanvasView::setTool(Tool *tool)
         m_tool->disconnect(this);
     }
     m_tool = tool;
-    m_toolActive = false;
+    if (m_toolActive) {
+        m_toolActive = false;
+        emit interactionChanged(false);
+    }
     if (m_tool) {
         m_tool->activated(this);
         connect(m_tool, &Tool::overlayChanged, this, &CanvasView::updateAll);
@@ -231,6 +235,7 @@ void CanvasView::setZoom(double zoom, const QPointF &anchor)
     m_pan = anchor - docAnchor * m_zoom;
     clampPan();
     emit zoomChanged(m_zoom);
+    emit viewChanged();
     updateAll();
 }
 
@@ -257,6 +262,7 @@ void CanvasView::fitToView()
     m_zoom = std::clamp(std::min(avail.width() / s.width(), avail.height() / s.height()), kMinZoom, kMaxZoom);
     m_pan = QPointF((m_surface->width() - s.width() * m_zoom) / 2.0, (m_surface->height() - s.height() * m_zoom) / 2.0);
     emit zoomChanged(m_zoom);
+    emit viewChanged();
     updateAll();
 }
 
@@ -269,6 +275,7 @@ void CanvasView::panBy(const QPointF &delta)
 {
     m_pan += delta;
     clampPan();
+    emit viewChanged();
     updateAll();
 }
 
@@ -298,6 +305,7 @@ void CanvasView::resizeEvent(QResizeEvent *e)
     QWidget::resizeEvent(e);
     if (m_fitPending)
         QTimer::singleShot(0, this, &CanvasView::fitToView);
+    emit viewChanged();
 }
 
 void CanvasView::showEvent(QShowEvent *e)
@@ -537,6 +545,7 @@ void CanvasView::dispatch(QEvent::Type type, const ToolEvent &ev)
     case QEvent::MouseButtonPress:
     case QEvent::TabletPress:
         m_toolActive = true;
+        emit interactionChanged(true);
         m_tool->press(this, ev);
         break;
     case QEvent::MouseMove:
@@ -551,6 +560,7 @@ void CanvasView::dispatch(QEvent::Type type, const ToolEvent &ev)
         if (m_toolActive) {
             m_toolActive = false;
             m_tool->release(this, ev);
+            emit interactionChanged(false);
         }
         break;
     default:

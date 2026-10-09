@@ -69,6 +69,11 @@ signals:
     void zoomChanged(double zoom);
     void cursorMoved(const QPointF &docPos);
     void colorPicked(const QColor &color);
+    void documentChanged(doc::Document *doc);
+    // Zoom, pan or size changed (document-to-widget mapping).
+    void viewChanged();
+    // A tool gesture (mouse/pen pressed) started or ended.
+    void interactionChanged(bool active);
 
 protected:
     void resizeEvent(QResizeEvent *e) override;

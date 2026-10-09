@@ -205,6 +205,18 @@ void AiPanel::setMode(Mode mode)
     updateUi();
 }
 
+void AiPanel::runFromCanvas(Mode mode, const QString &prompt)
+{
+    setMode(mode);
+    m_prompt->setPlainText(prompt);
+    run();
+}
+
+QString AiPanel::prompt() const
+{
+    return m_prompt->text();
+}
+
 void AiPanel::updateUi()
 {
     const bool prompt = m_mode == Mode::Inpaint || m_mode == Mode::Variation || m_mode == Mode::Edit || m_mode == Mode::Expand;
@@ -331,7 +343,9 @@ void AiPanel::trackJob(Job *job, std::function<void(doc::Document *, const ai::G
     connect(card, &JobCard::dismissed, card, &QObject::deleteLater);
     QPointer<doc::Document> doc = m_doc;
     QPointer<JobCard> cardGuard(card);
+    emit runningJobsChanged(++m_running);
     connect(job, &Job::finished, this, [this, doc, apply, cardGuard](Job *j) {
+        emit runningJobsChanged(--m_running);
         if (j->state() == Job::State::Succeeded && doc)
             apply(doc, ai::GenerationService::outputOf(j));
         else if (j->state() == Job::State::Failed)

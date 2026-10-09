@@ -7,6 +7,8 @@
 #include "ui/Icons.h"
 #include "ui/PageFactory.h"
 #include "ui/Theme.h"
+#include "ui/canvas/ContextBar.h"
+#include "ui/canvas/EditorState.h"
 #include "ui/dialogs/SettingsDialog.h"
 #include "ui/pages/EditorPage.h"
 #include "ui/widgets/Controls.h"
@@ -225,6 +227,15 @@ void MainWindow::buildMenus()
     view->addAction(Icons::get(QStringLiteral("queue")), tr("Job queue"), QKeySequence(QStringLiteral("Ctrl+Shift+Q")), this, [this] {
         m_queueButton->setChecked(!m_queueButton->isChecked());
         toggleQueue();
+    });
+    QAction *contextBar = view->addAction(Icons::get(QStringLiteral("sparkles")), tr("Generative toolbar on the canvas"));
+    contextBar->setCheckable(true);
+    contextBar->setChecked(m_editor && m_editor->editorState()->showContextBar());
+    connect(contextBar, &QAction::toggled, this, [this](bool on) {
+        if (!m_editor)
+            return;
+        m_editor->editorState()->setShowContextBar(on);
+        m_editor->contextBar()->setEnabledByUser(on);
     });
     view->addAction(Icons::get(Theme::instance().isDark() ? QStringLiteral("sun") : QStringLiteral("moon")), tr("Toggle light/dark theme"), this, [this] {
         const QString next = Theme::instance().isDark() ? QStringLiteral("light") : QStringLiteral("dark");

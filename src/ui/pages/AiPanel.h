@@ -34,6 +34,13 @@ public:
     explicit AiPanel(Studio *studio, QWidget *parent = nullptr);
     void setDocument(doc::Document *doc);
     void setMode(Mode mode);
+    // Runs an action with this prompt (the contextual canvas toolbar); the panel's other options apply.
+    void runFromCanvas(Mode mode, const QString &prompt);
+    QString prompt() const;
+    int runningJobs() const { return m_running; }
+
+signals:
+    void runningJobsChanged(int count);
 
 private:
     void run();
@@ -68,6 +75,7 @@ private:
     QPushButton *m_run;
     QVBoxLayout *m_jobs;
     QLabel *m_capsWarning;
+    int m_running = 0;
 };
 
 } // namespace lumen::ui

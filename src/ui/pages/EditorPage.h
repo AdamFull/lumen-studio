@@ -23,6 +23,7 @@ class EditorState;
 class LayersPanel;
 class Studio;
 class Tool;
+class ContextBar;
 
 // Layered image editor with AI-assisted editing.
 class EditorPage : public QWidget
@@ -32,6 +33,8 @@ public:
     explicit EditorPage(Studio *studio, QWidget *parent = nullptr);
 
     CanvasView *canvas() const { return m_canvas; }
+    ContextBar *contextBar() const { return m_contextBar; }
+    EditorState *editorState() const { return m_state; }
     void selectTool(const QString &id);
 
     // Actions also exposed through the main window menus.
@@ -55,6 +58,7 @@ private:
     Studio *m_studio;
     EditorState *m_state;
     CanvasView *m_canvas;
+    ContextBar *m_contextBar;
     QTabBar *m_tabs;
     QHBoxLayout *m_optionsHost;
     QWidget *m_options = nullptr;

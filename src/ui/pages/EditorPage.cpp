@@ -9,6 +9,7 @@
 #include "ui/Studio.h"
 #include "ui/Theme.h"
 #include "ui/canvas/CanvasView.h"
+#include "ui/canvas/ContextBar.h"
 #include "ui/canvas/EditorState.h"
 #include "ui/canvas/Tools.h"
 #include "ui/canvas/TransformTool.h"
@@ -208,6 +209,17 @@ EditorPage::EditorPage(Studio *studio, QWidget *parent)
         if (m_doc)
             m_doc->undoStack()->redo();
     });
+    // Contextual generative toolbar next to the selection.
+    m_contextBar = new ContextBar(m_canvas);
+    m_contextBar->setEnabledByUser(m_state->showContextBar());
+    connect(m_contextBar, &ContextBar::generateRequested, this, [this](const QString &prompt) {
+        m_ai->runFromCanvas(AiPanel::Mode::Inpaint, prompt);
+    });
+    connect(m_contextBar, &ContextBar::removeRequested, this, [this] {
+        m_ai->runFromCanvas(AiPanel::Mode::Inpaint, tr("empty background, seamless continuation of the surroundings"));
+    });
+    connect(m_contextBar, &ContextBar::moreRequested, this, [this] { m_side->setCurrentWidget(m_ai); });
+    connect(m_ai, &AiPanel::runningJobsChanged, m_contextBar, &ContextBar::setRunning);
     connect(zoomIn, &QToolButton::clicked, m_canvas, &CanvasView::zoomIn);
     connect(zoomOut, &QToolButton::clicked, m_canvas, &CanvasView::zoomOut);
     connect(fit, &QToolButton::clicked, m_canvas, &CanvasView::fitToView);

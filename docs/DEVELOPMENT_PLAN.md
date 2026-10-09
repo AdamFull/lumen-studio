@@ -294,7 +294,7 @@ before ticking a milestone.
 ### M5 — AI editing
 - [x] Inpaint pipeline (§3.6) for all image providers; outpaint; img2img variations
 - [x] Instruction edit (edit-capable providers), upscale, background removal
-- [ ] Contextual generative toolbar on the canvas (prompt field near selection) — **AC**: inpainting a 4096² image modifies only the masked area; result on new layer.
+- [x] Contextual generative toolbar on the canvas (prompt field near selection: Generate, Remove, more options; hidden while drawing; View menu toggle) — **AC**: inpainting a 4096² image modifies only the masked area; result on new layer.
 
 ### M6 — Pose system
 - [x] Skeleton model, OpenPose renderer, JSON import/export

@@ -1,10 +1,13 @@
 #include "core/ImageOps.h"
 #include "doc/Document.h"
 #include "ui/canvas/CanvasView.h"
+#include "ui/canvas/ContextBar.h"
 #include "ui/canvas/EditorState.h"
 #include "ui/canvas/TransformTool.h"
 
+#include <QLineEdit>
 #include <QPainter>
+#include <QToolButton>
 #include <QtTest>
 
 using namespace lumen;
@@ -40,6 +43,7 @@ private slots:
     void transformSelectionOnly();
     void transformRevertAndResample();
     void transformLockedLayer();
+    void contextBarFollowsSelection();
 
 private:
     ToolEvent at(double x, double y, Qt::KeyboardModifiers mods = Qt::NoModifier) const
@@ -220,6 +224,53 @@ void TestCanvas::transformLockedLayer()
     drag(*m_tool, QPointF(60, 50), QPointF(100, 90));
     QCOMPARE(messages.size(), 1);
     QCOMPARE(m_doc->activeLayer()->image, before);
+}
+
+void TestCanvas::contextBarFollowsSelection()
+{
+    m_view->resize(800, 600);
+    m_view->show();
+    QVERIFY(QTest::qWaitForWindowExposed(m_view));
+    ContextBar bar(m_view);
+    QTest::qWait(100);
+    QVERIFY(!bar.isVisible()); // no selection
+    QImage sel = img::createMask(m_doc->size());
+    QPainter(&sel).fillRect(QRect(40, 40, 40, 30), Qt::white);
+    m_doc->applySelection(sel, QStringLiteral("Select"));
+    QTRY_VERIFY(bar.isVisible());
+    QCOMPARE(bar.anchorRect(), QRect(40, 40, 40, 30));
+    const QRectF selRect = m_view->mapFromDoc(QRectF(40, 40, 40, 30));
+    QVERIFY(bar.geometry().top() >= selRect.bottom()); // below the selection
+    QVERIFY(m_view->rect().contains(bar.geometry()));
+
+    // Enter in the prompt field asks for a generation with the prompt.
+    QSignalSpy generate(&bar, &ContextBar::generateRequested);
+    bar.setPrompt(QStringLiteral("a red hat"));
+    auto *edit = bar.findChild<QLineEdit *>();
+    QVERIFY(edit);
+    QTest::keyClick(edit, Qt::Key_Return);
+    QCOMPARE(generate.size(), 1);
+    QCOMPARE(generate.first().first().toString(), QStringLiteral("a red hat"));
+
+    // Hidden while drawing, back afterwards; hidden when the user disables it.
+    emit m_view->interactionChanged(true);
+    QVERIFY(!bar.isVisible());
+    emit m_view->interactionChanged(false);
+    QTRY_VERIFY(bar.isVisible());
+    bar.setEnabledByUser(false);
+    QTRY_VERIFY(!bar.isVisible());
+    bar.setEnabledByUser(true);
+    QTRY_VERIFY(bar.isVisible());
+    // The close button hides it until the selection changes.
+    auto *close = bar.findChild<QToolButton *>(QStringLiteral("ContextBarClose"));
+    QVERIFY(close);
+    close->click();
+    QVERIFY(!bar.isVisible());
+    m_doc->clearSelection();
+    QTest::qWait(100);
+    QVERIFY(!bar.isVisible());
+    m_doc->applySelection(sel, QStringLiteral("Select"));
+    QTRY_VERIFY(bar.isVisible());
 }
 
 QTEST_MAIN(TestCanvas)
