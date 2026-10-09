@@ -1,0 +1,20 @@
+{
+  "name": "Part segmentation (Grounding DINO + SAM)",
+  "description": "Text-prompted part masks for character slicing. Requires the comfyui_segment_anything custom nodes (storyicon) with the GroundingDINO SwinT and SAM ViT-H models. Lumen runs it once per requested part with the part's segmentation prompt.",
+  "modes": ["segment_parts"],
+  "output_kind": "mask",
+  "outputs": {"6": "mask"},
+  "bindings": {
+    "init_image": {"node": "1", "input": "image"},
+    "prompt": {"node": "4", "input": "prompt"}
+  },
+  "workflow": {
+    "1": {"class_type": "LoadImage", "inputs": {"image": "input.png"}, "_meta": {"title": "Character"}},
+    "2": {"class_type": "SAMModelLoader (segment anything)", "inputs": {"model_name": "sam_vit_h (2.56GB)"}},
+    "3": {"class_type": "GroundingDinoModelLoader (segment anything)", "inputs": {"model_name": "GroundingDINO_SwinT_OGC (694MB)"}},
+    "4": {"class_type": "GroundingDinoSAMSegment (segment anything)",
+          "inputs": {"sam_model": ["2", 0], "grounding_dino_model": ["3", 0], "image": ["1", 0], "prompt": "hair", "threshold": 0.3}},
+    "5": {"class_type": "MaskToImage", "inputs": {"mask": ["4", 1]}},
+    "6": {"class_type": "PreviewImage", "inputs": {"images": ["5", 0]}, "_meta": {"title": "Part mask"}}
+  }
+}

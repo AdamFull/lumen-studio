@@ -3,6 +3,7 @@
 #include "ai/PartPipeline.h"
 #include "ai/PartService.h"
 #include "ai/ProviderCatalog.h"
+#include "ai/providers/ComfyUiProvider.h"
 #include "ai/providers/GeminiProvider.h"
 #include "ai/providers/PartServerProvider.h"
 #include "core/ImageOps.h"
@@ -86,6 +87,7 @@ private slots:
     void geminiSegmentation();
     void endToEnd();
     void cutOutsTileWithoutGaps();
+    void comfySegmentationTemplate();
 
 private:
     net::HttpClient m_http;
@@ -449,6 +451,74 @@ void TestSlicing::cutOutsTileWithoutGaps()
         for (int x = 0; x < source.width(); ++x)
             mismatches += assembled.pixel(x, y) != source.pixel(x, y);
     QCOMPARE(mismatches, 0);
+}
+
+void TestSlicing::comfySegmentationTemplate()
+{
+    // Per-part template: one ComfyUI run per requested part, empty masks are dropped.
+    QDir().mkpath(ComfyUiProvider::workflowDirectory());
+    const QString tplPath = ComfyUiProvider::workflowDirectory() + QStringLiteral("/test_segment.json");
+    {
+        QFile f(tplPath);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write(R"({"name": "seg", "modes": ["segment_parts"], "output_kind": "mask", "outputs": {"6": "mask"},
+                    "bindings": {"init_image": {"node": "1", "input": "image"}, "prompt": {"node": "4", "input": "prompt"}},
+                    "workflow": {"1": {"class_type": "LoadImage", "inputs": {"image": "x.png"}},
+                                 "4": {"class_type": "Segment", "inputs": {"image": ["1", 0], "prompt": "p"}},
+                                 "6": {"class_type": "PreviewImage", "inputs": {"images": ["4", 0]}}}})");
+    }
+    MockHttpServer server;
+    QStringList prompts;
+    server.route("POST", QStringLiteral("/upload/image"), [](const MockRequest &) {
+        return MockResponse::json({{QStringLiteral("name"), QStringLiteral("in.png")}, {QStringLiteral("subfolder"), QString()}, {QStringLiteral("type"), QStringLiteral("input")}});
+    });
+    server.route("POST", QStringLiteral("/prompt"), [&](const MockRequest &req) {
+        prompts << req.json().value(QStringLiteral("prompt")).toObject().value(QStringLiteral("4")).toObject()
+                       .value(QStringLiteral("inputs")).toObject().value(QStringLiteral("prompt")).toString();
+        return MockResponse::json({{QStringLiteral("prompt_id"), QStringLiteral("p%1").arg(prompts.size())}});
+    });
+    for (int i = 1; i <= 2; ++i) {
+        server.route("GET", QStringLiteral("/history/p%1").arg(i), [i](const MockRequest &) {
+            return MockResponse::json({{QStringLiteral("p%1").arg(i), QJsonObject{
+                {QStringLiteral("status"), QJsonObject{{QStringLiteral("status_str"), QStringLiteral("success")}}},
+                {QStringLiteral("outputs"), QJsonObject{{QStringLiteral("6"), QJsonObject{{QStringLiteral("images"), QJsonArray{
+                    QJsonObject{{QStringLiteral("filename"), QStringLiteral("m%1.png").arg(i)}, {QStringLiteral("subfolder"), QString()},
+                                {QStringLiteral("type"), QStringLiteral("temp")}}}}}}}}}}});
+        });
+    }
+    server.route("GET", QStringLiteral("/view"), [](const MockRequest &req) {
+        QImage m(40, 60, QImage::Format_RGB32);
+        m.fill(Qt::black);
+        if (req.query.queryItemValue(QStringLiteral("filename")) == QLatin1String("m1.png")) {
+            QPainter p(&m);
+            p.fillRect(QRect(0, 0, 40, 30), Qt::white);
+        }
+        MockResponse r;
+        r.contentType = "image/png";
+        r.body = img::encode(m);
+        return r;
+    });
+    ComfyUiProvider provider(ComfyUiProvider::describe(), QStringLiteral("c"), &m_http, nullptr);
+    provider.configure({{QStringLiteral("url"), server.baseUrl().toString()}, {QStringLiteral("segment_workflow"), QStringLiteral("test_segment")}});
+    QVERIFY(provider.supportsUtility(Utility::SegmentParts));
+    QImage source(80, 120, QImage::Format_ARGB32);
+    source.fill(Qt::gray);
+    const QJsonObject params{{QStringLiteral("parts"), QJsonArray{QJsonObject{{QStringLiteral("tag"), QStringLiteral("front hair")}, {QStringLiteral("prompt"), QStringLiteral("bangs")}},
+                                                                  QJsonObject{{QStringLiteral("tag"), QStringLiteral("tail")}}}}};
+    ImageOperation *op = provider.runUtility(Utility::SegmentParts, source, params);
+    op->setAutoDelete(false);
+    QTRY_VERIFY_WITH_TIMEOUT(op->isFinished(), 15000);
+    QFile::remove(tplPath);
+    QVERIFY2(op->state() == Operation::State::Succeeded, qPrintable(op->errorString()));
+    QCOMPARE(prompts, (QStringList{QStringLiteral("bangs"), QStringLiteral("tail")}));
+    QCOMPARE(op->result().images.size(), 1); // the empty "tail" mask is dropped
+    const GeneratedImage &g = op->result().images.first();
+    QCOMPARE(g.info.value(QStringLiteral("label")).toString(), QStringLiteral("front hair"));
+    QCOMPARE(g.info.value(QStringLiteral("kind")).toString(), QStringLiteral("mask"));
+    QCOMPARE(g.image.size(), source.size()); // scaled to the source canvas
+    QCOMPARE(qGray(g.image.pixel(40, 20)), 255);
+    QCOMPARE(qGray(g.image.pixel(40, 100)), 0);
+    delete op;
 }
 
 QTEST_MAIN(TestSlicing)
