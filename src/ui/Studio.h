@@ -5,6 +5,7 @@
 #include "ai/PartService.h"
 #include "ai/ProviderRegistry.h"
 #include "core/JobQueue.h"
+#include "doc/CharacterLibrary.h"
 #include "doc/Document.h"
 #include "doc/Project.h"
 #include "net/HttpClient.h"
@@ -35,6 +36,8 @@ public:
     ai::Director *director() { return &m_director; }
     ai::PartService *parts() { return &m_parts; }
     doc::Project *project() { return m_project; }
+    // Characters shared by all projects.
+    doc::CharacterLibrary *characters() { return &m_characters; }
 
     // ---- project lifecycle --------------------------------------------------------------------
     void openProject(const QString &path);
@@ -111,6 +114,7 @@ private:
     ai::Director m_director;
     ai::PartService m_parts;
     QPointer<doc::Project> m_project;
+    doc::CharacterLibrary m_characters{doc::CharacterLibrary::defaultDirectory()};
     QList<doc::Document *> m_documents;
     QPointer<doc::Document> m_active;
     QTimer m_autosave;

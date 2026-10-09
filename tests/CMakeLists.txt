@@ -19,6 +19,6 @@ lumen_add_test(tst_providers_cloud SOURCES tst_providers_cloud.cpp MockHttpServe
 lumen_add_test(tst_services SOURCES tst_services.cpp MockHttpServer.h LIBS lumen_ai)
 lumen_add_test(tst_slicing SOURCES tst_slicing.cpp MockHttpServer.h LIBS lumen_ai)
 lumen_add_test(tst_perf SOURCES tst_perf.cpp LIBS lumen_ui)
-lumen_add_test(tst_canvas SOURCES tst_canvas.cpp LIBS lumen_ui)
+lumen_add_test(tst_canvas SOURCES tst_canvas.cpp MockHttpServer.h LIBS lumen_ui)
 lumen_add_test(tst_parts_ui SOURCES tst_parts_ui.cpp LIBS lumen_ui)
 lumen_add_test(tst_live2d SOURCES tst_live2d.cpp LIBS lumen_live2d)

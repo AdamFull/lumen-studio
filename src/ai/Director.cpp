@@ -158,6 +158,100 @@ QJsonObject Director::shotPlanSchema(int maxShots)
     return object(QJsonObject{{QStringLiteral("title"), str()}, {QStringLiteral("summary"), str()}, {QStringLiteral("shots"), shots}});
 }
 
+QJsonObject Director::critiqueSchema()
+{
+    auto integer = [](const char *desc) {
+        return QJsonObject{{QStringLiteral("type"), QStringLiteral("integer")}, {QStringLiteral("minimum"), 0},
+                           {QStringLiteral("maximum"), 10}, {QStringLiteral("description"), QLatin1String(desc)}};
+    };
+    auto string = [](const char *desc) {
+        return QJsonObject{{QStringLiteral("type"), QStringLiteral("string")}, {QStringLiteral("description"), QLatin1String(desc)}};
+    };
+    const QJsonObject properties{
+        {QStringLiteral("overall"), integer("overall quality and fitness for the shot's purpose, 0-10")},
+        {QStringLiteral("identity"), integer("how well the character matches the references and the sheet (face, hair, colors, outfit), 0-10")},
+        {QStringLiteral("pose"), integer("how well pose, framing and camera match the planned shot, 0-10")},
+        {QStringLiteral("issues"), QJsonObject{{QStringLiteral("type"), QStringLiteral("array")},
+                                               {QStringLiteral("items"), QJsonObject{{QStringLiteral("type"), QStringLiteral("string")}}},
+                                               {QStringLiteral("description"), QStringLiteral("concrete problems, most important first")}}},
+        {QStringLiteral("revised_prompt"), string("complete improved prompt for a retry; keep the prompt's style and fix the issues")},
+        {QStringLiteral("negative_additions"), string("comma-separated terms to add to the negative prompt, or empty")},
+    };
+    QJsonArray required;
+    for (auto it = properties.begin(); it != properties.end(); ++it)
+        required.append(it.key());
+    return QJsonObject{{QStringLiteral("type"), QStringLiteral("object")},
+                       {QStringLiteral("properties"), properties},
+                       {QStringLiteral("required"), required},
+                       {QStringLiteral("additionalProperties"), false}};
+}
+
+int Director::critiqueScore(const QJsonObject &c)
+{
+    const int overall = c.value(QStringLiteral("overall")).toInt(0);
+    const int identity = c.value(QStringLiteral("identity")).toInt(overall);
+    const int pose = c.value(QStringLiteral("pose")).toInt(overall);
+    return std::clamp(std::min({overall, identity, pose}), 0, 10);
+}
+
+bool Director::critiqueAccepts(const QJsonObject &critique, int threshold)
+{
+    return critiqueScore(critique) >= threshold;
+}
+
+QJsonObject Director::applyCritique(const QJsonObject &shot, const QJsonObject &critique)
+{
+    QJsonObject out = shot;
+    const QString revised = critique.value(QStringLiteral("revised_prompt")).toString().trimmed();
+    if (!revised.isEmpty())
+        out.insert(QStringLiteral("prompt"), revised);
+    QStringList negative;
+    for (const QString &term : shot.value(QStringLiteral("negative_prompt")).toString().split(u',', Qt::SkipEmptyParts))
+        negative << term.trimmed();
+    for (const QString &term : critique.value(QStringLiteral("negative_additions")).toString().split(u',', Qt::SkipEmptyParts)) {
+        const QString t = term.trimmed();
+        if (!t.isEmpty() && !negative.contains(t, Qt::CaseInsensitive))
+            negative << t;
+    }
+    out.insert(QStringLiteral("negative_prompt"), negative.join(QStringLiteral(", ")));
+    return out;
+}
+
+StructuredChatOperation *Director::critiqueShot(const QImage &result, const QJsonObject &shot, const QJsonObject &character,
+                                                const QList<QImage> &references)
+{
+    QString model;
+    LlmProvider *provider = llm(LlmRole::Vision, &model);
+    ChatRequest req;
+    req.model = model;
+    req.temperature = 0.1;
+    req.jsonSchema = critiqueSchema();
+    req.schemaName = QStringLiteral("shot_critique");
+    req.messages << ChatMessage::system(QStringLiteral(
+        "You are a strict art director reviewing AI-generated images of a recurring character. Compare the generated image "
+        "with the reference images and the character sheet, and with the planned shot. Score honestly: 9-10 only when the "
+        "character is clearly the same (face, hair, eye color, outfit, colors) and pose and framing match; below 6 when "
+        "identity drifts, the pose is wrong, or there are anatomy errors, extra limbs, broken hands or artifacts. List the "
+        "concrete issues. Then write a revised prompt for a retry that keeps the original prompt's style (tags stay tags, "
+        "prose stays prose) and fixes the issues, plus terms for the negative prompt."));
+    ChatMessage user = ChatMessage::user(QStringLiteral("Planned shot:\n%1\n\nCharacter sheet:\n%2\n\nThe first image is the "
+                                                        "generated result; the others are references of the character.")
+                                             .arg(QString::fromUtf8(QJsonDocument(shot).toJson(QJsonDocument::Compact)),
+                                                  QString::fromUtf8(QJsonDocument(character).toJson(QJsonDocument::Compact)).left(8000)));
+    user.images.append(ChatImage{img::thumbnail(result, 1024), QStringLiteral("Generated result:")});
+    for (int i = 0; i < std::min<int>(2, int(references.size())); ++i)
+        user.images.append(ChatImage{img::thumbnail(references[i], 768), QStringLiteral("Reference %1:").arg(i + 1)});
+    req.messages << user;
+    if (!provider || !provider->capabilities().vision) {
+        auto *op = new StructuredChatOperation(provider, req);
+        failLater(op, provider ? tr("The model assigned to 'Vision analysis' (%1) cannot see images, so it cannot review results.")
+                                     .arg(provider->displayName())
+                               : tr("No language model is configured for 'Vision analysis'."));
+        return op;
+    }
+    return requestJson(provider, req);
+}
+
 QString Director::describeCharacter(const QJsonObject &s)
 {
     if (s.isEmpty())

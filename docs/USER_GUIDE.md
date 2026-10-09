@@ -49,6 +49,23 @@ The left bar switches pages (`Alt+1` … `Alt+6`).
 
 `Ctrl+Return` starts the generation on the Create and Generate pages.
 
+### Reusing characters across projects
+
+In the **Character** card of the Create page, **Library → Save character to library…** keeps the
+character sheet and its reference images outside the project. **Library → Load character from
+library…** brings them into any other project: the references are added to the project and to the
+session, and the sheet is set. Saving under an existing name updates that character.
+
+### Critic
+
+With **Critic** turned on, a vision model reviews every generated shot. It compares the result with
+the references, the character sheet and the planned pose and framing, and scores it out of 10.
+When no result of a shot reaches the minimum score, the shot is generated again with the critic's
+improved prompt, up to the number of retries you set. Result thumbnails get a green border when
+accepted and an amber one otherwise; hover them to read the scores and the issues. The verdict is also
+stored in the image's library entry. The critic uses the model assigned to *Vision analysis*
+(Settings → Models & roles).
+
 ## 4. The editor
 
 Open images with **File → Open image…** (`Ctrl+O`) or drag them onto the window. PSD files open with their layers;

@@ -1,5 +1,6 @@
 #include "core/ImageOps.h"
 #include "core/PngText.h"
+#include "doc/CharacterLibrary.h"
 #include "doc/Document.h"
 #include "doc/Project.h"
 #include "doc/PsdIO.h"
@@ -9,6 +10,8 @@
 #include <QImageReader>
 #include <QPainter>
 #include <QTemporaryDir>
+#include <QSignalSpy>
+#include <QDir>
 #include <QtTest>
 
 using namespace lumen;
@@ -19,6 +22,7 @@ class TestDoc : public QObject
     Q_OBJECT
 private slots:
     void psdImportExport();
+    void characterLibrary();
     void projectImportsPsd();
     void addRemoveLayerUndo();
     void paintCommitUndo();
@@ -328,6 +332,56 @@ void TestDoc::projectImportsPsd()
     auto image = project.loadImage(imported.result().id);
     QTRY_VERIFY(image.isFinished());
     QCOMPARE(image.result().pixelColor(5, 5), QColor(Qt::green));
+}
+
+void TestDoc::characterLibrary()
+{
+    QTemporaryDir dir;
+    CharacterLibrary library(dir.filePath(QStringLiteral("characters")));
+    QVERIFY(library.entries().isEmpty());
+    QSignalSpy changed(&library, &CharacterLibrary::changed);
+    const QJsonObject sheet{{QStringLiteral("name"), QStringLiteral("Mira")}, {QStringLiteral("hair"), QStringLiteral("red")}};
+    auto saved = library.save(QStringLiteral("Mira"), sheet, {solid(QSize(64, 80), Qt::red), QImage(), solid(QSize(32, 32), Qt::blue)},
+                              QStringLiteral("mage"));
+    QTRY_VERIFY(saved.isFinished());
+    const CharacterEntry e = saved.result();
+    QCOMPARE(e.referenceCount, 2); // null images are skipped
+    QCOMPARE(changed.size(), 1);
+    QCOMPARE(library.entries().size(), 1);
+    const auto read = library.entry(e.id);
+    QVERIFY(read.has_value());
+    QCOMPARE(read->name, QStringLiteral("Mira"));
+    QCOMPARE(read->sheet, sheet);
+    QCOMPARE(read->notes, QStringLiteral("mage"));
+    QVERIFY(!read->thumbnail.isNull());
+    auto refs = library.loadReferences(e.id);
+    QTRY_VERIFY(refs.isFinished());
+    QCOMPARE(refs.result().size(), 2);
+    QCOMPARE(refs.result()[0].size(), QSize(64, 80));
+    QCOMPARE(refs.result()[1].pixelColor(5, 5), QColor(Qt::blue));
+
+    // Replacing keeps the id and the creation date and drops old references.
+    QTest::qWait(5);
+    auto replaced = library.save(QStringLiteral("Mira"), sheet, {solid(QSize(16, 16), Qt::green)}, QString(), e.id);
+    QTRY_VERIFY(replaced.isFinished());
+    QCOMPARE(replaced.result().id, e.id);
+    QCOMPARE(replaced.result().created, read->created);
+    QVERIFY(replaced.result().modified >= read->modified);
+    auto refs2 = library.loadReferences(e.id);
+    QTRY_VERIFY(refs2.isFinished());
+    QCOMPARE(refs2.result().size(), 1);
+    QCOMPARE(QDir(dir.filePath(QStringLiteral("characters/") + e.id)).entryList({QStringLiteral("ref_*.png")}).size(), 1);
+
+    // A second library on the same folder (another project / session) sees the character.
+    CharacterLibrary other(dir.filePath(QStringLiteral("characters")));
+    QCOMPARE(other.entries().size(), 1);
+    QVERIFY(other.rename(e.id, QStringLiteral("Mira the Mage")));
+    QCOMPARE(library.entry(e.id)->name, QStringLiteral("Mira the Mage"));
+    QVERIFY(!other.rename(e.id, QStringLiteral("  ")));
+    QVERIFY(!library.remove(QStringLiteral("../escape")));
+    QVERIFY(library.remove(e.id));
+    QVERIFY(library.entries().isEmpty());
+    QVERIFY(!library.remove(e.id));
 }
 
 QTEST_MAIN(TestDoc)

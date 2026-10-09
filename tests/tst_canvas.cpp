@@ -10,6 +10,11 @@
 #include "ui/Theme.h"
 #include "ui/Shortcuts.h"
 #include "ui/Studio.h"
+#include "ui/director/DirectorSession.h"
+#include "ui/director/ShotCard.h"
+#include "ui/pages/CreatePage.h"
+#include "pose/Rig.h"
+#include "MockHttpServer.h"
 #include "ui/dialogs/ShortcutsPage.h"
 #include "ui/widgets/Controls.h"
 
@@ -17,6 +22,7 @@
 #include <QAction>
 #include <QLineEdit>
 #include <QPainter>
+#include <QSpinBox>
 #include <QTemporaryDir>
 #include <QToolButton>
 #include <QtTest>
@@ -61,6 +67,7 @@ private slots:
     void themeContrast();
     void accessibleNames();
     void fitLabelWraps();
+    void criticRetriesShot();
 
 private:
     ToolEvent at(double x, double y, Qt::KeyboardModifiers mods = Qt::NoModifier) const
@@ -487,6 +494,87 @@ void TestCanvas::fitLabelWraps()
     pt = 8.0;
     fitLabel(QStringLiteral("Warteschlangenverwaltung"), 40, &pt);
     QVERIFY(pt < 8.0 && pt >= 7.0);
+}
+
+void TestCanvas::criticRetriesShot()
+{
+    MockHttpServer server;
+    QStringList prompts;
+    server.route("POST", QStringLiteral("/sdapi/v1/txt2img"), [&](const MockRequest &req) {
+        prompts << req.json().value(QStringLiteral("prompt")).toString();
+        QImage im(64, 64, QImage::Format_ARGB32);
+        im.fill(prompts.size() == 1 ? Qt::red : Qt::green);
+        return MockResponse::json({{QStringLiteral("images"), QJsonArray{QString::fromLatin1(img::encode(im).toBase64())}},
+                                   {QStringLiteral("info"), QStringLiteral("{\"seed\": 1, \"all_seeds\": [1]}")}});
+    });
+    server.route("GET", QStringLiteral("/sdapi/v1/progress"), [](const MockRequest &) { return MockResponse::json({}); });
+    server.route("GET", QStringLiteral("/controlnet/model_list"), [](const MockRequest &) {
+        return MockResponse::json({{QStringLiteral("model_list"), QJsonArray{QStringLiteral("control_openpose [abc]")}}});
+    });
+    int critiques = 0;
+    server.route("POST", QStringLiteral("/v1/chat/completions"), [&](const MockRequest &) {
+        ++critiques;
+        const int score = critiques == 1 ? 3 : 9;
+        const QJsonObject verdict{{QStringLiteral("overall"), score},
+                                  {QStringLiteral("identity"), score},
+                                  {QStringLiteral("pose"), score},
+                                  {QStringLiteral("issues"), QJsonArray{QStringLiteral("arms too low")}},
+                                  {QStringLiteral("revised_prompt"), QStringLiteral("1girl, a-pose, arms raised 35 degrees")},
+                                  {QStringLiteral("negative_additions"), QStringLiteral("extra fingers")}};
+        return MockResponse::json(
+            {{QStringLiteral("choices"),
+              QJsonArray{QJsonObject{{QStringLiteral("message"),
+                                      QJsonObject{{QStringLiteral("content"), QString::fromUtf8(QJsonDocument(verdict).toJson(QJsonDocument::Compact))}}},
+                                     {QStringLiteral("finish_reason"), QStringLiteral("stop")}}}}});
+    });
+
+    Settings::instance().setValue(QStringLiteral("director/critic"), true);
+    Settings::instance().setValue(QStringLiteral("director/criticThreshold"), 7);
+    Settings::instance().setValue(QStringLiteral("director/criticRetries"), 2);
+    QTemporaryDir dir;
+    Studio studio;
+    for (ai::Provider *p : studio.providers()->providers())
+        studio.providers()->removeProvider(p->instanceId());
+    QVERIFY(studio.providers()->addProvider(QStringLiteral("sdwebui"), QStringLiteral("SD"), {{QStringLiteral("url"), server.baseUrl().toString()}}));
+    QVERIFY(studio.providers()->addProvider(QStringLiteral("llamacpp"), QStringLiteral("Vision"),
+                                            {{QStringLiteral("url"), server.baseUrl().toString() + QStringLiteral("/v1")}}));
+    studio.openProject(dir.filePath(QStringLiteral("critic.lumen")));
+    QTRY_VERIFY_WITH_TIMEOUT(studio.isProjectOpen(), 5000);
+    CreatePage page(&studio);
+    QTRY_VERIFY(page.findChild<DirectorSession *>());
+    DirectorSession *session = page.findChild<DirectorSession *>();
+    const QJsonObject shot{{QStringLiteral("id"), QStringLiteral("front")},
+                           {QStringLiteral("title"), QStringLiteral("Front")},
+                           {QStringLiteral("description"), QStringLiteral("A-pose")},
+                           {QStringLiteral("aspect_ratio"), QStringLiteral("1:1")},
+                           {QStringLiteral("background"), QStringLiteral("plain grey")},
+                           {QStringLiteral("prompt"), QStringLiteral("1girl, a-pose")},
+                           {QStringLiteral("negative_prompt"), QStringLiteral("text")},
+                           {QStringLiteral("pose"), pose::RigParams().toJson()}};
+    session->setPlan(QJsonObject{{QStringLiteral("title"), QStringLiteral("Test")}, {QStringLiteral("shots"), QJsonArray{shot}}});
+    for (QSpinBox *spin : page.findChildren<QSpinBox *>()) {
+        if (spin->suffix().contains(QLatin1String("per shot")))
+            spin->setValue(1);
+    }
+    QTRY_VERIFY(page.findChild<ShotCard *>());
+    emit page.findChild<ShotCard *>()->generateRequested(QStringLiteral("front"));
+
+    // First result scores 3 → one retry with the revised prompt → 9 is accepted, no further retry.
+    QTRY_VERIFY_WITH_TIMEOUT(critiques == 2 && session->shot(QStringLiteral("front"))->critiques.size() == 2, 20000);
+    QTest::qWait(300);
+    QCOMPARE(prompts.size(), 2);
+    QCOMPARE(critiques, 2);
+    QVERIFY(prompts[1].contains(QLatin1String("arms raised 35 degrees")));
+    QVERIFY(!prompts[0].contains(QLatin1String("arms raised")));
+    const ShotState *state = session->shot(QStringLiteral("front"));
+    QCOMPARE(state->results.size(), 2);
+    QCOMPARE(state->critiques.value(state->results[0]).toObject().value(QStringLiteral("score")).toInt(), 3);
+    QCOMPARE(state->critiques.value(state->results[1]).toObject().value(QStringLiteral("score")).toInt(), 9);
+    // The verdict is also stored with the library asset.
+    QTRY_COMPARE(studio.project()->asset(state->results[1])->metadata.value(QStringLiteral("critic")).toObject().value(QStringLiteral("score")).toInt(), 9);
+    Settings::instance().setValue(QStringLiteral("director/critic"), false);
+    for (ai::Provider *p : studio.providers()->providers())
+        studio.providers()->removeProvider(p->instanceId());
 }
 
 QTEST_MAIN(TestCanvas)

@@ -4,6 +4,7 @@
 #include "ai/GenerationService.h"
 #include "ai/PromptStyle.h"
 #include "core/Error.h"
+#include "core/Settings.h"
 #include "core/JsonUtil.h"
 #include "core/JobQueue.h"
 #include "ui/Icons.h"
@@ -15,7 +16,11 @@
 #include "ui/widgets/ReferenceStrip.h"
 #include "ui/widgets/ThumbnailCache.h"
 
+#include <QCheckBox>
 #include <QComboBox>
+#include <QInputDialog>
+#include <QListWidget>
+#include <QMenu>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QHBoxLayout>
@@ -123,6 +128,17 @@ CreatePage::CreatePage(Studio *studio, QWidget *parent)
     charHead->addStretch();
     auto *editSheet = new QPushButton(Icons::get(QStringLiteral("edit")), tr("Edit sheet"), charCard);
     m_analyze = new QPushButton(Icons::get(QStringLiteral("sparkles")), tr("Analyze references"), charCard);
+    auto *libraryButton = new QToolButton(charCard);
+    libraryButton->setIcon(Icons::get(QStringLiteral("person")));
+    libraryButton->setText(tr("Library"));
+    libraryButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    libraryButton->setPopupMode(QToolButton::InstantPopup);
+    libraryButton->setToolTip(tr("Reuse characters across projects"));
+    auto *libraryMenu = new QMenu(libraryButton);
+    libraryMenu->addAction(Icons::get(QStringLiteral("download")), tr("Save character to library…"), this, &CreatePage::saveCharacterToLibrary);
+    libraryMenu->addAction(Icons::get(QStringLiteral("upload")), tr("Load character from library…"), this, &CreatePage::loadCharacterFromLibrary);
+    libraryButton->setMenu(libraryMenu);
+    charHead->addWidget(libraryButton);
     charHead->addWidget(editSheet);
     charHead->addWidget(m_analyze);
     ch->addLayout(charHead);
@@ -151,6 +167,37 @@ CreatePage::CreatePage(Studio *studio, QWidget *parent)
     m_variants->setValue(2);
     m_variants->setSuffix(tr(" per shot"));
     genBar->addWidget(m_variants);
+    Settings &settings = Settings::instance();
+    m_critic = new QCheckBox(tr("Critic"), board);
+    m_critic->setToolTip(tr("A vision model reviews every result against the references and the shot, and retries shots that "
+                            "score below the minimum with an improved prompt"));
+    m_critic->setChecked(settings.value(QStringLiteral("director/critic"), false).toBool());
+    m_criticThreshold = new QSpinBox(board);
+    m_criticThreshold->setRange(1, 10);
+    m_criticThreshold->setPrefix(tr("min "));
+    m_criticThreshold->setSuffix(QStringLiteral("/10"));
+    m_criticThreshold->setToolTip(tr("Lowest acceptable critic score"));
+    m_criticThreshold->setValue(settings.value(QStringLiteral("director/criticThreshold"), 7).toInt());
+    m_criticRetries = new QSpinBox(board);
+    m_criticRetries->setRange(0, 3);
+    m_criticRetries->setPrefix(tr("retries "));
+    m_criticRetries->setToolTip(tr("How often a shot is generated again when no result reaches the minimum score"));
+    m_criticRetries->setValue(settings.value(QStringLiteral("director/criticRetries"), 1).toInt());
+    genBar->addWidget(m_critic);
+    genBar->addWidget(m_criticThreshold);
+    genBar->addWidget(m_criticRetries);
+    auto syncCritic = [this] {
+        m_criticThreshold->setEnabled(m_critic->isChecked());
+        m_criticRetries->setEnabled(m_critic->isChecked());
+        Settings::instance().setValue(QStringLiteral("director/critic"), m_critic->isChecked());
+        Settings::instance().setValue(QStringLiteral("director/criticThreshold"), m_criticThreshold->value());
+        Settings::instance().setValue(QStringLiteral("director/criticRetries"), m_criticRetries->value());
+    };
+    connect(m_critic, &QCheckBox::toggled, this, syncCritic);
+    connect(m_criticThreshold, &QSpinBox::valueChanged, this, syncCritic);
+    connect(m_criticRetries, &QSpinBox::valueChanged, this, syncCritic);
+    m_criticThreshold->setEnabled(m_critic->isChecked());
+    m_criticRetries->setEnabled(m_critic->isChecked());
     m_generateAll = new QPushButton(Icons::get(QStringLiteral("sparkles")), tr("Generate all"), board);
     Theme::setRole(m_generateAll, QStringLiteral("primary"));
     genBar->addWidget(m_generateAll);
@@ -458,7 +505,7 @@ void CreatePage::rebuildShots()
     int i = 0;
     for (const ShotState &s : m_session->shots()) {
         auto *card = new ShotCard(m_studio, m_session, s.id(), m_thumbs);
-        connect(card, &ShotCard::generateRequested, this, &CreatePage::generateShot);
+        connect(card, &ShotCard::generateRequested, this, [this](const QString &id) { generateShot(id); });
         m_shots->insertWidget(1 + i++, card);
         m_cards.insert(s.id(), card);
         if (m_running.value(s.id()) > 0)
@@ -656,7 +703,7 @@ void CreatePage::plan(const QString &instruction)
         run({});
 }
 
-void CreatePage::generateShot(const QString &shotId)
+void CreatePage::generateShot(const QString &shotId, int attempt, const QJsonObject &shotOverride)
 {
     if (!m_session)
         return;
@@ -669,7 +716,7 @@ void CreatePage::generateShot(const QString &shotId)
     }
     const ai::ImageCapabilities caps = provider->capabilities();
     const ai::PromptStyle style = ai::promptStyleFor(provider);
-    const QJsonObject shotJson = shot->shot;
+    const QJsonObject shotJson = shotOverride.isEmpty() ? shot->shot : shotOverride;
     const ShotState shotCopy = *shot;
     const int variants = m_variants->value();
     const QString providerId = provider->instanceId();
@@ -679,7 +726,7 @@ void CreatePage::generateShot(const QString &shotId)
     m_running[shotId]++;
     QPointer<CreatePage> self(this);
     QPointer<DirectorSession> session = m_session;
-    loadReferenceImages([self, session, shotId, shotJson, shotCopy, caps, style, variants, providerId, sessionId](QList<QImage> images) {
+    loadReferenceImages([self, session, shotId, shotJson, shotCopy, caps, style, variants, providerId, sessionId, attempt](QList<QImage> images) {
         if (!self || !session)
             return;
         QList<ai::ReferenceImage> refs;
@@ -701,12 +748,14 @@ void CreatePage::generateShot(const QString &shotId)
         spec.title = QObject::tr("Shot: %1").arg(shotJson.value(QStringLiteral("title")).toString());
         spec.meta = QJsonObject{{QStringLiteral("director_session"), sessionId}, {QStringLiteral("shot"), shotId},
                                 {QStringLiteral("shot_title"), shotJson.value(QStringLiteral("title"))}};
+        if (attempt > 0)
+            spec.meta.insert(QStringLiteral("critic_attempt"), attempt);
         Job *job = self->m_studio->generation()->submit(spec);
         QObject::connect(job, &Job::progressChanged, self, [self, shotId](double f, const QString &status) {
             if (ShotCard *card = self->m_cards.value(shotId))
                 card->setBusy(true, f >= 0 ? QStringLiteral("%1 — %2%").arg(status).arg(int(f * 100)) : status);
         });
-        QObject::connect(job, &Job::finished, self, [self, session, shotId](Job *j) {
+        QObject::connect(job, &Job::finished, self, [self, session, shotId, attempt, shotJson](Job *j) {
             if (!self)
                 return;
             self->m_running[shotId] = std::max(0, self->m_running.value(shotId) - 1);
@@ -715,21 +764,247 @@ void CreatePage::generateShot(const QString &shotId)
                 card->setBusy(self->m_running.value(shotId) > 0, QString());
             if (j->state() == Job::State::Succeeded && session) {
                 const ai::GenerationOutput out = ai::GenerationService::outputOf(j);
+                QStringList added;
                 if (ShotState *s = session->shot(shotId)) {
                     for (const doc::AssetInfo &a : out.assets) {
-                        if (!a.id.isEmpty())
+                        if (!a.id.isEmpty()) {
                             s->results.append(a.id);
+                            added << a.id;
+                        }
                     }
                     session->saveSoon();
                 }
                 if (card)
                     card->refresh();
+                if (self->m_critic->isChecked() && !added.isEmpty() && session == self->m_session)
+                    self->critique(shotId, added, attempt, shotJson);
             } else if (j->state() == Job::State::Failed) {
                 if (card)
                     card->setBusy(false, j->errorString());
                 self->m_studio->notify(j->errorString(), QStringLiteral("error"));
             }
         });
+    });
+}
+
+void CreatePage::critique(const QString &shotId, const QStringList &assetIds, int attempt, const QJsonObject &shotUsed)
+{
+    doc::Project *project = m_studio->project();
+    if (!m_session || !project)
+        return;
+    struct Round
+    {
+        int remaining;
+        QJsonObject best;
+        int bestScore = -1;
+        QString error;
+    };
+    auto round = std::make_shared<Round>();
+    round->remaining = int(assetIds.size());
+    const int threshold = m_criticThreshold->value();
+    const int retries = m_criticRetries->value();
+    QPointer<CreatePage> self(this);
+    QPointer<DirectorSession> session = m_session;
+    QPointer<doc::Project> projectGuard = project;
+    if (ShotCard *card = m_cards.value(shotId))
+        card->setBusy(true, tr("Critic is reviewing…"));
+    m_running[shotId]++;
+    auto finishRound = [self, session, shotId, attempt, shotUsed, round, threshold, retries] {
+        if (!self || --round->remaining > 0)
+            return;
+        self->m_running[shotId] = std::max(0, self->m_running.value(shotId) - 1);
+        ShotCard *card = self->m_cards.value(shotId);
+        if (round->bestScore < 0) {
+            if (card)
+                card->setBusy(false, tr("Critic failed: %1").arg(round->error));
+            return;
+        }
+        if (round->bestScore >= threshold) {
+            if (card)
+                card->setBusy(false, tr("Critic: %1/10 ✓").arg(round->bestScore));
+            return;
+        }
+        if (attempt < retries && session) {
+            if (card)
+                card->setBusy(true, tr("Critic: best %1/10 — retrying (%2/%3)…").arg(round->bestScore).arg(attempt + 1).arg(retries));
+            self->generateShot(shotId, attempt + 1, ai::Director::applyCritique(shotUsed, round->best));
+            return;
+        }
+        if (card)
+            card->setBusy(false, tr("Critic: best %1/10 after %n attempt(s)", nullptr, attempt + 1).arg(round->bestScore));
+    };
+    loadReferenceImages([self, session, projectGuard, shotId, assetIds, shotUsed, round, finishRound](QList<QImage> refs) {
+        if (!self || !session || !projectGuard)
+            return;
+        for (const QString &assetId : assetIds) {
+            projectGuard->loadImage(assetId)
+                .then(self, [self, session, projectGuard, shotId, assetId, shotUsed, refs, round, finishRound](QImage image) {
+                    if (!self || !session) {
+                        finishRound();
+                        return;
+                    }
+                    ai::StructuredChatOperation *op = self->m_studio->director()->critiqueShot(image, shotUsed, session->character(), refs);
+                    QObject::connect(op, &ai::Operation::finished, self, [self, session, projectGuard, shotId, assetId, op, round, finishRound] {
+                        if (op->state() == ai::Operation::State::Succeeded && session) {
+                            QJsonObject verdict = op->result();
+                            verdict.insert(QStringLiteral("score"), ai::Director::critiqueScore(verdict));
+                            if (ShotState *s = session->shot(shotId)) {
+                                s->critiques.insert(assetId, verdict);
+                                session->saveSoon();
+                            }
+                            if (projectGuard) {
+                                if (auto info = projectGuard->asset(assetId)) {
+                                    info->metadata.insert(QStringLiteral("critic"), verdict);
+                                    projectGuard->updateAsset(*info);
+                                }
+                            }
+                            if (verdict.value(QStringLiteral("score")).toInt() > round->bestScore) {
+                                round->bestScore = verdict.value(QStringLiteral("score")).toInt();
+                                round->best = verdict;
+                            }
+                            if (self) {
+                                if (ShotCard *card = self->m_cards.value(shotId))
+                                    card->refresh();
+                            }
+                        } else {
+                            round->error = op->errorString();
+                        }
+                        finishRound();
+                    });
+                })
+                .onFailed(self, [round, finishRound](const std::exception &e) {
+                    round->error = QString::fromUtf8(e.what());
+                    finishRound();
+                });
+        }
+    });
+}
+
+void CreatePage::saveCharacterToLibrary()
+{
+    if (!m_session || (m_session->character().isEmpty() && m_session->references().isEmpty())) {
+        m_studio->notify(tr("Attach references or create a character sheet first."), QStringLiteral("warning"));
+        return;
+    }
+    const QString suggested = m_session->character().value(QStringLiteral("name")).toString();
+    bool ok = false;
+    const QString name = QInputDialog::getText(this, tr("Save character"), tr("Name in the character library:"), QLineEdit::Normal,
+                                               suggested.isEmpty() ? tr("Character") : suggested, &ok)
+                             .trimmed();
+    if (!ok || name.isEmpty())
+        return;
+    // Saving under an existing name updates that character.
+    QString existing;
+    for (const doc::CharacterEntry &e : m_studio->characters()->entries()) {
+        if (e.name.compare(name, Qt::CaseInsensitive) == 0)
+            existing = e.id;
+    }
+    if (!existing.isEmpty()
+        && QMessageBox::question(this, tr("Save character"), tr("Replace the saved character \"%1\"?").arg(name)) != QMessageBox::Yes)
+        return;
+    QPointer<CreatePage> self(this);
+    const QJsonObject sheet = m_session->character();
+    loadReferenceImages([self, name, sheet, existing](QList<QImage> images) {
+        if (!self)
+            return;
+        self->m_studio->characters()
+            ->save(name, sheet, images, QString(), existing)
+            .then(self, [self](doc::CharacterEntry e) {
+                self->m_studio->notify(tr("Saved \"%1\" with %n reference(s) to the character library.", nullptr, e.referenceCount).arg(e.name),
+                                       QStringLiteral("success"));
+            })
+            .onFailed(self, [self](const std::exception &e) { self->m_studio->notify(describeException(e), QStringLiteral("error")); });
+    });
+}
+
+void CreatePage::loadCharacterFromLibrary()
+{
+    doc::CharacterLibrary *library = m_studio->characters();
+    QDialog dlg(this);
+    dlg.setWindowTitle(tr("Character library"));
+    dlg.resize(520, 460);
+    auto *v = new QVBoxLayout(&dlg);
+    v->addWidget(mutedLabel(tr("Characters saved from any project. Loading one adds its references to this project and sets "
+                               "the character sheet of the session."), &dlg));
+    auto *list = new QListWidget(&dlg);
+    list->setIconSize(QSize(64, 64));
+    list->setSpacing(2);
+    v->addWidget(list, 1);
+    auto fill = [list, library] {
+        list->clear();
+        for (const doc::CharacterEntry &e : library->entries()) {
+            auto *item = new QListWidgetItem(QStringLiteral("%1\n%2").arg(e.name, tr("%n reference(s) · %1", nullptr, e.referenceCount)
+                                                                                     .arg(QLocale().toString(e.modified, QLocale::ShortFormat))),
+                                             list);
+            if (!e.thumbnail.isNull())
+                item->setIcon(QIcon(QPixmap::fromImage(e.thumbnail)));
+            item->setData(Qt::UserRole, e.id);
+        }
+    };
+    fill();
+    auto *buttons = new QDialogButtonBox(&dlg);
+    QPushButton *load = buttons->addButton(tr("Load"), QDialogButtonBox::AcceptRole);
+    QPushButton *remove = buttons->addButton(tr("Delete"), QDialogButtonBox::DestructiveRole);
+    buttons->addButton(QDialogButtonBox::Cancel);
+    Theme::setRole(load, QStringLiteral("primary"));
+    v->addWidget(buttons);
+    auto sync = [list, load, remove] {
+        load->setEnabled(list->currentItem());
+        remove->setEnabled(list->currentItem());
+    };
+    sync();
+    connect(list, &QListWidget::currentItemChanged, &dlg, sync);
+    connect(list, &QListWidget::itemDoubleClicked, &dlg, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+    connect(remove, &QPushButton::clicked, &dlg, [&dlg, list, library, fill, sync] {
+        QListWidgetItem *item = list->currentItem();
+        if (!item)
+            return;
+        if (QMessageBox::question(&dlg, tr("Character library"), tr("Delete \"%1\" from the character library?")
+                                                                      .arg(item->text().section(u'\n', 0, 0))) == QMessageBox::Yes) {
+            library->remove(item->data(Qt::UserRole).toString());
+            fill();
+            sync();
+        }
+    });
+    if (library->entries().isEmpty())
+        list->addItem(tr("The library is empty. Save a character from any project first."));
+    if (dlg.exec() != QDialog::Accepted || !list->currentItem() || list->currentItem()->data(Qt::UserRole).toString().isEmpty())
+        return;
+    const auto entry = library->entry(list->currentItem()->data(Qt::UserRole).toString());
+    doc::Project *project = m_studio->project();
+    if (!entry || !project)
+        return;
+    if (!m_session)
+        newSession();
+    QPointer<CreatePage> self(this);
+    QPointer<DirectorSession> session = m_session;
+    QPointer<doc::Project> projectGuard = project;
+    const doc::CharacterEntry e = *entry;
+    library->loadReferences(e.id).then(this, [self, session, projectGuard, e](QList<QImage> images) {
+        if (!self || !session || !projectGuard)
+            return;
+        session->setCharacter(e.sheet);
+        if (images.isEmpty()) {
+            self->m_studio->notify(tr("Loaded \"%1\".").arg(e.name), QStringLiteral("success"));
+            return;
+        }
+        auto ids = std::make_shared<QStringList>();
+        auto remaining = std::make_shared<int>(int(images.size()));
+        for (int i = 0; i < images.size(); ++i) {
+            projectGuard
+                ->addAsset(images[i], doc::AssetKind::Reference, tr("%1 — reference %2").arg(e.name).arg(i + 1),
+                           QJsonObject{{QStringLiteral("character_library"), e.id}})
+                .then(self, [self, session, ids, remaining, e](doc::AssetInfo info) {
+                    *ids << info.id;
+                    if (--*remaining == 0 && session) {
+                        session->addReferences(*ids);
+                        self->m_studio->notify(tr("Loaded \"%1\" with %n reference(s).", nullptr, int(ids->size())).arg(e.name),
+                                               QStringLiteral("success"));
+                    }
+                });
+        }
     });
 }
 

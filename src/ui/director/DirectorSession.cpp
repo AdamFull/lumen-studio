@@ -119,8 +119,10 @@ void DirectorSession::setPlan(const QJsonObject &plan)
         s.shot = v.toObject();
         if (s.id().isEmpty())
             s.shot.insert(QStringLiteral("id"), QStringLiteral("shot%1").arg(++n));
-        if (previous.contains(s.id()))
+        if (previous.contains(s.id())) {
             s.results = previous.value(s.id()).results;
+            s.critiques = previous.value(s.id()).critiques;
+        }
         m_shots.append(s);
     }
     if (!plan.value(QStringLiteral("title")).toString().isEmpty())
@@ -165,6 +167,8 @@ QJsonObject DirectorSession::toJson() const
         QJsonObject o{{QStringLiteral("id"), s.id()}, {QStringLiteral("results"), json::toArray(s.results)}, {QStringLiteral("approved"), s.approved}};
         if (s.editedPose)
             o.insert(QStringLiteral("edited_pose"), s.editedPose->toOpenPoseJson());
+        if (!s.critiques.isEmpty())
+            o.insert(QStringLiteral("critiques"), s.critiques);
         shots.append(o);
     }
     return QJsonObject{{QStringLiteral("title"), m_title},
@@ -203,6 +207,7 @@ void DirectorSession::fromJson(const QString &id, const QJsonObject &o)
         if (ShotState *s = shot(st.value(QStringLiteral("id")).toString())) {
             s->results = json::toStringList(st.value(QStringLiteral("results")).toArray());
             s->approved = st.value(QStringLiteral("approved")).toBool(true);
+            s->critiques = st.value(QStringLiteral("critiques")).toObject();
             if (st.contains(QStringLiteral("edited_pose")))
                 s->editedPose = pose::Pose::fromOpenPoseJson(st.value(QStringLiteral("edited_pose")).toObject());
         }

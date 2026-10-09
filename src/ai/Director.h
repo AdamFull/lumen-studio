@@ -47,6 +47,17 @@ public:
     StructuredChatOperation *rewritePrompt(const QJsonObject &shot, const QJsonObject &character, const QString &instruction,
                                            const PromptStyle &style);
 
+    // Critic: a vision model compares a generated shot with the character references, the sheet and
+    // the planned shot. The answer follows critiqueSchema().
+    StructuredChatOperation *critiqueShot(const QImage &result, const QJsonObject &shot, const QJsonObject &character,
+                                          const QList<QImage> &references);
+    static QJsonObject critiqueSchema();
+    // Overall score 0-10 of a critique (the minimum of overall, identity and pose).
+    static int critiqueScore(const QJsonObject &critique);
+    static bool critiqueAccepts(const QJsonObject &critique, int threshold);
+    // The shot with the critic's revised prompt and negative additions applied (for a retry).
+    static QJsonObject applyCritique(const QJsonObject &shot, const QJsonObject &critique);
+
     static QJsonObject characterSheetSchema();
     static QJsonObject shotSchema();
     static QJsonObject shotPlanSchema(int maxShots = 12);

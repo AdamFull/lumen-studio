@@ -1,6 +1,8 @@
 #include "ui/director/ShotCard.h"
 
 #include "ai/Director.h"
+#include "core/JsonUtil.h"
+#include "core/Settings.h"
 #include "pose/PoseRenderer.h"
 #include "ui/Icons.h"
 #include "ui/Studio.h"
@@ -150,6 +152,20 @@ void ShotCard::refreshResults()
         if (!pm.isNull())
             b->setIcon(QIcon(pm));
         b->setToolTip(tr("Open in editor (right-click for more)"));
+        const QJsonObject verdict = s->critiques.value(id).toObject();
+        if (!verdict.isEmpty()) {
+            const int score = verdict.value(QStringLiteral("score")).toInt(ai::Director::critiqueScore(verdict));
+            const int threshold = Settings::instance().value(QStringLiteral("director/criticThreshold"), 7).toInt();
+            QStringList issues = json::toStringList(verdict.value(QStringLiteral("issues")).toArray()).mid(0, 4);
+            for (QString &issue : issues)
+                issue.prepend(QStringLiteral("• "));
+            b->setToolTip(tr("Critic: %1/10 (identity %2, pose %3)").arg(score).arg(verdict.value(QStringLiteral("identity")).toInt())
+                              .arg(verdict.value(QStringLiteral("pose")).toInt())
+                          + (issues.isEmpty() ? QString() : u'\n' + issues.join(u'\n')) + QStringLiteral("\n\n") + b->toolTip());
+            b->setStyleSheet(QStringLiteral("QToolButton { border: 2px solid %1; border-radius: 6px; }")
+                                 .arg((score >= threshold ? Theme::palette().success : Theme::palette().warning).name()));
+            b->setAccessibleDescription(tr("Critic score %1 of 10").arg(score));
+        }
         b->setContextMenuPolicy(Qt::CustomContextMenu);
         connect(b, &QToolButton::clicked, this, [this, id] { m_studio->openAssetInEditor(id); });
         connect(b, &QToolButton::customContextMenuRequested, this, [this, b, id](const QPoint &pos) {

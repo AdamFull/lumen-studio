@@ -37,6 +37,7 @@ private slots:
     void shotRequestBuildsPoseControl();
     void generationServiceRegionEndToEnd();
     void utilityOnAssets();
+    void directorCritique();
 
 private:
     net::HttpClient m_http;
@@ -280,6 +281,72 @@ void TestServices::utilityOnAssets()
     QTRY_VERIFY_WITH_TIMEOUT(missing->isFinished(), 5000);
     QCOMPARE(missing->state(), Job::State::Failed);
     QCOMPARE(calls, 1);
+    QFile::remove(registry.configPath());
+}
+
+void TestServices::directorCritique()
+{
+    MockHttpServer server;
+    QJsonObject request;
+    const QJsonObject verdict{{QStringLiteral("overall"), 5},
+                              {QStringLiteral("identity"), 8},
+                              {QStringLiteral("pose"), 4},
+                              {QStringLiteral("issues"), QJsonArray{QStringLiteral("left hand has six fingers"), QStringLiteral("arms too low")}},
+                              {QStringLiteral("revised_prompt"), QStringLiteral("1girl, a-pose, arms raised 35 degrees, detailed hands")},
+                              {QStringLiteral("negative_additions"), QStringLiteral("extra fingers, Text")}};
+    server.route("POST", QStringLiteral("/v1/chat/completions"), [&](const MockRequest &req) {
+        request = req.json();
+        const QString content = QString::fromUtf8(QJsonDocument(verdict).toJson(QJsonDocument::Compact));
+        return MockResponse::json({{QStringLiteral("choices"), QJsonArray{QJsonObject{{QStringLiteral("message"), QJsonObject{{QStringLiteral("content"), content}}},
+                                                                                     {QStringLiteral("finish_reason"), QStringLiteral("stop")}}}}});
+    });
+    ProviderRegistry registry(&m_http);
+    registerBuiltInProviders(registry);
+    QFile::remove(registry.configPath());
+    QVERIFY(registry.addProvider(QStringLiteral("llamacpp"), QStringLiteral("Vision"),
+                                 {{QStringLiteral("url"), server.baseUrl().toString() + QStringLiteral("/v1")}}));
+    Director director(&registry);
+    const QJsonObject shot{{QStringLiteral("id"), QStringLiteral("front")},
+                           {QStringLiteral("title"), QStringLiteral("Front A-pose")},
+                           {QStringLiteral("prompt"), QStringLiteral("1girl, a-pose")},
+                           {QStringLiteral("negative_prompt"), QStringLiteral("text, watermark")}};
+    const QJsonObject character{{QStringLiteral("name"), QStringLiteral("Mira")}, {QStringLiteral("summary"), QStringLiteral("red-haired mage")}};
+    QImage result(300, 400, QImage::Format_ARGB32_Premultiplied);
+    result.fill(Qt::red);
+    QList<QImage> refs{result, result, result};
+    StructuredChatOperation *op = director.critiqueShot(result, shot, character, refs);
+    op->setAutoDelete(false);
+    QTRY_VERIFY_WITH_TIMEOUT(op->isFinished(), 5000);
+    QVERIFY2(op->state() == Operation::State::Succeeded, qPrintable(op->errorString()));
+    QCOMPARE(op->result(), verdict);
+    delete op;
+    // The request carries the result and at most two references, with the shot and the sheet as text.
+    const QJsonArray messages = request.value(QStringLiteral("messages")).toArray();
+    const QJsonArray parts = messages.last().toObject().value(QStringLiteral("content")).toArray();
+    int images = 0;
+    QString text;
+    for (const QJsonValue &p : parts) {
+        if (p.toObject().value(QStringLiteral("type")).toString() == QLatin1String("image_url"))
+            ++images;
+        else
+            text += p.toObject().value(QStringLiteral("text")).toString();
+    }
+    QCOMPARE(images, 3);
+    QVERIFY(text.contains(QStringLiteral("Front A-pose")));
+    QVERIFY(text.contains(QStringLiteral("Mira")));
+
+    // Scoring and the retry shot.
+    json::SchemaValidator validator(Director::critiqueSchema());
+    QVERIFY(validator.validate(verdict));
+    QCOMPARE(Director::critiqueScore(verdict), 4); // the weakest of overall, identity and pose
+    QVERIFY(!Director::critiqueAccepts(verdict, 7));
+    QVERIFY(Director::critiqueAccepts(verdict, 4));
+    const QJsonObject retry = Director::applyCritique(shot, verdict);
+    QCOMPARE(retry.value(QStringLiteral("prompt")).toString(), verdict.value(QStringLiteral("revised_prompt")).toString());
+    QCOMPARE(retry.value(QStringLiteral("negative_prompt")).toString(), QStringLiteral("text, watermark, extra fingers"));
+    QCOMPARE(retry.value(QStringLiteral("id")).toString(), QStringLiteral("front"));
+    // An empty revision keeps the prompt.
+    QCOMPARE(Director::applyCritique(shot, QJsonObject{}).value(QStringLiteral("prompt")).toString(), QStringLiteral("1girl, a-pose"));
     QFile::remove(registry.configPath());
 }
 

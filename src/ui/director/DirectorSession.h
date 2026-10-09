@@ -3,6 +3,7 @@
 #include "pose/Rig.h"
 
 #include <QDateTime>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QObject>
 #include <QPointer>
@@ -31,6 +32,7 @@ struct ShotState
     QJsonObject shot;                    // planned shot (id, title, description, aspect_ratio, background, pose, prompt, negative_prompt)
     std::optional<pose::Pose> editedPose; // user-edited keypoints (overrides the rig pose)
     QStringList results;                  // generated asset ids
+    QJsonObject critiques;                // asset id → critic verdict (Director::critiqueSchema())
     bool approved = true;
 
     QString id() const { return shot.value(QStringLiteral("id")).toString(); }

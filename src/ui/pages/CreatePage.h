@@ -6,6 +6,7 @@
 #include <QPointer>
 #include <QWidget>
 
+class QCheckBox;
 class QComboBox;
 class QLabel;
 class QPushButton;
@@ -34,7 +35,12 @@ private:
     void send();
     void analyze(std::function<void()> then);
     void plan(const QString &instruction);
-    void generateShot(const QString &shotId);
+    // attempt > 0: a Critic retry with `shotOverride` (the shot with the critic's revised prompt).
+    void generateShot(const QString &shotId, int attempt = 0, const QJsonObject &shotOverride = {});
+    // Critic: reviews new results of a shot and retries it while the best score is below the threshold.
+    void critique(const QString &shotId, const QStringList &assetIds, int attempt, const QJsonObject &shotUsed);
+    void saveCharacterToLibrary();
+    void loadCharacterFromLibrary();
     void generateAll();
     void newSession();
     void loadSessions(const QString &select = QString());
@@ -66,6 +72,9 @@ private:
     QPushButton *m_analyze;
     ProviderCombo *m_provider;
     QSpinBox *m_variants;
+    QCheckBox *m_critic;
+    QSpinBox *m_criticRetries;
+    QSpinBox *m_criticThreshold;
     QPushButton *m_generateAll;
     QVBoxLayout *m_shots;
     QLabel *m_planTitle;

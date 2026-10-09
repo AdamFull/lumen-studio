@@ -250,7 +250,7 @@
         <translation>Warten auf den Server...</translation>
     </message>
     <message>
-        <location filename="../src/app/main.cpp" line="+163"/>
+        <location filename="../src/app/main.cpp" line="+166"/>
         <source>Lumen Studio did not close properly last time. Open documents were restored from the last autosave; a crash report may be in the log folder (Help → Open log folder).</source>
         <translation>Lumen Studio wurde beim letzten Mal nicht ordnungsgemäß beendet. Geöffnete Dokumente wurden aus der letzten automatischen Sicherung wiederhergestellt; ein Absturzbericht befindet sich möglicherweise im Protokollordner (Hilfe → Protokollordner öffnen).</translation>
     </message>
@@ -683,7 +683,7 @@
         <translation>Physikeinstellung %1 benötigt mindestens zwei Eckpunkte.</translation>
     </message>
     <message>
-        <location filename="../src/ui/pages/CreatePage.cpp" line="+575"/>
+        <location filename="../src/ui/pages/CreatePage.cpp" line="+622"/>
         <source>**Character sheet:** %1 — %2</source>
         <translation>**Charakterblatt:** %1 — %2</translation>
     </message>
@@ -1285,7 +1285,17 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ai::Director</name>
     <message>
-        <location filename="../src/ai/Director.cpp" line="+124"/>
+        <location filename="../src/ai/Director.cpp" line="+152"/>
+        <source>The model assigned to &apos;Vision analysis&apos; (%1) cannot see images, so it cannot review results.</source>
+        <translation>Das Modell für die Bildanalyse (%1) kann keine Bilder verarbeiten und daher keine Ergebnisse bewerten.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>No language model is configured for &apos;Vision analysis&apos;.</source>
+        <translation>Für die Bildanalyse ist kein Sprachmodell konfiguriert.</translation>
+    </message>
+    <message>
+        <location line="+64"/>
         <source>The model assigned to &apos;Vision analysis&apos; (%1) cannot see images. Choose a vision-capable model in Settings → Providers → Roles.</source>
         <translation>Das der &apos;Bildanalyse&apos; zugewiesene Modell (%1) kann keine Bilder sehen. Wählen Sie unter Einstellungen → Anbieter → Rollen ein bildfähiges Modell.</translation>
     </message>
@@ -3014,7 +3024,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::CreatePage</name>
     <message>
-        <location filename="../src/ui/pages/CreatePage.cpp" line="-645"/>
+        <location filename="../src/ui/pages/CreatePage.cpp" line="-687"/>
         <source>Director</source>
         <translation>Regie</translation>
     </message>
@@ -3025,12 +3035,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+227"/>
+        <location line="+269"/>
         <source>New session</source>
         <translation>Neue Sitzung</translation>
     </message>
     <message>
-        <location line="-203"/>
+        <location line="-245"/>
         <source>Describe what you need, e.g. &quot;3 images of my character for a Live2D avatar: neutral front A-pose, eyes closed and mouth open variants&quot;. Attach reference images above. Enter sends, Shift+Enter = new line.</source>
         <translation>Beschreiben Sie, was Sie benötigen, z. B. „3 Bilder meines Charakters für einen Live2D-Avatar: neutrale A-Pose von vorn, Varianten mit geschlossenen Augen und offenem Mund“. Hängen Sie oben Referenzbilder an. Eingabe sendet, Umschalt+Eingabe = neue Zeile.</translation>
     </message>
@@ -3056,34 +3066,55 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+373"/>
+        <location line="+415"/>
         <source>Send</source>
         <translation>Senden</translation>
     </message>
     <message>
-        <location line="-355"/>
+        <location line="-397"/>
+        <location line="+767"/>
         <source>Character</source>
         <translation>Charakter</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="-763"/>
         <source>Edit sheet</source>
         <translation>Steckbrief bearbeiten</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+317"/>
+        <location line="+359"/>
         <source>Analyze references</source>
         <translation>Referenzen analysieren</translation>
     </message>
     <message>
-        <location line="-299"/>
-        <location line="+313"/>
+        <location line="-356"/>
+        <source>Library</source>
+        <translation>Bibliothek</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Reuse characters across projects</source>
+        <translation>Figuren projektübergreifend wiederverwenden</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Save character to library…</source>
+        <translation>Figur in der Bibliothek speichern…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Load character from library…</source>
+        <translation>Figur aus der Bibliothek laden…</translation>
+    </message>
+    <message>
+        <location line="+20"/>
+        <location line="+344"/>
         <source>Shot plan</source>
         <translation>Aufnahmeplan</translation>
     </message>
     <message>
-        <location line="-310"/>
+        <location line="-341"/>
         <source>Generator</source>
         <translation>Generator</translation>
     </message>
@@ -3093,7 +3124,37 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation> pro Aufnahme</translation>
     </message>
     <message>
+        <location line="+3"/>
+        <source>Critic</source>
+        <translation>Kritiker</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>A vision model reviews every result against the references and the shot, and retries shots that score below the minimum with an improved prompt</source>
+        <translation>Ein Bildanalysemodell vergleicht jedes Ergebnis mit den Referenzen und der Einstellung und generiert Einstellungen unter der Mindestbewertung mit einem verbesserten Prompt erneut</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>min </source>
+        <translation>min. </translation>
+    </message>
+    <message>
         <location line="+2"/>
+        <source>Lowest acceptable critic score</source>
+        <translation>Niedrigste akzeptierte Bewertung</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>retries </source>
+        <translation>Versuche </translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>How often a shot is generated again when no result reaches the minimum score</source>
+        <translation>Wie oft eine Einstellung erneut generiert wird, wenn kein Ergebnis die Mindestbewertung erreicht</translation>
+    </message>
+    <message>
+        <location line="+17"/>
         <source>Generate all</source>
         <translation>Alle generieren</translation>
     </message>
@@ -3205,7 +3266,121 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Wird vorbereitet…</translation>
     </message>
     <message>
-        <location line="+70"/>
+        <location line="+85"/>
+        <source>Critic is reviewing…</source>
+        <translation>Kritiker bewertet…</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Critic failed: %1</source>
+        <translation>Kritiker fehlgeschlagen: %1</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Critic: %1/10 ✓</source>
+        <translation>Kritiker: %1/10 ✓</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Critic: best %1/10 — retrying (%2/%3)…</source>
+        <translation>Kritiker: bestes Ergebnis %1/10 – neuer Versuch (%2/%3)…</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+5"/>
+        <source>Critic: best %1/10 after %n attempt(s)</source>
+        <translation>
+            <numerusform>Kritiker: bestes Ergebnis %1/10 nach %n Versuch</numerusform>
+            <numerusform>Kritiker: bestes Ergebnis %1/10 nach %n Versuchen</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+52"/>
+        <source>Attach references or create a character sheet first.</source>
+        <translation>Fügen Sie zuerst Referenzen hinzu oder erstellen Sie ein Figurenblatt.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <location line="+12"/>
+        <source>Save character</source>
+        <translation>Figur speichern</translation>
+    </message>
+    <message>
+        <location line="-12"/>
+        <source>Name in the character library:</source>
+        <translation>Name in der Figurenbibliothek:</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Replace the saved character &quot;%1&quot;?</source>
+        <translation>Die gespeicherte Figur „%1“ ersetzen?</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+10"/>
+        <source>Saved &quot;%1&quot; with %n reference(s) to the character library.</source>
+        <translation>
+            <numerusform>„%1“ mit %n Referenz in der Figurenbibliothek gespeichert.</numerusform>
+            <numerusform>„%1“ mit %n Referenzen in der Figurenbibliothek gespeichert.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <location line="+40"/>
+        <source>Character library</source>
+        <translation>Figurenbibliothek</translation>
+    </message>
+    <message>
+        <location line="-37"/>
+        <source>Characters saved from any project. Loading one adds its references to this project and sets the character sheet of the session.</source>
+        <translation>Figuren, die in beliebigen Projekten gespeichert wurden. Beim Laden werden ihre Referenzen diesem Projekt hinzugefügt und das Figurenblatt der Sitzung gesetzt.</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+9"/>
+        <source>%n reference(s) · %1</source>
+        <translation>
+            <numerusform>%n Referenz · %1</numerusform>
+            <numerusform>%n Referenzen · %1</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Load</source>
+        <translation>Laden</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Delete</source>
+        <translation>Löschen</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>Delete &quot;%1&quot; from the character library?</source>
+        <translation>„%1“ aus der Figurenbibliothek löschen?</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>The library is empty. Save a character from any project first.</source>
+        <translation>Die Bibliothek ist leer. Speichern Sie zuerst eine Figur aus einem beliebigen Projekt.</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>Loaded &quot;%1&quot;.</source>
+        <translation>„%1“ geladen.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>%1 — reference %2</source>
+        <translation>%1 – Referenz %2</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+6"/>
+        <source>Loaded &quot;%1&quot; with %n reference(s).</source>
+        <translation>
+            <numerusform>„%1“ mit %n Referenz geladen.</numerusform>
+            <numerusform>„%1“ mit %n Referenzen geladen.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+20"/>
         <source>No shots are selected for generation.</source>
         <translation>Keine Aufnahmen zur Generierung ausgewählt.</translation>
     </message>
@@ -3476,7 +3651,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::DirectorSession</name>
     <message>
-        <location filename="../src/ui/director/DirectorSession.cpp" line="+240"/>
+        <location filename="../src/ui/director/DirectorSession.cpp" line="+245"/>
         <source>Untitled session</source>
         <translation>Unbenannte Sitzung</translation>
     </message>
@@ -7201,7 +7376,7 @@ oder aus der Bibliothek ziehen</translation>
 <context>
     <name>lumen::ui::ShotCard</name>
     <message>
-        <location filename="../src/ui/director/ShotCard.cpp" line="+46"/>
+        <location filename="../src/ui/director/ShotCard.cpp" line="+48"/>
         <source>Edit the pose</source>
         <translation>Pose bearbeiten</translation>
     </message>
@@ -7236,7 +7411,17 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Im Editor öffnen (Rechtsklick für mehr)</translation>
     </message>
     <message>
+        <location line="+8"/>
+        <source>Critic: %1/10 (identity %2, pose %3)</source>
+        <translation>Kritiker: %1/10 (Identität %2, Pose %3)</translation>
+    </message>
+    <message>
         <location line="+5"/>
+        <source>Critic score %1 of 10</source>
+        <translation>Kritikerbewertung %1 von 10</translation>
+    </message>
+    <message>
+        <location line="+6"/>
         <source>Open in editor</source>
         <translation>Im Editor öffnen</translation>
     </message>
