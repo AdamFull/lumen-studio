@@ -8,6 +8,7 @@
 
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QRegularExpression>
 
 namespace lumen::ai {
 
@@ -252,6 +253,44 @@ StructuredChatOperation *Director::critiqueShot(const QImage &result, const QJso
     return requestJson(provider, req);
 }
 
+QString Director::cleanPrompt(const QString &prompt)
+{
+    static const QRegularExpression rigValue(
+        QStringLiteral("\\b(?:camera_pitch|bend_twist|raise|direction|bend|twist|yaw|pitch|roll|lean|tilt|perspective)\\s*[:=]?\\s*"
+                       "-?\\d+(?:\\.\\d+)?\\s*(?:degrees|deg|°)?"),
+        QRegularExpression::CaseInsensitiveOption);
+    static const QRegularExpression rigName(QStringLiteral("\\b(?:left|right)_(?:arm|leg|hand)\\b|\\b(?:camera_pitch|bend_twist|include_hands|include_face)\\b"),
+                                            QRegularExpression::CaseInsensitiveOption);
+    QString out = prompt;
+    out.remove(rigValue);
+    out.remove(rigName);
+    // Tidy what is left: empty comma-separated items and doubled spaces.
+    QStringList parts;
+    for (const QString &part : out.split(u',')) {
+        const QString p = part.simplified();
+        if (!p.isEmpty())
+            parts << p;
+    }
+    return parts.join(QStringLiteral(", "));
+}
+
+QJsonObject Director::sanitizePlan(const QJsonObject &plan)
+{
+    QJsonObject out = plan;
+    QJsonArray shots;
+    for (const QJsonValue &v : plan.value(QStringLiteral("shots")).toArray()) {
+        QJsonObject shot = v.toObject();
+        for (const char *key : {"prompt", "negative_prompt", "description"}) {
+            const QString k = QLatin1String(key);
+            if (shot.contains(k))
+                shot.insert(k, cleanPrompt(shot.value(k).toString()));
+        }
+        shots.append(shot);
+    }
+    out.insert(QStringLiteral("shots"), shots);
+    return out;
+}
+
 QString Director::describeCharacter(const QJsonObject &s)
 {
     if (s.isEmpty())
@@ -337,7 +376,9 @@ StructuredChatOperation *Director::planShots(const PlanInput &in)
         "Prompt writing rules:\n- %4\n- Every prompt must fully restate the character's appearance (hair, eyes, outfit, colors, "
         "distinctive features) because each image is generated independently.\n- Describe the pose, expression, framing and "
         "background in the prompt too, consistent with the pose parameters.\n- Keep the character identical across all shots.\n"
-        "- negative_prompt lists what to avoid (may be empty).")
+        "- negative_prompt lists what to avoid (may be empty).\n- Never copy rig parameter names or numbers (raise, direction, "
+        "bend, twist, yaw, pitch, left_arm...) into prompt, description or negative_prompt: describe the pose in plain words, "
+        "e.g. 'arms slightly away from the body, palms open'.")
         .arg(purpose.name, purpose.guidance, pose::rigParamsGuide(), in.style.describeForLlm());
     if (!in.character.isEmpty())
         system += QStringLiteral("\n\nCharacter sheet (authoritative):\n") + pretty(in.character);
@@ -422,8 +463,8 @@ ImageRequest Director::buildShotRequest(const QJsonObject &shot, const QList<Ref
     ImageRequest r;
     r.mode = GenMode::TextToImage;
     r.size = sizeForAspect(shot.value(QStringLiteral("aspect_ratio")).toString(QStringLiteral("2:3")), caps.nativePixels, caps.sizeMultiple);
-    r.prompt = style.apply(shot.value(QStringLiteral("prompt")).toString());
-    QString negative = shot.value(QStringLiteral("negative_prompt")).toString();
+    r.prompt = style.apply(cleanPrompt(shot.value(QStringLiteral("prompt")).toString()));
+    QString negative = cleanPrompt(shot.value(QStringLiteral("negative_prompt")).toString());
     if (style.supportsNegative && !style.defaultNegative.isEmpty())
         negative = negative.isEmpty() ? style.defaultNegative : negative + QStringLiteral(", ") + style.defaultNegative;
     r.negativePrompt = style.supportsNegative ? negative : QString();

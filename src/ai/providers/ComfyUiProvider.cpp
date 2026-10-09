@@ -144,6 +144,9 @@ ProviderType ComfyUiProvider::describe()
          segmenters, 0, 0, false, true},
         {QStringLiteral("timeout_min"), tr("Timeout (minutes)"), F::Integer, 30, QString(), {}, 1, 240, false, true},
         {QStringLiteral("concurrency"), tr("Parallel jobs"), F::Integer, 1, QString(), {}, 1, 8, false, true},
+        {QStringLiteral("free_vram"), tr("Free VRAM when idle"), F::Boolean, false,
+         tr("Unload ComfyUI's models a few seconds after the last job, so a local language model (llama.cpp, Ollama, "
+            "LM Studio) on the same GPU runs at full speed. Recommended for GPUs with 8-12 GB.")},
     };
     return t;
 }
@@ -843,6 +846,53 @@ void ComfyUiProvider::runGraph(ImageOperation *op, std::function<QJsonObject(con
 }
 
 ImageOperation *ComfyUiProvider::generate(const ImageRequest &r)
+{
+    return track(generateImpl(r));
+}
+
+ImageOperation *ComfyUiProvider::runUtilityImpl(Utility utility, const QImage &image, const QJsonObject &params)
+{
+    return track(runUtilityImpl(utility, image, params));
+}
+
+ImageOperation *ComfyUiProvider::track(ImageOperation *op)
+{
+    if (!op)
+        return op;
+    ++m_activeOps;
+    if (m_freeTimer)
+        m_freeTimer->stop();
+    QPointer<ComfyUiProvider> self(this);
+    connect(op, &Operation::finished, this, [self] {
+        if (self && --self->m_activeOps == 0)
+            self->freeVramSoon();
+    });
+    return op;
+}
+
+void ComfyUiProvider::freeVramSoon()
+{
+    if (!setting(QStringLiteral("free_vram")).toBool())
+        return;
+    if (!m_freeTimer) {
+        m_freeTimer = new QTimer(this);
+        m_freeTimer->setSingleShot(true);
+        m_freeTimer->setInterval(4000);
+        connect(m_freeTimer, &QTimer::timeout, this, [this] {
+            if (m_activeOps > 0)
+                return;
+            net::CallOptions o;
+            o.maxRetries = 0;
+            o.quiet = true;
+            o.timeoutMs = 15000;
+            http()->postJson(request(QStringLiteral("/free")),
+                             QJsonObject{{QStringLiteral("unload_models"), true}, {QStringLiteral("free_memory"), true}}, o);
+        });
+    }
+    m_freeTimer->start();
+}
+
+ImageOperation *ComfyUiProvider::generateImpl(const ImageRequest &r)
 {
     auto *op = new ImageOperation(this);
     QList<QPair<QString, QImage>> uploads;

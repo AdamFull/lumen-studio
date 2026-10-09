@@ -669,6 +669,8 @@ void TestCanvas::assistantRunsReferenceScenario()
     QCOMPARE(txt2img, 1);
     // The director state the model saw, the plan, and the generated asset reported back.
     QVERIFY(QJsonDocument(agentRequests[1]).toJson().contains("purposes"));
+    // plan_shots reports the stored plan (title and shot ids) to the model.
+    QVERIFY(QJsonDocument(agentRequests[2]).toJson().contains("Front A-pose"));
     const QJsonObject state = studio.directorActions()->directorState();
     QCOMPARE(state.value(QStringLiteral("purpose")).toString(), QStringLiteral("live2d"));
     const QJsonArray shots = state.value(QStringLiteral("shots")).toArray();

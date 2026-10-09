@@ -40,6 +40,7 @@ private slots:
     void generationServiceRegionEndToEnd();
     void utilityOnAssets();
     void directorCritique();
+    void cleanShotPrompts();
     void agentNativeTools();
     void agentJsonProtocol();
 
@@ -518,6 +519,29 @@ void TestServices::agentJsonProtocol()
     // The transcript ends with the plain reply.
     QCOMPARE(run->messages().last().text, QStringLiteral("It is 2."));
     delete run;
+}
+
+void TestServices::cleanShotPrompts()
+{
+    // A real llama.cpp plan copied rig parameters into the prompt.
+    const QString dirty = QStringLiteral("1girl, red hair, blue robe, full body, A-pose, arms raise 35 direction 90 bend 0 bend_twist 0, "
+                                         "left_arm raise: 40, yaw=-15 degrees, hands open,, eyes open");
+    QCOMPARE(Director::cleanPrompt(dirty),
+             QStringLiteral("1girl, red hair, blue robe, full body, A-pose, arms, hands open, eyes open"));
+    // Ordinary text and numbers are kept.
+    QCOMPARE(Director::cleanPrompt(QStringLiteral("2girls, 1boy, holding 3 apples, raised hand, bending forward")),
+             QStringLiteral("2girls, 1boy, holding 3 apples, raised hand, bending forward"));
+    const QJsonObject plan{{QStringLiteral("title"), QStringLiteral("t")},
+                           {QStringLiteral("shots"), QJsonArray{QJsonObject{{QStringLiteral("id"), QStringLiteral("a")},
+                                                                            {QStringLiteral("prompt"), dirty},
+                                                                            {QStringLiteral("description"), QStringLiteral("front, yaw 0")},
+                                                                            {QStringLiteral("pose"), QJsonObject{{QStringLiteral("yaw"), 0}}}}}}};
+    const QJsonObject clean = Director::sanitizePlan(plan);
+    const QJsonObject shot = clean.value(QStringLiteral("shots")).toArray().first().toObject();
+    QVERIFY(!shot.value(QStringLiteral("prompt")).toString().contains(QLatin1String("raise")));
+    QCOMPARE(shot.value(QStringLiteral("description")).toString(), QStringLiteral("front"));
+    QCOMPARE(shot.value(QStringLiteral("pose")).toObject().value(QStringLiteral("yaw")).toInt(), 0); // the rig itself is untouched
+    QCOMPARE(clean.value(QStringLiteral("title")).toString(), QStringLiteral("t"));
 }
 
 QTEST_MAIN(TestServices)

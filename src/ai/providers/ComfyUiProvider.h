@@ -4,6 +4,8 @@
 
 #include <QHash>
 #include <QJsonObject>
+#include <QPointer>
+#include <QTimer>
 
 namespace lumen::ai {
 
@@ -93,6 +95,12 @@ protected:
     void onConfigured() override;
 
 private:
+    ImageOperation *generateImpl(const ImageRequest &request);
+    ImageOperation *runUtilityImpl(Utility utility, const QImage &image, const QJsonObject &params);
+    // "Free VRAM when idle": counts running operations and asks ComfyUI to unload its models a few
+    // seconds after the last one, so a local LLM can use the GPU.
+    ImageOperation *track(ImageOperation *op);
+    void freeVramSoon();
     QNetworkRequest request(const QString &path) const;
     QFuture<QStringList> nodeOptions(const QString &nodeClass, const QString &input);
     QFuture<bool> hasNode(const QString &nodeClass);
@@ -104,6 +112,8 @@ private:
 
     QString m_clientId;
     QHash<QString, bool> m_nodeCache;
+    int m_activeOps = 0;
+    QPointer<QTimer> m_freeTimer;
 };
 
 } // namespace lumen::ai

@@ -58,6 +58,12 @@ public:
     // The shot with the critic's revised prompt and negative additions applied (for a retry).
     static QJsonObject applyCritique(const QJsonObject &shot, const QJsonObject &critique);
 
+    // Removes pose-rig parameters that models sometimes copy into prompts ("raise 35, bend_twist 0")
+    // and tidies the separators left behind.
+    static QString cleanPrompt(const QString &prompt);
+    // A plan with cleaned prompts, negative prompts and descriptions.
+    static QJsonObject sanitizePlan(const QJsonObject &plan);
+
     static QJsonObject characterSheetSchema();
     static QJsonObject shotSchema();
     static QJsonObject shotPlanSchema(int maxShots = 12);

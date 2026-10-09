@@ -314,7 +314,12 @@ void TestProvidersCloud::comfyEndToEnd()
     });
     ComfyUiProvider p(ComfyUiProvider::describe(), QStringLiteral("c"), &m_http, nullptr);
     p.configure({{QStringLiteral("url"), server.baseUrl().toString()}, {QStringLiteral("model"), QStringLiteral("animagineXL.safetensors")},
-                 {QStringLiteral("ipadapter_preset"), QStringLiteral("none")}});
+                 {QStringLiteral("ipadapter_preset"), QStringLiteral("none")}, {QStringLiteral("free_vram"), true}});
+    QJsonObject freed;
+    server.route("POST", QStringLiteral("/free"), [&](const MockRequest &req) {
+        freed = req.json();
+        return MockResponse::json({});
+    });
     ImageRequest r;
     r.prompt = QStringLiteral("p");
     r.controls = {ControlInput{ControlType::OpenPose, solid(Qt::black), 1.0, 0.0, 1.0}};
@@ -330,6 +335,9 @@ void TestProvidersCloud::comfyEndToEnd()
     QVERIFY(graph.contains("lumen/u1.png"));
     QVERIFY(!queued.value(QStringLiteral("client_id")).toString().isEmpty());
     delete op;
+    // "Free VRAM when idle": the models are unloaded a few seconds after the last job.
+    QVERIFY(freed.isEmpty());
+    QTRY_VERIFY_WITH_TIMEOUT(freed.value(QStringLiteral("unload_models")).toBool(), 8000);
 }
 
 void TestProvidersCloud::comfyTemplateBindings()

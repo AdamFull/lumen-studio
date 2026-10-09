@@ -675,13 +675,9 @@ void CreatePage::plan(const QString &instruction, std::function<void(QString err
             if (!self || !session)
                 return;
             self->setBusy(false);
-            if (done)
-                done(op->state() == ai::Operation::State::Succeeded ? QString()
-                     : op->state() == ai::Operation::State::Cancelled ? tr("Planning was cancelled.")
-                                                                       : op->errorString());
             ChatEntry entry;
             if (op->state() == ai::Operation::State::Succeeded) {
-                const QJsonObject plan = op->result();
+                const QJsonObject plan = ai::Director::sanitizePlan(op->result());
                 session->setPlan(plan);
                 QStringList lines;
                 lines << QStringLiteral("**%1**").arg(plan.value(QStringLiteral("title")).toString());
@@ -704,6 +700,11 @@ void CreatePage::plan(const QString &instruction, std::function<void(QString err
                 entry.text = QObject::tr("Planning failed: %1").arg(op->errorString());
             }
             session->replaceLastStatus(entry);
+            // Reported after the plan is stored: the caller reads it from the session.
+            if (done)
+                done(op->state() == ai::Operation::State::Succeeded ? QString()
+                     : op->state() == ai::Operation::State::Cancelled ? tr("Planning was cancelled.")
+                                                                       : op->errorString());
         });
     };
     // Without a character sheet, vision-capable directors look at the references directly.

@@ -1,4 +1,5 @@
-// Smoke tests against real servers. Skipped unless the servers are given:
+// Smoke tests against real servers. Skipped unless the servers are given (the assistant scenario
+// takes several minutes: set QTEST_FUNCTION_TIMEOUT=3600000):
 //   LUMEN_LIVE_LLM=http://127.0.0.1:8080/v1   (llama.cpp / OpenAI-compatible)
 //   LUMEN_LIVE_COMFY=http://127.0.0.1:8188    (ComfyUI)
 //   LUMEN_LIVE_CHECKPOINT=<checkpoint name>   (optional; first checkpoint otherwise)
@@ -201,8 +202,11 @@ void TestLive::assistantScenario()
     ui::Studio studio;
     for (Provider *p : studio.providers()->providers())
         studio.providers()->removeProvider(p->instanceId());
+    // The LLM and SDXL share the GPU: ComfyUI unloads its models when idle.
     QVERIFY(studio.providers()->addProvider(QStringLiteral("comfyui"), QStringLiteral("ComfyUI"),
-                                            {{QStringLiteral("url"), comfyUrl()}, {QStringLiteral("model"), qEnvironmentVariable("LUMEN_LIVE_CHECKPOINT")}}));
+                                            {{QStringLiteral("url"), comfyUrl()},
+                                             {QStringLiteral("model"), qEnvironmentVariable("LUMEN_LIVE_CHECKPOINT")},
+                                             {QStringLiteral("free_vram"), true}}));
     QVERIFY(studio.providers()->addProvider(QStringLiteral("llamacpp"), QStringLiteral("llama.cpp"),
                                             {{QStringLiteral("url"), llmUrl()}, {QStringLiteral("timeout_s"), 900}}));
     studio.openProject(dir.filePath(QStringLiteral("live.lumen")));
@@ -224,6 +228,8 @@ void TestLive::assistantScenario()
         if (m.role == ChatRole::Assistant && !m.toolCalls.isEmpty())
             for (const ToolCall &c : m.toolCalls)
                 qInfo().noquote() << "  tool:" << c.name << QString::fromUtf8(QJsonDocument(c.arguments).toJson(QJsonDocument::Compact)).left(200);
+        if (m.role == ChatRole::Tool)
+            qInfo().noquote() << "  result:" << m.text.left(400);
     }
     qInfo().noquote() << "  reply:" << panel.lastReply();
     QVERIFY(!panel.lastReply().isEmpty());
