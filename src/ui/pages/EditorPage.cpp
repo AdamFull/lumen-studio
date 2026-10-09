@@ -11,6 +11,7 @@
 #include "ui/canvas/CanvasView.h"
 #include "ui/canvas/EditorState.h"
 #include "ui/canvas/Tools.h"
+#include "ui/canvas/TransformTool.h"
 #include "ui/pages/AiPanel.h"
 #include "ui/widgets/Controls.h"
 #include "ui/widgets/LayersPanel.h"
@@ -103,6 +104,7 @@ EditorPage::EditorPage(Studio *studio, QWidget *parent)
     m_toolGroup = new QActionGroup(this);
     m_toolGroup->setExclusive(true);
     m_tools = {new MoveTool(m_state, this),
+               new TransformTool(m_state, this),
                new SelectionTool(m_state, SelectionTool::Shape::Rect, this),
                new SelectionTool(m_state, SelectionTool::Shape::Ellipse, this),
                new SelectionTool(m_state, SelectionTool::Shape::Lasso, this),

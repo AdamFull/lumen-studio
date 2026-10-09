@@ -279,7 +279,7 @@ before ticking a milestone.
 ### M3 — Canvas & editor core
 - [x] Tiled raster layer, document, composite cache
 - [x] GPU canvas view: zoom/pan/rotate, fit, checkerboard, pixel grid, overlays
-- [ ] Tools: move, brush, eraser, rect/ellipse/lasso selection, mask brush/eraser, eyedropper, fill, crop ✔ — free transform pending
+- [x] Tools: move, free transform (move/scale/rotate/flip, selection-aware, lossless within a session), brush, eraser, rect/ellipse/lasso selection, mask brush/eraser, eyedropper, fill, crop
 - [x] Layers panel (opacity, blend, visibility, lock, reorder, duplicate, merge)
 - [x] Undo/redo with tile-delta commands, history panel
 - [x] Open/import/export (PNG/JPEG/WebP), clipboard, drag & drop — **AC**: 60 fps brush on 4096² doc, undo memory bounded.

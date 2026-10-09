@@ -24,6 +24,7 @@ const QHash<QString, QString> &iconData()
         {QStringLiteral("mask-brush"), QStringLiteral("<rect x='2.5' y='2.5' width='12' height='12' rx='2' stroke-dasharray='2.2 2'/><path d='M19.6 9.2a1.7 1.7 0 0 1 2.4 2.4l-6.9 6.9-3.1-.7-.7-3.1z'/><path d='M10.6 16.7c-1.7 0-2.6 1.2-2.6 2.8 0 .4-.3.7-.7.8.8.8 1.9 1.2 3.1 1.2 1.9 0 3.1-1.2 3.1-2.9'/>")},
         {QStringLiteral("eyedropper"), QStringLiteral("<path d='M14.5 4.5a2.8 2.8 0 0 1 4 4L16 11l1.5 1.5-1.5 1.5L10 8l1.5-1.5L13 8z'/><path d='M12 10l-7.3 7.3a2 2 0 0 0-.6 1.4V20h1.3a2 2 0 0 0 1.4-.6L14 12'/>")},
         {QStringLiteral("fill"), QStringLiteral("<path d='M5 11l7-7 8 8-7 7a2 2 0 0 1-2.8 0L5 13.8A2 2 0 0 1 5 11z'/><path d='M3 11h17'/><path d='M20.5 15.5s1.5 1.7 1.5 2.8a1.5 1.5 0 0 1-3 0c0-1.1 1.5-2.8 1.5-2.8z'/>")},
+        {QStringLiteral("transform"), QStringLiteral("<rect x='5' y='5' width='14' height='14' rx='1' stroke-dasharray='3 2'/><rect x='3' y='3' width='4' height='4'/><rect x='17' y='3' width='4' height='4'/><rect x='3' y='17' width='4' height='4'/><rect x='17' y='17' width='4' height='4'/>")},
         {QStringLiteral("crop"), QStringLiteral("<path d='M6 2v14a2 2 0 0 0 2 2h14'/><path d='M18 22V8a2 2 0 0 0-2-2H2'/>")},
         {QStringLiteral("hand"), QStringLiteral("<path d='M18 11V6a2 2 0 0 0-4 0v5M14 10V4a2 2 0 0 0-4 0v6M10 10.5V6a2 2 0 0 0-4 0v8'/><path d='M18 8a2 2 0 0 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.9-6-2.4l-3.6-3.6a2 2 0 0 1 2.8-2.8L6 14'/>")},
         {QStringLiteral("zoom-in"), QStringLiteral("<circle cx='11' cy='11' r='7'/><path d='M21 21l-5-5M11 8v6M8 11h6'/>")},

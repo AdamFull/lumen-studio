@@ -8,6 +8,7 @@ add_library(lumen_ui STATIC
     canvas/CanvasView.h canvas/CanvasView.cpp
     canvas/Tool.h
     canvas/Tools.h canvas/Tools.cpp
+    canvas/TransformTool.h canvas/TransformTool.cpp
     widgets/Controls.h widgets/Controls.cpp
     widgets/ReferenceStrip.h widgets/ReferenceStrip.cpp
     widgets/LayersPanel.h widgets/LayersPanel.cpp

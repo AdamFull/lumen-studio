@@ -7,7 +7,7 @@ It covers:
 * editable OpenPose poses, with a Live2D preset category;
 * mask-based local inpainting;
 * LLM-driven shot planning;
-* a layered editor;
+* a layered editor (selection, brush, fill, crop and free transform tools);
 * character part slicing for Live2D.
 
 Local back-ends (Stable Diffusion WebUI / Forge, ComfyUI, llama.cpp, Ollama, LM Studio) and cloud

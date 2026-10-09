@@ -4,6 +4,7 @@
 #include "core/Paths.h"
 #include "core/Settings.h"
 #include "ui/MainWindow.h"
+#include "ui/pages/EditorPage.h"
 #include "ui/parts/PartsPage.h"
 #include "ui/Studio.h"
 #include "ui/Theme.h"
@@ -39,7 +40,8 @@ int main(int argc, char *argv[])
                                     QStringLiteral("With --slice: open this step (1 source, 2 masks, 3 generate, 4 preview); 2+ segments with the skeleton."),
                                     QStringLiteral("step"));
     QCommandLineOption cubismOpt(QStringLiteral("cubism"), QStringLiteral("Preview a Live2D Cubism model (.model3.json)."), QStringLiteral("path"));
-    parser.addOptions({projectOpt, screenshotOpt, pageOpt, imageOpt, sizeOpt, sliceOpt, sliceStepOpt, cubismOpt});
+    QCommandLineOption toolOpt(QStringLiteral("tool"), QStringLiteral("Editor tool to select (e.g. transform, brush, crop)."), QStringLiteral("id"));
+    parser.addOptions({projectOpt, screenshotOpt, pageOpt, imageOpt, sizeOpt, sliceOpt, sliceStepOpt, cubismOpt, toolOpt});
     parser.process(app);
 
     paths::ensure();
@@ -77,6 +79,10 @@ int main(int argc, char *argv[])
         window.showPage(pages.value(page));
     if (parser.isSet(imageOpt))
         studio.openFile(QFileInfo(parser.value(imageOpt)).absoluteFilePath());
+    if (parser.isSet(toolOpt)) {
+        if (auto *editor = qobject_cast<ui::EditorPage *>(window.pageWidget(ui::Page::Editor)))
+            editor->selectTool(parser.value(toolOpt));
+    }
     if (parser.isSet(sliceOpt)) {
         const QString file = QFileInfo(parser.value(sliceOpt)).absoluteFilePath();
         const int step = parser.value(sliceStepOpt).toInt();
