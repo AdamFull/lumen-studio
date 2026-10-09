@@ -81,6 +81,7 @@ QString assetKindName(AssetKind kind)
     case AssetKind::Pose: return QStringLiteral("pose");
     case AssetKind::Mask: return QStringLiteral("mask");
     case AssetKind::Export: return QStringLiteral("export");
+    case AssetKind::Part: return QStringLiteral("part");
     }
     return QStringLiteral("import");
 }
@@ -95,6 +96,7 @@ QString assetKindLabel(AssetKind kind)
     case AssetKind::Pose: return QObject::tr("Pose map");
     case AssetKind::Mask: return QObject::tr("Mask");
     case AssetKind::Export: return QObject::tr("Export");
+    case AssetKind::Part: return QObject::tr("Character part");
     }
     return {};
 }
@@ -102,7 +104,7 @@ QString assetKindLabel(AssetKind kind)
 AssetKind assetKindFromName(const QString &name)
 {
     for (AssetKind k : {AssetKind::Reference, AssetKind::Generation, AssetKind::Edit, AssetKind::Import,
-                        AssetKind::Pose, AssetKind::Mask, AssetKind::Export}) {
+                        AssetKind::Pose, AssetKind::Mask, AssetKind::Export, AssetKind::Part}) {
         if (assetKindName(k) == name)
             return k;
     }

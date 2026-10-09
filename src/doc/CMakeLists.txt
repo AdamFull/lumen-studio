@@ -6,6 +6,7 @@ add_library(lumen_doc STATIC
     Commands.h Commands.cpp
     ProjectStore.h ProjectStore.cpp
     Project.h Project.cpp
+    Parts.h Parts.cpp
 )
 target_include_directories(lumen_doc PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
 target_link_libraries(lumen_doc PUBLIC lumen_core lumen_pose Qt6::Gui Qt6::Sql Qt6::Concurrent)

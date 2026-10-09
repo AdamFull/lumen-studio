@@ -1,0 +1,276 @@
+#include "core/ImageOps.h"
+#include "core/MaskOps.h"
+#include "core/Psd.h"
+
+#include <QBuffer>
+#include <QElapsedTimer>
+#include <QPainter>
+#include <QtTest>
+
+using namespace lumen;
+
+namespace {
+
+QImage rectMask(const QSize &size, const QList<QRect> &rects)
+{
+    QImage m = img::createMask(size, 0);
+    for (const QRect &r : rects) {
+        for (int y = r.top(); y <= r.bottom(); ++y)
+            std::fill(m.scanLine(y) + r.left(), m.scanLine(y) + r.right() + 1, uchar(255));
+    }
+    return m;
+}
+
+qint64 area(const QImage &m)
+{
+    qint64 n = 0;
+    for (int y = 0; y < m.height(); ++y)
+        for (int x = 0; x < m.width(); ++x)
+            n += m.constScanLine(y)[x] >= 128;
+    return n;
+}
+
+} // namespace
+
+class TestMasks : public QObject
+{
+    Q_OBJECT
+private slots:
+    void components();
+    void islandsAndHoles();
+    void verticalSplit();
+    void cutLineSplitsLimb();
+    void cutLineThatMissesKeepsMask();
+    void nearestSegment();
+    void colorRegionContiguous();
+    void labelMaps();
+    void visibleMasksFromLayers();
+    void extensionMask();
+    void silhouetteFromBackground();
+    void packBitsRoundTrip();
+    void psdRoundTrip();
+    void psdComponentsPerformance();
+};
+
+void TestMasks::components()
+{
+    const QImage m = rectMask({100, 50}, {QRect(0, 0, 10, 10), QRect(50, 10, 30, 30), QRect(11, 0, 2, 2)});
+    const img::Components c = img::connectedComponents(m);
+    QCOMPARE(c.count, 3);
+    const QList<QImage> pieces = img::splitComponents(m, 10);
+    QCOMPARE(pieces.size(), 2);
+    QCOMPARE(area(pieces[0]), 900);
+    QCOMPARE(area(pieces[1]), 100);
+    // Diagonal neighbours join only with 8-connectivity.
+    QImage d = img::createMask({4, 4}, 0);
+    d.scanLine(0)[0] = 255;
+    d.scanLine(1)[1] = 255;
+    QCOMPARE(img::connectedComponents(d, 128, true).count, 1);
+    QCOMPARE(img::connectedComponents(d, 128, false).count, 2);
+}
+
+void TestMasks::islandsAndHoles()
+{
+    QImage m = rectMask({60, 60}, {QRect(10, 10, 30, 30), QRect(50, 50, 3, 3)});
+    for (int y = 20; y < 25; ++y)
+        std::fill(m.scanLine(y) + 20, m.scanLine(y) + 25, uchar(0)); // 25 px hole
+    const QImage cleaned = img::removeSmallIslands(m, 20);
+    QCOMPARE(area(cleaned), 900 - 25);
+    QCOMPARE(area(img::fillHoles(cleaned, 10)), 900 - 25); // hole larger than the limit stays
+    QCOMPARE(area(img::fillHoles(cleaned)), 900);
+}
+
+void TestMasks::verticalSplit()
+{
+    const QImage m = rectMask({40, 10}, {QRect(0, 0, 40, 10)});
+    const auto [l, r] = img::splitByVerticalLine(m, 15);
+    QCOMPARE(area(l), 150);
+    QCOMPARE(area(r), 250);
+}
+
+void TestMasks::cutLineSplitsLimb()
+{
+    // A horizontal "arm" cut by a short vertical stroke that does not reach the edges.
+    const QImage m = rectMask({200, 100}, {QRect(10, 40, 180, 20)});
+    const QList<QImage> pieces = img::splitByCutLine(m, QPolygonF{QPointF(100, 45), QPointF(100, 55)});
+    QCOMPARE(pieces.size(), 2);
+    QCOMPARE(area(pieces[0]) + area(pieces[1]), 3600); // barrier pixels are reassigned
+    QVERIFY(std::abs(area(pieces[0]) - area(pieces[1])) <= 60);
+}
+
+void TestMasks::cutLineThatMissesKeepsMask()
+{
+    const QImage m = rectMask({200, 100}, {QRect(10, 40, 50, 20)});
+    const QList<QImage> pieces = img::splitByCutLine(m, QPolygonF{QPointF(150, 0), QPointF(150, 10)});
+    QCOMPARE(pieces.size(), 1);
+    QCOMPARE(area(pieces[0]), 1000);
+}
+
+void TestMasks::nearestSegment()
+{
+    const QImage m = rectMask({100, 100}, {QRect(0, 0, 100, 100)});
+    const QList<QImage> parts = img::splitByNearestSegment(m, {QLineF(10, 10, 10, 90), QLineF(90, 10, 90, 90)});
+    QCOMPARE(parts.size(), 2);
+    QCOMPARE(area(parts[0]), 5000);
+    QCOMPARE(area(parts[1]), 5000);
+    const QList<QImage> grouped = img::splitByNearestSegmentGroups(m, {QLineF(0, 0, 0, 1), QLineF(99, 0, 99, 1), QLineF(50, 99, 51, 99)},
+                                                                   {0, 0, 1}, 2);
+    QCOMPARE(area(grouped[0]) + area(grouped[1]), 10000);
+}
+
+void TestMasks::colorRegionContiguous()
+{
+    QImage im(50, 20, QImage::Format_ARGB32);
+    im.fill(Qt::white);
+    QPainter p(&im);
+    p.fillRect(QRect(0, 0, 10, 20), Qt::red);
+    p.fillRect(QRect(40, 0, 10, 20), Qt::red);
+    p.end();
+    QCOMPARE(area(img::colorRegion(im, {2, 2}, 10, true)), 200);
+    QCOMPARE(area(img::colorRegion(im, {2, 2}, 10, false)), 400);
+    const QImage limit = rectMask(im.size(), {QRect(0, 0, 5, 20)});
+    QCOMPARE(area(img::colorRegion(im, {2, 2}, 10, true, limit)), 100);
+}
+
+void TestMasks::labelMaps()
+{
+    const QSize size(30, 30);
+    const QImage a = rectMask(size, {QRect(0, 0, 20, 20)});
+    const QImage b = rectMask(size, {QRect(10, 10, 20, 20)});
+    QImage labels = img::labelsFromMasks(size, {a, b}, {3, 7});
+    const QVector<qint64> h = img::labelHistogram(labels);
+    QCOMPARE(h[7], 400);
+    QCOMPARE(h[3], 300); // b wins in the overlap
+    QCOMPARE(img::labelBounds(labels, 3), QRect(0, 0, 20, 20));
+    QCOMPARE(area(img::maskForLabel(labels, 7)), 400);
+    QCOMPARE(img::maskForLabel(labels, 7, QRect(25, 25, 10, 10)).size(), QSize(5, 5));
+    img::replaceLabel(labels, 3, 9);
+    QCOMPARE(img::labelHistogram(labels)[9], 300);
+    QVector<QRgb> palette(256, 0);
+    palette[9] = qRgba(255, 0, 0, 255);
+    const QImage col = img::colorizeLabels(labels, palette, QRect(0, 0, 5, 5));
+    QCOMPARE(col.pixel(0, 0), qRgba(255, 0, 0, 255));
+    const QImage edges = img::labelEdges(labels, labels.rect(), 0xffffffff);
+    QVERIFY(qAlpha(edges.pixel(9, 15)) == 255 || qAlpha(edges.pixel(10, 15)) == 255);
+    QCOMPARE(qAlpha(edges.pixel(2, 2)), 0);
+}
+
+void TestMasks::visibleMasksFromLayers()
+{
+    QImage bottom(20, 20, QImage::Format_ARGB32);
+    bottom.fill(Qt::blue);
+    QImage top(20, 20, QImage::Format_ARGB32);
+    top.fill(Qt::transparent);
+    QPainter p(&top);
+    p.fillRect(QRect(0, 0, 10, 20), Qt::red);
+    p.end();
+    const QList<QImage> vis = img::visibleMasksFromLayers({bottom, top});
+    QCOMPARE(area(vis[0]), 200);
+    QCOMPARE(area(vis[1]), 200);
+}
+
+void TestMasks::extensionMask()
+{
+    const QImage own = rectMask({100, 100}, {QRect(0, 0, 40, 100)});
+    const QImage occ = rectMask({100, 100}, {QRect(40, 0, 20, 50)});
+    const QImage ext = img::extensionMask(own, occ, 10);
+    QCOMPARE(area(ext), 4000 + 10 * 50);
+    QVERIFY(img::adaptiveExtensionRadius(0) == 8);
+    QVERIFY(img::adaptiveExtensionRadius(10'000'000) == 160);
+}
+
+void TestMasks::silhouetteFromBackground()
+{
+    QImage im(64, 64, QImage::Format_RGB32);
+    im.fill(QColor(250, 250, 250));
+    QPainter p(&im);
+    p.fillRect(QRect(16, 8, 32, 48), QColor(40, 60, 90));
+    p.end();
+    QCOMPARE(area(img::silhouetteMask(im)), 32 * 48);
+    QImage alpha(32, 32, QImage::Format_ARGB32);
+    alpha.fill(Qt::transparent);
+    QPainter q(&alpha);
+    q.fillRect(QRect(0, 0, 8, 8), Qt::black);
+    q.end();
+    QCOMPARE(area(img::silhouetteMask(alpha)), 64);
+}
+
+void TestMasks::packBitsRoundTrip()
+{
+    QByteArray row;
+    for (int i = 0; i < 300; ++i)
+        row.append(char(i < 140 ? 7 : (i % 3 == 0 ? i : 1)));
+    row.append(QByteArray(2, 'x'));
+    const QByteArray packed = psd::packBits(reinterpret_cast<const uchar *>(row.constData()), int(row.size()));
+    QVERIFY(packed.size() < row.size());
+    QByteArray out(row.size(), 0);
+    const uchar *p = reinterpret_cast<const uchar *>(packed.constData());
+    QVERIFY(psd::unpackBits(p, p + packed.size(), reinterpret_cast<uchar *>(out.data()), int(out.size())));
+    QCOMPARE(out, row);
+}
+
+void TestMasks::psdRoundTrip()
+{
+    psd::File f;
+    f.size = QSize(64, 48);
+    QImage body(64, 48, QImage::Format_ARGB32);
+    body.fill(Qt::transparent);
+    QPainter p(&body);
+    p.fillRect(QRect(20, 10, 20, 30), QColor(10, 200, 30, 255));
+    p.fillRect(QRect(20, 40, 20, 4), QColor(10, 200, 30, 128));
+    p.end();
+    QImage eye(6, 4, QImage::Format_ARGB32);
+    eye.fill(QColor(0, 0, 255));
+    f.layers = {psd::Layer::groupBegin(QStringLiteral("Head")),
+                psd::Layer::pixels(QStringLiteral("目 irides"), eye, QPoint(30, 12)),
+                psd::Layer::groupEnd(),
+                psd::Layer::pixels(QStringLiteral("topwear"), body)};
+    f.layers[3].opacity = 200;
+    f.layers[1].visible = false;
+
+    QBuffer buf;
+    buf.open(QIODevice::ReadWrite);
+    QVERIFY(psd::write(&buf, f));
+    buf.seek(0);
+    QString err;
+    const auto back = psd::read(&buf, &err);
+    QVERIFY2(back.has_value(), qPrintable(err));
+    QCOMPARE(back->size, f.size);
+    QCOMPARE(back->layers.size(), 4);
+    QCOMPARE(back->layers[0].kind, psd::Layer::Kind::GroupBegin);
+    QCOMPARE(back->layers[0].name, QStringLiteral("Head"));
+    QCOMPARE(back->layers[1].name, QStringLiteral("目 irides"));
+    QVERIFY(!back->layers[1].visible);
+    QCOMPARE(back->layers[1].offset, QPoint(30, 12));
+    QCOMPARE(back->layers[1].image.pixel(0, 0), qRgba(0, 0, 255, 255));
+    QCOMPARE(back->layers[2].kind, psd::Layer::Kind::GroupEnd);
+    QCOMPARE(back->layers[3].opacity, 200);
+    QCOMPARE(back->layers[3].offset, QPoint(20, 10)); // cropped to opaque bounds
+    QCOMPARE(back->layers[3].image.size(), QSize(20, 34));
+    QCOMPARE(qAlpha(back->layers[3].image.pixel(5, 32)), 128);
+    QVERIFY(std::abs(qGreen(back->layers[3].image.pixel(5, 32)) - 200) <= 1); // stored unpremultiplied
+    QVERIFY(!back->composite.isNull());
+    QCOMPARE(qAlpha(back->composite.pixel(0, 0)), 0);
+    QVERIFY(qAlpha(back->composite.pixel(25, 20)) > 150);
+}
+
+void TestMasks::psdComponentsPerformance()
+{
+    // A 2048x2048 mask with many islands: components + split must stay interactive.
+    QImage m = img::createMask({2048, 2048}, 0);
+    for (int y = 0; y < 2048; y += 64)
+        for (int x = 0; x < 2048; x += 64)
+            for (int yy = y; yy < y + 40; ++yy)
+                std::fill(m.scanLine(yy) + x, m.scanLine(yy) + x + 40, uchar(255));
+    QElapsedTimer t;
+    t.start();
+    const img::Components c = img::connectedComponents(m);
+    QCOMPARE(c.count, 32 * 32);
+    const QList<QImage> cut = img::splitByCutLine(rectMask({2048, 2048}, {QRect(0, 900, 2048, 200)}),
+                                                  QPolygonF{QPointF(1000, 950), QPointF(1010, 1050)});
+    QCOMPARE(cut.size(), 2);
+    qInfo() << "components + cut on 2048^2:" << t.elapsed() << "ms";
+}
+
+QTEST_MAIN(TestMasks)
+#include "tst_masks.moc"

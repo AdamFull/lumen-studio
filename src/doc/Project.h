@@ -16,7 +16,7 @@
 
 namespace lumen::doc {
 
-enum class AssetKind { Reference, Generation, Edit, Import, Pose, Mask, Export };
+enum class AssetKind { Reference, Generation, Edit, Import, Pose, Mask, Export, Part };
 
 QString assetKindName(AssetKind kind);
 QString assetKindLabel(AssetKind kind);
