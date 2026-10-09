@@ -1504,6 +1504,18 @@ void PartsPage::cancelGeneration()
 
 void PartsPage::rebuildCards()
 {
+    QList<const doc::Part *> order = m_set ? m_set->partsInDrawOrder() : QList<const doc::Part *>();
+    std::reverse(order.begin(), order.end());
+    QList<int> labels;
+    for (const doc::Part *p : order)
+        labels.append(p->label);
+    // Mask edits change parts often; only rebuild when the list itself changed.
+    if (labels == m_cardOrder && m_cardWidgets.size() == labels.size()) {
+        for (int label : labels)
+            updateCard(label);
+        return;
+    }
+    m_cardOrder = labels;
     for (auto it = m_cardWidgets.begin(); it != m_cardWidgets.end(); ++it) {
         if (it.value())
             it.value()->deleteLater();
@@ -1511,8 +1523,6 @@ void PartsPage::rebuildCards()
     m_cardWidgets.clear();
     if (!m_set)
         return;
-    QList<const doc::Part *> order = m_set->partsInDrawOrder();
-    std::reverse(order.begin(), order.end());
     int index = 0;
     for (const doc::Part *p : order) {
         auto *card = new PartCard(m_cards->parentWidget());

@@ -167,6 +167,7 @@ private:
     QPushButton *m_expressionButton;
     QVBoxLayout *m_cards;
     QHash<int, QPointer<PartCard>> m_cardWidgets;
+    QList<int> m_cardOrder;
     // Export panel.
     QCheckBox *m_idle;
     QCheckBox *m_follow;
