@@ -144,7 +144,7 @@ public:
     // `tags` (optional) assigns taxonomy kinds to the pieces (draw order and colour follow the kind).
     QList<int> splitPart(int label, const QList<QImage> &pieces, const QStringList &names = {},
                          const QStringList &sides = {}, const QString &undoText = QString(), const QStringList &tags = {});
-    // Metadata edit (name, tag, side, colour, order, visible, locked, prompt).
+    // Metadata edit (name, tag, side, colour, order, visible, locked, prompt, provenance).
     void updatePart(const Part &part, const QString &undoText = QString());
     // Draw order from a list of labels, back to front.
     void reorder(const QList<int> &labelsBackToFront);

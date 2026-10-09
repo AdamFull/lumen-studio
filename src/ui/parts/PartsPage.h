@@ -87,6 +87,7 @@ private:
 
     // Generation.
     void generate(const QList<int> &labels);
+    void generateExpression(const QString &kind);
     void cancelGeneration();
     void rebuildCards();
     void updateCard(int label);
@@ -161,6 +162,8 @@ private:
     QPushButton *m_generateAll;
     QPushButton *m_generateSelected;
     QPushButton *m_cancel;
+    QComboBox *m_expression;
+    QPushButton *m_expressionButton;
     QVBoxLayout *m_cards;
     QHash<int, QPointer<PartCard>> m_cardWidgets;
     // Export panel.

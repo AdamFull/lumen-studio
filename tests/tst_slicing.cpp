@@ -88,6 +88,7 @@ private slots:
     void endToEnd();
     void cutOutsTileWithoutGaps();
     void comfySegmentationTemplate();
+    void expressionVariant();
 
 private:
     net::HttpClient m_http;
@@ -519,6 +520,82 @@ void TestSlicing::comfySegmentationTemplate()
     QCOMPARE(qGray(g.image.pixel(40, 20)), 255);
     QCOMPARE(qGray(g.image.pixel(40, 100)), 0);
     delete op;
+}
+
+void TestSlicing::expressionVariant()
+{
+    MockHttpServer server;
+    QString prompt;
+    server.route("POST", QStringLiteral("/sdapi/v1/img2img"), [&](const MockRequest &req) {
+        const QJsonObject payload = req.json();
+        prompt = payload.value(QStringLiteral("prompt")).toString();
+        QImage out(payload.value(QStringLiteral("width")).toInt(), payload.value(QStringLiteral("height")).toInt(), QImage::Format_ARGB32);
+        out.fill(QColor(200, 120, 90));
+        return MockResponse::json({{QStringLiteral("images"), QJsonArray{b64(out)}}, {QStringLiteral("info"), QStringLiteral("{}")}});
+    });
+    server.route("GET", QStringLiteral("/sdapi/v1/progress"), [](const MockRequest &) { return MockResponse::json({}); });
+    QTemporaryDir dir;
+    doc::Project project;
+    auto opened = project.open(dir.filePath(QStringLiteral("p.lumen")));
+    QTRY_VERIFY(opened.isFinished());
+    ProviderRegistry registry(&m_http);
+    registerBuiltInProviders(registry);
+    QFile::remove(registry.configPath());
+    Provider *sd = registry.addProvider(QStringLiteral("sdwebui"), QStringLiteral("SD"), {{QStringLiteral("url"), server.baseUrl().toString()}});
+    JobQueue queue;
+    GenerationService generation(&registry, &queue);
+    generation.setProject(&project);
+    PartService service(&registry, &queue, &generation);
+
+    const QImage source = figure();
+    PartSet set;
+    set.bind(&project);
+    set.setSource(source, QStringLiteral("src"), img::silhouetteMask(source));
+    const int face = set.addPart(QStringLiteral("face"), {}, {}, rectMask(source.size(), QRect(90, 20, 60, 70)));
+    const int eyes = set.addPart(QStringLiteral("irides"), {}, {}, rectMask(source.size(), QRect(100, 45, 40, 10)));
+    QVERIFY(face && eyes);
+    const QImage region = parts::expressionRegion(set.labels(), {eyes}, set.silhouette());
+    QVERIFY(img::maskBounds(region).contains(QRect(100, 45, 40, 10)));
+    QVERIFY(img::maskBounds(region).height() > 10);
+
+    ExpressionOptions options;
+    options.kind = QStringLiteral("eyes_closed");
+    options.providerId = sd->instanceId();
+    Job *job = service.generateExpression(&set, {}, options); // finds the irides part by kind
+    QTRY_VERIFY_WITH_TIMEOUT(job->isFinished(), 10000);
+    QVERIFY2(job->state() == Job::State::Succeeded, qPrintable(job->errorString()));
+    QVERIFY(prompt.contains(QStringLiteral("closed")));
+    const doc::Part *variant = nullptr;
+    for (const doc::Part &p : set.parts()) {
+        if (p.tag == QLatin1String("eyes closed"))
+            variant = &p;
+    }
+    QVERIFY(variant);
+    QVERIFY(!variant->visible);
+    QCOMPARE(variant->pixels, 0);
+    QVERIFY(variant->hasResult());
+    QCOMPARE(variant->provenance, QStringLiteral("variant:eyes_closed"));
+    QVERIFY(variant->order > set.part(eyes)->order);
+    const QImage result = set.resultImage(variant->label);
+    QVERIFY(!result.isNull());
+    QVERIFY(QRect(variant->chosenRect()).intersects(QRect(100, 45, 40, 10)));
+
+    // Exported as a hidden layer.
+    const QString path = dir.filePath(QStringLiteral("v.psd"));
+    Job *exp = service.exportPsd(&set, path, ExportOptions{true, false});
+    QTRY_VERIFY_WITH_TIMEOUT(exp->isFinished(), 10000);
+    QVERIFY2(exp->state() == Job::State::Succeeded, qPrintable(exp->errorString()));
+    const auto file = psd::read(path);
+    QVERIFY(file.has_value());
+    bool found = false;
+    for (const psd::Layer &l : file->layers) {
+        if (l.name == QLatin1String("Eyes closed")) {
+            found = true;
+            QVERIFY(!l.visible);
+        }
+    }
+    QVERIFY(found);
+    QFile::remove(registry.configPath());
 }
 
 QTEST_MAIN(TestSlicing)

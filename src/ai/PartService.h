@@ -34,6 +34,17 @@ struct CompletionOptions
     bool refineAlpha = false;      // run background removal on the result when a provider offers it
 };
 
+struct ExpressionOptions
+{
+    QString kind;                  // parts::ExpressionKind id
+    QString providerId;
+    QString characterSummary;
+    int steps = 28;
+    double cfg = 6.0;
+    double denoise = 0.85;
+    QString model;
+};
+
 struct ExportOptions
 {
     bool includeCutOuts = true;    // parts without a generated result are exported as cut-outs
@@ -57,6 +68,10 @@ public:
     Job *segmentWithSkeleton(doc::PartSet *set, const pose::Person &skeleton, const parts::SegmentOptions &options);
     // One job per part; parts without pixels are skipped.
     QList<Job *> complete(doc::PartSet *set, const QList<int> &labels, const CompletionOptions &options);
+
+    // Repaints facial parts (eyes closed, mouth open...) and stores the drawing as a hidden variant
+    // part for Live2D blink / lip-sync. Empty `baseLabels` = the parts matching the expression kind.
+    Job *generateExpression(doc::PartSet *set, const QList<int> &baseLabels, const ExpressionOptions &options);
 
     Job *exportPsd(doc::PartSet *set, const QString &path, const ExportOptions &options);
     Job *exportPngFolder(doc::PartSet *set, const QString &directory, const ExportOptions &options);

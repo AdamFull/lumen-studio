@@ -586,6 +586,67 @@ QString completionPrompt(const doc::Part &part, const doc::PartKind *kind, const
     return prompt;
 }
 
+// ---- Expression variants ------------------------------------------------------------------------------
+
+const QList<ExpressionKind> &expressionKinds()
+{
+    static const QList<ExpressionKind> kinds{
+        {QStringLiteral("eyes_closed"), QObject::tr("Eyes closed"), QStringLiteral("eyes closed"),
+         {QStringLiteral("eyewhite"), QStringLiteral("irides"), QStringLiteral("eyelash")},
+         QStringLiteral("both eyes gently closed, relaxed closed eyelids drawn as curved lash lines, no visible irises")},
+        {QStringLiteral("eyes_smile"), QObject::tr("Smiling eyes"), QStringLiteral("eyes smile"),
+         {QStringLiteral("eyewhite"), QStringLiteral("irides"), QStringLiteral("eyelash")},
+         QStringLiteral("happy closed eyes curved upward like ^ ^, smiling eyes")},
+        {QStringLiteral("mouth_open"), QObject::tr("Mouth open (A)"), QStringLiteral("mouth open"),
+         {QStringLiteral("mouth")}, QStringLiteral("mouth open wide saying 'ah', visible teeth and tongue, same lips")},
+        {QStringLiteral("mouth_o"), QObject::tr("Mouth round (O)"), QStringLiteral("mouth o"),
+         {QStringLiteral("mouth")}, QStringLiteral("small round open mouth saying 'oh'")},
+        {QStringLiteral("mouth_smile"), QObject::tr("Smile"), QStringLiteral("mouth smile"),
+         {QStringLiteral("mouth")}, QStringLiteral("closed happy smile, corners of the mouth raised")},
+    };
+    return kinds;
+}
+
+const ExpressionKind *findExpression(const QString &id)
+{
+    for (const ExpressionKind &k : expressionKinds()) {
+        if (k.id == id)
+            return &k;
+    }
+    return nullptr;
+}
+
+QImage expressionRegion(const QImage &labels, const QList<int> &baseLabels, const QImage &silhouette)
+{
+    QImage mask = img::createMask(labels.size(), 0);
+    QVector<bool> wanted(256, false);
+    for (int l : baseLabels)
+        wanted[l & 0xff] = true;
+    for (int y = 0; y < labels.height(); ++y) {
+        const uchar *row = labels.constScanLine(y);
+        uchar *m = mask.scanLine(y);
+        for (int x = 0; x < labels.width(); ++x)
+            m[x] = wanted[row[x]] ? 255 : 0;
+    }
+    const QRect bounds = img::maskBounds(mask, 128);
+    if (bounds.isEmpty())
+        return mask;
+    // Eyelids and open mouths reach beyond the original shapes.
+    const int grow = std::clamp(int(std::lround(std::min(bounds.width(), bounds.height()) * 0.35)), 6, 96);
+    QImage region = img::dilateMask(mask, grow);
+    if (!silhouette.isNull() && silhouette.size() == region.size())
+        region = img::combineMasks(region, silhouette, img::MaskOp::Intersect);
+    return region;
+}
+
+QString expressionPrompt(const ExpressionKind &kind, const QString &characterSummary)
+{
+    QString prompt = kind.prompt;
+    if (!characterSummary.trimmed().isEmpty())
+        prompt += QStringLiteral(", %1").arg(characterSummary.trimmed());
+    return prompt + QStringLiteral(". Same character, same face, same art style and colors; change only this facial feature.");
+}
+
 // ---- Export -----------------------------------------------------------------------------------------
 
 QList<ExportLayer> exportLayers(const doc::PartSet::Snapshot &set, const QImage &source,

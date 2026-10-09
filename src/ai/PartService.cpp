@@ -485,6 +485,115 @@ QList<Job *> PartService::complete(doc::PartSet *setIn, const QList<int> &labels
     return jobs;
 }
 
+Job *PartService::generateExpression(doc::PartSet *setIn, const QList<int> &baseLabelsIn, const ExpressionOptions &options)
+{
+    QPointer<doc::PartSet> set(setIn);
+    QPointer<PartService> self(this);
+    const parts::ExpressionKind *kindPtr = parts::findExpression(options.kind);
+    const parts::ExpressionKind kind = kindPtr ? *kindPtr : parts::ExpressionKind{};
+    QList<int> base = baseLabelsIn;
+    if (base.isEmpty() && setIn) {
+        for (const doc::Part &p : setIn->parts()) {
+            if (kind.baseTags.contains(p.tag) && p.pixels > 0)
+                base.append(p.label);
+        }
+    }
+    const QString title = tr("Expression · %1").arg(kind.name.isEmpty() ? options.kind : kind.name);
+    return m_queue->submit(title, m_generation->groupFor(options.providerId), [self, set, base, kind, options](Job *job) {
+        if (!self || !set || !set->hasSource()) {
+            job->fail(tr("The part set is no longer open"));
+            return;
+        }
+        if (kind.id.isEmpty()) {
+            job->fail(tr("Unknown expression \"%1\"").arg(options.kind));
+            return;
+        }
+        if (base.isEmpty()) {
+            job->fail(tr("No %1 parts found - select the parts to repaint first.").arg(kind.baseTags.join(QStringLiteral("/"))));
+            return;
+        }
+        const QImage labels = set->labels();
+        const QImage silhouette = set->silhouette();
+        const QImage source = set->source();
+        job->setProgress(-1.0, tr("Preparing..."));
+        async::run([labels, base, silhouette, source] {
+            const QImage region = parts::expressionRegion(labels, base, silhouette);
+            if (img::maskIsEmpty(region, 128))
+                throw ProviderError(QObject::tr("The selected parts are empty."));
+            return std::make_pair(region, img::flatten(source, Qt::white));
+        }).then(job, [self, set, job, kind, options, silhouette](std::pair<QImage, QImage> prepared) {
+            if (!self || !set) {
+                job->fail(tr("The part set is no longer open"));
+                return;
+            }
+            GenerationSpec spec;
+            spec.providerId = options.providerId;
+            spec.saveAssets = false;
+            spec.title = job->title();
+            spec.request.mode = GenMode::Inpaint;
+            spec.request.prompt = parts::expressionPrompt(kind, options.characterSummary);
+            spec.request.negativePrompt = QStringLiteral("different character, different style, extra eyes, text, watermark");
+            spec.request.steps = options.steps;
+            spec.request.cfg = options.cfg;
+            spec.request.denoise = options.denoise;
+            spec.request.model = options.model;
+            spec.request.initImage = prepared.second;
+            spec.request.mask = prepared.first;
+            RegionInput region;
+            region.source = prepared.second;
+            region.mask = prepared.first;
+            region.padding = 64;
+            region.grow = 4;
+            region.feather = 8;
+            region.colorMatch = true;
+            spec.region = region;
+            self->m_generation->execute(job, spec, [self, set, kind, silhouette](Job *job, const GenerationSpec &used, GenerationOutput out) {
+                if (!self || !set) {
+                    job->fail(tr("The part set is no longer open"));
+                    return;
+                }
+                if (out.images.isEmpty()) {
+                    job->fail(out.text.isEmpty() ? tr("The provider returned no images") : out.text);
+                    return;
+                }
+                QImage layer = out.images.first();
+                if (!silhouette.isNull() && silhouette.size() == layer.size())
+                    layer = img::applyMaskToAlpha(layer, img::dilateMask(silhouette, 1));
+                // One variant part per expression; regenerating adds a variant to it.
+                int label = 0;
+                for (const doc::Part &p : set->parts()) {
+                    if (p.tag == kind.tag)
+                        label = p.label;
+                }
+                if (label == 0) {
+                    label = set->addPart(kind.tag, kind.name);
+                    if (label == 0) {
+                        job->fail(tr("A part set holds at most %1 parts.").arg(doc::PartSet::kMaxParts));
+                        return;
+                    }
+                    doc::Part p = *set->part(label);
+                    p.visible = false; // alternates are hidden layers in the export
+                    p.provenance = QStringLiteral("variant:") + kind.id;
+                    int order = 0;
+                    for (const doc::Part &o : set->parts()) {
+                        if (kind.baseTags.contains(o.tag))
+                            order = std::max(order, o.order + 1);
+                    }
+                    p.order = order;
+                    set->updatePart(p, tr("Add expression variant"));
+                }
+                const QJsonObject meta{{QStringLiteral("part_set"), set->id()},
+                                       {QStringLiteral("part_id"), set->part(label)->id},
+                                       {QStringLiteral("tag"), kind.tag},
+                                       {QStringLiteral("expression"), kind.id},
+                                       {QStringLiteral("prompt"), used.request.prompt},
+                                       {QStringLiteral("request"), used.request.describe()}};
+                self->storeResult(job, set, label, set->part(label)->id, layer, meta);
+            });
+        }).onFailed(job, [job](const std::exception &e) { job->fail(describeException(e)); });
+    }, QStringLiteral("parts"));
+}
+
 void PartService::storeResult(Job *job, QPointer<doc::PartSet> set, int, QString partId, QImage layerIn, QJsonObject meta, bool choose)
 {
     QPointer<doc::Project> project = m_generation->project();

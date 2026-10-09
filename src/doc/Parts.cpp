@@ -38,6 +38,17 @@ PartKind kind(const char *tag, const QString &name, const char *group, int order
     return k;
 }
 
+// Alternate facial drawings (Live2D blink / lip-sync), generated as hidden variant parts.
+QList<PartKind> expressionKinds()
+{
+    const QString note = QStringLiteral("an alternate drawing used by the rig");
+    return {kind("eyes closed", QObject::tr("Eyes closed"), "head", 23, 0x8e7cc3, false, 0.67, note, "closed eyes", {}, false),
+            kind("eyes smile", QObject::tr("Smiling eyes"), "head", 23, 0xa48fd1, false, 0.67, note, "smiling eyes", {}, false),
+            kind("mouth open", QObject::tr("Mouth open (A)"), "head", 20, 0xe06666, false, 0.66, note, "open mouth", {}, false),
+            kind("mouth o", QObject::tr("Mouth round (O)"), "head", 20, 0xea9999, false, 0.66, note, "round mouth", {}, false),
+            kind("mouth smile", QObject::tr("Smile"), "head", 20, 0xf4cccc, false, 0.66, note, "smiling mouth", {}, false)};
+}
+
 QList<PartTaxonomy> buildTaxonomies()
 {
     using QSL = QStringList;
@@ -129,6 +140,7 @@ QList<PartTaxonomy> buildTaxonomies()
              QStringLiteral("the complete held object, including parts hidden by the hands"), "held object",
              QSL{QStringLiteral("object"), QStringLiteral("weapon"), QStringLiteral("item")}),
     };
+    live2d.kinds += expressionKinds();
 
     PartTaxonomy simple;
     simple.id = QStringLiteral("simple");
@@ -156,6 +168,7 @@ QList<PartTaxonomy> buildTaxonomies()
              QSL{QStringLiteral("headwear"), QStringLiteral("objects"), QStringLiteral("eyewear"), QStringLiteral("earwear"),
                  QStringLiteral("neckwear")}),
     };
+    simple.kinds += expressionKinds();
     return {live2d, simple};
 }
 
@@ -412,7 +425,12 @@ PartSet::PartSet(QObject *parent)
     connect(&m_undo, &QUndoStack::indexChanged, this, [this] { touch(); });
 }
 
-PartSet::~PartSet() = default;
+PartSet::~PartSet()
+{
+    // The undo stack outlives the save timer during destruction and signals while clearing.
+    disconnect(&m_undo, nullptr, this, nullptr);
+    m_saveTimer.stop();
+}
 
 void PartSet::setName(const QString &name)
 {
@@ -748,6 +766,7 @@ void PartSet::updatePart(const Part &updated, const QString &undoText)
     p->visible = updated.visible;
     p->locked = updated.locked;
     p->prompt = updated.prompt;
+    p->provenance = updated.provenance;
     pushMaskChange(before, QRect(), QImage(), undoText.isEmpty() ? tr("Edit part") : undoText);
     emit partsChanged();
     emit labelsChanged(m_labels.rect()); // colours / visibility affect the overlay

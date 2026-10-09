@@ -169,7 +169,7 @@ public:
         m_approve->setChecked(p.state == doc::PartState::Approved);
         m_remove->setVisible(p.hasResult());
         const bool busy = p.state == doc::PartState::Queued || p.state == doc::PartState::Generating;
-        m_generate->setEnabled(!busy && p.pixels > 0);
+        m_generate->setEnabled(!busy && (p.pixels > 0 || p.provenance.startsWith(QLatin1String("variant:"))));
         if (m_resultKey != p.chosenAssetId() + QString::number(result.cacheKey())) {
             m_resultKey = p.chosenAssetId() + QString::number(result.cacheKey());
             m_thumb->setPixmap(checkerThumb(result, m_thumb->size()));
@@ -659,6 +659,18 @@ QWidget *PartsPage::buildGeneratePanel()
     buttons->addWidget(m_cancel);
     v->addLayout(buttons);
 
+    v->addWidget(sectionLabel(tr("Expression variants")));
+    auto *exprRow = new QHBoxLayout;
+    m_expression = new QComboBox(w);
+    for (const ai::parts::ExpressionKind &k : ai::parts::expressionKinds())
+        m_expression->addItem(k.name, k.id);
+    m_expression->setToolTip(tr("Repaints the eye or mouth parts (or the selected parts) and stores the drawing as a hidden "
+                                "layer for blinking and lip-sync."));
+    m_expressionButton = new QPushButton(Icons::get(QStringLiteral("sparkles")), tr("Add"), w);
+    exprRow->addWidget(m_expression, 1);
+    exprRow->addWidget(m_expressionButton);
+    v->addLayout(exprRow);
+
     v->addWidget(sectionLabel(tr("Review")));
     auto *scroll = new QScrollArea(w);
     scroll->setWidgetResizable(true);
@@ -698,6 +710,7 @@ QWidget *PartsPage::buildGeneratePanel()
     });
     connect(m_generateSelected, &QPushButton::clicked, this, [this] { generate(m_list->selectedLabels()); });
     connect(m_cancel, &QPushButton::clicked, this, &PartsPage::cancelGeneration);
+    connect(m_expressionButton, &QPushButton::clicked, this, [this] { generateExpression(m_expression->currentData().toString()); });
     connect(next, &QPushButton::clicked, this, [this] { setStep(ExportStep); });
     return w;
 }
@@ -1375,12 +1388,20 @@ void PartsPage::generate(const QList<int> &labels)
     QList<int> todo;
     for (int label : labels) {
         const doc::Part *p = m_set->part(label);
-        if (!p || p->pixels == 0 || p->state == doc::PartState::Queued || p->state == doc::PartState::Generating)
+        if (!p || p->state == doc::PartState::Queued || p->state == doc::PartState::Generating)
             continue;
-        todo.append(label);
+        if (p->provenance.startsWith(QLatin1String("variant:"))) {
+            // Expression variants are regenerated from the face, not completed from a mask.
+            if (labels.size() == 1)
+                generateExpression(p->provenance.mid(8));
+            continue;
+        }
+        if (p->pixels > 0)
+            todo.append(label);
     }
     if (todo.isEmpty()) {
-        m_studio->notify(tr("Nothing to generate: the parts are empty or already running."));
+        if (labels.size() > 1 || !m_set->part(labels.first()) || !m_set->part(labels.first())->provenance.startsWith(QLatin1String("variant:")))
+            m_studio->notify(tr("Nothing to generate: the parts are empty or already running."));
         return;
     }
     const QList<Job *> jobs = m_studio->parts()->complete(m_set, todo, options);
@@ -1388,6 +1409,33 @@ void PartsPage::generate(const QList<int> &labels)
         m_running.append(j);
     if (m_panels->currentIndex() != GenerateStep)
         setStep(GenerateStep);
+}
+
+void PartsPage::generateExpression(const QString &kind)
+{
+    if (!m_set || kind.isEmpty())
+        return;
+    const ai::parts::ExpressionKind *k = ai::parts::findExpression(kind);
+    if (!k)
+        return;
+    // Selected regular parts define the area; otherwise the parts matching the expression.
+    QList<int> base;
+    for (int label : m_list->selectedLabels()) {
+        const doc::Part *p = m_set->part(label);
+        if (p && p->pixels > 0 && !p->provenance.startsWith(QLatin1String("variant:")))
+            base.append(label);
+    }
+    ai::ExpressionOptions options;
+    options.kind = kind;
+    options.providerId = m_provider->providerId();
+    options.characterSummary = m_character->text().trimmed();
+    Job *job = m_studio->parts()->generateExpression(m_set, base, options);
+    m_running.append(job);
+    QPointer<PartsPage> self(this);
+    connect(job, &Job::finished, this, [self](Job *j) {
+        if (self && j->state() == Job::State::Failed)
+            self->m_studio->notify(j->errorString(), QStringLiteral("error"));
+    });
 }
 
 void PartsPage::cancelGeneration()

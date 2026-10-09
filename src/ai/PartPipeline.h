@@ -103,6 +103,23 @@ QRect cropToContent(QImage &layer);
 QString completionPrompt(const doc::Part &part, const doc::PartKind *kind, const QString &characterSummary,
                          const QColor &key);
 
+// ---- Expression variants -------------------------------------------------------------------------
+
+// Alternative drawings of facial parts for Live2D blink / lip-sync (exported as hidden layers).
+struct ExpressionKind
+{
+    QString id;          // "eyes_closed", "eyes_smile", "mouth_open", "mouth_o", "mouth_smile"
+    QString name;        // display / layer name
+    QString tag;         // tag of the variant part (the puppet preview swaps layers by tag)
+    QStringList baseTags; // parts whose area is repainted
+    QString prompt;
+};
+const QList<ExpressionKind> &expressionKinds();
+const ExpressionKind *findExpression(const QString &id);
+// Area to repaint: the base parts grown proportionally to their size, clipped to the silhouette.
+QImage expressionRegion(const QImage &labels, const QList<int> &baseLabels, const QImage &silhouette);
+QString expressionPrompt(const ExpressionKind &kind, const QString &characterSummary);
+
 // ---- Export ---------------------------------------------------------------------------------------
 
 struct ExportLayer

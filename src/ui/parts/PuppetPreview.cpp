@@ -221,12 +221,32 @@ void PuppetPreview::render(QPainter &p, const QRectF &target)
     const QPointF origin(target.center().x() - m_canvas.width() * s / 2.0, target.center().y() - m_canvas.height() * s / 2.0);
     const Params &a = m_params;
     const bool cached = m_scaled.size() == m_layers.size();
+    // Expression variants replace the regular eye / mouth layers when available.
+    bool hasEyesClosed = false, hasMouthOpen = false;
+    for (const PuppetLayer &l : m_layers) {
+        hasEyesClosed |= l.tag == QLatin1String("eyes closed");
+        hasMouthOpen |= l.tag == QLatin1String("mouth open");
+    }
+    const bool eyesShut = hasEyesClosed && a.eyeOpen < 0.45;
+    const bool mouthOpen = hasMouthOpen && a.mouthOpen > 0.5;
     p.setRenderHint(QPainter::SmoothPixmapTransform, true);
     p.setRenderHint(QPainter::Antialiasing, true);
     for (int i = 0; i < m_layers.size(); ++i) {
         const PuppetLayer &l = m_layers[i];
-        if (!l.visible || l.image.isNull())
+        if (l.image.isNull())
             continue;
+        const bool eyePart = isEyeBall(l.tag) || l.tag == QLatin1String("eyelash");
+        if (l.tag == QLatin1String("eyes closed")) {
+            if (!eyesShut)
+                continue;
+        } else if (l.tag == QLatin1String("mouth open")) {
+            if (!mouthOpen)
+                continue;
+        } else if (l.tag.startsWith(QLatin1String("eyes ")) || l.tag.startsWith(QLatin1String("mouth "))) {
+            continue; // other alternates are static poses, not animated here
+        } else if (!l.visible || (eyesShut && eyePart) || (mouthOpen && l.tag == QLatin1String("mouth"))) {
+            continue;
+        }
         const QImage &img = cached ? m_scaled[i] : l.image;
         p.save();
         p.translate(origin);
@@ -251,13 +271,13 @@ void PuppetPreview::render(QPainter &p, const QRectF &target)
                 p.translate(nx * l.rect.width() * 0.05, -ny * l.rect.height() * 0.08);
         }
         const QPointF c = QRectF(l.rect).center();
-        if (isEyeBall(l.tag)) {
+        if (isEyeBall(l.tag) && !hasEyesClosed) {
             p.translate(c);
             p.scale(1.0, std::max(0.06, a.eyeOpen));
             p.translate(-c);
-        } else if (l.tag == QLatin1String("eyelash")) {
+        } else if (l.tag == QLatin1String("eyelash") && !hasEyesClosed) {
             p.translate(0, (1.0 - a.eyeOpen) * l.rect.height() * 0.35);
-        } else if (l.tag == QLatin1String("mouth")) {
+        } else if (l.tag == QLatin1String("mouth") && !hasMouthOpen) {
             p.translate(QPointF(c.x(), l.rect.top()));
             p.scale(1.0, 1.0 + a.mouthOpen * 0.9);
             p.translate(-QPointF(c.x(), l.rect.top()));
