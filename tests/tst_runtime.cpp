@@ -6,6 +6,8 @@
 #include "runtime/Catalog.h"
 #include "runtime/Download.h"
 #include "runtime/Hardware.h"
+#include "runtime/ModelFormats.h"
+#include "runtime/ModelLibrary.h"
 #include "runtime/RuntimeStore.h"
 #include "runtime/ServerProfile.h"
 #include "runtime/Supervisor.h"
@@ -13,8 +15,11 @@
 
 #include <QCryptographicHash>
 #include <QDir>
+#include <QDirIterator>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QJsonArray>
+#include <QJsonDocument>
 #include <QNetworkAccessManager>
 #include <QSignalSpy>
 #include <QTemporaryDir>
@@ -206,6 +211,9 @@ private slots:
     void installFromGithub();
     void adoptExisting();
     void adoptPythonApps();
+    void inspectRealModels();
+    void modelFormats();
+    void modelLibrary();
 
 private:
     QTemporaryDir m_tmp;
@@ -1046,6 +1054,324 @@ void TestRuntime::adoptPythonApps()
     reloaded.setRoot(store.root());
     reloaded.load();
     QCOMPARE(reloaded.runtimes().first().settings.value(QStringLiteral("script")).toString(), root + QStringLiteral("/ComfyUI/main.py"));
+}
+
+namespace {
+
+// A safetensors file with the given tensors (name -> shape) and metadata; the data is not needed
+// to read the header.
+QByteArray makeSafetensors(const QList<QPair<QString, QList<int>>> &tensors, const QJsonObject &meta = {}, const QString &dtype = QStringLiteral("F16"))
+{
+    QJsonObject header;
+    for (const auto &[name, shape] : tensors) {
+        QJsonArray dims;
+        for (int d : shape)
+            dims << d;
+        header.insert(name, QJsonObject{{QStringLiteral("dtype"), dtype}, {QStringLiteral("shape"), dims}, {QStringLiteral("data_offsets"), QJsonArray{0, 0}}});
+    }
+    if (!meta.isEmpty())
+        header.insert(QStringLiteral("__metadata__"), meta);
+    const QByteArray json = QJsonDocument(header).toJson(QJsonDocument::Compact);
+    QByteArray out;
+    const quint64 n = quint64(json.size());
+    for (int i = 0; i < 8; ++i)
+        out.append(char((n >> (8 * i)) & 0xFF));
+    return out + json;
+}
+
+void putU32(QByteArray &b, quint32 v)
+{
+    for (int i = 0; i < 4; ++i)
+        b.append(char((v >> (8 * i)) & 0xFF));
+}
+
+void putU64(QByteArray &b, quint64 v)
+{
+    for (int i = 0; i < 8; ++i)
+        b.append(char((v >> (8 * i)) & 0xFF));
+}
+
+void putStr(QByteArray &b, const QByteArray &s)
+{
+    putU64(b, quint64(s.size()));
+    b += s;
+}
+
+// A GGUF v3 header: metadata (strings, u32 values, a long string array like a vocabulary) and
+// tensor infos.
+QByteArray makeGguf(const QString &arch, int fileType, const QList<QPair<QString, QList<int>>> &tensors, bool llmMeta = true)
+{
+    QByteArray b;
+    putU32(b, 0x46554747u);
+    putU32(b, 3);
+    putU64(b, quint64(tensors.size()));
+    QList<QPair<QByteArray, quint32>> ints;
+    if (llmMeta) {
+        const QByteArray a = arch.toUtf8();
+        ints = {{a + ".context_length", 40960}, {a + ".block_count", 36}, {a + ".attention.head_count", 32},
+                {a + ".attention.head_count_kv", 8}, {a + ".embedding_length", 4096}};
+    }
+    putU64(b, quint64(4 + ints.size()));
+    putStr(b, "general.architecture");
+    putU32(b, 8);
+    putStr(b, arch.toUtf8());
+    putStr(b, "general.name");
+    putU32(b, 8);
+    putStr(b, "Test Model 8B");
+    putStr(b, "general.file_type");
+    putU32(b, 4);
+    putU32(b, quint32(fileType));
+    putStr(b, "tokenizer.ggml.tokens"); // skipped: too long to keep
+    putU32(b, 9);
+    putU32(b, 8);
+    putU64(b, 1000);
+    for (int i = 0; i < 1000; ++i)
+        putStr(b, "tok" + QByteArray::number(i));
+    for (const auto &[key, value] : ints) {
+        putStr(b, key);
+        putU32(b, 4);
+        putU32(b, value);
+    }
+    for (const auto &[name, shape] : tensors) {
+        putStr(b, name.toUtf8());
+        putU32(b, quint32(shape.size()));
+        for (int d : shape)
+            putU64(b, quint64(d));
+        putU32(b, 12);
+        putU64(b, 0);
+    }
+    return b;
+}
+
+} // namespace
+
+void TestRuntime::modelFormats()
+{
+    QTemporaryDir dir;
+    auto inspect = [&](const QString &name, const QByteArray &data) {
+        const QString path = dir.filePath(name);
+        writeFile(path, data);
+        return inspectModel(path);
+    };
+    // SDXL checkpoint (ldm layout), Illustrious by name.
+    ModelInfo i = inspect(QStringLiteral("checkpoints/waiIllustriousSDXL_v170.safetensors"),
+                          makeSafetensors({{QStringLiteral("model.diffusion_model.input_blocks.0.0.weight"), {320, 4, 3, 3}},
+                                           {QStringLiteral("model.diffusion_model.label_emb.0.0.weight"), {1280, 2816}},
+                                           {QStringLiteral("conditioner.embedders.1.model.ln_final.weight"), {1280}},
+                                           {QStringLiteral("first_stage_model.decoder.conv_in.weight"), {512, 4, 3, 3}}}));
+    QCOMPARE(i.kind, ModelKind::Checkpoint);
+    QCOMPARE(i.family, QStringLiteral("SDXL"));
+    QCOMPARE(i.variant, QStringLiteral("Illustrious"));
+    QCOMPARE(i.precision, QStringLiteral("F16"));
+    QCOMPARE(i.parameters, qint64(320 * 4 * 9 + 1280 * 2816 + 1280 + 512 * 4 * 9));
+    // SD 1.5 checkpoint.
+    i = inspect(QStringLiteral("a.safetensors"), makeSafetensors({{QStringLiteral("model.diffusion_model.input_blocks.0.0.weight"), {320, 4, 3, 3}},
+                                                                   {QStringLiteral("cond_stage_model.transformer.text_model.final_layer_norm.weight"), {768}}}));
+    QCOMPARE(i.family, QStringLiteral("SD 1.5"));
+    // Kohya LoRA with SDXL metadata and a trigger phrase.
+    i = inspect(QStringLiteral("loras/akane.safetensors"),
+                makeSafetensors({{QStringLiteral("lora_unet_input_blocks_4_1_proj_in.lora_down.weight"), {16, 640}},
+                                 {QStringLiteral("lora_unet_input_blocks_4_1_proj_in.lora_up.weight"), {640, 16}}},
+                                {{QStringLiteral("ss_base_model_version"), QStringLiteral("sdxl_base_v1-0")},
+                                 {QStringLiteral("modelspec.trigger_phrase"), QStringLiteral("lmn_akane, red hair")}},
+                                QStringLiteral("BF16")));
+    QCOMPARE(i.kind, ModelKind::Lora);
+    QCOMPARE(i.family, QStringLiteral("SDXL"));
+    QCOMPARE(i.triggerWords, (QStringList{QStringLiteral("lmn_akane"), QStringLiteral("red hair")}));
+    QCOMPARE(i.precision, QStringLiteral("BF16"));
+    // ControlNet (diffusers SDXL), IP-Adapter (SDXL width), CLIP vision, VAE (FLUX.2), upscaler, Anima DiT.
+    QCOMPARE(inspect(QStringLiteral("cn.safetensors"), makeSafetensors({{QStringLiteral("controlnet_cond_embedding.conv_in.weight"), {16, 3, 3, 3}},
+                                                                         {QStringLiteral("add_embedding.linear_1.weight"), {1280, 2816}}}))
+                 .family,
+             QStringLiteral("SDXL"));
+    i = inspect(QStringLiteral("ipa.safetensors"), makeSafetensors({{QStringLiteral("image_proj.proj.weight"), {8192, 1024}},
+                                                                     {QStringLiteral("ip_adapter.1.to_k_ip.weight"), {640, 2048}}}));
+    QCOMPARE(i.kind, ModelKind::IpAdapter);
+    QCOMPARE(i.family, QStringLiteral("SDXL"));
+    QCOMPARE(inspect(QStringLiteral("cv.safetensors"), makeSafetensors({{QStringLiteral("vision_model.encoder.layers.0.mlp.fc1.weight"), {5120, 1280}}})).kind,
+             ModelKind::ClipVision);
+    i = inspect(QStringLiteral("vae.safetensors"), makeSafetensors({{QStringLiteral("encoder.down_blocks.0.resnets.0.conv1.weight"), {128, 128, 3, 3}},
+                                                                     {QStringLiteral("decoder.conv_in.weight"), {512, 32, 3, 3}},
+                                                                     {QStringLiteral("decoder.up_blocks.0.resnets.0.conv1.weight"), {512, 512, 3, 3}}}));
+    QCOMPARE(i.kind, ModelKind::Vae);
+    QCOMPARE(i.family, QStringLiteral("FLUX.2"));
+    QCOMPARE(inspect(QStringLiteral("x4.safetensors"), makeSafetensors({{QStringLiteral("conv_first.weight"), {64, 3, 3, 3}},
+                                                                         {QStringLiteral("body.0.rdb1.conv1.weight"), {32, 64, 3, 3}}}))
+                 .kind,
+             ModelKind::Upscaler);
+    i = inspect(QStringLiteral("anima.safetensors"), makeSafetensors({{QStringLiteral("net.blocks.0.self_attn.q_proj.weight"), {2048, 2048}},
+                                                                       {QStringLiteral("net.llm_adapter.proj.weight"), {2048, 1024}}}));
+    QCOMPARE(i.kind, ModelKind::DiffusionModel);
+    QCOMPARE(i.family, QStringLiteral("Anima"));
+    // Pickle files are never opened as pickles: their kind comes from the folder.
+    i = inspect(QStringLiteral("upscale_models/RealESRGAN_x4plus_anime_6B.pth"), QByteArray("PK\x03\x04 pickle"));
+    QCOMPARE(i.kind, ModelKind::Upscaler);
+    QVERIFY(i.unsafeFormat);
+    // A damaged header is reported, not crashed on.
+    QVERIFY(!inspect(QStringLiteral("bad.safetensors"), QByteArray("\xff\xff\xff\xff\xff\xff\xff\x7f{")).error.isEmpty());
+
+    // GGUF language model: architecture, quantisation, attention shape; the vocabulary is skipped.
+    i = inspect(QStringLiteral("Qwen3-8B-Q4_K_M.gguf"),
+                makeGguf(QStringLiteral("qwen3"), 15, {{QStringLiteral("blk.0.attn_q.weight"), {4096, 4096}}, {QStringLiteral("token_embd.weight"), {4096, 1000}}}));
+    QVERIFY2(i.error.isEmpty(), qPrintable(i.error));
+    QCOMPARE(i.kind, ModelKind::Llm);
+    QCOMPARE(i.family, QStringLiteral("qwen3"));
+    QCOMPARE(i.precision, QStringLiteral("Q4_K_M"));
+    QCOMPARE(i.title, QStringLiteral("Test Model 8B"));
+    QCOMPARE(i.contextLength, 40960);
+    QCOMPARE(i.layers, 36);
+    QCOMPARE(i.kvHeads, 8);
+    QCOMPARE(i.headDim, 128);
+    QCOMPARE(i.parameters, qint64(4096) * 4096 + qint64(4096) * 1000);
+    // KV cache for 16k context at q8_0: 2 × 36 layers × 8 heads × 128 × 16384 × 1.0625 bytes ≈ 1.2 GB.
+    const qint64 mem = i.estimatedMemory(5000ll * 1024 * 1024, 16384);
+    QVERIFY(mem > 5000ll * 1024 * 1024 + 1100ll * 1024 * 1024 && mem < 5000ll * 1024 * 1024 + 1900ll * 1024 * 1024);
+    // Vision projector.
+    i = inspect(QStringLiteral("mmproj-Qwen3VL-8B-Instruct-Q8_0.gguf"), makeGguf(QStringLiteral("clip"), 7, {{QStringLiteral("v.blk.0.attn_q.weight"), {1152, 1152}}}, false));
+    QCOMPARE(i.kind, ModelKind::Projector);
+    QCOMPARE(i.precision, QStringLiteral("Q8_0"));
+    // Quantised diffusion model for stable-diffusion.cpp.
+    i = inspect(QStringLiteral("flux1-dev-Q4_0.gguf"), makeGguf(QString(), 2, {{QStringLiteral("double_blocks.0.img_attn.qkv.weight"), {3072, 9216}}}, false));
+    QCOMPARE(i.kind, ModelKind::DiffusionModel);
+    QCOMPARE(i.family, QStringLiteral("FLUX"));
+    QVERIFY(!inspect(QStringLiteral("trunc.gguf"), QByteArray("GGUF\x03\x00\x00\x00", 8)).error.isEmpty());
+
+    QCOMPARE(modelKindFromKey(modelKindKey(ModelKind::ControlNet)), ModelKind::ControlNet);
+    QCOMPARE(ggufFileTypeName(30), QStringLiteral("IQ4_XS"));
+}
+
+void TestRuntime::modelLibrary()
+{
+    QTemporaryDir data;
+    QTemporaryDir comfy;
+    MockHttpServer civitai;
+    int lookups = 0;
+    QString askedHash;
+    civitai.route("GET", QString(), [](const MockRequest &) { return MockResponse::json({}, 404); });
+    net::HttpClient http;
+    ModelLibrary lib(&http);
+    lib.setDataDir(data.path());
+    lib.setCivitaiBase(civitai.baseUrl().toString());
+    QStringList trashed;
+    lib.moveToTrash = [&trashed](const QString &path, QString *) {
+        trashed << path;
+        return QFile::remove(path);
+    };
+    lib.load();
+    QCOMPARE(lib.roots().size(), 1);
+    QVERIFY(lib.roots().first().builtin);
+    QVERIFY(QFileInfo(lib.defaultFolder() + QStringLiteral("/loras")).isDir());
+
+    // A ComfyUI-style folder with a checkpoint, a LoRA and a small file that is not a model.
+    const QByteArray padding(2 * 1024 * 1024, '\0'); // the scan ignores files under 1 MB
+    const QByteArray ckpt = makeSafetensors({{QStringLiteral("model.diffusion_model.input_blocks.0.0.weight"), {320, 4, 3, 3}},
+                                             {QStringLiteral("model.diffusion_model.label_emb.0.0.weight"), {1280, 2816}},
+                                             {QStringLiteral("conditioner.embedders.1.model.ln_final.weight"), {1280}}}) + padding;
+    const QByteArray lora = makeSafetensors({{QStringLiteral("lora_unet_a.lora_down.weight"), {8, 640}}},
+                                            {{QStringLiteral("ss_base_model_version"), QStringLiteral("sdxl_base_v1-0")}}) + padding;
+    QVERIFY(writeFile(comfy.filePath(QStringLiteral("checkpoints/wai.safetensors")), ckpt));
+    QVERIFY(writeFile(comfy.filePath(QStringLiteral("loras/style.safetensors")), lora));
+    QVERIFY(writeFile(comfy.filePath(QStringLiteral("checkpoints/put_checkpoints_here.safetensors")), "x"));
+    QVERIFY(writeFile(lib.defaultFolder() + QStringLiteral("/llm/Qwen3-8B-Q4_K_M.gguf"),
+                      makeGguf(QStringLiteral("qwen3"), 15, {{QStringLiteral("blk.0.attn_q.weight"), {4096, 4096}}}) + padding));
+
+    QSignalSpy finished(&lib, &ModelLibrary::scanFinished);
+    QVERIFY(lib.addRoot(comfy.path(), QStringLiteral("ComfyUI")));
+    QVERIFY(!lib.addRoot(comfy.path())); // already there
+    QVERIFY(finished.wait(10000));
+    QCOMPARE(lib.entries().size(), 3);
+    QCOMPARE(lib.entries(ModelKind::Checkpoint).size(), 1);
+    QCOMPARE(lib.entries(ModelKind::Lora).first().info.family, QStringLiteral("SDXL"));
+    QCOMPARE(lib.entries(ModelKind::Llm).first().info.precision, QStringLiteral("Q4_K_M"));
+
+    // The index survives a restart; unchanged files are not read again, changed ones are.
+    const QString ckptPath = QDir::cleanPath(comfy.filePath(QStringLiteral("checkpoints/wai.safetensors")));
+    {
+        ModelLibrary again(&http);
+        again.setDataDir(data.path());
+        again.load();
+        QCOMPARE(again.roots().size(), 2);
+        QCOMPARE(again.entries().size(), 3);
+        QCOMPARE(again.entry(ckptPath)->info.family, QStringLiteral("SDXL"));
+    }
+    QTest::qWait(1100); // a newer modification time
+    QVERIFY(writeFile(ckptPath, makeSafetensors({{QStringLiteral("model.diffusion_model.input_blocks.0.0.weight"), {320, 4, 3, 3}},
+                                                 {QStringLiteral("cond_stage_model.transformer.text_model.x.weight"), {768}}}) + padding));
+    lib.rescan();
+    QVERIFY(finished.wait(10000));
+    QCOMPARE(lib.entry(ckptPath)->info.family, QStringLiteral("SD 1.5"));
+
+    // Hash and Civitai lookup (the hash is what is sent).
+    QFuture<QString> hash = lib.computeHash(ckptPath);
+    QTRY_VERIFY_WITH_TIMEOUT(hash.isFinished(), 10000);
+    QCOMPARE(hash.result(), sha256(readAll(ckptPath)));
+    civitai.route("GET", QStringLiteral("/api/v1/model-versions/by-hash/") + hash.result().toUpper(), [&](const MockRequest &req) {
+        ++lookups;
+        askedHash = req.path.section(QLatin1Char('/'), -1);
+        return MockResponse::json({{QStringLiteral("id"), 403131},
+                                   {QStringLiteral("modelId"), 260267},
+                                   {QStringLiteral("name"), QStringLiteral("v3.1")},
+                                   {QStringLiteral("baseModel"), QStringLiteral("SDXL 1.0")},
+                                   {QStringLiteral("trainedWords"), QJsonArray{QStringLiteral("anime")}},
+                                   {QStringLiteral("model"), QJsonObject{{QStringLiteral("name"), QStringLiteral("Animagine XL")}, {QStringLiteral("type"), QStringLiteral("Checkpoint")}}},
+                                   {QStringLiteral("images"), QJsonArray{QJsonObject{{QStringLiteral("url"), QStringLiteral("https://image/nsfw.png")}, {QStringLiteral("nsfwLevel"), 8}},
+                                                                         QJsonObject{{QStringLiteral("url"), QStringLiteral("https://image/ok.png")}, {QStringLiteral("nsfwLevel"), 1}}}}});
+    });
+    QFuture<QJsonObject> found = lib.lookupCivitai(ckptPath);
+    QTRY_VERIFY_WITH_TIMEOUT(found.isFinished(), 10000);
+    QCOMPARE(lookups, 1);
+    QCOMPARE(askedHash, hash.result().toUpper());
+    QCOMPARE(found.result().value(QStringLiteral("name")).toString(), QStringLiteral("Animagine XL"));
+    QCOMPARE(found.result().value(QStringLiteral("preview")).toString(), QStringLiteral("https://image/ok.png"));
+    QCOMPARE(found.result().value(QStringLiteral("page")).toString(), QStringLiteral("https://civitai.com/models/260267?modelVersionId=403131"));
+    QCOMPARE(lib.entry(ckptPath)->civitai.value(QStringLiteral("baseModel")).toString(), QStringLiteral("SDXL 1.0"));
+    // Unknown files are remembered as such.
+    const QString loraPath = QDir::cleanPath(comfy.filePath(QStringLiteral("loras/style.safetensors")));
+    QFuture<QJsonObject> missing = lib.lookupCivitai(loraPath);
+    QTRY_VERIFY_WITH_TIMEOUT(missing.isFinished(), 10000);
+    QVERIFY(missing.result().value(QStringLiteral("notFound")).toBool());
+
+    // Suggestions: a folder with models that is not a root yet.
+    QTemporaryDir downloads;
+    QVERIFY(writeFile(downloads.filePath(QStringLiteral("big.gguf")), QByteArray(11 * 1024 * 1024, 'x')));
+    QVERIFY(lib.suggestedRoots(nullptr, {downloads.filePath(QStringLiteral("big.gguf"))}).contains(QDir::cleanPath(downloads.path())));
+    QVERIFY(!lib.suggestedRoots(nullptr, {ckptPath}).contains(QDir::cleanPath(comfy.filePath(QStringLiteral("checkpoints")))));
+
+    // Removing a root forgets its files; moving a file to the recycle bin removes it.
+    lib.removeRoot(comfy.path());
+    QCOMPARE(lib.entries().size(), 1);
+    const QString gguf = lib.entries().first().path;
+    QString error;
+    QVERIFY2(lib.trash(gguf, &error), qPrintable(error));
+    QVERIFY(!QFileInfo::exists(gguf));
+    QCOMPARE(trashed, QStringList{gguf});
+    QVERIFY(lib.entries().isEmpty());
+}
+
+// LUMEN_TEST_MODEL_DIRS=<dir>;<dir>: prints how every model file found there is classified.
+void TestRuntime::inspectRealModels()
+{
+    const QStringList dirs = qEnvironmentVariable("LUMEN_TEST_MODEL_DIRS").split(QLatin1Char(';'), Qt::SkipEmptyParts);
+    if (dirs.isEmpty())
+        QSKIP("LUMEN_TEST_MODEL_DIRS is not set");
+    for (const QString &dir : dirs) {
+        QDirIterator it(dir, modelFileFilters(), QDir::Files, QDirIterator::Subdirectories);
+        while (it.hasNext()) {
+            const QString path = it.next();
+            QElapsedTimer t;
+            t.start();
+            const ModelInfo info = inspectModel(path);
+            qInfo().noquote() << QStringLiteral("%1 | %2 | %3 %4 | %5 | %6M params | ctx %7 L%8 kv%9x%10 | %11 ms %12")
+                                     .arg(QFileInfo(path).fileName(), modelKindKey(info.kind), info.family, info.variant, info.precision)
+                                     .arg(info.parameters / 1000000)
+                                     .arg(info.contextLength)
+                                     .arg(info.layers)
+                                     .arg(info.kvHeads)
+                                     .arg(info.headDim)
+                                     .arg(t.elapsed())
+                                     .arg(info.error);
+        }
+    }
 }
 
 QTEST_MAIN(TestRuntime)

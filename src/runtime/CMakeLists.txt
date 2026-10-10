@@ -6,6 +6,8 @@ add_library(lumen_runtime STATIC
     RuntimeStore.h RuntimeStore.cpp
     ServerProfile.h ServerProfile.cpp
     Supervisor.h Supervisor.cpp
+    ModelFormats.h ModelFormats.cpp
+    ModelLibrary.h ModelLibrary.cpp
 )
 qt_add_resources(lumen_runtime runtime_catalog
     PREFIX "/runtimes"
