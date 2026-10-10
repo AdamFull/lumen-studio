@@ -19,8 +19,9 @@ namespace lumen::ui {
 class Studio;
 
 // Tests a trained character LoRA (M13 §13.6): the newest epochs render four test shots each (poses,
-// views and backgrounds that are not in the training set, prompted by the trigger word alone), next
-// to a baseline without the LoRA (appearance tags and the character's reference through IP-Adapter).
+// views and backgrounds that are not in the training set), next to a baseline without the LoRA.
+// Both use the same prompt with the appearance tags, as Create does; the baseline gets the
+// character's reference through IP-Adapter instead of the LoRA.
 // The Critic scores every image against the references. The best epoch then renders the shots at
 // weights 0.6 and 1.0, and Lumen recommends an epoch and a weight. Needs a Lumen-run
 // stable-diffusion.cpp server (the LoRA files are put into its LoRA folder for the test).

@@ -7893,12 +7893,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Ergebnis testen</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>The newest three epochs draw four new scenes from the trigger word alone; for comparison the same scenes are drawn without the LoRA, from the description and the reference image. The Critic scores how well each image keeps the character (0–10). Takes about 20 minutes on an 8 GB GPU.</source>
-        <translation>Die drei neuesten Epochen zeichnen vier neue Szenen allein aus dem Auslösewort; zum Vergleich werden dieselben Szenen ohne die LoRA gezeichnet, aus der Beschreibung und dem Referenzbild. Der Kritiker bewertet, wie gut jedes Bild den Charakter trifft (0–10). Dauert auf einer GPU mit 8 GB etwa 20 Minuten.</translation>
-    </message>
-    <message>
-        <location line="+5"/>
+        <location line="+6"/>
         <location line="+148"/>
         <source>Test the LoRA</source>
         <translation>LoRA testen</translation>
@@ -8031,7 +8026,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Stopp</translation>
     </message>
     <message>
-        <location line="+47"/>
+        <location line="-422"/>
+        <source>The newest three epochs draw four new scenes with the LoRA; for comparison the same scenes are drawn without it, with the reference image through IP-Adapter. The Critic scores how well each image keeps the character (0–10). Takes about 45 minutes on an 8 GB GPU.</source>
+        <translation>Die drei neuesten Epochen zeichnen vier neue Szenen mit der LoRA; zum Vergleich werden dieselben Szenen ohne sie gezeichnet, mit dem Referenzbild über IP-Adapter. Der Kritiker bewertet, wie gut jedes Bild den Charakter trifft (0–10). Dauert auf einer GPU mit 8 GB etwa 45 Minuten.</translation>
+    </message>
+    <message>
+        <location line="+469"/>
         <source>Every kept image is tagged; the captions were rebuilt.</source>
         <translation>Jedes behaltene Bild ist vertaggt; die Beschreibungen wurden neu erstellt.</translation>
     </message>

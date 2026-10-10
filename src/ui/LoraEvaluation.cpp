@@ -193,8 +193,8 @@ void LoraEvaluation::generateNext()
         }
     }
     const ai::ImageCapabilities caps = provider->capabilities();
-    // The baseline describes the character in words and shows its reference; LoRA candidates only
-    // name the trigger word.
+    // The same prompt for all; the baseline shows the reference instead of using the LoRA (and has
+    // no trigger word).
     if (cell.epoch == 0)
         shot = ai::Director::loraTestShots(m_sheet, QString()).value(shotIndex);
     const QSize size = ai::Director::sizeForAspect(shot.value(QStringLiteral("aspect_ratio")).toString(), caps.nativePixels, std::max(64, caps.sizeMultiple));

@@ -1145,12 +1145,19 @@ A LoRA learns from 15–40 varied images of the character. They come from what L
     - 6.6 GB peak GPU memory (fp8 base not needed);
     - an 85 MB SDXL LoRA that Lumen's header reader recognises;
     - a 16-step run took 104 s including model loading and caching.
+    - a full run (8 images × 25 repeats × 6 epochs = 1,200 steps) took 58 min: 2.84 s per step,
+      6.7 GB peak GPU memory. Loss fell from 0.083 after epoch 1 to 0.063 at the end; six 85 MB
+      epoch files plus two 93 MB training states.
 - [x] Evaluation (`ui/LoraEvaluation`, Train tab → *Test the result*):
   - Four test shots (`Director::loraTestShots`): cheering outdoors, three-quarter on a street, side
     view running on a beach, a tilted portrait in a café. These poses, views and backgrounds are not
-    in the training recipe. LoRA candidates are prompted with the trigger word alone.
-  - The baseline is the same shots without a LoRA: appearance tags plus the reference through
-    IP-Adapter, which is what the user had before training.
+    in the training recipe. Every image gets the appearance tags, as shots planned in Create do;
+    LoRA candidates add the trigger word.
+  - The baseline is the same shots without a LoRA, with the reference through IP-Adapter: what
+    the user had before training.
+  - A first live run prompted the candidates with the trigger word alone. The 8-image LoRA kept
+    hair and eyes but dropped the outfit in new scenes (bikini on the beach, hoodie in the café):
+    5.7–6.6 against 8.9 for the baseline. That measured the LoRA in a way Lumen never uses it.
   - Stage 1: the baseline and the newest three epochs at weight 0.8. Stage 2: the best epoch at
     0.6 and 1.0. That makes 24 images, with a fixed seed per shot so only the LoRA differs.
   - The Critic scores every image against the references: (2 × identity + pose) / 3. On a tie the

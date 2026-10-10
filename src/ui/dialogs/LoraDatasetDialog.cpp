@@ -423,9 +423,9 @@ QWidget *LoraDatasetDialog::buildTrainTab()
     // Test the result: the newest epochs against a baseline without the LoRA.
     v->addSpacing(8);
     v->addWidget(sectionLabel(tr("Test the result"), page));
-    v->addWidget(mutedLabel(tr("The newest three epochs draw four new scenes from the trigger word alone; for comparison the same scenes are "
-                               "drawn without the LoRA, from the description and the reference image. The Critic scores how well each "
-                               "image keeps the character (0–10). Takes about 20 minutes on an 8 GB GPU."),
+    v->addWidget(mutedLabel(tr("The newest three epochs draw four new scenes with the LoRA; for comparison the same scenes are drawn "
+                               "without it, with the reference image through IP-Adapter. The Critic scores how well each image keeps the "
+                               "character (0–10). Takes about 45 minutes on an 8 GB GPU."),
                             page));
     auto *evalRow = new QHBoxLayout;
     m_evalButton = new QPushButton(Icons::get(QStringLiteral("check")), tr("Test the LoRA"), page);

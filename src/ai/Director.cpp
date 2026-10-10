@@ -723,9 +723,8 @@ QList<QJsonObject> Director::loraTestShots(const QJsonObject &sheet, const QStri
         }
         QStringList prompt;
         if (!trigger.isEmpty())
-            prompt << trigger << subject;
-        else
-            prompt << subject << appearanceTags(sheet);
+            prompt << trigger;
+        prompt << subject << appearanceTags(sheet);
         prompt << QLatin1String(t.tags) << QLatin1String(t.background);
         out << QJsonObject{{QStringLiteral("id"), QLatin1String(t.id)},
                            {QStringLiteral("title"), QLatin1String(t.title)},

@@ -1624,13 +1624,12 @@ void TestCanvas::loraEvaluation()
     QCOMPARE(epochs.last().first, 4);
     QCOMPARE(QFileInfo(epochs.last().second).fileName(), QStringLiteral("lmn_mira.safetensors"));
 
-    // The test shots: new scenes; with a trigger word only it names the character.
+    // The test shots: new scenes with the character's description; LoRA candidates add the trigger word.
     const QList<QJsonObject> withTrigger = ai::Director::loraTestShots(sheet, QStringLiteral("lmn_mira"));
     const QList<QJsonObject> baseline = ai::Director::loraTestShots(sheet, QString());
     QCOMPARE(withTrigger.size(), 4);
-    QVERIFY(withTrigger[0].value(QStringLiteral("prompt")).toString().startsWith(QStringLiteral("lmn_mira, 1girl, solo")));
-    QVERIFY(!withTrigger[0].value(QStringLiteral("prompt")).toString().contains(QStringLiteral("red hair")));
-    QVERIFY(baseline[0].value(QStringLiteral("prompt")).toString().contains(QStringLiteral("red hair")));
+    QVERIFY(withTrigger[0].value(QStringLiteral("prompt")).toString().startsWith(QStringLiteral("lmn_mira, 1girl, solo, red hair")));
+    QCOMPARE(QStringLiteral("lmn_mira, ") + baseline[0].value(QStringLiteral("prompt")).toString(), withTrigger[0].value(QStringLiteral("prompt")).toString());
     QCOMPARE(ai::Director::loraTestScore({{QStringLiteral("identity"), 9}, {QStringLiteral("pose"), 6}}), 8.0);
 
     LoraDatasetDialog dlg(&studio, characterId, nullptr, {});
