@@ -830,6 +830,150 @@ Open questions:
   plan only adopts it for now.
 * Linux and macOS asset patterns come later; the catalogue format already keys them by platform.
 
+### M13 — Stable characters (character LoRA)
+
+Goal: a character keeps exactly the same look in every image (face, hair, eyes, outfit, colours,
+proportions) while the pose, framing, expression and background change. The user designs the
+character once, Lumen trains a **character LoRA** from it, and from then on the character is part
+of every generation that uses it, from any page, through the Director or the assistant.
+
+#### 13.1 Why a LoRA
+
+A LoRA (low-rank adaptation) is a small add-on to a base model, typically 20–200 MB for SDXL. It
+changes the model's weights so that a **trigger word** (e.g. `lmn_akane`) produces this one
+character. Because the identity lives in the weights rather than in the prompt or a reference
+image, it holds across poses, and it combines with pose control (ControlNet), inpainting and
+img2img.
+
+| Method | Identity | Pose freedom | Cost | In Lumen |
+|---|---|---|---|---|
+| Prompt + character sheet | weak: details drift | full | none | M7 |
+| IP-Adapter (reference image) | partial: colours and style, details drift | the reference's pose leaks in at weight ≥ 0.45 (measured, §12.1) | none | M12 phase B |
+| Face adapters (InstantID, PuLID, FaceID) | strong for faces, made for photos | full | none; extra models | — |
+| Textual inversion (an embedding) | weak for complex outfits | full | ~30 min training | — |
+| **Character LoRA** | **strong: face, hair, outfit, palette** | **full** | **1–2.5 h training on 8 GB (estimate)** | **M13** |
+| Full fine-tune / DreamBooth checkpoint | strongest | full | GBs per character; beyond 8 GB | — |
+
+LoRA and IP-Adapter combine well. The LoRA carries the identity; a low-weight IP-Adapter can add the
+reference's exact colours for one image. A LoRA belongs to a model family: an SDXL /
+Illustrious / Pony LoRA works on checkpoints of that family, not on SD 1.5 or FLUX.
+
+#### 13.2 Using LoRAs (all image back-ends)
+
+* Providers:
+  * sd.cpp: the `lora[]` field of `img_gen`, with files from the server's `--lora-model-dir`.
+  * ComfyUI: a `LoraLoader` binding in the workflow templates.
+  * SD WebUI / Forge: `<lora:name:weight>` in the prompt.
+  * `ImageRequest` gains `loras: [{file, weight}]`; `capabilities()` reports LoRA support and the
+    loaded model family.
+* Character library (`CharacterLibrary`, M9): a character gains a LoRA entry: file, trigger word,
+  recommended weight, base model family, training data and its report (§13.6).
+* Generation, Director and assistant: choosing a character with a LoRA adds the trigger word and
+  the LoRA to every request. Lumen warns when the selected checkpoint is from another family (read
+  from the safetensors metadata, e.g. `ss_base_model_version`).
+* LoRA files from elsewhere (the model library, M12 phase D; Civitai, phase E) can be attached to a
+  character too.
+
+#### 13.3 Dataset builder
+
+A LoRA learns from 15–40 varied images of the character. They come from what Lumen already does:
+* **Source:** the character sheet and reference images (M7), or a character designed in Lumen
+  first (Create page).
+* **Shot template "LoRA dataset":** a Director purpose profile.
+  * Full body front / three-quarter / side / back.
+  * Upper body and portrait close-ups.
+  * Three or four expressions, a few hand and arm poses (rig presets, M6).
+  * Plain and simple backgrounds, so the background does not become part of the character.
+  * Generated with pose control + IP-Adapter (sd.cpp), several variants per shot.
+* **Curation grid:**
+  * The Critic scores identity against the references; the user keeps or rejects each image and
+    can regenerate or inpaint fixes.
+  * Near-duplicates are flagged.
+  * Images are cropped and bucketed for training (1024-class sizes for SDXL).
+* **Bootstrapping:** with only one reference, a first LoRA trained on the best images generates a
+  more consistent second set, and v2 is trained on that.
+
+#### 13.4 Captions
+
+* The vision model (Qwen3-VL) writes booru-style tags per image (the dialect of anime SDXL models)
+  and the trigger word is put first.
+* Tags that describe the fixed identity (hair colour, eye colour, the signature outfit) are removed,
+  so the LoRA ties them to the trigger word. Pose, view, expression, framing and background tags
+  stay, so they remain controllable.
+  * "Outfit is part of the character" can be switched off, keeping outfit tags so outfits can be
+    changed by prompt.
+* Captions are editable in a table: search and replace, add or remove a tag on all images.
+
+#### 13.5 Trainer runtime
+
+* Training needs Python and PyTorch with CUDA; sd.cpp only loads LoRAs. The reference trainer is
+  **kohya-ss/sd-scripts** (Apache-2.0; `sdxl_train_network.py`), the most common SDXL LoRA trainer.
+* **Managed install**, extending the M12 runtime store:
+  * `astral-sh/uv` from its GitHub releases (one executable, digest-verified) creates a private
+    venv under `runtimes/trainers/`.
+  * It installs a pinned sd-scripts release and its lock-filed requirements (PyTorch CUDA wheels
+    from the PyTorch index, about 4–5 GB) with hash checking.
+  * The catalogue gains a "python environment" kind with these sources and their pins.
+* **Adopt existing:** kohya_ss (GUI bundle), plain sd-scripts, or later OneTrainer / ai-toolkit
+  through their CLIs.
+
+#### 13.6 Training job
+
+* A Queue job driving a supervised process:
+  * dataset folder (`<repeats>_<trigger>`), captions and a generated TOML config;
+  * progress parsed from the trainer's output: step, epoch, loss, ETA;
+  * a sample image per epoch (fixed seeds and poses);
+  * cancel, and resume from the saved state;
+  * a log viewer like the servers' (M12).
+* GPU: training needs the whole card, so the supervisor stops or unloads every server first and
+  restarts them afterwards. The status bar shows the training.
+* Presets, starting points to be measured on the 8 GB test laptop (sd-scripts documents 8 GB as
+  possible, 10 GB recommended):
+  * **8 GB:**
+    * U-Net only, network dim 8–16, alpha dim/2;
+    * Adafactor, gradient checkpointing, cached latents and text-encoder outputs on disk;
+    * bf16 or fp16 + `--no_half_vae`, batch 1, 1024 buckets;
+    * about 1,500–2,500 steps (≈ 25 images × 8 repeats × 10 epochs).
+  * **12 / 16 GB+:** larger dim, the text encoders trained too, batch 2–4.
+* **Evaluation:**
+  * Every saved epoch renders a test grid: four poses × weights 0.6 / 0.8 / 1.0, plus a "no LoRA"
+    column.
+  * The Critic scores identity against the references and checks for overfitting (copied
+    backgrounds, pose stiffness).
+  * Lumen recommends an epoch and a weight; the user picks.
+* **Result:** the LoRA file goes to the library's LoRA folder (which the sd.cpp server's
+  `--lora-model-dir` points to) and is attached to the character with its trigger word, weight,
+  base model, dataset and report.
+
+#### 13.7 Implementation steps
+
+- [ ] LoRA use: `ImageRequest.loras`, the sd.cpp / ComfyUI / WebUI mappings, LoRA lists from the
+  servers, the character ↔ LoRA link, automatic trigger word, base-family check.
+- [ ] Dataset builder: "LoRA dataset" purpose profile, generation with pose + IP-Adapter, curation
+  grid with Critic scores, de-duplication, crop / bucket export.
+- [ ] Captioning with the vision model, identity-tag pruning, caption table editor.
+- [ ] Trainer runtime: uv-managed venv with pinned sd-scripts + PyTorch (hash-checked), adopt
+  existing kohya installs.
+- [ ] Training job: config generation, supervised run with progress, samples, cancel / resume,
+  GPU takeover, 8 / 12 / 16 GB presets measured on real hardware.
+- [ ] Evaluation grid, Critic identity scoring per epoch, recommended epoch and weight.
+
+**AC**:
+1. From one reference image of an anime character, a user builds a 25-image dataset, trains an
+   SDXL LoRA on the 8 GB test laptop without leaving Lumen, and attaches it to the character.
+2. Ten new images of that character in different poses (pose control) and expressions keep the
+   same face, hair, eyes, outfit and palette. The Critic's identity score is higher than with
+   IP-Adapter alone on the same shots.
+3. The servers are back to normal after training.
+
+Risks and open questions:
+* 8 GB is the lower limit for SDXL LoRA training; if quality or time is not acceptable, offer
+  training on a cloud GPU (e.g. fal.ai / Replicate LoRA trainers) as an option.
+* Generated training images can carry artefacts into the LoRA; the Critic filter and the user's
+  curation matter more than the image count.
+* A LoRA inherits the licence terms of its base model (e.g. Illustrious and Pony derivatives).
+* FLUX / Qwen-Image LoRAs need 16–24 GB and are out of scope for 8 GB machines.
+
 ---
 
 ## 5. Quality strategy
