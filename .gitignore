@@ -17,3 +17,7 @@ compile_commands.json
 *.lumen-wal
 *.lumen-shm
 /logs/
+
+# Python bytecode (py_compile checks of bundled scripts)
+__pycache__/
+*.pyc
