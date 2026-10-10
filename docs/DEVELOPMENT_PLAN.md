@@ -1433,6 +1433,91 @@ Risks and open questions:
 * Candidates for M15: cloud LoRA training (fal.ai, Replicate) for machines under 8 GB and for
   FLUX / Qwen-Image LoRAs; two characters in one image.
 
+### M15 — Cloud LoRA training (RunPod)
+
+Goal: train a character LoRA on a rented cloud GPU in about 20–30 minutes instead of two hours on
+the 8 GB laptop, and on machines without a suitable GPU at all. The LoRA is the same as a local
+one: the same pinned trainer, the same recipe, the user's own base checkpoint.
+
+#### 15.1 Why a rented GPU, not a hosted trainer
+
+Hosted LoRA trainers (October 2026) train FLUX (fal.ai `fal-ai/flux-lora-fast-training`, Replicate
+`fast-flux-trainer`) or base SDXL (community trainers on Replicate). None takes the user's own
+checkpoint, and a LoRA should be trained on the family it is used with (Illustrious, Pony,
+NoobAI with v-prediction). Lumen's characters are drawn with anime SDXL checkpoints, so Lumen runs
+its own trainer (M13 §13.5) on a rented GPU. A hosted FLUX trainer can be a second back-end later.
+
+#### 15.2 RunPod
+
+* REST API v2 (`https://api.runpod.io/v2`, bearer key; v1 is retired on 15 November 2026):
+  `POST /v2/pods` (`name`, `image`, `gpu {id, count, minCudaVersion}`, `cloud`, `disk`, `env`,
+  `ports`, `cmd`), `GET /v2/pods/{id}` (`status`: PROVISIONING / STARTING / RUNNING / EXITED /
+  ERROR / TERMINATED, `cost` per hour), `GET /v2/pods`, `DELETE /v2/pods/{id}`, and
+  `GET /v2/catalog/gpus` (VRAM, `price.secure` / `price.community` per hour). Errors are RFC 9457
+  problem objects. The field names come from the docs; the first live run confirms them.
+* The pod runs a stock PyTorch image; HTTP ports are served at
+  `https://<pod>-<port>.proxy.runpod.net` (HTTPS through Cloudflare, connections cut after
+  100 s). So every request is short: uploads and downloads go in chunks, progress is polled.
+* The API key lives in the OS credential store (SecretStore), never in settings or projects.
+
+#### 15.3 The pod agent
+
+A Python script shipped with Lumen (`resources/runtimes/cloud/pod_agent.py`, standard library
+only), passed to the pod in an environment variable and started by the pod's command. It:
+1. installs sd-scripts at the pinned commit (archive SHA-256 checked) and the hashed lock file
+   (M13), in the background, and reports its phase;
+2. accepts the training set as a zip and the base checkpoint either from a URL (Hugging Face or a
+   public link, checked against its SHA-256) or as chunked uploads;
+3. runs `sdxl_train_network.py` (or `train_network.py`) with the arguments Lumen builds
+   (`trainingArguments`, with the pod's paths and the 24 GB preset), and streams the log;
+4. serves the epoch files in chunks;
+5. exits after a set lifetime or an idle hour even if Lumen never comes back.
+Every request carries a random token generated for this pod (passed in the pod's environment).
+
+#### 15.4 In Lumen
+
+* `runtime/RunPod`: the API client (pods, GPU catalogue), with mock-server tests.
+* `runtime/CloudTraining`: a Queue job like the local one (`startTraining`), with the same
+  progress parsing: create the pod → wait for the agent → upload → train → download the epochs →
+  terminate the pod. Cancel and failure terminate it too.
+* Pods carry the name prefix `lumen-train-`; at start Lumen lists its own leftover pods and offers
+  to terminate them, so a crash never leaves a paid GPU running.
+* Train tab: *Where* — "This computer" or "RunPod cloud GPU". For the cloud: the GPU (from the
+  catalogue, 24 GB or more), its price per hour and the estimated cost and time; a confirmation
+  before every start, since it spends money.
+* Settings → Cloud training: the API key (stored in the credential store), the preferred GPU,
+  Secure or Community cloud.
+* The base checkpoint's URL comes from its library sidecar when it was downloaded from Hugging Face
+  (M12 phase E); otherwise Lumen uploads the file (6–7 GB, warned with the time it will take).
+
+#### 15.5 Implementation steps
+- [ ] RunPod client: pods (create, get, list, delete) and the GPU catalogue; problem-object errors;
+  the API key in the credential store; Settings → Cloud training. Tests against a mock server.
+- [ ] Pod agent: the script and Lumen's protocol client (status, chunked upload and download,
+  model from URL, train, log). Tests run the agent locally with Python and a fake trainer.
+- [ ] Cloud training job: the orchestration, cancel, failure handling, always terminating the pod;
+  leftover pods at start. Tests with the mock RunPod API and the local agent.
+- [ ] Train tab and costs: *Where*, GPU choice, estimate, confirmation; the result goes into the
+  library and onto the character like a local training.
+- [ ] One short live run on RunPod (the user's account): the 29-image Akane set, 10 epochs.
+
+**AC**:
+1. With a RunPod API key, a user trains the character LoRA from the Train tab on a cloud GPU; it
+   arrives in the model library and on the character, like a local training.
+2. Before starting, Lumen shows the GPU, its price per hour and the estimated total cost; it never
+   starts a pod without the user's confirmation.
+3. Cancel, a failed training and a closed Lumen never leave a pod running: the pod is terminated,
+   or the next start finds and terminates it; the agent also exits on its own.
+4. The API key is stored only in the credential store.
+
+Risks and open questions:
+* RunPod REST v2 is new; field names may still change. The client keeps them in one place.
+* Upload speed decides whether a local checkpoint is practical (6.5 GB at 20 Mbit/s is about
+  45 min); checkpoints from Hugging Face are downloaded by the pod instead.
+* Civitai downloads need the user's Civitai token; passing it to a rented machine is a choice the
+  user makes per run (off by default: upload instead).
+* GPU availability varies; the catalogue's availability and a fallback list of 24 GB GPUs help.
+
 ---
 
 ## 5. Quality strategy
