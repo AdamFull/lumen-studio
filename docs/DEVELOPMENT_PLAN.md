@@ -94,6 +94,7 @@ pose authoring and LLM-driven planning** in one responsive application, working 
 | Provider | Transport | Features used |
 |---|---|---|
 | **SD WebUI (A1111 / Forge / reForge)** | REST `/sdapi/v1/*` | txt2img, img2img, inpaint (mask, `inpaint_full_res`, padding), `/progress` live preview, `/interrupt`, models / samplers / schedulers / upscalers discovery, `extra-single-image` upscaling, ControlNet extension (`alwayson_scripts.controlnet`: OpenPose, IP-Adapter, reference-only; `/controlnet/detect` for DWPose), rembg extension |
+| **stable-diffusion.cpp `sd-server`** (planned, M12) | native async REST `/sdcpp/v1` (`capabilities`, `img_gen` → job, `jobs/{id}`, cancel, `upscale`) | txt2img, img2img, inpaint, ControlNet, IP-Adapter (SD 1.5 / SDXL), LoRA, hires fix, ESRGAN; started and supervised by Lumen, model set fixed per process |
 | **ComfyUI** | REST `/prompt`, `/upload/image`, `/history`, `/view`, `/object_info`, `/interrupt`, **WebSocket `/ws`** | workflow templates (API format) with declarative bindings: SDXL/Illustrious + ControlNet Union + IP-Adapter, FLUX.1 Kontext (multi-reference), Qwen-Image-Edit (multi-image + pose), inpaint (InpaintModelConditioning), upscale, DWPose preprocessor, background removal |
 | **OpenAI Images** | `/v1/images/generations`, `/v1/images/edits` (multipart, multiple `image[]`, mask) | GPT-Image models: text-to-image, multi-reference edit, masked edit, transparent background |
 | **Google Gemini / Imagen** | `generateContent` (inline image parts), Imagen `predict` | multi-image reference editing, instruction edits |
@@ -171,6 +172,7 @@ lumen/
     net/         lumen_net       http client, retry/back-off, SSE, multipart, websocket wrapper
     doc/         lumen_doc       project store (SQLite), assets, document, layers, tiles, undo commands
     pose/        lumen_pose      skeleton, presets, FK/IK, 3D rig, renderer, OpenPose JSON
+    runtime/     lumen_runtime   (M12) runtime installer, server supervisor, model library, downloads
     ai/          lumen_ai        provider interfaces + registry, request model, providers/*,
                                  comfy workflow templates, director pipeline, prompt templates
     ui/          lumen_ui        main window, theme, canvas, tools, panels, dialogs, chat, pose editor
@@ -478,6 +480,300 @@ profile.
 - [x] Expression variant generation (eyes closed, mouth shapes)
 - [x] Cubism model preview: runtime Core binding (`lumen_live2d`), model3/motion3 loading, software renderer, Parts page tab, physics, all motion groups, expressions and pose — **AC**: a generated A-pose character is segmented, its arm mask split left/right and re-generated for one side only, exported as a layered PSD that opens in Photoshop/Krita/Cubism with correctly named, ordered parts; the preview animates it; the UI never stalls during segmentation or generation.
 
+### M12 — Managed local runtimes & model hub
+
+Goal: a user with a GPU and no AI tooling gets a working local studio from inside Lumen. Today
+every local back-end is a server the user installs, starts and configures elsewhere; Lumen only
+connects to its URL. After M12 Lumen can **install** a local runtime (download from the
+project's GitHub releases) or **adopt** one that is already installed. It **starts and stops**
+the server itself, exposes its launch options as provider settings, and manages the **model files**
+the servers load. Downloading models from Hugging Face and Civitai comes in a later phase. Remote
+or externally started servers keep working as they do now (URL only).
+
+#### 12.1 Why stable-diffusion.cpp becomes the default local image back-end
+
+[stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp) (MIT) ships `sd-server`
+(`examples/server`). The server has three APIs: a native async API under `/sdcpp/v1`, an
+OpenAI-compatible API under `/v1/images/*`, and an A1111-compatible API under `/sdapi/v1`.
+
+| | sd.cpp `sd-server` | ComfyUI | SD WebUI / Forge |
+|---|---|---|---|
+| Install | one zip, no Python (CPU 17.5 MB, Vulkan 30 MB, CUDA 12 338 MB + cudart 564 MB) | Python env, GBs, custom nodes for IP-Adapter / DWPose | Python env, GBs |
+| Start-up / supervision | single native process, CLI flags | Python process tree | Python process tree, `webui-user.bat` |
+| Progress / cancel | async jobs: `POST /img_gen` → 202 + job id, `GET /jobs/{id}` (state, preview, `b64_json` results), `POST /jobs/{id}/cancel` | WebSocket | `/progress`, `/interrupt` |
+| Features Lumen uses | txt2img, img2img (`init_image`, `strength`), inpaint (`mask_image`), ControlNet (`control_image`, `control_strength`), **IP-Adapter for SD 1.5 / SDXL** (`ip_adapter_image`, ViT-H CLIP vision), LoRA (`lora[]`), hires fix, ESRGAN `/upscale`, VAE tiling, `capabilities` discovery (samplers, schedulers, LoRAs, upscalers, limits) | all, through workflow templates | all, through extensions |
+| Low VRAM | GGUF quantisation of diffusion models, `--offload-to-cpu`, `--max-vram <GiB>`, `--clip-on-cpu`, `--vae-on-cpu`, `--diffusion-fa` | `--lowvram` | `--medvram` |
+| Model switching | **none**: one model set per process, chosen on the command line, so a switch means a restart | per workflow | `/options` |
+
+The table is from the server [README](https://github.com/leejet/stable-diffusion.cpp/blob/master/examples/server/README.md)
+and [api.md](https://github.com/leejet/stable-diffusion.cpp/blob/master/examples/server/api.md),
+the CLI option table in `examples/common/common.cpp`, and
+[ip_adapter.md](https://github.com/leejet/stable-diffusion.cpp/blob/master/docs/ip_adapter.md).
+The "sdcpp REST API" is the native `/sdcpp/v1` API of this same server, not a separate project.
+
+The biggest gain for Lumen: identity references through IP-Adapter with no custom nodes. The live
+tests showed that our plain ComfyUI setup cannot do this. The cost is the restart on every model
+change. ControlNet, IP-Adapter, LoRA directory and upscaler are also start-up flags, so the set of
+features a server offers depends on how it was started (§12.4).
+
+Not yet verified, so spike first (phase B): an SDXL OpenPose ControlNet (xinsir) loads and steers
+the pose. The code has an SDXL ControlNet path (`control.hpp`), but the docs show only SD 1.5
+examples. Also measure quality and speed against ComfyUI on the 8 GB test laptop.
+
+#### 12.2 Concepts
+
+* **Runtime**: an installed server program of a known *kind*: `llama.cpp`, `sd.cpp`, `comfyui`,
+  `sdwebui`, or later `koboldcpp`. It is either:
+  * *managed*: downloaded by Lumen into `appData/runtimes/<kind>/<tag>-<backend>/`. Lumen records
+    repo, tag, asset name, sha256, backend and install date.
+  * *adopted*: an existing install. Lumen records the executable or launcher path plus the version
+    it probed. Lumen never modifies or updates adopted runtimes.
+* **Server profile**: a runtime plus a launch configuration: models, port, GPU options, extra args
+  and lifecycle policy. One runtime can have several profiles, for example "Qwen3-VL 8B vision" and
+  "Qwen3 8B fast".
+* **Binding**: a provider instance may name a server profile (`managedBy`). The provider stays a
+  pure API client. The supervisor makes sure the server is up before the provider's first request.
+  Providers without a binding behave exactly as today.
+* **Model library**: the model files known to Lumen, typed and indexed. Server profiles reference
+  library entries rather than raw paths, so models can be moved or rescanned.
+
+#### 12.3 Runtime installer (GitHub releases)
+
+* **Catalogue** (`resources/runtimes/catalog.json`, data, not code). It lists only pinned
+  repositories, each with tag and asset patterns per platform and backend:
+  * `ggml-org/llama.cpp`:
+    * tags `b<N>` (daily builds);
+    * assets `llama-b<N>-bin-win-{cpu,cuda-12.4,cuda-13.x,vulkan,…}-x64.zip`;
+    * companion runtime `cudart-llama-bin-win-cuda-<ver>-x64.zip` for CUDA builds.
+  * `leejet/stable-diffusion.cpp`:
+    * tags `master-<N>-<sha>`;
+    * assets `sd-master-<sha>-bin-win-{cpu,cuda12,vulkan,rocm-…}-x64.zip`;
+    * companion `cudart-sd-bin-win-cu12-x64.zip`.
+* **Release resolution**: `GET api.github.com/repos/{repo}/releases?per_page=N`, newest release
+  whose tag matches the pattern. Not `releases/latest`: for llama.cpp it points to an unrelated
+  `v0.6.0`, and the daily builds are flagged *prerelease*. Responses are cached with `ETag` /
+  `If-None-Match` because of the 60 requests/hour unauthenticated limit. An optional GitHub
+  token can go in the credential store.
+* **Backend choice**:
+  * Hardware probe on a worker thread: DXGI adapter list with dedicated VRAM, vendor id and driver
+    version; `nvidia-smi --query-gpu` when present.
+  * Recommendation: NVIDIA → CUDA (the build matching the driver's maximum CUDA version);
+    AMD / Intel → Vulkan; no GPU → CPU.
+  * The user sees each option's download size and can override, for example to pick Vulkan
+    (33 MB) over CUDA 12.4 (265 MB + 391 MB cudart).
+* **Download and install**, through a download manager shared with §12.7:
+  * The download is a `Job` in the Queue, resumable with `Range` into a `.part` file, with a
+    disk-space check up front.
+  * **sha256 is verified against the release asset's `digest`** from the GitHub API. Assets
+    without a digest are refused.
+  * Extraction uses vendored miniz (MIT, single file), with zip-slip checks: no absolute paths, no
+    `..`, no reparse points.
+  * Files go into a staging folder that is renamed into place atomically. Lumen then runs
+    `<exe> --version` and records the version.
+* **Updates**: "check for updates" on demand, plus an optional weekly check. A running server is
+  never updated: the update applies at the next start. The previous version is kept for
+  **rollback**, two per kind by default.
+* **Adopt existing**:
+  * The user picks an executable or folder; Lumen detects the kind from the exe name
+    (`llama-server.exe`, `sd-server.exe`), and records the version from `--version`.
+  * ComfyUI Desktop: detected from `AppData/Local/Programs/ComfyUI` plus the base directory and
+    `extra_models_config.yaml` in `AppData/Roaming/ComfyUI`, using the same launch line the live
+    tests use (`--front-end-root …`).
+  * ComfyUI portable: `python_embeded` + `main.py`. SD WebUI / Forge: `webui-user.bat` / venv.
+  * Ollama and LM Studio stay external services. Lumen connects to them and may run
+    `ollama serve`, but does not supervise their models.
+* **Security**:
+  * Only catalogue repositories, downloaded over HTTPS from GitHub hosts.
+  * Digest verification is mandatory, and the only files ever executed are the catalogue's known
+    server executables inside a verified install.
+  * Nothing is elevated, and nothing is installed outside `appData/runtimes`.
+  * llama.cpp and sd.cpp are MIT and downloaded by the user at run time; Lumen redistributes
+    nothing.
+
+#### 12.4 Process supervisor
+
+* `ServerSupervisor` (new module `lumen_runtime`; depends on `core`, `net`; used by `ai` and `ui`)
+  manages one `QProcess` per running server profile.
+* **Process control**:
+  * Each child is placed in a **Windows job object** with `KILL_ON_JOB_CLOSE`, so servers and
+    their child processes (ComfyUI's Python tree) die with Lumen.
+  * Servers bind to `127.0.0.1` only. The port is the kind's default, or the first free one.
+* **Readiness**:
+  * Probes: llama.cpp `GET /health` (503 while loading, 200 when ready); sd-server
+    `GET /sdcpp/v1/capabilities`; ComfyUI `GET /system_stats`.
+  * Model-loading progress is parsed from stdout where the server prints it, with a start-up
+    timeout per profile.
+* **Logs**: a ring buffer plus `logs/runtimes/<profile>.log`, viewable from the server's status
+  chip and from Settings. Failure messages quote the last log lines, for example CUDA out of
+  memory or a missing DLL.
+* **Lifecycle policy per profile**:
+  * Start on demand (default), at app start, or manually.
+  * Stop after N idle minutes, and on app exit unless "keep running" is set.
+  * After a crash, restart with back-off, at most three times, then surface the error.
+* **Status**: status-bar chips per server (stopped / starting / loading x % / ready / sleeping /
+  error) with start, stop, restart, open log and copy command line.
+* **Model switches**:
+  * sd-server is restarted with the new model set. The job queue groups pending jobs by model set
+    to avoid ping-pong.
+  * A request needing a component that is not loaded (ControlNet for pose shots, IP-Adapter for
+    identity) offers "restart with …", or the profile's auto-components handle it. The Director
+    knows which components the planned shots need before generation starts.
+  * llama.cpp: restart, or router mode (`--models-dir`) where the build supports it.
+* **GPU arbitration** builds on `ImageProvider::releaseGpu()` and the deferred Critic:
+  * The supervisor knows which servers share a GPU and how much VRAM is free (DXGI
+    `QueryVideoMemoryInfo`).
+  * llama.cpp profiles default to `--sleep-idle-seconds`.
+  * sd-server cannot unload without exiting. Its `releaseGpu()` either stops the process (cost:
+    a model reload) or is a no-op when the profile runs with `--offload-to-cpu` / `--max-vram`.
+    The spike decides the default for 8 GB cards.
+
+#### 12.5 Local provider settings
+
+* Settings → **Local runtimes**:
+  * the runtimes list: kind, version, backend, managed/adopted, disk size, update available;
+    install / adopt / update / roll back / remove;
+  * the server profiles list.
+* Profile forms use the existing `settingsSchema` mechanism, plus an **Extra arguments** field and
+  a read-only preview of the full command line.
+* **llama.cpp profile**:
+  * model and `--mmproj` (paired automatically when the library knows the projector);
+  * context, `-ngl` or `--fit`, KV cache type, flash attention, threads, parallel slots;
+  * `--jinja`, reasoning budget, `--sleep-idle-seconds`.
+* **sd.cpp profile**:
+  * checkpoint, or diffusion model + VAE + text encoders (FLUX / Qwen-Image style models);
+  * ControlNet; IP-Adapter + CLIP vision; LoRA and embedding directories; upscaler;
+  * `--offload-to-cpu`, `--max-vram`, `--clip-on-cpu`, `--vae-on-cpu`, `--diffusion-fa`,
+    VAE tiling, threads.
+* **ComfyUI profile**: launcher / Python, base directory, extra model paths,
+  `--lowvram`/`--normalvram`, port, "Free VRAM when idle".
+* **VRAM presets** from the hardware probe (8 / 12 / 16+ GB) fill sensible defaults. The tested
+  8 GB setup from the user guide becomes the 8 GB preset.
+
+#### 12.6 Model library & browser
+
+* **Library roots**: a Lumen models folder (default `appData/models`, user-changeable) with typed
+  sub-folders: `checkpoints`, `diffusion_models`, `vae`, `text_encoders`, `loras`, `controlnet`,
+  `ipadapter`, `clip_vision`, `upscale_models`, `llm`, `mmproj`. Lumen can also scan existing
+  folders in place, without copying:
+  * ComfyUI `extra_model_paths.yaml` / `extra_models_config.yaml`;
+  * the A1111 `models/` folder;
+  * the LM Studio models folder;
+  * any folder the user adds.
+* **Index**: SQLite in app data, on a worker thread. Each entry holds path, size, mtime and type,
+  plus:
+  * **GGUF metadata**: `general.architecture`, quantisation, context length; mmproj (`clip`
+    architecture) detection;
+  * **safetensors header**: tensor-name heuristics for SD 1.5 / SDXL / FLUX / LoRA / ControlNet /
+    IP-Adapter, and `__metadata__` such as `ss_base_model_version`;
+  * **sha256**, computed lazily, cached and invalidated by mtime/size.
+* **Enrichment**: `GET civitai.com/api/v1/model-versions/by-hash/{sha256}` returns name, base
+  model, trigger words, preview images and the NSFW flag. Opt-in, because it sends file hashes.
+* **Browser UI** (new page or Library tab):
+  * grid/list with filters (type, base model, quantisation, size, source);
+  * details pane: preview, trigger words, licence, source link, used by which profiles;
+  * actions: use in profile, reveal in Explorer, rename, move, delete (to the Recycle Bin only).
+  * **Fit hints**: estimated VRAM (weights + KV cache at the profile's context) against the
+    detected VRAM gives "fits / partial offload / too large".
+* **Starter sets** (curated `resources/models/starters.json`, per VRAM tier):
+  * a vision LLM + mmproj (Qwen3-VL-8B Q4_K_M for 8 GB);
+  * an SDXL anime checkpoint;
+  * OpenPose ControlNet;
+  * IP-Adapter SDXL + CLIP ViT-H;
+  * an ESRGAN upscaler.
+
+  "Set up local studio" downloads the set (total size shown first), creates the profiles and runs
+  a test generation.
+
+#### 12.7 Hugging Face & Civitai downloads (later phase)
+
+* **Shared download manager**:
+  * Queue jobs, one or two parallel downloads, resumable `.part` files, disk-space check.
+  * Mandatory hash verification when the source publishes one.
+  * A sidecar `<file>.lumen.json` records source, URL, revision, licence, trigger words and the
+    NSFW flag.
+  * Only `.gguf` and `.safetensors` by default. Pickle formats (`.ckpt`, `.pt`, `.bin`) are refused
+    unless the user opts in per file with a warning. Downloaded files are never executed.
+* **Hugging Face**:
+  * Search: `GET huggingface.co/api/models?search=…&filter=gguf&sort=downloads&limit=…`.
+  * Files: `GET /api/models/{repo}/tree/{revision}` gives sizes, and `lfs.oid` = sha256.
+  * Download: `GET /{repo}/resolve/{revision}/{path}` (a 307 redirect to the CDN), with the
+    revision pinned to the commit from `X-Repo-Commit` and `Range` resume.
+  * Gated repositories need an HF token (Bearer, credential store). The licence comes from
+    `cardData.license`.
+  * For GGUF repos: a quantisation picker with sizes and fit hints, and the matching `mmproj-*`
+    offered automatically.
+* **Civitai**:
+  * Search: `GET civitai.com/api/v1/models?query=…&types=Checkpoint|LORA|Controlnet&baseModels=…&nsfw=…`,
+    with cursor paging.
+  * Version details: `GET /api/v1/model-versions/{id}` returns files with `sizeKB`, `hashes.SHA256`,
+    `downloadUrl`, `baseModel` and `trainedWords`.
+  * Download: `GET /api/download/models/{versionId}` with `Authorization: Bearer <token>`. The
+    token is in the credential store, never in the URL; many downloads require it.
+  * NSFW results are hidden by default and previews blurred, per setting. The licence and
+    commercial-use fields are shown before download.
+* API keys and tokens live only in the OS credential store, as for cloud providers.
+
+#### 12.8 Implementation steps
+
+Phase A — foundations
+- [ ] `lumen_runtime` module:
+  - hardware probe (DXGI + `nvidia-smi`);
+  - download manager (resume, sha256, disk check, Queue jobs);
+  - vendored miniz extraction with zip-slip checks;
+  - runtime catalogue + GitHub release resolver (tag patterns, digests, ETag cache).
+- [ ] Runtime store: install / adopt / update / roll back / remove; Settings → Local runtimes.
+- [ ] `ServerSupervisor`:
+  - job objects, ports, readiness probes, logs, restart policy, idle stop;
+  - status-bar chips;
+  - provider ↔ profile binding with start-on-demand.
+
+Phase B — stable-diffusion.cpp
+- [ ] Spike on the 8 GB test laptop:
+  - SDXL Illustrious checkpoint + xinsir OpenPose ControlNet + IP-Adapter SDXL;
+  - 1024², with time and VRAM compared against ComfyUI;
+  - inpaint quality;
+  - restart cost of a model switch;
+  - `--offload-to-cpu` against stop/start for GPU sharing.
+- [ ] `SdCppProvider` on `/sdcpp/v1`:
+  - capabilities discovery, `img_gen` + job polling with previews, cancel, `/upscale`;
+  - capabilities derived from the launch profile; model-set restarts with job grouping;
+  - works unmanaged too (URL only);
+  - mock-server contract tests; `tst_live` with `LUMEN_LIVE_SDCPP`.
+- [ ] GPU arbiter policy for sd-server + llama.cpp behind `releaseGpu()`; the reference scenario
+  with the Critic on one GPU.
+
+Phase C — llama.cpp management
+- [ ] llama-server profiles (model + mmproj, context, `-ngl`/`--fit`, KV type, FA, `--jinja`,
+  sleep-idle), VRAM presets, role defaults (vision profile for the analyst and the Critic).
+- [ ] Adopted ComfyUI / SD WebUI start-stop through the supervisor.
+
+Phase D — model library
+- [ ] Index (scan roots, GGUF / safetensors header parsing, lazy sha256), browser UI, fit hints,
+  Civitai by-hash enrichment (opt-in), starter sets and "Set up local studio".
+
+Phase E — hub downloads
+- [ ] Hugging Face search and download (revision pinning, gated token, quant picker, mmproj
+  pairing).
+- [ ] Civitai search and download (token, NSFW filter, hashes, licence fields).
+- [ ] Onboarding: a "Set up local AI" path (hardware → recommended runtimes + starter set with
+  sizes → install → start → test generation).
+
+**AC**:
+1. On a clean Windows machine with an NVIDIA GPU, a user installs llama.cpp (CUDA) and sd.cpp
+   from Settings, downloads the 8 GB starter set, and runs the reference scenario (§1.1) with the
+   Critic. They never open a terminal or another app.
+2. Lumen starts both servers on demand, alternates them on one GPU without CPU fallback, and
+   stops them on exit. No orphan process remains after a crash of Lumen.
+3. A tampered download (digest mismatch) is rejected.
+4. An adopted ComfyUI Desktop install starts and stops from Lumen.
+
+Open questions:
+* Can CUDA builds of llama.cpp and sd.cpp share one cudart download? The DLL sets differ; check.
+* Run several sd-server instances (one per model set) when VRAM allows, or always one?
+* Should ComfyUI become installable? Its portable build is a 7z with a Python environment, so the
+  plan only adopts it for now.
+* Linux and macOS asset patterns come later; the catalogue format already keys them by platform.
+
 ---
 
 ## 5. Quality strategy
@@ -500,4 +796,7 @@ profile.
 | Local server unavailable / slow | health checks, clear status indicators, queue persistence, cancellation |
 | Part segmentation models are heavy (8–16 GB VRAM, Python) | out-of-process via ComfyUI / sidecar, cloud and heuristic fallbacks, every step editable by hand |
 | Live2D Cubism SDK licence | built-in puppet preview needs no SDK; the Cubism Core is loaded at runtime from the user's own SDK copy |
+| Downloaded runtimes / models could be tampered with or malicious | pinned GitHub repositories only, mandatory sha256 (release digests, HF LFS oids, Civitai hashes), nothing executed except known server executables, pickle formats refused by default |
+| Upstream release naming or server API changes (llama.cpp daily builds, sd.cpp `master-N` tags) | catalogue as data with tag/asset patterns, adopted installs keep working, contract tests against a mock sd-server, rollback to the previous runtime |
+| Local servers compete for one GPU | supervisor-level GPU arbitration on top of `releaseGpu()`, llama.cpp sleep-on-idle, sd-server offload or stop/start, VRAM presets |
 | Missing optional Qt modules | CMake feature detection, graceful degradation (polling progress, PNG/JPEG only) |
