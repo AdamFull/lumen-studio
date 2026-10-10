@@ -768,6 +768,21 @@ void TestCanvas::localServersWiring()
         QCOMPARE(trees[1]->topLevelItemCount(), 1);
         QCOMPARE(trees[1]->topLevelItem(0)->text(0), QStringLiteral("Local Qwen"));
         QCOMPARE(trees[1]->topLevelItem(0)->text(4), QStringLiteral("Running"));
+        const QString shots = qEnvironmentVariable("LUMEN_SCREENSHOT_DIR");
+        if (!shots.isEmpty()) {
+            QTest::qWait(300);
+            dlg.grab().save(shots + QStringLiteral("/local-servers.png"));
+            ServerProfileDialog profileDlg(&studio, profile, false, &dlg);
+            profileDlg.show();
+            QTest::qWait(200);
+            profileDlg.grab().save(shots + QStringLiteral("/server-profile.png"));
+            InstallRuntimeDialog install(&studio, std::nullopt, QString(), &dlg);
+            install.show();
+            QTRY_VERIFY_WITH_TIMEOUT(install.findChildren<QPushButton *>().size() > 1, 1000);
+            QTest::qWait(4000); // hardware probe + GitHub
+            install.grab().save(shots + QStringLiteral("/install.png"));
+            window.grab().save(shots + QStringLiteral("/window.png"));
+        }
         dlg.showTab(QStringLiteral("providers"));
         QTest::qWait(50);
         auto *form = dlg.findChild<ProviderForm *>();

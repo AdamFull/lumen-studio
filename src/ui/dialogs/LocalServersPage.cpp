@@ -815,7 +815,7 @@ void ServerProfileDialog::buildOptions()
             break;
         }
         case OptionField::Type::Boolean: {
-            auto *c = new QCheckBox(box);
+            auto *c = new QCheckBox(f.label, box);
             c->setChecked(value.toBool());
             connect(c, &QCheckBox::toggled, this, &ServerProfileDialog::updatePreview);
             w = c;
@@ -842,7 +842,8 @@ void ServerProfileDialog::buildOptions()
                 row->setToolTip(f.help);
         }
         m_fields.insert(f.key, w);
-        const QString label = f.label + (f.required ? QStringLiteral(" *") : QString());
+        // Check boxes carry their own label.
+        const QString label = f.type == OptionField::Type::Boolean ? QString() : f.label + (f.required ? QStringLiteral(" *") : QString());
         if (f.advanced) {
             anyAdvanced = true;
             advancedForm->addRow(label, row ? row : w);

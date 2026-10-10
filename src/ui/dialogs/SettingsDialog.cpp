@@ -364,7 +364,8 @@ SettingsDialog::SettingsDialog(Studio *studio, QWidget *parent)
     auto *v = new QVBoxLayout(this);
     m_tabs = new QTabWidget(this);
     m_tabs->addTab(buildProvidersTab(), Icons::get(QStringLiteral("server")), tr("Providers"));
-    m_tabs->addTab(buildRolesTab(), Icons::get(QStringLiteral("chat")), tr("Models & roles"));
+    // "&&": a single "&" would turn the next letter into a mnemonic and disappear.
+    m_tabs->addTab(buildRolesTab(), Icons::get(QStringLiteral("chat")), tr("Models & roles").replace(QLatin1Char('&'), QStringLiteral("&&")));
     m_tabs->addTab(new LocalServersPage(studio, this), Icons::get(QStringLiteral("server")), tr("Local servers"));
     m_tabs->addTab(buildGeneralTab(), Icons::get(QStringLiteral("settings")), tr("General"));
     m_tabs->addTab(new ShortcutsPage(this), Icons::get(QStringLiteral("text")), tr("Shortcuts"));

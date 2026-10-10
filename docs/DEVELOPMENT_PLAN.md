@@ -566,8 +566,9 @@ examples. Also measure quality and speed against ComfyUI on the 8 GB test laptop
     disk-space check up front.
   * **sha256 is verified against the release asset's `digest`** from the GitHub API. Assets
     without a digest are refused.
-  * Extraction uses vendored miniz (MIT, single file), with zip-slip checks: no absolute paths, no
-    `..`, no reparse points.
+  * Extraction streams entries through zlib (the MinGW toolchain's, or the system's) and checks
+    CRC-32. Before anything is written it rejects absolute paths, drive letters, `..`, symbolic
+    links and encrypted entries, and every parent folder must resolve inside the target.
   * Files go into a staging folder that is renamed into place atomically. Lumen then runs
     `<exe> --version` and records the version.
 * **Updates**: "check for updates" on demand, plus an optional weekly check. A running server is
@@ -608,7 +609,7 @@ examples. Also measure quality and speed against ComfyUI on the 8 GB test laptop
   memory or a missing DLL.
 * **Lifecycle policy per profile**:
   * Start on demand (default), at app start, or manually.
-  * Stop after N idle minutes, and on app exit unless "keep running" is set.
+  * Stop after N idle minutes, and always on app exit (a "keep running" option may come later).
   * After a crash, restart with back-off, at most three times, then surface the error.
 * **Status**: status-bar chips per server (stopped / starting / loading x % / ready / sleeping /
   error) with start, stop, restart, open log and copy command line.
@@ -716,16 +717,21 @@ examples. Also measure quality and speed against ComfyUI on the 8 GB test laptop
 #### 12.8 Implementation steps
 
 Phase A — foundations
-- [ ] `lumen_runtime` module:
-  - hardware probe (DXGI + `nvidia-smi`);
+- [x] `lumen_runtime` module:
+  - hardware probe (DXGI + `nvidia-smi`, including the newer "KMD / CUDA UMD" banner);
   - download manager (resume, sha256, disk check, Queue jobs);
-  - vendored miniz extraction with zip-slip checks;
+  - streaming zip extraction on zlib with zip-slip checks;
   - runtime catalogue + GitHub release resolver (tag patterns, digests, ETag cache).
-- [ ] Runtime store: install / adopt / update / roll back / remove; Settings → Local runtimes.
-- [ ] `ServerSupervisor`:
+- [x] Runtime store: install / adopt / update / roll back / remove; Settings → Local servers.
+  Companion CUDA runtimes are unpacked once per digest and shared by later versions. An update
+  moves the servers on the same build to the new version and keeps the old one.
+- [x] `ServerSupervisor`:
   - job objects, ports, readiness probes, logs, restart policy, idle stop;
-  - status-bar chips;
-  - provider ↔ profile binding with start-on-demand.
+  - status-bar button;
+  - provider ↔ profile binding with start-on-demand (`ai::ProviderGate`: generation, utilities,
+    segmentation, the agent and structured chat wait for the server and release it afterwards).
+  - Verified live: an adopted llama.cpp b10964 (CUDA 12.4) with Qwen3-VL-8B starts on the first
+    request and answers in 8.3 s including the start; it stops in 0.8 s and frees the VRAM.
 
 Phase B — stable-diffusion.cpp
 - [ ] Spike on the 8 GB test laptop:
@@ -743,8 +749,9 @@ Phase B — stable-diffusion.cpp
   with the Critic on one GPU.
 
 Phase C — llama.cpp management
-- [ ] llama-server profiles (model + mmproj, context, `-ngl`/`--fit`, KV type, FA, `--jinja`,
-  sleep-idle), VRAM presets, role defaults (vision profile for the analyst and the Critic).
+- [ ] llama-server profiles. Done: model + mmproj, context, `-ngl`, KV type, FA, `--jinja`,
+  sleep-idle, reasoning budget, and the first local LLM becomes the assistant. Still to do: VRAM
+  presets, `--fit`, and role defaults (a vision profile for the analyst and the Critic).
 - [ ] Adopted ComfyUI / SD WebUI start-stop through the supervisor.
 
 Phase D — model library

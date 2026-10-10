@@ -57,6 +57,27 @@ llama-server -m Qwen3VL-8B-Instruct-Q4_K_M.gguf --mmproj mmproj-Qwen3VL-8B-Instr
 ComfyUI ran an SDXL anime checkpoint (Animagine XL 4.0 or WAI-Illustrious) with the xinsir OpenPose
 ControlNet. Qwen3-VL-8B handles the assistant, planning, reference analysis and the Critic.
 
+### Local servers: let Lumen run llama.cpp and stable-diffusion.cpp
+
+Instead of starting servers yourself, Lumen can install and run them. Open **Settings → Local
+servers**.
+
+1. **Get the program.** Use **Download…** for a release from GitHub. Lumen picks the build for your
+   graphics card (CUDA for NVIDIA, Vulkan for AMD and Intel, CPU otherwise) and shows the download
+   size. Files are checked against the checksums GitHub publishes. Alternatively, **Add existing…**
+   lists llama-server and sd-server copies it finds in Program Files, your home folder and
+   Downloads, or you can browse to one.
+2. **Create a server.** **New server…** asks for the model files and the launch options. Defaults
+   suit an 8 GB GPU. The dialog shows the full command line. Leave **Add it as a provider** on, and
+   the server appears under Providers too.
+3. **Use it.** A server set to start *When needed* starts on the first request: a chat message, a
+   generation or a Critic review. The job shows "Starting …" meanwhile. Servers stop when Lumen
+   closes, or after the idle time you set.
+
+The server button in the status bar shows what runs and offers start, stop, restart and the
+server's log. **Check for updates** downloads newer releases. Servers switch to them at their next
+start, and the previous version stays installed, so you can switch back in the server's settings.
+
 ## 3. Pages
 
 The left bar switches pages (`Alt+1` … `Alt+6`).
@@ -221,6 +242,8 @@ LumenStudio [--project file.lumen] [--page editor|generate|create|poses|parts|li
 | What | Installed | Portable |
 |---|---|---|
 | Settings, provider configuration, logs, character library | `%LOCALAPPDATA%\Lumen\Lumen Studio` | `userdata\` |
+| Server programs downloaded by Lumen, server settings | `…\Lumen Studiountimes`, `servers.json` | `userdatauntimes` |
+| Server logs | `…\Lumen Studio\logs\servers` | `userdata\logs\servers` |
 | Cache (thumbnails) | `%LOCALAPPDATA%\Lumen\Lumen Studio\cache` | `userdata\cache` |
 | Projects | `Documents\Lumen Studio` | `userdata\projects` |
 | API keys | Windows Credential Manager | Windows Credential Manager |
@@ -234,4 +257,7 @@ The environment variable `LUMEN_DATA_DIR` overrides both (useful for separate pr
   (`--api` for SD WebUI, `--listen` when it runs on another machine).
 * **A cloud request fails**: the job card shows the server's message; check the key, your balance
   and the provider's content policy.
+* **A local server fails to start**: open its log from the status-bar button. The last lines
+  usually name the cause: a model file that is not found, CUDA out of memory (lower *GPU layers* or
+  the context size), or a port already in use.
 * **Logs**: **Help → Open log folder**. Include the latest log when reporting a problem.
