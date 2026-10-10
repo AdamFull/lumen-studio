@@ -44,6 +44,7 @@ private slots:
     void sdcppGenerateWithPoseAndReference();
     void sdcppFailureCancelAndUpscale();
     void lorasAcrossProviders();
+    void sdCppPromptStyle();
 
 private:
     net::HttpClient m_http;
@@ -539,6 +540,21 @@ void TestProviders::sdcppFailureCancelAndUpscale()
     // The model's own 4x is brought to the requested 2x.
     QCOMPARE(op->result().images.first().image.size(), QSize(200, 120));
     delete op;
+}
+
+void TestProviders::sdCppPromptStyle()
+{
+    // stable-diffusion.cpp is a local Stable Diffusion back-end: the checkpoint's name picks the
+    // dialect (it used to be treated as a cloud model, so anime checkpoints got prose prompts).
+    SdCppProvider sd(SdCppProvider::describe(), QStringLiteral("sd"), &m_http, nullptr);
+    sd.configure({{QStringLiteral("url"), QStringLiteral("http://127.0.0.1:1")},
+                  {QStringLiteral("model"), QStringLiteral("waiIllustriousSDXL_v170.safetensors")}});
+    PromptStyle style = promptStyleFor(&sd);
+    QCOMPARE(style.family, QStringLiteral("illustrious"));
+    QVERIFY(style.dialect == PromptStyle::Dialect::Tags);
+    QVERIFY(style.apply(QStringLiteral("1girl")).startsWith(QStringLiteral("masterpiece")));
+    sd.configure({{QStringLiteral("url"), QStringLiteral("http://127.0.0.1:1")}});
+    QVERIFY(promptStyleFor(&sd).family != QLatin1String("cloud"));
 }
 
 void TestProviders::lorasAcrossProviders()

@@ -40,7 +40,8 @@ PromptStyle promptStyleFor(const ImageProvider *provider, const QString &model)
     const QString type = provider->type().id;
     const ImageCapabilities caps = provider->capabilities();
     s.supportsNegative = caps.negativePrompt;
-    if (type != QLatin1String("sdwebui") && type != QLatin1String("comfyui")) {
+    // Local Stable Diffusion back-ends: the checkpoint's name tells the prompt dialect.
+    if (type != QLatin1String("sdwebui") && type != QLatin1String("comfyui") && type != QLatin1String("sdcpp")) {
         s.family = QStringLiteral("cloud");
         s.dialect = PromptStyle::Dialect::Natural;
         return s;

@@ -1928,10 +1928,20 @@ void TestLive::characterEverywhere()
                 chip->setUsedHere(with == 1);
                 seed->setValue(1000 + i);
                 promptEdit->setPlainText(prompts[i]);
-                const int before = int(studio.project()->assets().size());
                 go->click();
-                QVERIFY(QTest::qWaitFor([&] { return int(studio.project()->assets().size()) > before; }, 900000));
-                const doc::AssetInfo a = studio.project()->assets().first();
+                // The image of this prompt, with the character or without (as the metadata says).
+                auto find = [&]() -> std::optional<doc::AssetInfo> {
+                    for (const doc::AssetInfo &a : studio.project()->assets()) {
+                        if (a.metadata.value(QStringLiteral("user_prompt")).toString() == prompts[i]
+                            && a.metadata.contains(QStringLiteral("character")) == (with == 1))
+                            return a;
+                    }
+                    return std::nullopt;
+                };
+                QVERIFY(QTest::qWaitFor([&] { return find().has_value(); }, 900000));
+                const doc::AssetInfo a = *find();
+                if (with == 1)
+                    qInfo().noquote() << "   sent:" << a.metadata.value(QStringLiteral("prompt")).toString().left(160);
                 auto loaded = studio.project()->loadImage(a.id);
                 QTRY_VERIFY_WITH_TIMEOUT(loaded.isFinished(), 10000);
                 images[with] = loaded.result();

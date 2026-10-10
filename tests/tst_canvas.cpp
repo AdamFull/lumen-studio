@@ -1145,6 +1145,8 @@ void TestCanvas::characterLoraChecks()
 
     auto *image = qobject_cast<ai::ImageProvider *>(sd);
     QCOMPARE(checkpointFamily(&studio, image), QStringLiteral("SDXL"));
+    // The provider knows the server's checkpoint, so the prompt style can match it.
+    QCOMPARE(studio.providers()->imageProvider(sd->instanceId())->text(QStringLiteral("model")), QStringLiteral("xl.safetensors"));
     QCOMPARE(modelFamily(&studio, xlLora), QStringLiteral("SDXL"));
     QCOMPARE(suggestedTrigger(&studio, xlLora), QStringLiteral("lmn_mira"));
 
@@ -1745,7 +1747,8 @@ void TestCanvas::loraEvaluation()
         const QJsonArray lora = generations[i].value(QStringLiteral("lora")).toArray();
         QCOMPARE(lora.size(), 1);
         QVERIFY(lora[0].toObject().value(QStringLiteral("path")).toString().startsWith(QStringLiteral("lumen-eval/lmn_mira-e0")));
-        QVERIFY(generations[i].value(QStringLiteral("prompt")).toString().startsWith(QStringLiteral("lmn_mira")));
+        // The trigger follows the model's quality prefix (the checkpoint "xl" is a generic SDXL model).
+        QVERIFY(generations[i].value(QStringLiteral("prompt")).toString().startsWith(QStringLiteral("high quality, detailed, lmn_mira, ")));
         // The same seed per shot for every candidate.
         QCOMPARE(generations[i].value(QStringLiteral("seed")), generations[i % 4].value(QStringLiteral("seed")));
     }

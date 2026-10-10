@@ -155,6 +155,11 @@ void Studio::applyServerBindings()
             wanted.insert(QStringLiteral("control_net"), has(QStringLiteral("control_net")));
             wanted.insert(QStringLiteral("ip_adapter"), has(QStringLiteral("ip_adapter")) && has(QStringLiteral("clip_vision")));
             wanted.insert(QStringLiteral("upscaler"), has(QStringLiteral("upscalers_dir")));
+            // The checkpoint's file name, so the prompt style matches it (Illustrious → tags).
+            QString model = profile->option(QStringLiteral("model"), kind).toString().trimmed();
+            if (model.isEmpty())
+                model = profile->option(QStringLiteral("diffusion_model"), kind).toString().trimmed();
+            wanted.insert(QStringLiteral("model"), QFileInfo(QDir::fromNativeSeparators(model)).fileName());
         }
         QVariantMap settings = m_registry.settingsFor(p->instanceId());
         if (kind == QLatin1String("llama.cpp")) {
