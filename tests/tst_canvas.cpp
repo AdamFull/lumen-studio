@@ -1296,6 +1296,11 @@ void TestCanvas::loraTrainingSet()
         }
     }
     QCOMPARE(rejected, 1);
+    // The Train tab follows the set (the images came after the dialog opened).
+    bool summaryFollows = false;
+    for (QLabel *l : dlg.findChildren<QLabel *>())
+        summaryFollows = summaryFollows || l->text().startsWith(QStringLiteral("%1 images × ").arg(ds->keptCount()));
+    QVERIFY(summaryFollows);
     // The repeated picture is a near-duplicate of the better-scored one.
     QCOMPARE(ds->markDuplicates(), 1);
     for (const doc::DatasetItem &i : ds->items()) {

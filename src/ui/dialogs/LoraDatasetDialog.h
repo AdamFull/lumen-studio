@@ -4,6 +4,7 @@
 
 #include <QDialog>
 #include <QHash>
+#include <QSet>
 #include <QPixmap>
 #include <QPointer>
 
@@ -87,6 +88,9 @@ private:
     void startEvaluation();
     void bindEvaluation(LoraEvaluation *evaluation);
     void refreshEvaluation();
+    void updateEvaluationButton();
+    // A test image's grid icon, loaded off the GUI thread (empty until loaded).
+    QPixmap evalThumbnail(const QString &path);
     void applyEvaluation();
     void refreshEarlierRuns();
     void removeEarlierRuns();
@@ -136,6 +140,8 @@ private:
     QTableWidget *m_evalTable = nullptr;
     QPushButton *m_applyEval = nullptr;
     QPointer<LoraEvaluation> m_evaluation;
+    QHash<QString, QPixmap> m_evalThumbs;
+    QSet<QString> m_evalLoading;
     QString m_evalRun;
     QJsonObject m_sheet;
     QList<QImage> m_references;

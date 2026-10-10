@@ -257,6 +257,7 @@ LoraDatasetDialog::LoraDatasetDialog(Studio *studio, const QString &characterId,
             m_dataset->setKept(id, !i->kept);
     });
     connect(m_dataset, &doc::LoraDataset::changed, this, &LoraDatasetDialog::reload);
+    connect(m_dataset, &doc::LoraDataset::changed, this, &LoraDatasetDialog::refreshTrainTab);
     m_dataset->load();
     // A trigger word from the character's name the first time.
     doc::DatasetSettings settings = m_dataset->settings();
@@ -547,7 +548,38 @@ void LoraDatasetDialog::refreshTrainTab()
     m_trainButton->setEnabled(running || (!trainers.isEmpty() && images > 0 && m_checkpoint->count() > 0));
     m_resumeButton->setVisible(!running && CharacterTraining::canResume(CharacterTraining::lastRun(m_dataset->directory())));
     m_resumeButton->setEnabled(!trainers.isEmpty());
-    refreshEvaluation();
+    updateEvaluationButton();
+}
+
+void LoraDatasetDialog::updateEvaluationButton()
+{
+    if (!m_evalButton)
+        return;
+    const QString run = m_evaluation ? m_evaluation->runDir() : CharacterTraining::lastRun(m_dataset->directory());
+    const bool training = m_trainingJob && !m_trainingJob->isFinished();
+    const bool hasFiles = !run.isEmpty() && !LoraEvaluation::epochFiles(run).isEmpty();
+    m_evalButton->setText(m_evaluation ? tr("Stop testing") : tr("Test the LoRA"));
+    m_evalButton->setEnabled(m_evaluation || (hasFiles && !training));
+}
+
+QPixmap LoraDatasetDialog::evalThumbnail(const QString &path)
+{
+    if (m_evalThumbs.contains(path))
+        return m_evalThumbs.value(path);
+    if (!m_evalLoading.contains(path)) {
+        m_evalLoading.insert(path);
+        QPointer<LoraDatasetDialog> self(this);
+        async::run([path] { return QImage(path).scaled(72, 72, Qt::KeepAspectRatio, Qt::SmoothTransformation); })
+            .then(this, [self, path](const QImage &img) {
+                if (!self)
+                    return;
+                self->m_evalLoading.remove(path);
+                self->m_evalThumbs.insert(path, QPixmap::fromImage(img));
+                if (self->m_evalLoading.isEmpty())
+                    self->refreshEvaluation();
+            });
+    }
+    return {};
 }
 
 void LoraDatasetDialog::refreshEarlierRuns()
@@ -614,10 +646,7 @@ void LoraDatasetDialog::refreshEvaluation()
     if (!m_evalTable)
         return;
     const QString run = m_evaluation ? m_evaluation->runDir() : CharacterTraining::lastRun(m_dataset->directory());
-    const bool training = m_trainingJob && !m_trainingJob->isFinished();
-    const bool hasFiles = !run.isEmpty() && !LoraEvaluation::epochFiles(run).isEmpty();
-    m_evalButton->setText(m_evaluation ? tr("Stop testing") : tr("Test the LoRA"));
-    m_evalButton->setEnabled(m_evaluation || (hasFiles && !training));
+    updateEvaluationButton();
 
     // The cells: of the running test, else of the last saved one.
     struct Row
@@ -693,9 +722,9 @@ void LoraDatasetDialog::refreshEvaluation()
                     if (c.epoch != row.epoch || !qFuzzyCompare(c.weight + 1, row.weight + 1) || c.shot != shots[s].first)
                         continue;
                     if (!c.image.isEmpty()) {
-                        const QImage img(c.image);
-                        if (!img.isNull())
-                            item->setIcon(QIcon(QPixmap::fromImage(img.scaled(72, 72, Qt::KeepAspectRatio, Qt::SmoothTransformation))));
+                        const QPixmap pm = evalThumbnail(c.image);
+                        if (!pm.isNull())
+                            item->setIcon(QIcon(pm));
                         item->setData(Qt::UserRole + 2, c.image);
                     }
                     if (c.score >= 0) {
