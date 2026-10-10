@@ -4,6 +4,7 @@
 //   LUMEN_LIVE_COMFY=http://127.0.0.1:8188    (ComfyUI)
 //   LUMEN_LIVE_CHECKPOINT=<checkpoint name>   (optional; first checkpoint otherwise)
 //   LUMEN_LIVE_OUT=<folder>                   (optional; generated images are saved there)
+//   LUMEN_LIVE_REFERENCE=<image>              (vision tests: a character image to analyse)
 #include "ai/Agent.h"
 #include "ai/Director.h"
 #include "ai/PromptStyle.h"
@@ -12,6 +13,7 @@
 #include "ai/providers/ComfyUiProvider.h"
 #include "ai/providers/OpenAiChatProvider.h"
 #include "core/Settings.h"
+#include "doc/Project.h"
 #include "net/HttpClient.h"
 #include "pose/Rig.h"
 #include "ui/Studio.h"
@@ -63,6 +65,9 @@ private slots:
     void comfyTextToImage();
     void comfyPoseControl();
     void assistantScenario();
+    void visionCharacterSheet();
+    void visionCritique();
+    void assistantWithReferenceAndCritic();
 
 private:
     net::HttpClient m_http;
@@ -244,6 +249,144 @@ void TestLive::assistantScenario()
         }
     }
     QVERIFY(images >= 1);
+    for (Provider *p : studio.providers()->providers())
+        studio.providers()->removeProvider(p->instanceId());
+}
+
+namespace {
+
+QString referencePath()
+{
+    return qEnvironmentVariable("LUMEN_LIVE_REFERENCE");
+}
+
+ProviderRegistry *liveRegistry(net::HttpClient *http)
+{
+    auto *registry = new ProviderRegistry(http);
+    registerBuiltInProviders(*registry);
+    for (Provider *p : registry->providers())
+        registry->removeProvider(p->instanceId());
+    registry->addProvider(QStringLiteral("llamacpp"), QStringLiteral("LLM"), {{QStringLiteral("url"), llmUrl()}, {QStringLiteral("timeout_s"), 900}});
+    return registry;
+}
+
+} // namespace
+
+void TestLive::visionCharacterSheet()
+{
+    if (llmUrl().isEmpty() || referencePath().isEmpty())
+        QSKIP("LUMEN_LIVE_LLM and LUMEN_LIVE_REFERENCE are needed");
+    std::unique_ptr<ProviderRegistry> registry(liveRegistry(&m_http));
+    Director director(registry.get());
+    const QImage reference(referencePath());
+    QVERIFY(!reference.isNull());
+    QElapsedTimer t;
+    t.start();
+    StructuredChatOperation *op = director.analyzeCharacter({reference}, QString());
+    op->setAutoDelete(false);
+    QTRY_VERIFY_WITH_TIMEOUT(op->isFinished(), 900000);
+    qInfo() << "character sheet:" << t.elapsed() << "ms, attempts" << op->attempts();
+    QVERIFY2(op->state() == Operation::State::Succeeded, qPrintable(op->errorString()));
+    const QJsonObject sheet = op->result();
+    qInfo().noquote() << QJsonDocument(sheet).toJson(QJsonDocument::Indented).left(1500);
+    QVERIFY(QJsonDocument(sheet).toJson().toLower().contains("red"));
+    delete op;
+    for (Provider *p : registry->providers())
+        registry->removeProvider(p->instanceId());
+}
+
+void TestLive::visionCritique()
+{
+    if (llmUrl().isEmpty() || referencePath().isEmpty())
+        QSKIP("LUMEN_LIVE_LLM and LUMEN_LIVE_REFERENCE are needed");
+    const QString candidatePath = qEnvironmentVariable("LUMEN_LIVE_CANDIDATE");
+    if (candidatePath.isEmpty())
+        QSKIP("LUMEN_LIVE_CANDIDATE (a generated shot to review) is needed");
+    std::unique_ptr<ProviderRegistry> registry(liveRegistry(&m_http));
+    Director director(registry.get());
+    const QJsonObject shot{{QStringLiteral("title"), QStringLiteral("Front A-pose")},
+                           {QStringLiteral("description"), QStringLiteral("full body, front view, arms slightly away from the body")},
+                           {QStringLiteral("prompt"), QStringLiteral("1girl, red hair, mage robe, full body, front view, a-pose")}};
+    const QJsonObject character{{QStringLiteral("name"), QStringLiteral("Mage")},
+                                {QStringLiteral("hair"), QJsonObject{{QStringLiteral("color"), QStringLiteral("red")}}}};
+    QElapsedTimer t;
+    t.start();
+    StructuredChatOperation *op = director.critiqueShot(QImage(candidatePath), shot, character, {QImage(referencePath())});
+    op->setAutoDelete(false);
+    QTRY_VERIFY_WITH_TIMEOUT(op->isFinished(), 900000);
+    qInfo() << "critique:" << t.elapsed() << "ms";
+    QVERIFY2(op->state() == Operation::State::Succeeded, qPrintable(op->errorString()));
+    qInfo().noquote() << QJsonDocument(op->result()).toJson(QJsonDocument::Indented);
+    const int score = Director::critiqueScore(op->result());
+    QVERIFY(score >= 0 && score <= 10);
+    QVERIFY(!op->result().value(QStringLiteral("revised_prompt")).toString().isEmpty());
+    delete op;
+    for (Provider *p : registry->providers())
+        registry->removeProvider(p->instanceId());
+}
+
+void TestLive::assistantWithReferenceAndCritic()
+{
+    if (llmUrl().isEmpty() || comfyUrl().isEmpty() || referencePath().isEmpty())
+        QSKIP("LUMEN_LIVE_LLM, LUMEN_LIVE_COMFY and LUMEN_LIVE_REFERENCE are needed");
+    Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
+    Settings::instance().setValue(QStringLiteral("director/critic"), true);
+    Settings::instance().setValue(QStringLiteral("director/criticThreshold"), 6);
+    Settings::instance().setValue(QStringLiteral("director/criticRetries"), 1);
+    QTemporaryDir dir;
+    ui::Studio studio;
+    for (Provider *p : studio.providers()->providers())
+        studio.providers()->removeProvider(p->instanceId());
+    QVERIFY(studio.providers()->addProvider(QStringLiteral("comfyui"), QStringLiteral("ComfyUI"),
+                                            {{QStringLiteral("url"), comfyUrl()},
+                                             {QStringLiteral("model"), qEnvironmentVariable("LUMEN_LIVE_CHECKPOINT")},
+                                             {QStringLiteral("free_vram"), true}}));
+    QVERIFY(studio.providers()->addProvider(QStringLiteral("llamacpp"), QStringLiteral("llama.cpp"),
+                                            {{QStringLiteral("url"), llmUrl()}, {QStringLiteral("timeout_s"), 900}}));
+    studio.openProject(dir.filePath(QStringLiteral("live.lumen")));
+    QTRY_VERIFY_WITH_TIMEOUT(studio.isProjectOpen(), 10000);
+    auto imported = studio.project()->importFile(referencePath(), doc::AssetKind::Reference);
+    QTRY_VERIFY_WITH_TIMEOUT(imported.isFinished(), 10000);
+    const QString refId = imported.result().id;
+    ui::CreatePage create(&studio);
+    for (QSpinBox *spin : create.findChildren<QSpinBox *>()) {
+        if (spin->suffix().contains(QLatin1String("per shot")))
+            spin->setValue(1);
+    }
+    ui::AssistantPanel panel(&studio);
+    QSignalSpy finished(&panel, &ui::AssistantPanel::runFinished);
+    QElapsedTimer t;
+    t.start();
+    panel.send(QStringLiteral("This is my character: reference image %1. Analyse it, then plan two source images for a Live2D avatar "
+                              "(purpose live2d, 2 shots) and generate them.")
+                   .arg(refId));
+    QTRY_VERIFY_WITH_TIMEOUT(finished.size() == 1, 3000000);
+    qInfo() << "assistant with reference and critic:" << t.elapsed() << "ms";
+    for (const ChatMessage &m : panel.history()) {
+        if (m.role == ChatRole::Assistant && !m.toolCalls.isEmpty())
+            for (const ToolCall &c : m.toolCalls)
+                qInfo().noquote() << "  tool:" << c.name << QString::fromUtf8(QJsonDocument(c.arguments).toJson(QJsonDocument::Compact)).left(200);
+        if (m.role == ChatRole::Tool)
+            qInfo().noquote() << "  result:" << m.text.left(300);
+    }
+    qInfo().noquote() << "  reply:" << panel.lastReply();
+    const QJsonObject state = studio.directorActions()->directorState();
+    qInfo().noquote() << "  character:" << QJsonDocument(state.value(QStringLiteral("character")).toObject()).toJson(QJsonDocument::Compact);
+    int images = 0;
+    for (const QJsonValue &v : state.value(QStringLiteral("shots")).toArray()) {
+        const QJsonObject shot = v.toObject();
+        qInfo().noquote() << "  shot" << shot.value(QStringLiteral("id")).toString() << "best critic"
+                          << shot.value(QStringLiteral("best_critic_score")).toInt(-1) << "results"
+                          << shot.value(QStringLiteral("results")).toArray().size();
+        for (const QJsonValue &id : shot.value(QStringLiteral("results")).toArray()) {
+            auto img = studio.project()->loadImage(id.toString());
+            QTRY_VERIFY_WITH_TIMEOUT(img.isFinished(), 10000);
+            save(img.result(), QStringLiteral("reference_%1.png").arg(++images));
+        }
+    }
+    QVERIFY(!state.value(QStringLiteral("character")).toObject().isEmpty());
+    QVERIFY(images >= 2);
+    Settings::instance().setValue(QStringLiteral("director/critic"), false);
     for (Provider *p : studio.providers()->providers())
         studio.providers()->removeProvider(p->instanceId());
 }

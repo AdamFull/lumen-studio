@@ -60,13 +60,15 @@ QFuture<ToolResult> fail(const QString &message)
     return ready(ToolResult::failure(message));
 }
 
-// Resolves when the job finishes, with the assets it stored.
-QFuture<ToolResult> waitForJob(Job *job, QJsonObject extra = {})
+// Resolves when the job finishes, with the assets it stored. The image providers release the GPU
+// first, so the language model that reads the result runs at full speed.
+QFuture<ToolResult> waitForJob(Studio *studio, Job *job, QJsonObject extra = {})
 {
     auto promise = std::make_shared<QPromise<ToolResult>>();
     promise->start();
     QFuture<ToolResult> future = promise->future();
-    QObject::connect(job, &Job::finished, job, [promise, extra](Job *j) {
+    QPointer<Studio> s(studio);
+    QObject::connect(job, &Job::finished, job, [promise, extra, s](Job *j) {
         ToolResult r;
         r.data = extra;
         if (j->state() == Job::State::Succeeded) {
@@ -77,8 +79,14 @@ QFuture<ToolResult> waitForJob(Job *job, QJsonObject extra = {})
         } else {
             r.error = j->state() == Job::State::Cancelled ? QObject::tr("cancelled") : j->errorString();
         }
-        promise->addResult(r);
-        promise->finish();
+        auto resolve = [promise, r] {
+            promise->addResult(r);
+            promise->finish();
+        };
+        if (s)
+            s->generation()->releaseGpu().then(s.data(), resolve);
+        else
+            resolve();
     });
     return future;
 }
@@ -241,7 +249,7 @@ ai::ToolSet assistantTools(Studio *studio)
                       }
                       spec.title = spec.request.prompt.left(60);
                       spec.meta.insert(QStringLiteral("assistant"), true);
-                      return waitForJob(s->generation()->submit(spec));
+                      return waitForJob(s, s->generation()->submit(spec));
                   };
                   if (refIds.isEmpty() || !s->project())
                       return submit({});
@@ -290,7 +298,7 @@ ai::ToolSet assistantTools(Studio *studio)
                       spec.parentAssetId = assetId;
                       spec.title = QObject::tr("Edit: %1").arg(spec.request.prompt.left(40));
                       spec.meta.insert(QStringLiteral("assistant"), true);
-                      return waitForJob(s->generation()->submit(spec));
+                      return waitForJob(s, s->generation()->submit(spec));
                   });
               });
 
@@ -328,7 +336,7 @@ ai::ToolSet assistantTools(Studio *studio)
                       spec.parentAssetId = assetId;
                       spec.title = QObject::tr("Inpaint: %1").arg(spec.request.prompt.left(40));
                       spec.meta.insert(QStringLiteral("assistant"), true);
-                      return waitForJob(s->generation()->submit(spec));
+                      return waitForJob(s, s->generation()->submit(spec));
                   });
               });
 
@@ -340,7 +348,7 @@ ai::ToolSet assistantTools(Studio *studio)
                   const QString id = args.value(QStringLiteral("asset_id")).toString();
                   if (!s->project() || !s->project()->asset(id))
                       return fail(QObject::tr("There is no asset \"%1\".").arg(id));
-                  return waitForJob(s->generation()->submitUtilityForAsset(QString(), ai::Utility::RemoveBackground, id, {},
+                  return waitForJob(s, s->generation()->submitUtilityForAsset(QString(), ai::Utility::RemoveBackground, id, {},
                                                                            QObject::tr("Remove background")));
               });
 
@@ -355,7 +363,7 @@ ai::ToolSet assistantTools(Studio *studio)
                   if (!s->project() || !s->project()->asset(id))
                       return fail(QObject::tr("There is no asset \"%1\".").arg(id));
                   const int factor = args.value(QStringLiteral("factor")).toInt(2) >= 4 ? 4 : 2;
-                  return waitForJob(s->generation()->submitUtilityForAsset(QString(), ai::Utility::Upscale, id,
+                  return waitForJob(s, s->generation()->submitUtilityForAsset(QString(), ai::Utility::Upscale, id,
                                                                            QJsonObject{{QStringLiteral("factor"), factor}},
                                                                            QObject::tr("Upscale %1×").arg(factor)));
               });
@@ -452,11 +460,14 @@ ai::ToolSet assistantTools(Studio *studio)
                       return fail(QObject::tr("The director is not available."));
                   Bridge<QStringList> bridge;
                   director->generateShots(json::toStringList(args.value(QStringLiteral("shot_ids")).toArray()),
-                                          [bridge](QStringList assets, QString error) {
+                                          [bridge, s](QStringList assets, QString error) {
                                               ToolResult r;
                                               r.error = error;
                                               r.assetIds = assets;
-                                              bridge.resolve(r);
+                                              if (s)
+                                                  s->generation()->releaseGpu().then(s.data(), [bridge, r] { bridge.resolve(r); });
+                                              else
+                                                  bridge.resolve(r);
                                           });
                   return bridge.future();
               });

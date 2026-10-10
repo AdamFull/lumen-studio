@@ -81,6 +81,8 @@ public:
     static std::optional<ComfyTemplate> layerDiffuseTemplate();
     bool supportsUtility(Utility u) const override;
     ImageOperation *runUtility(Utility utility, const QImage &image, const QJsonObject &params) override;
+    // With "Free VRAM when idle": unloads ComfyUI's models now (when no job is running).
+    QFuture<void> releaseGpu() override;
 
     // Graph construction (exposed for tests). Image inputs refer to uploaded file names.
     struct UploadedImages

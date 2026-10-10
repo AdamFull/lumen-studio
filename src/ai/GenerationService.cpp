@@ -355,6 +355,18 @@ void GenerationService::finishWithAssets(Job *job, const GenerationSpec &spec, G
     }
 }
 
+QFuture<void> GenerationService::releaseGpu()
+{
+    QList<QFuture<void>> futures;
+    for (Provider *p : m_registry->providers()) {
+        if (auto *image = qobject_cast<ImageProvider *>(p))
+            futures << image->releaseGpu();
+    }
+    if (futures.isEmpty())
+        return QtFuture::makeReadyVoidFuture();
+    return QtFuture::whenAll(futures.begin(), futures.end()).then([](const QList<QFuture<void>> &) {});
+}
+
 Job *GenerationService::submitUtility(const QString &providerId, Utility utility, const QImage &image, const QJsonObject &params,
                                       const QString &title, bool saveAsset)
 {

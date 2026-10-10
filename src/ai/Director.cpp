@@ -165,18 +165,22 @@ QJsonObject Director::critiqueSchema()
         return QJsonObject{{QStringLiteral("type"), QStringLiteral("integer")}, {QStringLiteral("minimum"), 0},
                            {QStringLiteral("maximum"), 10}, {QStringLiteral("description"), QLatin1String(desc)}};
     };
-    auto string = [](const char *desc) {
-        return QJsonObject{{QStringLiteral("type"), QStringLiteral("string")}, {QStringLiteral("description"), QLatin1String(desc)}};
+    // Length limits keep small local models from looping inside a string (grammar-constrained servers enforce them).
+    auto string = [](const char *desc, int maxLength) {
+        return QJsonObject{{QStringLiteral("type"), QStringLiteral("string")}, {QStringLiteral("description"), QLatin1String(desc)},
+                           {QStringLiteral("maxLength"), maxLength}};
     };
     const QJsonObject properties{
         {QStringLiteral("overall"), integer("overall quality and fitness for the shot's purpose, 0-10")},
         {QStringLiteral("identity"), integer("how well the character matches the references and the sheet (face, hair, colors, outfit), 0-10")},
         {QStringLiteral("pose"), integer("how well pose, framing and camera match the planned shot, 0-10")},
         {QStringLiteral("issues"), QJsonObject{{QStringLiteral("type"), QStringLiteral("array")},
-                                               {QStringLiteral("items"), QJsonObject{{QStringLiteral("type"), QStringLiteral("string")}}},
-                                               {QStringLiteral("description"), QStringLiteral("concrete problems, most important first")}}},
-        {QStringLiteral("revised_prompt"), string("complete improved prompt for a retry; keep the prompt's style and fix the issues")},
-        {QStringLiteral("negative_additions"), string("comma-separated terms to add to the negative prompt, or empty")},
+                                               {QStringLiteral("items"), QJsonObject{{QStringLiteral("type"), QStringLiteral("string")},
+                                                                                     {QStringLiteral("maxLength"), 200}}},
+                                               {QStringLiteral("maxItems"), 6},
+                                               {QStringLiteral("description"), QStringLiteral("concrete problems, most important first (at most 6)")}}},
+        {QStringLiteral("revised_prompt"), string("complete improved prompt for a retry; keep the prompt's style and fix the issues", 800)},
+        {QStringLiteral("negative_additions"), string("comma-separated terms to add to the negative prompt, or empty", 300)},
     };
     QJsonArray required;
     for (auto it = properties.begin(); it != properties.end(); ++it)
@@ -203,16 +207,31 @@ bool Director::critiqueAccepts(const QJsonObject &critique, int threshold)
 QJsonObject Director::applyCritique(const QJsonObject &shot, const QJsonObject &critique)
 {
     QJsonObject out = shot;
-    const QString revised = critique.value(QStringLiteral("revised_prompt")).toString().trimmed();
-    if (!revised.isEmpty())
-        out.insert(QStringLiteral("prompt"), revised);
+    // Small models pad the prompt with negations and repeats: keep each positive item once.
+    QStringList items;
+    for (const QString &part : cleanPrompt(critique.value(QStringLiteral("revised_prompt")).toString()).split(u',')) {
+        const QString item = part.trimmed();
+        const QString lower = item.toLower();
+        if (item.isEmpty() || lower == QLatin1String("no") || lower.startsWith(QLatin1String("no ")) || lower.startsWith(QLatin1String("without "))
+            || item.contains(QChar::ReplacementCharacter))
+            continue;
+        if (!items.contains(item, Qt::CaseInsensitive))
+            items << item;
+    }
+    if (!items.isEmpty())
+        out.insert(QStringLiteral("prompt"), items.join(QStringLiteral(", ")));
     QStringList negative;
     for (const QString &term : shot.value(QStringLiteral("negative_prompt")).toString().split(u',', Qt::SkipEmptyParts))
         negative << term.trimmed();
+    int added = 0;
     for (const QString &term : critique.value(QStringLiteral("negative_additions")).toString().split(u',', Qt::SkipEmptyParts)) {
         const QString t = term.trimmed();
-        if (!t.isEmpty() && !negative.contains(t, Qt::CaseInsensitive))
-            negative << t;
+        if (added >= 8)
+            break;
+        if (t.isEmpty() || t.contains(QChar::ReplacementCharacter) || negative.contains(t, Qt::CaseInsensitive))
+            continue;
+        negative << t;
+        ++added;
     }
     out.insert(QStringLiteral("negative_prompt"), negative.join(QStringLiteral(", ")));
     return out;
@@ -228,13 +247,17 @@ StructuredChatOperation *Director::critiqueShot(const QImage &result, const QJso
     req.temperature = 0.1;
     req.jsonSchema = critiqueSchema();
     req.schemaName = QStringLiteral("shot_critique");
+    req.maxTokens = 1500;
     req.messages << ChatMessage::system(QStringLiteral(
-        "You are a strict art director reviewing AI-generated images of a recurring character. Compare the generated image "
-        "with the reference images and the character sheet, and with the planned shot. Score honestly: 9-10 only when the "
-        "character is clearly the same (face, hair, eye color, outfit, colors) and pose and framing match; below 6 when "
-        "identity drifts, the pose is wrong, or there are anatomy errors, extra limbs, broken hands or artifacts. List the "
-        "concrete issues. Then write a revised prompt for a retry that keeps the original prompt's style (tags stay tags, "
-        "prose stays prose) and fixes the issues, plus terms for the negative prompt."));
+        "You are a strict art director reviewing AI-generated images of a recurring character.\n"
+        "- identity: compare the character's face, hair, eye color, outfit and colors with the reference images and the "
+        "character sheet. The references only show who the character is: ignore their pose, framing and background.\n"
+        "- pose: compare pose, framing, camera angle and background with the PLANNED SHOT, not with the references.\n"
+        "- overall: image quality; below 6 for anatomy errors, extra limbs, broken hands or artifacts.\n"
+        "Score honestly: 9-10 only when everything matches. List at most 6 concrete issues.\n"
+        "revised_prompt: the shot's prompt rewritten to fix the issues, in the same style (tags stay tags, prose stays prose), "
+        "under 60 words, keeping the planned pose and framing. Never write negations like 'no X' in it; put unwanted things "
+        "in negative_additions (a few comma-separated terms)."));
     ChatMessage user = ChatMessage::user(QStringLiteral("Planned shot:\n%1\n\nCharacter sheet:\n%2\n\nThe first image is the "
                                                         "generated result; the others are references of the character.")
                                              .arg(QString::fromUtf8(QJsonDocument(shot).toJson(QJsonDocument::Compact)),

@@ -762,6 +762,7 @@ void CreatePage::generateShot(const QString &shotId, int attempt, const QJsonObj
         if (attempt > 0)
             spec.meta.insert(QStringLiteral("critic_attempt"), attempt);
         Job *job = self->m_studio->generation()->submit(spec);
+        ++self->m_generating;
         QObject::connect(job, &Job::progressChanged, self, [self, shotId](double f, const QString &status) {
             if (ShotCard *card = self->m_cards.value(shotId))
                 card->setBusy(true, f >= 0 ? QStringLiteral("%1 — %2%").arg(status).arg(int(f * 100)) : status);
@@ -769,6 +770,7 @@ void CreatePage::generateShot(const QString &shotId, int attempt, const QJsonObj
         QObject::connect(job, &Job::finished, self, [self, session, shotId, attempt, shotJson](Job *j) {
             if (!self)
                 return;
+            --self->m_generating;
             self->m_running[shotId] = std::max(0, self->m_running.value(shotId) - 1);
             ShotCard *card = self->m_cards.value(shotId);
             if (card)
@@ -787,8 +789,13 @@ void CreatePage::generateShot(const QString &shotId, int attempt, const QJsonObj
                 }
                 if (card)
                     card->refresh();
-                if (self->m_critic->isChecked() && !added.isEmpty() && session == self->m_session)
-                    self->critique(shotId, added, attempt, shotJson);
+                if (self->m_critic->isChecked() && !added.isEmpty() && session == self->m_session) {
+                    // Counts as running, so the shot is not reported as finished before its review.
+                    self->m_running[shotId]++;
+                    self->m_pendingCritiques.append({shotId, added, attempt, shotJson});
+                    if (ShotCard *c = self->m_cards.value(shotId))
+                        c->setBusy(true, tr("Waiting for the other shots before the Critic reviews…"));
+                }
             } else if (j->state() == Job::State::Failed) {
                 if (card)
                     card->setBusy(false, j->errorString());
@@ -797,7 +804,36 @@ void CreatePage::generateShot(const QString &shotId, int attempt, const QJsonObj
             }
             if (self->m_running.value(shotId) == 0)
                 self->shotSettled(shotId);
+            if (self->m_generating == 0)
+                self->startPendingCritiques();
         });
+    });
+}
+
+void CreatePage::startPendingRetries()
+{
+    const QList<PendingCritique> retries = m_pendingRetries;
+    m_pendingRetries.clear();
+    for (const PendingCritique &r : retries) {
+        m_running[r.shotId] = std::max(0, m_running.value(r.shotId) - 1);
+        generateShot(r.shotId, r.attempt, r.shotUsed);
+    }
+}
+
+void CreatePage::startPendingCritiques()
+{
+    if (m_pendingCritiques.isEmpty() || m_generating > 0)
+        return;
+    const QList<PendingCritique> batch = m_pendingCritiques;
+    m_pendingCritiques.clear();
+    QPointer<CreatePage> self(this);
+    m_studio->generation()->releaseGpu().then(this, [self, batch] {
+        if (!self)
+            return;
+        for (const PendingCritique &p : batch) {
+            self->m_running[p.shotId] = std::max(0, self->m_running.value(p.shotId) - 1);
+            self->critique(p.shotId, p.assetIds, p.attempt, p.shotUsed);
+        }
     });
 }
 
@@ -823,11 +859,18 @@ void CreatePage::critique(const QString &shotId, const QStringList &assetIds, in
     if (ShotCard *card = m_cards.value(shotId))
         card->setBusy(true, tr("Critic is reviewing…"));
     m_running[shotId]++;
+    ++m_critiquing;
     auto finishRound = [self, session, shotId, attempt, shotUsed, round, threshold, retries] {
         if (!self || --round->remaining > 0)
             return;
         self->m_running[shotId] = std::max(0, self->m_running.value(shotId) - 1);
-        // Settles the shot unless a retry started.
+        --self->m_critiquing;
+        // Retries start once every review of the batch is done (the GPU is shared).
+        auto startRetries = qScopeGuard([self] {
+            if (self && self->m_critiquing == 0)
+                self->startPendingRetries();
+        });
+        // Settles the shot unless a retry is queued.
         auto settle = qScopeGuard([self, shotId] {
             if (self && self->m_running.value(shotId) == 0)
                 self->shotSettled(shotId);
@@ -846,7 +889,8 @@ void CreatePage::critique(const QString &shotId, const QStringList &assetIds, in
         if (attempt < retries && session) {
             if (card)
                 card->setBusy(true, tr("Critic: best %1/10 — retrying (%2/%3)…").arg(round->bestScore).arg(attempt + 1).arg(retries));
-            self->generateShot(shotId, attempt + 1, ai::Director::applyCritique(shotUsed, round->best));
+            self->m_running[shotId]++;
+            self->m_pendingRetries.append({shotId, {}, attempt + 1, ai::Director::applyCritique(shotUsed, round->best)});
             return;
         }
         if (card)

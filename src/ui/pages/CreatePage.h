@@ -94,6 +94,21 @@ private:
     QLabel *m_emptyHint;
     QHash<QString, QPointer<ShotCard>> m_cards;
     QHash<QString, int> m_running;
+    // Critic rounds wait until no generation is running (an LLM and an image model sharing one GPU
+    // must not run at the same time), then start after the image providers released the GPU.
+    struct PendingCritique
+    {
+        QString shotId;
+        QStringList assetIds;
+        int attempt;
+        QJsonObject shotUsed;
+    };
+    QList<PendingCritique> m_pendingCritiques;
+    int m_generating = 0;
+    int m_critiquing = 0;
+    QList<PendingCritique> m_pendingRetries; // shot with the critic's fix, attempt number
+    void startPendingCritiques();
+    void startPendingRetries();
     bool m_busy = false;
     struct ShotWaiter
     {

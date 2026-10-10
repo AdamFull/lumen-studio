@@ -109,6 +109,9 @@ public:
     virtual ImageOperation *runUtility(Utility utility, const QImage &image, const QJsonObject &params);
     virtual QFuture<QStringList> listSamplers();
     virtual QFuture<QStringList> listSchedulers();
+    // Frees GPU memory held between jobs (e.g. unloads models) so another local model, such as a
+    // language model on the same GPU, can run at full speed. Resolves when done; no-op by default.
+    virtual QFuture<void> releaseGpu() { return QtFuture::makeReadyVoidFuture(); }
 };
 
 class LlmProvider : public Provider

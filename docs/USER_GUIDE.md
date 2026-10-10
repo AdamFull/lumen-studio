@@ -34,6 +34,29 @@ same list later with **Edit → Settings… → Providers** (`Ctrl+,`).
 Every generation runs as a job in the **Queue** (`Ctrl+Shift+Q`), where it can be cancelled or
 retried.
 
+### One GPU for the language model and the image model
+
+With 8-12 GB of VRAM, a local language model (llama.cpp, Ollama, LM Studio) and SDXL in ComfyUI do
+not fit at the same time. Whichever loads second ends up mostly on the CPU and runs many times
+slower. To let them take turns:
+
+* start llama.cpp with `--sleep-idle-seconds 30` so it unloads its model when idle;
+* turn on **Free VRAM when idle** in the ComfyUI provider settings.
+
+Lumen also keeps them apart. The Critic reviews only after all shots of a batch are generated, and
+retries start after all reviews. The assistant hands generated results back to the language model
+only after ComfyUI has unloaded its models.
+
+A tested setup on an 8 GB RTX 4060 laptop GPU:
+
+```
+llama-server -m Qwen3VL-8B-Instruct-Q4_K_M.gguf --mmproj mmproj-Qwen3VL-8B-Instruct-Q8_0.gguf ^
+  --port 8080 -ngl 99 -c 16384 -ctk q8_0 -ctv q8_0 -fa on --jinja --sleep-idle-seconds 30
+```
+
+ComfyUI ran an SDXL anime checkpoint (Animagine XL 4.0 or WAI-Illustrious) with the xinsir OpenPose
+ControlNet. Qwen3-VL-8B handles the assistant, planning, reference analysis and the Critic.
+
 ## 3. Pages
 
 The left bar switches pages (`Alt+1` … `Alt+6`).

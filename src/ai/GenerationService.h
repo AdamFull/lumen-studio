@@ -87,6 +87,10 @@ public:
     Job *submitUtilityForAsset(const QString &providerId, Utility utility, const QString &assetId, const QJsonObject &params,
                                const QString &title);
 
+    // Asks every image provider to free GPU memory between jobs (see ImageProvider::releaseGpu);
+    // resolves when all are done. Call before running a local language model after image jobs.
+    QFuture<void> releaseGpu();
+
     // Image provider able to run a utility (preferred provider first, then any other).
     ImageProvider *providerForUtility(Utility utility, const QString &preferredId = QString()) const;
 

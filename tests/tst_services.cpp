@@ -350,6 +350,13 @@ void TestServices::directorCritique()
     QCOMPARE(retry.value(QStringLiteral("prompt")).toString(), verdict.value(QStringLiteral("revised_prompt")).toString());
     QCOMPARE(retry.value(QStringLiteral("negative_prompt")).toString(), QStringLiteral("text, watermark, extra fingers"));
     QCOMPARE(retry.value(QStringLiteral("id")).toString(), QStringLiteral("front"));
+    // Negations and repeats from a looping model are dropped.
+    QJsonObject looping = verdict;
+    looping.insert(QStringLiteral("revised_prompt"), QStringLiteral("1girl, a-pose, no artifacts, red hair, no background, a-pose, without hat, no"));
+    looping.insert(QStringLiteral("negative_additions"), QStringLiteral("a, b, c, d, e, f, g, h, i, j, orn\uFFFD"));
+    const QJsonObject retried = Director::applyCritique(shot, looping);
+    QCOMPARE(retried.value(QStringLiteral("prompt")).toString(), QStringLiteral("1girl, a-pose, red hair"));
+    QCOMPARE(retried.value(QStringLiteral("negative_prompt")).toString(), QStringLiteral("text, watermark, a, b, c, d, e, f, g, h"));
     // An empty revision keeps the prompt.
     QCOMPARE(Director::applyCritique(shot, QJsonObject{}).value(QStringLiteral("prompt")).toString(), QStringLiteral("1girl, a-pose"));
     QFile::remove(registry.configPath());

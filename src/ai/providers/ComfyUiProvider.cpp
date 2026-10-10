@@ -870,6 +870,28 @@ ImageOperation *ComfyUiProvider::track(ImageOperation *op)
     return op;
 }
 
+QFuture<void> ComfyUiProvider::releaseGpu()
+{
+    if (!setting(QStringLiteral("free_vram")).toBool() || m_activeOps > 0)
+        return QtFuture::makeReadyVoidFuture();
+    if (m_freeTimer)
+        m_freeTimer->stop();
+    net::CallOptions o;
+    o.maxRetries = 0;
+    o.quiet = true;
+    o.timeoutMs = 30000;
+    net::HttpCall *call = http()->postJson(request(QStringLiteral("/free")),
+                                           QJsonObject{{QStringLiteral("unload_models"), true}, {QStringLiteral("free_memory"), true}}, o);
+    auto promise = std::make_shared<QPromise<void>>();
+    promise->start();
+    QFuture<void> future = promise->future();
+    connect(call, &net::HttpCall::finished, this, [promise] {
+        // ComfyUI unloads asynchronously after answering: give it a moment before the GPU is used again.
+        QTimer::singleShot(1500, [promise] { promise->finish(); });
+    });
+    return future;
+}
+
 void ComfyUiProvider::freeVramSoon()
 {
     if (!setting(QStringLiteral("free_vram")).toBool())
