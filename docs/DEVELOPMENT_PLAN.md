@@ -1491,8 +1491,17 @@ Every request carries a random token generated for this pod (passed in the pod's
   (M12 phase E); otherwise Lumen uploads the file (6–7 GB, warned with the time it will take).
 
 #### 15.5 Implementation steps
-- [ ] RunPod client: pods (create, get, list, delete) and the GPU catalogue; problem-object errors;
-  the API key in the credential store; Settings → Cloud training. Tests against a mock server.
+- [x] RunPod client (`runtime/RunPod`): `gpus()` (sorted by Secure price), `createPod`, `pod`,
+  `pods(prefix)`, `terminate` (a 404 counts as terminated). Create and delete are never retried
+  (a retry could start a second, paid pod). Errors carry RunPod's problem `detail` and validation
+  `errors`; 401/403 say the key was refused. The key is read from the credential store
+  (`lumen/runpod-api-key`); the Studio owns one client.
+  - Settings → Cloud training (`ui/dialogs/CloudTrainingPage`): the key (save, forget, test),
+    Secure or Community cloud, the preferred GPU from the catalogue (offered in that cloud, 24 GB
+    or more, with its price per hour).
+  - Tests: the client against a mock API (body of a new pod, statuses, listing by prefix,
+    terminate twice, a validation problem, a refused key, no key); the settings page's GPU list,
+    preferred GPU, cloud switch and error.
 - [ ] Pod agent: the script and Lumen's protocol client (status, chunked upload and download,
   model from URL, train, log). Tests run the agent locally with Python and a fake trainer.
 - [ ] Cloud training job: the orchestration, cancel, failure handling, always terminating the pod;

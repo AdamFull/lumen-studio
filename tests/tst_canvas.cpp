@@ -22,6 +22,7 @@
 #include "pose/Rig.h"
 #include "MockHttpServer.h"
 #include "ui/dialogs/CharacterLoraDialog.h"
+#include "ui/dialogs/CloudTrainingPage.h"
 #include "ui/dialogs/LocalServersPage.h"
 #include "ui/dialogs/LoraDatasetDialog.h"
 #include "ui/CharacterTraining.h"
@@ -123,6 +124,7 @@ private slots:
     void expressionCheck();
     void assistantCharacter();
     void safeContent();
+    void cloudTrainingPage();
 
 private:
     ToolEvent at(double x, double y, Qt::KeyboardModifiers mods = Qt::NoModifier) const
@@ -2448,6 +2450,67 @@ void TestCanvas::safeContent()
     Settings::instance().setValue(QStringLiteral("generation/safeContent"), false);
     QVERIFY(!shield->isChecked());
     QCOMPARE(generate(), QStringLiteral("lowres"));
+}
+
+void TestCanvas::cloudTrainingPage()
+{
+    MockHttpServer server;
+    bool refuse = false;
+    server.route("GET", QStringLiteral("/v2/catalog/gpus"), [&](const MockRequest &) {
+        if (refuse)
+            return MockResponse::json({{QStringLiteral("title"), QStringLiteral("Unauthorized")}, {QStringLiteral("status"), 401}}, 401);
+        auto gpu = [](const char *id, int memory, double secure, double community) {
+            return QJsonObject{{QStringLiteral("id"), QLatin1String(id)}, {QStringLiteral("name"), QLatin1String(id)},
+                               {QStringLiteral("memory"), memory},
+                               {QStringLiteral("price"), QJsonObject{{QStringLiteral("secure"), secure}, {QStringLiteral("community"), community}}},
+                               {QStringLiteral("maxCount"), QJsonObject{{QStringLiteral("secure"), secure > 0 ? 4 : 0},
+                                                                        {QStringLiteral("community"), community > 0 ? 4 : 0}}}};
+        };
+        return MockResponse::json({{QStringLiteral("gpus"), QJsonArray{gpu("RTX A4000", 16, 0.17, 0.09), gpu("RTX 4090", 24, 0.69, 0.34),
+                                                                       gpu("A100 80GB", 80, 1.64, 0.0), gpu("RTX 6000 Ada", 48, 0.0, 0.0)}}});
+    });
+    Settings::instance().setValue(QStringLiteral("cloud/runpod/gpu"), QString());
+    Settings::instance().setValue(QStringLiteral("cloud/runpod/community"), false);
+    Studio studio;
+    studio.runPod()->setBaseUrl(server.baseUrl().toString() + QStringLiteral("/v2"));
+    studio.runPod()->keyProvider = [] { return QStringLiteral("rp_test"); };
+    auto cleanup = qScopeGuard([] {
+        Settings::instance().setValue(QStringLiteral("cloud/runpod/gpu"), QString());
+        Settings::instance().setValue(QStringLiteral("cloud/runpod/community"), false);
+    });
+
+    // With a key the page loads the catalogue: GPUs with 24 GB or more that the cloud offers.
+    CloudTrainingPage page(&studio);
+    QComboBox *gpus = nullptr;
+    QComboBox *cloud = nullptr;
+    for (QComboBox *c : page.findChildren<QComboBox *>()) {
+        if (c->findData(true) >= 0)
+            cloud = c;
+        else
+            gpus = c;
+    }
+    QVERIFY(gpus && cloud);
+    QTRY_COMPARE(gpus->count(), 2);
+    QCOMPARE(gpus->itemText(0), QStringLiteral("RTX 4090 · 24 GB · $0.69/h"));
+    QCOMPARE(gpus->itemData(1).toString(), QStringLiteral("A100 80GB"));
+    // The first one becomes the preferred GPU until the user picks another.
+    QCOMPARE(Settings::instance().value(QStringLiteral("cloud/runpod/gpu")).toString(), QStringLiteral("RTX 4090"));
+    gpus->setCurrentIndex(1);
+    emit gpus->activated(1);
+    QCOMPARE(Settings::instance().value(QStringLiteral("cloud/runpod/gpu")).toString(), QStringLiteral("A100 80GB"));
+    // Community cloud: its prices; the A100 is not offered there, so the choice falls back.
+    cloud->setCurrentIndex(1);
+    QVERIFY(Settings::instance().value(QStringLiteral("cloud/runpod/community")).toBool());
+    QTRY_COMPARE(gpus->count(), 1);
+    QCOMPARE(gpus->itemText(0), QStringLiteral("RTX 4090 · 24 GB · $0.34/h"));
+    // A refused key shows RunPod's answer.
+    refuse = true;
+    page.refreshGpus();
+    auto refusedShown = [&page] {
+        const QList<QLabel *> labels = page.findChildren<QLabel *>();
+        return std::any_of(labels.begin(), labels.end(), [](QLabel *l) { return l->text().contains(QStringLiteral("refused the API key")); });
+    };
+    QTRY_VERIFY(refusedShown());
 }
 
 QTEST_MAIN(TestCanvas)

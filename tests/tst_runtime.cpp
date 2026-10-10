@@ -11,6 +11,7 @@
 #include "runtime/ModelFormats.h"
 #include "runtime/ModelHub.h"
 #include "runtime/ModelLibrary.h"
+#include "runtime/RunPod.h"
 #include "runtime/RuntimeStore.h"
 #include "runtime/ServerProfile.h"
 #include "runtime/Trainer.h"
@@ -203,6 +204,7 @@ class TestRuntime : public QObject
 
 private slots:
     void zipSafePaths();
+    void runPodClient();
     void zipExtract();
     void zipRejectsUnsafeArchives();
     void downloadVerifiesAndResumes();
@@ -2028,6 +2030,134 @@ void TestRuntime::inspectRealModels()
                                      .arg(info.error);
         }
     }
+}
+
+void TestRuntime::runPodClient()
+{
+    MockHttpServer server;
+    QJsonObject created;
+    QByteArray auth;
+    QStringList deleted;
+    server.route("GET", QStringLiteral("/v2/catalog/gpus"), [&](const MockRequest &req) {
+        auth = req.headers.value("authorization");
+        const QJsonArray gpus{
+            QJsonObject{{QStringLiteral("id"), QStringLiteral("NVIDIA GeForce RTX 4090")}, {QStringLiteral("name"), QStringLiteral("RTX 4090")},
+                        {QStringLiteral("memory"), 24},
+                        {QStringLiteral("price"), QJsonObject{{QStringLiteral("secure"), 0.69}, {QStringLiteral("community"), 0.34}}},
+                        {QStringLiteral("maxCount"), QJsonObject{{QStringLiteral("secure"), 8}, {QStringLiteral("community"), 8}}}},
+            QJsonObject{{QStringLiteral("id"), QStringLiteral("NVIDIA RTX A4000")}, {QStringLiteral("name"), QStringLiteral("RTX A4000")},
+                        {QStringLiteral("memory"), 16},
+                        {QStringLiteral("price"), QJsonObject{{QStringLiteral("secure"), 0.17}, {QStringLiteral("community"), 0.0}}},
+                        {QStringLiteral("maxCount"), QJsonObject{{QStringLiteral("secure"), 2}, {QStringLiteral("community"), 0}}}}};
+        return MockResponse::json({{QStringLiteral("gpus"), gpus}});
+    });
+    server.route("POST", QStringLiteral("/v2/pods"), [&](const MockRequest &req) {
+        created = req.json();
+        if (created.value(QStringLiteral("gpu")).toObject().value(QStringLiteral("id")).toString().isEmpty())
+            return MockResponse::json({{QStringLiteral("title"), QStringLiteral("Unprocessable Entity")}, {QStringLiteral("status"), 422},
+                                       {QStringLiteral("detail"), QStringLiteral("invalid request")},
+                                       {QStringLiteral("errors"), QJsonArray{QStringLiteral("gpu.id is required")}}},
+                                      422);
+        return MockResponse::json({{QStringLiteral("id"), QStringLiteral("pod1")}, {QStringLiteral("name"), created.value(QStringLiteral("name"))},
+                                   {QStringLiteral("status"), QStringLiteral("PROVISIONING")}, {QStringLiteral("cost"), 0.69}},
+                                  201);
+    });
+    server.route("GET", QStringLiteral("/v2/pods/pod1"), [](const MockRequest &) {
+        return MockResponse::json({{QStringLiteral("id"), QStringLiteral("pod1")}, {QStringLiteral("name"), QStringLiteral("lumen-train-aki")},
+                                   {QStringLiteral("status"), QStringLiteral("RUNNING")}, {QStringLiteral("cost"), 0.69}});
+    });
+    server.route("GET", QStringLiteral("/v2/pods"), [](const MockRequest &) {
+        return MockResponse::json({{QStringLiteral("pods"),
+                                    QJsonArray{QJsonObject{{QStringLiteral("id"), QStringLiteral("pod1")}, {QStringLiteral("name"), QStringLiteral("lumen-train-aki")},
+                                                           {QStringLiteral("status"), QStringLiteral("RUNNING")}},
+                                               QJsonObject{{QStringLiteral("id"), QStringLiteral("x")}, {QStringLiteral("name"), QStringLiteral("my-notebook")},
+                                                           {QStringLiteral("status"), QStringLiteral("RUNNING")}}}}});
+    });
+    server.route("DELETE", QStringLiteral("/v2/pods/pod1"), [&](const MockRequest &) {
+        deleted << QStringLiteral("pod1");
+        MockResponse r;
+        r.status = 204;
+        return r;
+    });
+    server.route("DELETE", QStringLiteral("/v2/pods/gone"), [](const MockRequest &) {
+        return MockResponse::json({{QStringLiteral("title"), QStringLiteral("Not Found")}, {QStringLiteral("status"), 404},
+                                   {QStringLiteral("detail"), QStringLiteral("pod not found")}},
+                                  404);
+    });
+
+    net::HttpClient http;
+    RunPodClient client(&http);
+    client.setBaseUrl(server.baseUrl().toString() + QStringLiteral("/v2"));
+    client.keyProvider = [] { return QStringLiteral("rp_test_key"); };
+    QVERIFY(client.hasKey());
+
+    // The catalogue, cheapest Secure price first.
+    auto gpus = client.gpus();
+    QTRY_VERIFY(gpus.isFinished());
+    QCOMPARE(auth, QByteArray("Bearer rp_test_key"));
+    QCOMPARE(gpus.result().size(), 2);
+    QCOMPARE(gpus.result()[0].name, QStringLiteral("RTX A4000"));
+    const RunPodGpu rtx = gpus.result()[1];
+    QCOMPARE(rtx.memoryGb, 24);
+    QCOMPARE(rtx.price(true), 0.34);
+    QVERIFY(rtx.offered(true) && !gpus.result()[0].offered(true));
+
+    // A pod: the request body, then its status and proxy address.
+    RunPodPodSpec spec;
+    spec.name = QStringLiteral("lumen-train-aki");
+    spec.image = QStringLiteral("runpod/pytorch:2.8.0-py3.11-cuda12.8.1-devel-ubuntu22.04");
+    spec.gpuId = rtx.id;
+    spec.minCudaVersion = QStringLiteral("12.8");
+    spec.env.insert(QStringLiteral("LUMEN_TOKEN"), QStringLiteral("secret"));
+    spec.ports = {QStringLiteral("8000/http")};
+    spec.cmd = {QStringLiteral("bash"), QStringLiteral("-c"), QStringLiteral("python3 /agent.py")};
+    auto pod = client.createPod(spec);
+    QTRY_VERIFY(pod.isFinished());
+    QCOMPARE(pod.result().id, QStringLiteral("pod1"));
+    QCOMPARE(created.value(QStringLiteral("gpu")).toObject().value(QStringLiteral("id")).toString(), QStringLiteral("NVIDIA GeForce RTX 4090"));
+    QCOMPARE(created.value(QStringLiteral("gpu")).toObject().value(QStringLiteral("minCudaVersion")).toString(), QStringLiteral("12.8"));
+    QCOMPARE(created.value(QStringLiteral("cloud")).toString(), QStringLiteral("SECURE"));
+    QCOMPARE(created.value(QStringLiteral("ports")).toArray(), QJsonArray{QStringLiteral("8000/http")});
+    QCOMPARE(created.value(QStringLiteral("env")).toObject().value(QStringLiteral("LUMEN_TOKEN")).toString(), QStringLiteral("secret"));
+    QCOMPARE(created.value(QStringLiteral("cmd")).toArray().size(), 3);
+    auto running = client.pod(QStringLiteral("pod1"));
+    QTRY_VERIFY(running.isFinished());
+    QVERIFY(running.result().isRunning());
+    QCOMPARE(running.result().proxyUrl(8000), QStringLiteral("https://pod1-8000.proxy.runpod.net"));
+
+    // Lumen's own pods only.
+    auto mine = client.pods(QLatin1String(RunPodClient::kTrainingPrefix));
+    QTRY_VERIFY(mine.isFinished());
+    QCOMPARE(mine.result().size(), 1);
+    QCOMPARE(mine.result()[0].id, QStringLiteral("pod1"));
+
+    // Terminating; a pod that is already gone counts as terminated.
+    auto t1 = client.terminate(QStringLiteral("pod1"));
+    auto t2 = client.terminate(QStringLiteral("gone"));
+    QTRY_VERIFY(t1.isFinished() && t2.isFinished());
+    QVERIFY(!t1.isCanceled() && !t2.isCanceled());
+    QCOMPARE(deleted, QStringList{QStringLiteral("pod1")});
+
+    // RunPod's own messages: a validation problem, a refused key, no key.
+    auto errorOf = [](auto future) {
+        QTest::qWaitFor([&] { return future.isFinished(); }, 10000);
+        try {
+            future.waitForFinished();
+        } catch (const std::exception &e) {
+            return QString::fromUtf8(e.what());
+        }
+        return QString();
+    };
+    RunPodPodSpec bad = spec;
+    bad.gpuId.clear();
+    QCOMPARE(errorOf(client.createPod(bad)), QStringLiteral("RunPod: invalid request; gpu.id is required"));
+    server.route("GET", QStringLiteral("/v2/catalog/gpus"), [](const MockRequest &) {
+        return MockResponse::json({{QStringLiteral("title"), QStringLiteral("Unauthorized")}, {QStringLiteral("status"), 401}}, 401);
+    });
+    QVERIFY(errorOf(client.gpus()).contains(QStringLiteral("refused the API key")));
+    client.keyProvider = [] { return QString(); };
+    QVERIFY(!client.hasKey());
+    QVERIFY(errorOf(client.gpus()).contains(QStringLiteral("No RunPod API key")));
 }
 
 QTEST_MAIN(TestRuntime)

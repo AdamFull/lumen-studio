@@ -3388,6 +3388,29 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
 </context>
 <context>
+    <name>lumen::runtime::RunPod</name>
+    <message>
+        <location filename="../src/runtime/RunPod.cpp" line="+97"/>
+        <source>No RunPod API key: add one under Settings → Cloud training.</source>
+        <translation>Kein RunPod-API-Schlüssel: Fügen Sie einen unter Einstellungen → Cloud-Training hinzu.</translation>
+    </message>
+    <message>
+        <location line="+20"/>
+        <source>RunPod refused the API key (%1). Check it under Settings → Cloud training.</source>
+        <translation>RunPod hat den API-Schlüssel abgelehnt (%1). Prüfen Sie ihn unter Einstellungen → Cloud-Training.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>RunPod: %1</source>
+        <translation>RunPod: %1</translation>
+    </message>
+    <message>
+        <location line="+43"/>
+        <source>RunPod did not return a pod.</source>
+        <translation>RunPod hat keinen Pod zurückgegeben.</translation>
+    </message>
+</context>
+<context>
     <name>lumen::runtime::RuntimeStore</name>
     <message>
         <location filename="../src/runtime/RuntimeStore.cpp" line="+144"/>
@@ -5013,6 +5036,122 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <location line="+25"/>
         <source>The LoRA of %1 is trained and attached to the character (trigger word: %2).</source>
         <translation>Die LoRA von %1 ist trainiert und dem Charakter angehängt (Auslösewort: %2).</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::ui::CloudTrainingPage</name>
+    <message>
+        <location filename="../src/ui/dialogs/CloudTrainingPage.cpp" line="+37"/>
+        <source>Train character LoRAs on a rented RunPod GPU: about half an hour instead of hours on a laptop. Lumen starts the GPU, uploads the training set, trains with the same settings as on this computer, downloads the LoRA and shuts the GPU down. RunPod bills your account by the minute. Create an API key at &lt;a href=&apos;https://www.runpod.io/console/user/settings&apos;&gt;runpod.io → Settings → API Keys&lt;/a&gt;.</source>
+        <translation>Trainieren Sie Charakter-LoRAs auf einer gemieteten RunPod-GPU: etwa eine halbe Stunde statt Stunden auf einem Laptop. Lumen startet die GPU, lädt das Trainingsset hoch, trainiert mit denselben Einstellungen wie auf diesem Computer, lädt die LoRA herunter und fährt die GPU wieder herunter. RunPod rechnet minutengenau über Ihr Konto ab. Einen API-Schlüssel erstellen Sie unter &lt;a href=&apos;https://www.runpod.io/console/user/settings&apos;&gt;runpod.io → Settings → API Keys&lt;/a&gt;.</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Save</source>
+        <translation>Speichern</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Forget the saved key</source>
+        <translation>Gespeicherten Schlüssel vergessen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Test</source>
+        <translation>Testen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Ask RunPod for its GPUs with this key</source>
+        <translation>RunPod mit diesem Schlüssel nach seinen GPUs fragen</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>RunPod API key</source>
+        <translation>RunPod-API-Schlüssel</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Kept in the Windows Credential Manager and only sent to RunPod.</source>
+        <translation>Wird in der Windows-Anmeldeinformationsverwaltung aufbewahrt und nur an RunPod gesendet.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Kept in a private file in Lumen&apos;s data folder and only sent to RunPod.</source>
+        <translation>Wird in einer privaten Datei im Datenordner von Lumen aufbewahrt und nur an RunPod gesendet.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Secure cloud (data centres, reliable)</source>
+        <translation>Secure Cloud (Rechenzentren, zuverlässig)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Community cloud (cheaper, less reliable)</source>
+        <translation>Community Cloud (günstiger, weniger zuverlässig)</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Cloud</source>
+        <translation>Cloud</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Load GPUs and prices from RunPod</source>
+        <translation>GPUs und Preise von RunPod laden</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>GPU</source>
+        <translation>GPU</translation>
+    </message>
+    <message>
+        <location line="+32"/>
+        <source>Saved — type a new one to replace it</source>
+        <translation>Gespeichert — geben Sie einen neuen ein, um ihn zu ersetzen</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Not set</source>
+        <translation>Nicht gesetzt</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Cloud training</source>
+        <translation>Cloud-Training</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Cannot save the key: %1</source>
+        <translation>Der Schlüssel kann nicht gespeichert werden: %1</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>The key is forgotten.</source>
+        <translation>Der Schlüssel ist vergessen.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Asking RunPod…</source>
+        <translation>RunPod wird gefragt…</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>%1 · %2 GB · $%3/h</source>
+        <translation>%1 · %2 GB · %3 $/h</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>RunPod offers no GPU with %1 GB or more in this cloud right now.</source>
+        <translation>RunPod bietet in dieser Cloud gerade keine GPU mit %1 GB oder mehr an.</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+9"/>
+        <source>Connected: %n GPU type(s) with %1 GB or more.</source>
+        <translation>
+            <numerusform>Verbunden: %n GPU-Typ mit %1 GB oder mehr.</numerusform>
+            <numerusform>Verbunden: %n GPU-Typen mit %1 GB oder mehr.</numerusform>
+        </translation>
     </message>
 </context>
 <context>
@@ -9446,7 +9585,7 @@ Trotzdem herunterladen?</translation>
 <context>
     <name>lumen::ui::OnboardingDialog</name>
     <message>
-        <location filename="../src/ui/dialogs/SettingsDialog.cpp" line="+666"/>
+        <location filename="../src/ui/dialogs/SettingsDialog.cpp" line="+670"/>
         <source>Welcome to Lumen Studio</source>
         <translation>Willkommen bei Lumen Studio</translation>
     </message>
@@ -11256,7 +11395,7 @@ oder aus der Bibliothek ziehen</translation>
 <context>
     <name>lumen::ui::ProviderForm</name>
     <message>
-        <location filename="../src/ui/dialogs/SettingsDialog.cpp" line="-687"/>
+        <location filename="../src/ui/dialogs/SettingsDialog.cpp" line="-690"/>
         <source>Documentation</source>
         <translation>Dokumentation</translation>
     </message>
@@ -11769,6 +11908,11 @@ oder aus der Bibliothek ziehen</translation>
     </message>
     <message>
         <location line="+1"/>
+        <source>Cloud training</source>
+        <translation>Cloud-Training</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>General</source>
         <translation>Allgemein</translation>
     </message>
@@ -11778,7 +11922,7 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Tastenkürzel</translation>
     </message>
     <message>
-        <location line="+34"/>
+        <location line="+36"/>
         <source>Add provider</source>
         <translation>Anbieter hinzufügen</translation>
     </message>

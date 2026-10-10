@@ -1,4 +1,5 @@
 #include "ui/dialogs/SettingsDialog.h"
+#include "ui/dialogs/CloudTrainingPage.h"
 #include "ui/dialogs/LocalServersPage.h"
 #include "ui/dialogs/LocalSetupDialog.h"
 #include "ui/dialogs/ModelsPage.h"
@@ -371,6 +372,7 @@ SettingsDialog::SettingsDialog(Studio *studio, QWidget *parent)
     m_tabs->addTab(buildRolesTab(), Icons::get(QStringLiteral("chat")), tr("Models & roles").replace(QLatin1Char('&'), QStringLiteral("&&")));
     m_tabs->addTab(new LocalServersPage(studio, this), Icons::get(QStringLiteral("server")), tr("Local servers"));
     m_tabs->addTab(new ModelsPage(studio, this), Icons::get(QStringLiteral("layers")), tr("Models"));
+    m_tabs->addTab(new CloudTrainingPage(studio, this), Icons::get(QStringLiteral("cloud")), tr("Cloud training"));
     m_tabs->addTab(buildGeneralTab(), Icons::get(QStringLiteral("settings")), tr("General"));
     m_tabs->addTab(new ShortcutsPage(this), Icons::get(QStringLiteral("text")), tr("Shortcuts"));
     v->addWidget(m_tabs, 1);
@@ -389,10 +391,12 @@ void SettingsDialog::showTab(const QString &tab)
         m_tabs->setCurrentIndex(2);
     else if (tab == QLatin1String("models"))
         m_tabs->setCurrentIndex(3);
-    else if (tab == QLatin1String("general"))
+    else if (tab == QLatin1String("cloud"))
         m_tabs->setCurrentIndex(4);
-    else if (tab == QLatin1String("shortcuts"))
+    else if (tab == QLatin1String("general"))
         m_tabs->setCurrentIndex(5);
+    else if (tab == QLatin1String("shortcuts"))
+        m_tabs->setCurrentIndex(6);
 }
 
 QWidget *SettingsDialog::buildProvidersTab()

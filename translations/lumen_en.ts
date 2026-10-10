@@ -341,4 +341,12 @@
         <translation><numerusform>%n earlier training, %1</numerusform><numerusform>%n earlier trainings, %1</numerusform></translation>
     </message>
 </context>
+<context>
+    <name>lumen::ui::CloudTrainingPage</name>
+    <message numerus="yes">
+        <location filename="../src/ui/dialogs/CloudTrainingPage.cpp" line="+1" />
+        <source>Connected: %n GPU type(s) with %1 GB or more.</source>
+        <translation><numerusform>Connected: %n GPU type with %1 GB or more.</numerusform><numerusform>Connected: %n GPU types with %1 GB or more.</numerusform></translation>
+    </message>
+</context>
 </TS>

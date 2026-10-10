@@ -32,6 +32,7 @@ add_library(lumen_ui STATIC
     dialogs/ModelHubDialog.h dialogs/ModelHubDialog.cpp
     dialogs/LocalSetupDialog.h dialogs/LocalSetupDialog.cpp
     dialogs/CharacterLoraDialog.h dialogs/CharacterLoraDialog.cpp
+    dialogs/CloudTrainingPage.h dialogs/CloudTrainingPage.cpp
     dialogs/LoraDatasetDialog.h dialogs/LoraDatasetDialog.cpp
     CharacterTraining.h CharacterTraining.cpp
     LoraEvaluation.h LoraEvaluation.cpp

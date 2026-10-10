@@ -13,6 +13,7 @@
 #include "pose/Skeleton.h"
 #include "runtime/ModelHub.h"
 #include "runtime/ModelLibrary.h"
+#include "runtime/RunPod.h"
 #include "runtime/RuntimeStore.h"
 #include "runtime/Supervisor.h"
 
@@ -49,6 +50,8 @@ public:
     runtime::ModelLibrary *models() { return &m_models; }
     // Hugging Face / Civitai search and downloads into the library.
     runtime::ModelHub *hub() { return &m_hub; }
+    // RunPod API (cloud LoRA training, M15).
+    runtime::RunPodClient *runPod() { return &m_runPod; }
     // Provider of a managed server (bound through its "managed_server" setting), if any.
     ai::Provider *providerForServer(const QString &profileId) const;
     doc::Project *project() { return m_project; }
@@ -148,6 +151,7 @@ private:
     runtime::ServerSupervisor m_servers; // destroyed before the providers: stops the servers
     runtime::ModelLibrary m_models;
     runtime::ModelHub m_hub;
+    runtime::RunPodClient m_runPod{&m_http};
     ai::GenerationService m_generation;
     ai::Director m_director;
     ai::PartService m_parts;

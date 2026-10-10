@@ -9,6 +9,7 @@ add_library(lumen_runtime STATIC
     ModelFormats.h ModelFormats.cpp
     ModelLibrary.h ModelLibrary.cpp
     ModelHub.h ModelHub.cpp
+    RunPod.h RunPod.cpp
     Trainer.h Trainer.cpp
     LoraTraining.h LoraTraining.cpp
 )
