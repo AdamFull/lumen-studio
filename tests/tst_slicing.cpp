@@ -536,6 +536,13 @@ void TestSlicing::expressionVariant()
         return MockResponse::json({{QStringLiteral("images"), QJsonArray{b64(out)}}, {QStringLiteral("info"), QStringLiteral("{}")}});
     });
     server.route("GET", QStringLiteral("/sdapi/v1/progress"), [](const MockRequest &) { return MockResponse::json({}); });
+    server.route("GET", QStringLiteral("/sdapi/v1/loras"), [](const MockRequest &) {
+        MockResponse r;
+        r.body = QJsonDocument(QJsonArray{QJsonObject{{QStringLiteral("name"), QStringLiteral("lmn_aki")},
+                                                      {QStringLiteral("path"), QStringLiteral("C:/webui/models/Lora/lmn_aki.safetensors")}}})
+                     .toJson();
+        return r;
+    });
     QTemporaryDir dir;
     doc::Project project;
     auto opened = project.open(dir.filePath(QStringLiteral("p.lumen")));
@@ -597,6 +604,26 @@ void TestSlicing::expressionVariant()
         }
     }
     QVERIFY(found);
+
+    // With the character: its LoRA (WebUI prompt tag) and trigger; the description goes in through
+    // the summary only.
+    CharacterContext aki;
+    aki.id = QStringLiteral("c1");
+    aki.name = QStringLiteral("Aki");
+    aki.sheet = {{QStringLiteral("tags"), QStringLiteral("red hair, green eyes")}};
+    aki.lora.file = dir.filePath(QStringLiteral("lmn_aki.safetensors"));
+    aki.lora.trigger = QStringLiteral("lmn_aki");
+    aki.lora.weight = 0.7;
+    options.kind = QStringLiteral("mouth_smile");
+    options.character = aki;
+    options.characterSummary = QStringLiteral("red hair, green eyes");
+    set.addPart(QStringLiteral("mouth"), {}, {}, rectMask(source.size(), QRect(110, 70, 20, 8)));
+    job = service.generateExpression(&set, {}, options);
+    QTRY_VERIFY_WITH_TIMEOUT(job->isFinished(), 10000);
+    QVERIFY2(job->state() == Job::State::Succeeded, qPrintable(job->errorString()));
+    QVERIFY2(prompt.startsWith(QStringLiteral("lmn_aki, ")), qPrintable(prompt));
+    QVERIFY(prompt.contains(QStringLiteral("<lora:lmn_aki:0.7>")));
+    QCOMPARE(prompt.count(QStringLiteral("red hair")), 1);
     QFile::remove(registry.configPath());
 }
 
@@ -637,6 +664,11 @@ void TestSlicing::layerDiffuseCompletion()
         ++uploads;
         return MockResponse::json({{QStringLiteral("name"), QStringLiteral("u%1.png").arg(uploads)}, {QStringLiteral("subfolder"), QString()},
                                    {QStringLiteral("type"), QStringLiteral("input")}});
+    });
+    server.route("GET", QStringLiteral("/object_info/LoraLoader"), [](const MockRequest &) {
+        const QJsonObject required{{QStringLiteral("lora_name"), QJsonArray{QJsonArray{QStringLiteral("chars/lmn_aki.safetensors")}}}};
+        return MockResponse::json({{QStringLiteral("LoraLoader"),
+                                    QJsonObject{{QStringLiteral("input"), QJsonObject{{QStringLiteral("required"), required}}}}}});
     });
     server.route("POST", QStringLiteral("/prompt"), [&](const MockRequest &req) {
         graph = req.json().value(QStringLiteral("prompt")).toObject();
@@ -691,6 +723,11 @@ void TestSlicing::layerDiffuseCompletion()
 
     CompletionOptions options;
     options.strategy = CompletionStrategy::LayerDiffuse;
+    // With the character's LoRA: a LoraLoader between the checkpoint and LayerDiffuse.
+    options.character.name = QStringLiteral("Aki");
+    options.character.lora.file = dir.filePath(QStringLiteral("lmn_aki.safetensors"));
+    options.character.lora.trigger = QStringLiteral("lmn_aki");
+    options.character.lora.weight = 0.7;
     const QList<Job *> jobs = service.complete(&set, {torso}, options);
     QCOMPARE(jobs.size(), 1);
     QTRY_VERIFY_WITH_TIMEOUT(jobs.first()->isFinished(), 15000);
@@ -701,6 +738,23 @@ void TestSlicing::layerDiffuseCompletion()
     QVERIFY(g.contains("LayeredDiffusionApply"));
     QVERIFY(g.contains("animagineXL.safetensors")); // provider checkpoint
     QVERIFY(g.contains("u2.png"));                   // mask bound to the mask loader
+    QString loraNode;
+    for (auto it = graph.begin(); it != graph.end(); ++it) {
+        if (it.value()[QStringLiteral("class_type")].toString() == QLatin1String("LoraLoader"))
+            loraNode = it.key();
+    }
+    QVERIFY(!loraNode.isEmpty());
+    QCOMPARE(graph.value(loraNode)[QStringLiteral("inputs")][QStringLiteral("strength_model")].toDouble(), 0.7);
+    QCOMPARE(graph.value(loraNode)[QStringLiteral("inputs")][QStringLiteral("lora_name")].toString(), QStringLiteral("chars/lmn_aki.safetensors"));
+    for (auto it = graph.begin(); it != graph.end(); ++it) {
+        if (it.value()[QStringLiteral("class_type")].toString() == QLatin1String("LayeredDiffusionApply"))
+            QCOMPARE(it.value()[QStringLiteral("inputs")][QStringLiteral("model")].toArray(), (QJsonArray{loraNode, 0}));
+    }
+    QVERIFY(g.contains("lmn_aki, Complete"));        // the trigger first in the part prompt
+    const auto stored = project.asset(set.part(torso)->chosenAssetId());
+    QVERIFY(stored.has_value());
+    const QJsonObject partMeta = stored->metadata;
+    QCOMPARE(partMeta.value(QStringLiteral("character")).toObject().value(QStringLiteral("trigger")).toString(), QStringLiteral("lmn_aki"));
     const QImage result = set.resultImage(torso);
     QVERIFY(!result.isNull());
     QVERIFY(parts::hasTransparency(result));

@@ -1,5 +1,6 @@
 #include "ui/parts/PartsPage.h"
 
+#include "ai/Director.h"
 #include "ai/PartService.h"
 #include "core/Async.h"
 #include "core/Error.h"
@@ -22,6 +23,8 @@
 #include "ui/parts/CubismView.h"
 #include "ui/parts/PartTools.h"
 #include "ui/parts/PuppetPreview.h"
+#include "ui/dialogs/CharacterLoraDialog.h"
+#include "ui/widgets/CharacterChip.h"
 #include "ui/widgets/Controls.h"
 #include "ui/widgets/ProviderCombo.h"
 #include "ui/widgets/ReferenceStrip.h"
@@ -678,9 +681,16 @@ QWidget *PartsPage::buildGeneratePanel()
     form->addRow(tr("Provider"), m_provider);
     form->addRow(tr("Variants"), m_variants);
     v->addLayout(form);
+    auto *characterRow = new QHBoxLayout;
+    characterRow->addWidget(new QLabel(tr("Character"), w));
+    characterRow->addStretch();
+    m_characterChip = new CharacterChip(m_studio, QStringLiteral("parts"), w);
+    characterRow->addWidget(m_characterChip);
+    v->addLayout(characterRow);
     m_character = new AutoTextEdit(w, 2, 5);
-    m_character->setPlaceholderText(tr("Character description (optional): hair colour, outfit, art style..."));
     v->addWidget(m_character);
+    connect(m_characterChip, &CharacterChip::characterChanged, this, &PartsPage::updateCharacterHint);
+    updateCharacterHint();
     auto *buttons = new QHBoxLayout;
     m_generateAll = primaryButton(tr("Generate all"), QStringLiteral("sparkles"), w);
     m_generateSelected = new QPushButton(tr("Selected"), w);
@@ -1240,6 +1250,7 @@ void PartsPage::setSourceAsset(const QString &assetId, bool keepSession)
             newSession();
     }
     const auto info = project->asset(assetId);
+    adoptCharacterOf(assetId);
     QPointer<PartsPage> self(this);
     QPointer<doc::PartSet> set(m_set);
     m_sourceInfo->setText(tr("Loading..."));
@@ -1595,11 +1606,72 @@ void PartsPage::generate(const QList<int> &labels)
             m_studio->notify(tr("Nothing to generate: the parts are empty or already running."));
         return;
     }
-    const QList<Job *> jobs = m_studio->parts()->complete(m_set, todo, options);
-    for (Job *j : jobs)
-        m_running.append(j);
     if (m_panels->currentIndex() != GenerateStep)
         setStep(GenerateStep);
+    QPointer<PartsPage> self(this);
+    QPointer<doc::PartSet> set(m_set);
+    withCharacter(options.providerId, [self, set, todo, options](const ai::CharacterContext &character, const QString &family) mutable {
+        if (!self || !set || set != self->m_set)
+            return;
+        options.character = character;
+        options.modelFamily = family;
+        if (options.characterSummary.isEmpty())
+            options.characterSummary = ai::Director::appearanceTags(character.sheet);
+        const QList<Job *> jobs = self->m_studio->parts()->complete(set, todo, options);
+        for (Job *j : jobs)
+            self->m_running.append(j);
+    });
+}
+
+void PartsPage::withCharacter(const QString &providerId, std::function<void(const ai::CharacterContext &, const QString &)> then)
+{
+    const QString id = m_characterChip->characterId();
+    if (id.isEmpty())
+        return then(ai::CharacterContext{}, QString());
+    const QString family = checkpointFamily(m_studio, m_studio->providers()->imageProvider(providerId));
+    m_studio->characterContext(id).then(this, [then, family](const ai::CharacterContext &c) { then(c, family); });
+}
+
+void PartsPage::updateCharacterHint()
+{
+    const auto entry = m_studio->characters()->entry(m_characterChip->characterId());
+    if (!entry) {
+        m_character->setPlaceholderText(tr("Character description (optional): hair colour, outfit, art style..."));
+        return;
+    }
+    const bool lora = ai::CharacterLora::fromJson(entry->lora).isValid();
+    m_character->setPlaceholderText(lora ? tr("Empty: %1's LoRA and description are used (%2)").arg(entry->name, ai::Director::appearanceTags(entry->sheet))
+                                         : tr("Empty: %1's description is used (%2)").arg(entry->name, ai::Director::appearanceTags(entry->sheet)));
+}
+
+void PartsPage::adoptCharacterOf(const QString &assetId)
+{
+    doc::Project *project = m_studio->project();
+    const auto info = project ? project->asset(assetId) : std::nullopt;
+    if (!info)
+        return;
+    QPointer<PartsPage> self(this);
+    auto adopt = [self](const QString &id) {
+        if (!self || id.isEmpty() || id == self->m_studio->activeCharacter())
+            return;
+        if (const auto entry = self->m_studio->characters()->entry(id)) {
+            self->m_studio->setActiveCharacter(id);
+            self->m_studio->notify(tr("%1 is the character of this image and now the project's character.").arg(entry->name));
+        }
+    };
+    // Images since M14 name their character; older Create images name their director session.
+    const QString id = info->metadata.value(QStringLiteral("character")).toObject().value(QStringLiteral("character")).toString();
+    if (!id.isEmpty())
+        return adopt(id);
+    const QString session = info->metadata.value(QStringLiteral("director_session")).toString();
+    if (session.isEmpty())
+        return;
+    project->records(QStringLiteral("director")).then(this, [adopt, session](const QList<doc::Record> &records) {
+        for (const doc::Record &r : records) {
+            if (r.id == session)
+                adopt(r.json.value(QStringLiteral("library_character")).toString());
+        }
+    });
 }
 
 void PartsPage::generateExpression(const QString &kind)
@@ -1620,12 +1692,21 @@ void PartsPage::generateExpression(const QString &kind)
     options.kind = kind;
     options.providerId = m_provider->providerId();
     options.characterSummary = m_character->text().trimmed();
-    Job *job = m_studio->parts()->generateExpression(m_set, base, options);
-    m_running.append(job);
     QPointer<PartsPage> self(this);
-    connect(job, &Job::finished, this, [self](Job *j) {
-        if (self && j->state() == Job::State::Failed)
-            self->m_studio->notify(j->errorString(), QStringLiteral("error"));
+    QPointer<doc::PartSet> set(m_set);
+    withCharacter(options.providerId, [self, set, base, options](const ai::CharacterContext &character, const QString &family) mutable {
+        if (!self || !set || set != self->m_set)
+            return;
+        options.character = character;
+        options.modelFamily = family;
+        if (options.characterSummary.isEmpty())
+            options.characterSummary = ai::Director::appearanceTags(character.sheet);
+        Job *job = self->m_studio->parts()->generateExpression(set, base, options);
+        self->m_running.append(job);
+        connect(job, &Job::finished, self, [self](Job *j) {
+            if (self && j->state() == Job::State::Failed)
+                self->m_studio->notify(j->errorString(), QStringLiteral("error"));
+        });
     });
 }
 

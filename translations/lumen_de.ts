@@ -124,17 +124,17 @@
         <translation>Lächeln</translation>
     </message>
     <message>
-        <location filename="../src/ai/PartService.cpp" line="+206"/>
+        <location filename="../src/ai/PartService.cpp" line="+212"/>
         <source>The skeleton has no visible joints.</source>
         <translation>Das Skelett hat keine sichtbaren Gelenke.</translation>
     </message>
     <message>
-        <location line="+404"/>
+        <location line="+412"/>
         <source>The selected parts are empty.</source>
         <translation>Die ausgewählten Teile sind leer.</translation>
     </message>
     <message>
-        <location line="+160"/>
+        <location line="+165"/>
         <source>There are no parts to export.</source>
         <translation>Es gibt keine Teile zum Exportieren.</translation>
     </message>
@@ -559,7 +559,7 @@
         <translation>Charakterteil</translation>
     </message>
     <message>
-        <location filename="../src/ui/parts/PartsPage.cpp" line="+1144"/>
+        <location filename="../src/ui/parts/PartsPage.cpp" line="+1154"/>
         <location filename="../src/doc/Project.cpp" line="+169"/>
         <location filename="../src/doc/PsdIO.cpp" line="+91"/>
         <location filename="../src/live2d/Motion.cpp" line="+20"/>
@@ -871,7 +871,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Skalierung</translation>
     </message>
     <message>
-        <location filename="../src/ui/parts/PartsPage.cpp" line="-1059"/>
+        <location filename="../src/ui/parts/PartsPage.cpp" line="-1066"/>
         <source>1  Source</source>
         <translation>1  Quelle</translation>
     </message>
@@ -951,12 +951,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Noch nicht generiert</translation>
     </message>
     <message>
-        <location line="+984"/>
+        <location line="+991"/>
         <source>%1 has no visible pixel layers.</source>
         <translation>%1 hat keine sichtbaren Pixelebenen.</translation>
     </message>
     <message>
-        <location line="+331"/>
+        <location line="+332"/>
         <source>The part lies on one side of the centre line.</source>
         <translation>Das Teil liegt auf einer Seite der Mittellinie.</translation>
     </message>
@@ -2120,7 +2120,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ai::PartService</name>
     <message>
-        <location filename="../src/ai/PartService.cpp" line="-723"/>
+        <location filename="../src/ai/PartService.cpp" line="-736"/>
         <source>Segment character parts</source>
         <translation>Charakterteile segmentieren</translation>
     </message>
@@ -2138,15 +2138,15 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <location line="+110"/>
         <location line="+23"/>
         <location line="+91"/>
-        <location line="+125"/>
+        <location line="+133"/>
         <location line="+22"/>
-        <location line="+26"/>
+        <location line="+31"/>
         <location line="+108"/>
         <source>The part set is no longer open</source>
         <translation>Das Teile-Set ist nicht mehr geöffnet</translation>
     </message>
     <message>
-        <location line="-597"/>
+        <location line="-610"/>
         <source>Cancelled</source>
         <translation>Abgebrochen</translation>
     </message>
@@ -2205,12 +2205,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+49"/>
-        <location line="+351"/>
+        <location line="+364"/>
         <source>Part · %1</source>
         <translation>Teil · %1</translation>
     </message>
     <message>
-        <location line="-345"/>
+        <location line="-358"/>
         <source>The part was deleted</source>
         <translation>Das Teil wurde gelöscht</translation>
     </message>
@@ -2226,12 +2226,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+19"/>
-        <location line="+282"/>
+        <location line="+295"/>
         <source>No project is open</source>
         <translation>Kein Projekt geöffnet</translation>
     </message>
     <message>
-        <location line="-241"/>
+        <location line="-254"/>
         <source>The LayerDiffuse workflow template is missing (data/workflows/comfyui/complete_part_layerdiffuse.json).</source>
         <translation>Die LayerDiffuse-Workflow-Vorlage fehlt (data/workflows/comfyui/complete_part_layerdiffuse.json).</translation>
     </message>
@@ -2241,13 +2241,13 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>LayerDiffuse benötigt einen ComfyUI-Anbieter mit den ComfyUI-layerdiffuse-Nodes.</translation>
     </message>
     <message>
-        <location line="+56"/>
-        <location line="+131"/>
+        <location line="+64"/>
+        <location line="+136"/>
         <source>The provider returned no images</source>
         <translation>Der Anbieter hat keine Bilder zurückgegeben</translation>
     </message>
     <message>
-        <location line="-123"/>
+        <location line="-128"/>
         <source>Extracting part...</source>
         <translation>Teil wird extrahiert...</translation>
     </message>
@@ -2272,7 +2272,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Wird vorbereitet...</translation>
     </message>
     <message>
-        <location line="+53"/>
+        <location line="+58"/>
         <source>A part set holds at most %1 parts.</source>
         <translation>Ein Teile-Set enthält höchstens %1 Teile.</translation>
     </message>
@@ -9991,7 +9991,7 @@ Trotzdem herunterladen?</translation>
 <context>
     <name>lumen::ui::PartsPage</name>
     <message>
-        <location filename="../src/ui/parts/PartsPage.cpp" line="-1280"/>
+        <location filename="../src/ui/parts/PartsPage.cpp" line="-1288"/>
         <source>Slicing sessions of this project</source>
         <translation>Zerlegungssitzungen dieses Projekts</translation>
     </message>
@@ -10077,13 +10077,13 @@ Trotzdem herunterladen?</translation>
     </message>
     <message>
         <location line="+15"/>
-        <location line="+1331"/>
+        <location line="+1409"/>
         <location line="+43"/>
         <source>Parts</source>
         <translation>Teile</translation>
     </message>
     <message>
-        <location line="-1372"/>
+        <location line="-1450"/>
         <source>Undo</source>
         <translation>Rückgängig</translation>
     </message>
@@ -10114,14 +10114,14 @@ Trotzdem herunterladen?</translation>
     </message>
     <message>
         <location line="+5"/>
-        <location line="+778"/>
+        <location line="+786"/>
         <source>Drop an image here
 or drag one from the Library</source>
         <translation>Bild hier ablegen
 oder aus der Bibliothek ziehen</translation>
     </message>
     <message>
-        <location line="-773"/>
+        <location line="-781"/>
         <source>Open image...</source>
         <translation>Bild öffnen...</translation>
     </message>
@@ -10147,12 +10147,12 @@ oder aus der Bibliothek ziehen</translation>
     </message>
     <message>
         <location line="+3"/>
-        <location line="+743"/>
+        <location line="+751"/>
         <source>Remove background</source>
         <translation>Hintergrund entfernen</translation>
     </message>
     <message>
-        <location line="-742"/>
+        <location line="-750"/>
         <source>Makes the background transparent with a background-removal provider; the character silhouette then guides every mask.</source>
         <translation>Macht den Hintergrund mit einem Anbieter zur Hintergrundentfernung transparent; die Silhouette der Figur steuert danach jede Maske.</translation>
     </message>
@@ -10229,12 +10229,12 @@ oder aus der Bibliothek ziehen</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+798"/>
+        <location line="+806"/>
         <source>Auto-segment</source>
         <translation>Automatisch segmentieren</translation>
     </message>
     <message>
-        <location line="-791"/>
+        <location line="-799"/>
         <source>Edit skeleton</source>
         <translation>Skelett bearbeiten</translation>
     </message>
@@ -10245,12 +10245,12 @@ oder aus der Bibliothek ziehen</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+807"/>
+        <location line="+815"/>
         <source>Detect skeleton</source>
         <translation>Skelett erkennen</translation>
     </message>
     <message>
-        <location line="-806"/>
+        <location line="-814"/>
         <source>Detect the pose from the image with a pose-detection provider (DWPose/OpenPose)</source>
         <translation>Die Pose im Bild mit einem Anbieter zur Posenerkennung erkennen (DWPose/OpenPose)</translation>
     </message>
@@ -10367,12 +10367,12 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Varianten</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+957"/>
         <source>Character description (optional): hair colour, outfit, art style...</source>
         <translation>Figurenbeschreibung (optional): Haarfarbe, Outfit, Kunststil...</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="-944"/>
         <source>Generate all</source>
         <translation>Alle generieren</translation>
     </message>
@@ -10608,12 +10608,13 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Eine neue Zerlegungssitzung für dieses Bild starten? Wählen Sie „Nein“, um das Bild der aktuellen Sitzung zu ersetzen (Masken bleiben nur bei passender Größe erhalten).</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+12"/>
         <source>Loading...</source>
         <translation>Wird geladen...</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="-571"/>
+        <location line="+584"/>
         <source>Character</source>
         <translation>Figur</translation>
     </message>
@@ -10686,7 +10687,22 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Nichts zu generieren: Die Teile sind leer oder werden bereits verarbeitet.</translation>
     </message>
     <message>
-        <location line="+159"/>
+        <location line="+37"/>
+        <source>Empty: %1&apos;s LoRA and description are used (%2)</source>
+        <translation>Leer: Die LoRA und die Beschreibung von %1 werden verwendet (%2)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Empty: %1&apos;s description is used (%2)</source>
+        <translation>Leer: Die Beschreibung von %1 wird verwendet (%2)</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>%1 is the character of this image and now the project&apos;s character.</source>
+        <translation>%1 ist der Charakter dieses Bildes und jetzt der Charakter des Projekts.</translation>
+    </message>
+    <message>
+        <location line="+176"/>
         <source>character</source>
         <translation>figur</translation>
     </message>

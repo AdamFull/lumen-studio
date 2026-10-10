@@ -1331,9 +1331,22 @@ Rules per mode:
   - The selection bar's *Remove* calls `runFromCanvas(…, false)` and never gets the character.
   - Test against a mock sd.cpp server: fill selection (trigger and LoRA, no tags), remove (none),
     whole-image variation (LoRA and tags), expand (LoRA, no tags), switched off (none), metadata.
-- [ ] Parts page: the character from the source asset or the active one; part completion and
-  expression variants with the LoRA; LoRA binding in the LayerDiffuse template; the face-crop
-  identity check of expression variants.
+- [x] Parts page, character and LoRA:
+  - `CompletionOptions` and `ExpressionOptions` carry the character and the checkpoint's family;
+    `PartService` applies it as `Region` to every request (provider resolved like
+    `GenerationService`: an empty id is the default provider) and records it in the part's
+    metadata. The appearance words go in through `characterSummary` only; an empty description
+    box falls back to the character's appearance tags.
+  - LayerDiffuse needed no template change: `ComfyUiProvider::insertLoras` already rewires
+    per-request templates, so the LoRA sits between the checkpoint and `LayeredDiffusionApply`.
+  - Opening an image for slicing makes its character active: the image's `character` metadata,
+    else the `library_character` of its `director_session` record (Create images before M14).
+  - Tests: an expression variant on WebUI with the LoRA tag and trigger (description once); a
+    LayerDiffuse completion whose graph has the LoraLoader feeding LayerDiffuse, with the trigger
+    first and the metadata; the Parts page adopting the character from both kinds of image, and
+    leaving it alone for an image without one.
+- [ ] Face check of expression variants: the identity checklist (M13) on a face crop of each
+  variant against the source face, so a variant that changes the eye colour is flagged.
 - [ ] Assistant tools: `generate_image`, `edit_image` and `inpaint_region` use the active character
   unless the call passes `character: false`; tool descriptions say so.
 - [ ] Live measurements (RTX 4060 8 GB, the M13 character): identity checklist scores with and

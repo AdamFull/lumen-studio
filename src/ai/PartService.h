@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ai/CharacterContext.h"
 #include "ai/GenerationService.h"
 #include "ai/PartPipeline.h"
 
@@ -33,6 +34,10 @@ struct CompletionOptions
     double denoise = 1.0;
     QString model;
     bool refineAlpha = false;      // run background removal on the result when a provider offers it
+    // The character (M14): its LoRA (else its reference) goes into every request; the prompt
+    // describes the part, so its appearance words come through characterSummary only.
+    CharacterContext character;
+    QString modelFamily;           // the loaded checkpoint's family, for the LoRA check
 };
 
 struct ExpressionOptions
@@ -44,6 +49,10 @@ struct ExpressionOptions
     double cfg = 6.0;
     double denoise = 0.85;
     QString model;
+    // The character (M14): its LoRA (else its reference) goes into every request; the prompt
+    // describes the part, so its appearance words come through characterSummary only.
+    CharacterContext character;
+    QString modelFamily;           // the loaded checkpoint's family, for the LoRA check
 };
 
 struct ExportOptions
@@ -97,6 +106,8 @@ private:
     Job *runExport(doc::PartSet *set, const QString &title, const ExportOptions &options,
                    std::function<void(const QList<parts::ExportLayer> &, const doc::PartSet::Snapshot &, const QImage &)> write);
 
+    // The image provider of a request (empty id: the default one, as GenerationService does).
+    ImageProvider *providerFor(const QString &id) const;
     ProviderRegistry *m_registry;
     JobQueue *m_queue;
     GenerationService *m_generation;

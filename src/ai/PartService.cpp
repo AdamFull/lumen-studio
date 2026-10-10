@@ -1,6 +1,7 @@
 #include "ai/PartService.h"
 
 #include "ai/Gate.h"
+#include "ai/PromptStyle.h"
 #include "core/Async.h"
 #include "core/ImageOps.h"
 #include "core/JobQueue.h"
@@ -87,6 +88,11 @@ QList<ImageProvider *> PartService::segmenters() const
             list.append(p);
     }
     return list;
+}
+
+ImageProvider *PartService::providerFor(const QString &id) const
+{
+    return id.isEmpty() ? m_registry->defaultImageProvider() : m_registry->imageProvider(id);
 }
 
 ImageProvider *PartService::layerDiffuseProvider(const QString &preferredId, QString *templateId) const
@@ -503,6 +509,14 @@ QList<Job *> PartService::complete(doc::PartSet *setIn, const QList<int> &labels
                         region.colorMatch = false;
                         spec.region = region;
                         QJsonObject fullMeta = meta;
+                        if (!options.character.isEmpty()) {
+                            if (ImageProvider *provider = self->providerFor(spec.providerId)) {
+                                const CharacterApplied applied = applyCharacter(spec.request, options.character, provider->capabilities(),
+                                                                                CharacterUse::Region, promptStyleFor(provider), options.modelFamily);
+                                if (applied.any())
+                                    fullMeta.insert(QStringLiteral("character"), applied.toJson(options.character));
+                            }
+                        }
                         fullMeta.insert(QStringLiteral("prompt"), spec.request.prompt);
                         fullMeta.insert(QStringLiteral("key_color"), ctx.key.name());
                         const QImage contextImage = ctx.image;
@@ -635,6 +649,11 @@ Job *PartService::generateExpression(doc::PartSet *setIn, const QList<int> &base
             region.feather = 8;
             region.colorMatch = true;
             spec.region = region;
+            if (!options.character.isEmpty()) {
+                if (ImageProvider *provider = self->providerFor(spec.providerId))
+                    applyCharacter(spec.request, options.character, provider->capabilities(), CharacterUse::Region, promptStyleFor(provider),
+                                   options.modelFamily);
+            }
             self->m_generation->execute(job, spec, [self, set, kind, silhouette](Job *job, const GenerationSpec &used, GenerationOutput out) {
                 if (!self || !set) {
                     job->fail(tr("The part set is no longer open"));

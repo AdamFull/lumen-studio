@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ai/CharacterContext.h"
 #include "doc/Parts.h"
 #include "ui/parts/PartListPanel.h"
 
@@ -8,6 +9,8 @@
 #include <QTimer>
 #include <QUuid>
 #include <QWidget>
+
+#include <functional>
 
 class QActionGroup;
 class QButtonGroup;
@@ -34,6 +37,7 @@ namespace lumen::ui {
 
 class AutoTextEdit;
 class CanvasView;
+class CharacterChip;
 class CubismPanel;
 class CubismView;
 class EditorState;
@@ -95,6 +99,11 @@ private:
     // Generation.
     void generate(const QList<int> &labels);
     void generateExpression(const QString &kind);
+    // Loads the page's character (if any) and continues with it and the checkpoint's family.
+    void withCharacter(const QString &providerId, std::function<void(const ai::CharacterContext &, const QString &family)> then);
+    // An image drawn for a library character makes that character the project's one.
+    void adoptCharacterOf(const QString &assetId);
+    void updateCharacterHint();
     void cancelGeneration();
     void rebuildCards();
     void updateCard(int label);
@@ -170,6 +179,7 @@ private:
     ProviderCombo *m_provider;
     QSpinBox *m_variants;
     AutoTextEdit *m_character;
+    CharacterChip *m_characterChip;
     QPushButton *m_generateAll;
     QPushButton *m_generateSelected;
     QPushButton *m_cancel;

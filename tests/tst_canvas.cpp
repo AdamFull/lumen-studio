@@ -16,6 +16,7 @@
 #include "ui/pages/CreatePage.h"
 #include "ui/pages/GeneratePage.h"
 #include "ui/pages/AiPanel.h"
+#include "ui/parts/PartsPage.h"
 #include "pose/Rig.h"
 #include "MockHttpServer.h"
 #include "ui/dialogs/CharacterLoraDialog.h"
@@ -116,6 +117,7 @@ private slots:
     void activeCharacter();
     void generatePageCharacter();
     void editorCharacter();
+    void partsPageCharacter();
 
 private:
     ToolEvent at(double x, double y, Qt::KeyboardModifiers mods = Qt::NoModifier) const
@@ -2109,6 +2111,78 @@ void TestCanvas::editorCharacter()
     for (const doc::AssetInfo &a : studio.project()->assets())
         recorded = recorded || a.metadata.value(QStringLiteral("character")).toObject().value(QStringLiteral("character")).toString() == aki;
     QVERIFY(recorded);
+}
+
+void TestCanvas::partsPageCharacter()
+{
+    Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
+    QTemporaryDir dir;
+    Studio studio;
+    studio.openProject(dir.filePath(QStringLiteral("parts.lumen")));
+    QTRY_VERIFY_WITH_TIMEOUT(studio.isProjectOpen(), 5000);
+    QImage ref(64, 96, QImage::Format_ARGB32);
+    ref.fill(Qt::red);
+    auto a = studio.characters()->save(QStringLiteral("Aki (parts test)"), {{QStringLiteral("tags"), QStringLiteral("red hair, green eyes")}}, {ref},
+                                       QString(), QString(),
+                                       QJsonObject{{QStringLiteral("file"), dir.filePath(QStringLiteral("lmn_aki.safetensors"))},
+                                                   {QStringLiteral("trigger"), QStringLiteral("lmn_aki")}});
+    auto b = studio.characters()->save(QStringLiteral("Bo (parts test)"), {{QStringLiteral("tags"), QStringLiteral("blue hair")}}, {ref});
+    QTRY_VERIFY(a.isFinished() && b.isFinished());
+    const QString aki = a.result().id;
+    const QString bo = b.result().id;
+    auto cleanup = qScopeGuard([&] {
+        studio.characters()->remove(aki);
+        studio.characters()->remove(bo);
+    });
+    PartsPage page(&studio);
+    auto *chip = page.findChild<CharacterChip *>();
+    QVERIFY(chip);
+    chip->setUsedHere(true);
+
+    // An image that names its character (Create, Generate and the editor record it) makes that
+    // character the project's one when it is opened for slicing.
+    QImage figure(128, 192, QImage::Format_ARGB32);
+    figure.fill(Qt::transparent);
+    {
+        QPainter p(&figure);
+        p.fillRect(QRect(40, 20, 48, 160), Qt::red);
+    }
+    auto withCharacter = studio.project()->addAsset(figure, doc::AssetKind::Generation, QStringLiteral("Aki shot"),
+                                                    {{QStringLiteral("character"), QJsonObject{{QStringLiteral("character"), aki}}}});
+    QTRY_VERIFY(withCharacter.isFinished());
+    studio.sliceAsset(withCharacter.result().id);
+    QTRY_COMPARE(studio.activeCharacter(), aki);
+    QCOMPARE(chip->characterId(), aki);
+    // The empty description box says what is used instead.
+    bool hint = false;
+    for (AutoTextEdit *e : page.findChildren<AutoTextEdit *>())
+        hint = hint || e->placeholderText().contains(QStringLiteral("Aki (parts test)'s LoRA and description are used (red hair, green eyes)"));
+    QVERIFY(hint);
+
+    // An older Create image names only its director session; the session names the character.
+    doc::Record session;
+    session.id = QStringLiteral("session-bo");
+    session.type = QStringLiteral("director");
+    session.name = QStringLiteral("Bo session");
+    session.json = QJsonObject{{QStringLiteral("library_character"), bo}};
+    auto savedSession = studio.project()->saveRecord(session);
+    QTRY_VERIFY(savedSession.isFinished());
+    auto fromSession = studio.project()->addAsset(figure, doc::AssetKind::Generation, QStringLiteral("Bo shot"),
+                                                  {{QStringLiteral("director_session"), QStringLiteral("session-bo")}});
+    QTRY_VERIFY(fromSession.isFinished());
+    QTimer::singleShot(0, [] {
+        // Opening a second image asks whether to start a new session.
+        if (auto *box = qobject_cast<QMessageBox *>(QApplication::activeModalWidget()))
+            box->button(QMessageBox::Yes)->click();
+    });
+    studio.sliceAsset(fromSession.result().id);
+    QTRY_COMPARE(studio.activeCharacter(), bo);
+    // An image without a character leaves the active one alone.
+    auto plain = studio.project()->addAsset(figure, doc::AssetKind::Import, QStringLiteral("plain"), {});
+    QTRY_VERIFY(plain.isFinished());
+    studio.sliceAsset(plain.result().id);
+    QTest::qWait(100);
+    QCOMPARE(studio.activeCharacter(), bo);
 }
 
 QTEST_MAIN(TestCanvas)

@@ -184,8 +184,8 @@ session, and the sheet is set. Saving under an existing name updates that charac
 ### The project's character
 
 A project has one **active character** from the character library. The character button (round
-picture and name, "· LoRA" when it has one) sits above the prompt on the Generate page and in the
-editor's AI panel. Its menu picks another character or none.
+picture and name, "· LoRA" when it has one) sits above the prompt on the Generate page, in the
+editor's AI panel and on the Parts page. Its menu picks another character or none.
 
 * The Create page makes a character active when you save it to the library or load it from there.
 * With a character active, the prompt only needs the scene ("reading in a library, evening light").
@@ -201,6 +201,10 @@ editor's AI panel. Its menu picks another character or none.
   * a **Variation** of the whole image also uses its appearance;
   * **Instruct edit** uses its reference or description (edit models take no LoRA);
   * **Remove** (the selection bar) never uses it.
+* On the **Parts** page, opening an image drawn for a library character makes that character the
+  project's one. Part completion (including LayerDiffuse on ComfyUI) and the expression variants
+  then use its LoRA, so hidden parts and closed eyes or a smile keep the character's look. An empty
+  *Character description* box uses the character's appearance; text you type there replaces it.
 * **Use the character on this page** in the menu switches it off for one page; the name is then
   struck through.
 * **Re-run** (Library) brings back the words you wrote and the character. If the image was drawn
