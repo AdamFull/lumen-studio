@@ -1489,6 +1489,8 @@ void TestLive::evaluateLora()
 // installed trainer in LUMEN_LIVE_SD_RUNTIMES: M13's acceptance run through the UI, with both servers
 // run by Lumen. Create → Training set → plan and generate the shots → Critic scores → captions →
 // Train tab (LUMEN_LIVE_FULL_EPOCHS, default 10) → Test the LoRA → attach the recommended epoch.
+// LUMEN_LIVE_FULL_CHARACTER=<library id> starts at the Train tab with that character's training set
+// (from an earlier run of this test).
 void TestLive::characterLoraEndToEnd()
 {
     const int shotCount = qEnvironmentVariableIntValue("LUMEN_LIVE_FULL_LORA");
@@ -1562,9 +1564,15 @@ void TestLive::characterLoraEndToEnd()
                             {QStringLiteral("gender_presentation"), QStringLiteral("female")},
                             {QStringLiteral("tags"), qEnvironmentVariable("LUMEN_LIVE_DATASET_TAGS",
                                                                           QStringLiteral("long red hair, yellow eyes, black hooded cloak, black choker"))}};
-    auto saved = studio.characters()->save(QStringLiteral("Akane (M13 acceptance)"), sheet, {QImage(referencePath())});
-    QTRY_VERIFY_WITH_TIMEOUT(saved.isFinished(), 10000);
-    const QString characterId = saved.result().id;
+    const QString reuse = qEnvironmentVariable("LUMEN_LIVE_FULL_CHARACTER");
+    QString characterId = reuse;
+    if (reuse.isEmpty()) {
+        auto saved = studio.characters()->save(QStringLiteral("Akane (M13 acceptance)"), sheet, {QImage(referencePath())});
+        QTRY_VERIFY_WITH_TIMEOUT(saved.isFinished(), 10000);
+        characterId = saved.result().id;
+    }
+    QVERIFY2(studio.characters()->entry(characterId), "no such library character");
+    qInfo().noquote() << "character" << characterId;
     auto cleanup = qScopeGuard([&] {
         Settings::instance().setValue(QStringLiteral("director/critic"), false);
         for (Provider *p : studio.providers()->providers())
@@ -1603,62 +1611,69 @@ void TestLive::characterLoraEndToEnd()
     total.start();
     auto stamp = [&total](const QString &what) { qInfo().noquote() << QStringLiteral("[%1 min]").arg(total.elapsed() / 60000.0, 0, 'f', 1) << what; };
 
-    // 1. Plan and generate the training shots.
-    QVERIFY(button(QStringLiteral("Plan training shots")));
-    button(QStringLiteral("Plan training shots"))->click();
-    QTRY_COMPARE_WITH_TIMEOUT(int(session->shots().size()), shotCount, 10000);
-    // As "Generate all" does, through the director actions (they report when every shot settled).
-    QStringList ids;
-    for (const ui::ShotState &s : session->shots())
-        ids << s.id();
-    bool generated = false;
-    QString generationErrors;
-    create.generateShots(ids, [&](const QStringList &, const QString &error) {
-        generationErrors = error;
-        generated = true;
-    });
-    QTRY_VERIFY_WITH_TIMEOUT(generated, 4 * 3600 * 1000);
-    int failed = 0;
-    for (const ui::ShotState &s : session->shots())
-        failed += s.results.isEmpty() ? 1 : 0;
-    if (!generationErrors.isEmpty())
-        qInfo().noquote() << "   errors:" << generationErrors.left(1000);
-    stamp(QStringLiteral("%1 shots generated, %2 failed").arg(shotCount).arg(failed));
-
-    // 2. Into the training set; the Critic scores; near-duplicates out; captions.
-    int added = -1;
-    dlg->addSessionResults([&](int n) { added = n; });
-    QTRY_VERIFY_WITH_TIMEOUT(added >= 0, 120000);
-    dlg->scoreAll();
-    QTRY_VERIFY_WITH_TIMEOUT(!dlg->isScoring(), 3600 * 1000);
     doc::LoraDataset *ds = dlg->dataset();
-    const int duplicates = ds->markDuplicates();
-    QList<QImage> kept;
-    QStringList scores;
-    for (const doc::DatasetItem &i : ds->items()) {
-        scores << QStringLiteral("%1%2").arg(i.score).arg(i.kept ? QString() : QStringLiteral("✗"));
-        if (i.kept)
-            kept << QImage(ds->imagePath(i.id));
-    }
-    stamp(QStringLiteral("%1 added, %2 kept, %3 near-duplicates; scores %4").arg(added).arg(ds->keptCount()).arg(duplicates).arg(scores.join(QLatin1Char(' '))));
-    dlg->captionAll();
-    QTRY_VERIFY_WITH_TIMEOUT(!dlg->isCaptioning(), 3600 * 1000);
-    for (const doc::DatasetItem &i : ds->items()) {
-        if (i.kept)
-            qInfo().noquote() << "   " << i.caption;
-    }
-    stamp(QStringLiteral("captions done; trigger %1").arg(ds->settings().trigger));
-    {
-        const int columns = 6;
-        QImage contact(columns * 200, ((int(kept.size()) + columns - 1) / columns) * 200, QImage::Format_RGB32);
-        contact.fill(Qt::white);
-        QPainter p(&contact);
-        for (int i = 0; i < kept.size(); ++i) {
-            const QImage tile = kept[i].scaled(200, 200, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-            p.drawImage((i % columns) * 200 + (200 - tile.width()) / 2, (i / columns) * 200 + (200 - tile.height()) / 2, tile);
+    if (!reuse.isEmpty()) {
+        stamp(QStringLiteral("training set of an earlier run: %1 images, %2 kept, trigger %3")
+                  .arg(ds->items().size())
+                  .arg(ds->keptCount())
+                  .arg(ds->settings().trigger));
+    } else {
+        // 1. Plan and generate the training shots.
+        QVERIFY(button(QStringLiteral("Plan training shots")));
+        button(QStringLiteral("Plan training shots"))->click();
+        QTRY_COMPARE_WITH_TIMEOUT(int(session->shots().size()), shotCount, 10000);
+        // As "Generate all" does, through the director actions (they report when every shot settled).
+        QStringList ids;
+        for (const ui::ShotState &s : session->shots())
+            ids << s.id();
+        bool generated = false;
+        QString generationErrors;
+        create.generateShots(ids, [&](const QStringList &, const QString &error) {
+            generationErrors = error;
+            generated = true;
+        });
+        QTRY_VERIFY_WITH_TIMEOUT(generated, 4 * 3600 * 1000);
+        int failed = 0;
+        for (const ui::ShotState &s : session->shots())
+            failed += s.results.isEmpty() ? 1 : 0;
+        if (!generationErrors.isEmpty())
+            qInfo().noquote() << "   errors:" << generationErrors.left(1000);
+        stamp(QStringLiteral("%1 shots generated, %2 failed").arg(shotCount).arg(failed));
+
+        // 2. Into the training set; the Critic scores; near-duplicates out; captions.
+        int added = -1;
+        dlg->addSessionResults([&](int n) { added = n; });
+        QTRY_VERIFY_WITH_TIMEOUT(added >= 0, 120000);
+        dlg->scoreAll();
+        QTRY_VERIFY_WITH_TIMEOUT(!dlg->isScoring(), 3600 * 1000);
+        const int duplicates = ds->markDuplicates();
+        QList<QImage> kept;
+        QStringList scores;
+        for (const doc::DatasetItem &i : ds->items()) {
+            scores << QStringLiteral("%1%2").arg(i.score).arg(i.kept ? QString() : QStringLiteral("✗"));
+            if (i.kept)
+                kept << QImage(ds->imagePath(i.id));
         }
-        p.end();
-        save(contact, QStringLiteral("full_dataset.png"));
+        stamp(QStringLiteral("%1 added, %2 kept, %3 near-duplicates; scores %4").arg(added).arg(ds->keptCount()).arg(duplicates).arg(scores.join(QLatin1Char(' '))));
+        dlg->captionAll();
+        QTRY_VERIFY_WITH_TIMEOUT(!dlg->isCaptioning(), 3600 * 1000);
+        for (const doc::DatasetItem &i : ds->items()) {
+            if (i.kept)
+                qInfo().noquote() << "   " << i.caption;
+        }
+        stamp(QStringLiteral("captions done; trigger %1").arg(ds->settings().trigger));
+        {
+            const int columns = 6;
+            QImage contact(columns * 200, ((int(kept.size()) + columns - 1) / columns) * 200, QImage::Format_RGB32);
+            contact.fill(Qt::white);
+            QPainter p(&contact);
+            for (int i = 0; i < kept.size(); ++i) {
+                const QImage tile = kept[i].scaled(200, 200, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+                p.drawImage((i % columns) * 200 + (200 - tile.width()) / 2, (i / columns) * 200 + (200 - tile.height()) / 2, tile);
+            }
+            p.end();
+            save(contact, QStringLiteral("full_dataset.png"));
+        }
     }
 
     // 3. Train tab: the generator's model and the GPU's preset are preselected.

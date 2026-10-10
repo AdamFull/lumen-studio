@@ -4,9 +4,9 @@
 
 #include <QDialog>
 #include <QHash>
-#include <QSet>
 #include <QPixmap>
 #include <QPointer>
+#include <QSet>
 
 #include <functional>
 
