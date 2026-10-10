@@ -1206,6 +1206,125 @@ Risks and open questions:
 * A LoRA inherits the licence terms of its base model (e.g. Illustrious and Pony derivatives).
 * FLUX / Qwen-Image LoRAs need 16–24 GB and are out of scope for 8 GB machines.
 
+### M14 — The character everywhere
+
+Goal: once a character exists (sheet, references, LoRA), every image tool in Lumen draws that
+character without the user repeating it. The Generate page, the editor's AI tools, Live2D part
+completion and expression variants, and the assistant all use the character's LoRA when the image
+back-end can load it, and its reference or description when it cannot. This closes the gap between
+M13's goal ("from any page") and what M13 built: today only the Create page's shots use the LoRA.
+
+#### 14.1 Where the character is missing today
+
+Audit of every place that builds an `ImageRequest` (October 2026):
+
+| Place | What it knows about the character | LoRA |
+|---|---|---|
+| Create page shots (`CreatePage::generateShot`) | session sheet, references, library entry | yes (M13) |
+| Generate page (`GeneratePage::generate`, *Re-run*) | only references added by hand | no; *Re-run* also drops `loras` from the metadata |
+| Editor AI panel: fill selection, variation, instruct edit, expand (`AiPanel::run`) | only references added by hand | no |
+| Live2D part completion (`PartService::complete`) | a free-text "Character description" box | no |
+| Expression variants (`PartService::generateExpression`) | the same text box | no |
+| Assistant `generate_image`, `edit_image`, `inpaint_region` | reference ids the LLM passes, if any | no |
+| Assistant `generate_shots` | via the Create page | yes |
+
+Utilities (background removal, upscale, pose detection, segmentation) take no prompt and stay as
+they are. The Live2D scenario (§1.1) suffers most: part completion and the eye and mouth variants
+must look like the same character, and a sentence of description is the weakest way to get there.
+
+#### 14.2 The active character
+
+* One **active character** per project, chosen from the character library. It is stored in the
+  project, so reopening a project restores it.
+* A character chip in the prompt area of the Generate page, the editor's AI panel and the Parts page:
+  name, thumbnail and a LoRA badge. It opens a picker (library characters, "None") and has a
+  per-page switch "Use the character", on by default once a character is active.
+* The Create page sets the active character when its session loads or saves a library character,
+  so a character designed there is ready on the other pages.
+* Parts page: a part set made from a Create image finds its character through the source asset's
+  `director_session` metadata and that session's library character. It falls back to the active
+  character. The character's sheet replaces the free-text box, which stays as an override.
+* The assistant sees the active character in its state (name, summary, LoRA yes/no) and can set it
+  (`set_active_character`).
+
+#### 14.3 Applying a character to a request
+
+One function replaces the Create page's own code: `CharacterContext::apply(ImageRequest &, caps,
+mode)`. It goes down a ladder by what the back-end can do:
+1. **LoRA** (sd.cpp, ComfyUI, WebUI with a model of the LoRA's family): trigger word first, the
+   LoRA at the character's weight. A family mismatch skips the LoRA with a warning, as in M13.
+2. **Reference image** (IP-Adapter, multi-reference edit APIs): the character's first reference,
+   with the `Character` role.
+3. **Description**: the appearance tags (tag-style back-ends) or the sheet summary (prose).
+
+Rules per mode:
+* txt2img, img2img, variations: the whole ladder; the appearance tags go into the prompt when
+  there is no LoRA.
+* Inpaint and expand: the LoRA (or reference) only. The user's prompt describes the region; the
+  appearance tags would repaint hair or clothes into a hand fix.
+* Instruct edit: reference or description only; edit models do not take LoRAs.
+* Background prompts ("remove", the parts page's key-colour fill) never get the character.
+* Every request records the character id and how it was applied in its metadata (`describe()`),
+  so *Re-run* and the Library show it, and *Re-run* restores the LoRA.
+* Cloud back-ends without LoRAs say once per session what they use instead ("Gemini cannot load
+  LoRAs: using Akane's reference image").
+
+#### 14.4 Live2D parts with the character
+
+* Part completion: the character's LoRA plus the part prompt, for the Inpaint and LayerDiffuse
+  strategies. This needs a LoRA binding in the LayerDiffuse ComfyUI template; the standard graph
+  already has one (M13).
+* Expression variants: the LoRA keeps the eye shape and colour and the mouth style of the
+  character. Each variant gets a check of the changed region against the source face: the identity
+  checklist (M13) on a face crop, so a variant that changes the eye colour is flagged before the
+  rigger sees it.
+* Optional, if the measurements in step 6 show a gain: a LoRA weight lower for small regions
+  (eyes, mouth) than for whole parts. Start with the character's own weight.
+
+#### 14.5 Implementation steps
+- [ ] `CharacterContext` (ai): the ladder of §14.3 for one request and mode; the metadata it
+  records; unit tests for every rung, mode and provider family (sd.cpp, ComfyUI, WebUI, Gemini,
+  OpenAI), including a family mismatch. The Create page switches to it with no change in
+  behaviour (its tests stay green).
+- [ ] Active character: project setting, picker and chip widget, the Create page sets it, the
+  assistant's state and `set_active_character` tool.
+- [ ] Generate page and *Re-run*: the chip, the ladder, metadata; *Re-run* restores the LoRA and
+  the character.
+- [ ] Editor AI panel: the chip; fill selection, variation, instruct edit and expand follow the
+  mode rules; "remove" stays character-free.
+- [ ] Parts page: the character from the source asset or the active one; part completion and
+  expression variants with the LoRA; LoRA binding in the LayerDiffuse template; the face-crop
+  identity check of expression variants.
+- [ ] Assistant tools: `generate_image`, `edit_image` and `inpaint_region` use the active character
+  unless the call passes `character: false`; tool descriptions say so.
+- [ ] Live measurements (RTX 4060 8 GB, the M13 character): identity checklist scores with and
+  without the character on 8 Generate-page prompts, 4 editor fixes (hand, face, sleeve, hair) and
+  the 5 expression variants.
+
+**AC**:
+1. With a trained character active, a Generate-page prompt that never names the character ("reading
+   in a library, evening light") produces that character: the checklist identity is at least 2
+   points higher than the same prompt without the character. *Re-run* repeats it with the same LoRA.
+2. A hand fix and a face fix with *Fill selection* in the editor keep the character: the checklist
+   finds no new "different" feature in the region.
+3. For a Create-page image of the character, the Parts page completes the occluded parts and makes
+   the five expression variants with the character's LoRA without any setting by the user. The
+   requests carry the LoRA (contract tests), and no variant changes the eye colour or face shape
+   (face-crop checklist).
+4. "Draw Akane at the beach" in the assistant uses her LoRA through `generate_image`.
+5. On a cloud back-end without LoRAs, the same prompts fall back to the reference image or the
+   description, and Lumen says which.
+
+Risks and open questions:
+* One active character per project, or one per page? Per project is simpler and matches how people
+  work on one character at a time; scenes with two characters need regional prompting and two
+  LoRAs, which is a later milestone.
+* Inpainting with a character LoRA can pull the whole style towards the training images; the
+  measurements decide whether inpaint needs a lower weight.
+* LayerDiffuse with a LoRA is untested on 8 GB; it may not fit next to the transparency model.
+* Candidates for M15: cloud LoRA training (fal.ai, Replicate) for machines under 8 GB and for
+  FLUX / Qwen-Image LoRAs; two characters in one image.
+
 ---
 
 ## 5. Quality strategy
