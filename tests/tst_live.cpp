@@ -7,15 +7,20 @@
 //   LUMEN_LIVE_REFERENCE=<image>              (vision tests: a character image to analyse)
 #include "ai/Agent.h"
 #include "ai/Director.h"
+#include "ai/Gate.h"
 #include "ai/PromptStyle.h"
 #include "ai/ProviderCatalog.h"
 #include "ai/ProviderRegistry.h"
 #include "ai/providers/ComfyUiProvider.h"
 #include "ai/providers/OpenAiChatProvider.h"
+#include "core/Job.h"
+#include "core/JobQueue.h"
 #include "core/Settings.h"
 #include "doc/Project.h"
 #include "net/HttpClient.h"
 #include "pose/Rig.h"
+#include "runtime/RuntimeStore.h"
+#include "runtime/Supervisor.h"
 #include "ui/Studio.h"
 #include "ui/assistant/AssistantPanel.h"
 #include "ui/pages/CreatePage.h"
@@ -68,6 +73,8 @@ private slots:
     void visionCharacterSheet();
     void visionCritique();
     void assistantWithReferenceAndCritic();
+    void managedLlamaServer();
+    void installRuntime();
 
 private:
     net::HttpClient m_http;
@@ -389,6 +396,125 @@ void TestLive::assistantWithReferenceAndCritic()
     Settings::instance().setValue(QStringLiteral("director/critic"), false);
     for (Provider *p : studio.providers()->providers())
         studio.providers()->removeProvider(p->instanceId());
+}
+
+namespace {
+
+class SupervisorGate : public ProviderGate
+{
+public:
+    SupervisorGate(runtime::ServerSupervisor *s, QString id) : m_s(s), m_id(std::move(id)) {}
+    QFuture<QString> acquire() override { return m_s->acquire(m_id); }
+    void release() override { m_s->release(m_id); }
+
+private:
+    runtime::ServerSupervisor *m_s;
+    QString m_id;
+};
+
+template<typename T>
+bool waitFor(const QFuture<T> &f, int ms)
+{
+    QElapsedTimer t;
+    t.start();
+    while (!f.isFinished() && t.elapsed() < ms)
+        QTest::qWait(50);
+    return f.isFinished();
+}
+
+} // namespace
+
+// LUMEN_LIVE_LLAMA_SERVER=<llama-server.exe> LUMEN_LIVE_LLAMA_MODEL=<.gguf> [LUMEN_LIVE_LLAMA_MMPROJ=<.gguf>]:
+// Lumen adopts the install, starts the server on the first request, chats, and stops it.
+void TestLive::managedLlamaServer()
+{
+    const QString exe = qEnvironmentVariable("LUMEN_LIVE_LLAMA_SERVER");
+    const QString model = qEnvironmentVariable("LUMEN_LIVE_LLAMA_MODEL");
+    if (exe.isEmpty() || model.isEmpty())
+        QSKIP("LUMEN_LIVE_LLAMA_SERVER and LUMEN_LIVE_LLAMA_MODEL are needed");
+    QTemporaryDir root;
+    JobQueue jobs;
+    runtime::RuntimeStore store(&m_http, &jobs);
+    store.setRoot(root.filePath(QStringLiteral("runtimes")));
+    QFuture<runtime::InstalledRuntime> adopted = store.adopt(exe);
+    QVERIFY(waitFor(adopted, 30000));
+    const runtime::InstalledRuntime rt = adopted.result();
+    qInfo() << "adopted" << rt.displayName() << rt.versionInfo;
+
+    runtime::ServerSupervisor servers(&store, &m_http);
+    servers.setConfigPath(root.filePath(QStringLiteral("servers.json")));
+    servers.setLogDir(root.filePath(QStringLiteral("logs")));
+    runtime::ServerProfile profile = servers.createProfile(rt.id, QStringLiteral("Live llama"));
+    profile.options.insert(QStringLiteral("model"), model);
+    const QString mmproj = qEnvironmentVariable("LUMEN_LIVE_LLAMA_MMPROJ");
+    if (!mmproj.isEmpty())
+        profile.options.insert(QStringLiteral("mmproj"), mmproj);
+    profile.startupTimeoutSec = 300;
+    servers.addProfile(profile);
+    qInfo().noquote() << "command:" << servers.launchFor(profile.id).commandLine();
+
+    OpenAiChatProvider llm(OpenAiChatProvider::describe(OpenAiChatProvider::Flavor::LlamaCpp), QStringLiteral("live"), &m_http, nullptr);
+    llm.configure({{QStringLiteral("url"), runtime::providerUrl(rt.kind, profile.port)}, {QStringLiteral("timeout_s"), 600}});
+    llm.setGate(std::make_shared<SupervisorGate>(&servers, profile.id));
+
+    QElapsedTimer t;
+    t.start();
+    ChatRequest req;
+    req.messages = {ChatMessage::system(QStringLiteral("Answer in one short sentence.")),
+                    ChatMessage::user(QStringLiteral("Name a primary colour."))};
+    req.maxTokens = 400;
+    ChatOperation *op = gatedChat(&llm, req);
+    op->setAutoDelete(false);
+    QStringList statuses;
+    connect(op, &Operation::progress, this, [&statuses](double, const QString &s) { statuses << s; });
+    QTRY_VERIFY_WITH_TIMEOUT(op->isFinished(), 360000);
+    if (op->state() != Operation::State::Succeeded)
+        qInfo().noquote() << servers.log(profile.id).mid(std::max<qsizetype>(0, servers.log(profile.id).size() - 30)).join(QLatin1Char('\n'));
+    QVERIFY2(op->state() == Operation::State::Succeeded, qPrintable(op->errorString()));
+    qInfo() << "first answer after" << t.elapsed() << "ms (includes server start):" << op->result().text.left(200);
+    QVERIFY(!op->result().text.trimmed().isEmpty());
+    QCOMPARE(servers.state(profile.id), runtime::ServerState::Ready);
+    QCOMPARE(servers.users(profile.id), 0);
+    delete op;
+
+    QFuture<QStringList> models = gatedList(&llm, [&llm] { return llm.listModels(); });
+    QVERIFY(waitFor(models, 30000));
+    qInfo() << "models:" << models.result();
+
+    t.restart();
+    servers.stop(profile.id);
+    QTRY_COMPARE_WITH_TIMEOUT(servers.state(profile.id), runtime::ServerState::Stopped, 30000);
+    qInfo() << "stopped after" << t.elapsed() << "ms";
+    QVERIFY(runtime::portIsFree(profile.port));
+}
+
+// LUMEN_LIVE_INSTALL=<runtime>:<backend>, e.g. "sd.cpp:cpu": installs a real release from GitHub
+// into a temporary folder (downloads it!) and checks that the server runs.
+void TestLive::installRuntime()
+{
+    const QString what = qEnvironmentVariable("LUMEN_LIVE_INSTALL");
+    if (what.isEmpty())
+        QSKIP("LUMEN_LIVE_INSTALL is not set");
+    const runtime::RuntimeSpec *spec = runtime::Catalog::instance().runtime(what.section(QLatin1Char(':'), 0, 0));
+    QVERIFY(spec);
+    QTemporaryDir root;
+    JobQueue jobs;
+    runtime::RuntimeStore store(&m_http, &jobs);
+    store.setRoot(root.filePath(QStringLiteral("runtimes")));
+    QFuture<QList<runtime::Release>> releases = store.feed()->fetch(*spec);
+    QVERIFY(waitFor(releases, 60000));
+    const runtime::InstallPlan plan = runtime::planInstall(*spec, what.section(QLatin1Char(':'), 1), releases.result());
+    QVERIFY2(plan.ok(), qPrintable(plan.error));
+    qInfo() << "installing" << plan.tag << plan.main.name << plan.downloadSize() / 1e6 << "MB";
+    QElapsedTimer t;
+    t.start();
+    Job *job = store.install(plan);
+    QTRY_VERIFY_WITH_TIMEOUT(job->isFinished(), 1800000);
+    QVERIFY2(job->state() == Job::State::Succeeded, qPrintable(job->errorString()));
+    const auto rt = store.runtime(job->result().toString());
+    QVERIFY(rt);
+    qInfo() << "installed in" << t.elapsed() << "ms:" << rt->executable << rt->versionInfo;
+    QVERIFY(!rt->versionInfo.isEmpty());
 }
 
 QTEST_MAIN(TestLive)

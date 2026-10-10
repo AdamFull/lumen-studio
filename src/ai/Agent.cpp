@@ -1,5 +1,6 @@
 #include "ai/Agent.h"
 
+#include "ai/Gate.h"
 #include "ai/Provider.h"
 #include "ai/StructuredChat.h"
 #include "core/Log.h"
@@ -159,7 +160,7 @@ void AgentRun::stepNative()
     req.tools = m_tools.definitions();
     req.temperature = 0.3;
     req.stream = true;
-    ChatOperation *op = m_provider->chat(req);
+    ChatOperation *op = gatedChat(m_provider, req);
     m_current = op;
     connect(op, &ChatOperation::textDelta, this, &AgentRun::textDelta);
     connect(op, &Operation::finished, this, [this, op] {

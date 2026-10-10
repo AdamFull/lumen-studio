@@ -22,7 +22,7 @@ if(Qt6LinguistTools_FOUND)
     list(FILTER LUMEN_TS_FILES EXCLUDE REGEX "lumen_en\.ts$")
     if(LUMEN_TS_FILES)
         qt_add_translations(lumen
-            SOURCE_TARGETS lumen lumen_ui lumen_ai lumen_doc lumen_core lumen_net lumen_pose lumen_live2d
+            SOURCE_TARGETS lumen lumen_ui lumen_ai lumen_runtime lumen_doc lumen_core lumen_net lumen_pose lumen_live2d
             TS_FILES ${LUMEN_TS_FILES}
             PLURALS_TS_FILE "${PROJECT_SOURCE_DIR}/translations/lumen_en.ts"
             RESOURCE_PREFIX /i18n

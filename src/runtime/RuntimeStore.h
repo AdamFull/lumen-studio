@@ -78,6 +78,13 @@ public:
     // folders are removed when no install uses them any more.
     bool remove(const QString &id, QString *error = nullptr);
 
+    // Folder of a shared companion archive (CUDA runtime), keyed by its digest, and whether it is
+    // already unpacked there (then installs and updates skip downloading it).
+    QString libraryDir(const QString &kind, const ReleaseAsset &asset) const;
+    bool hasLibrary(const QString &kind, const ReleaseAsset &asset) const;
+    // Bytes a plan still has to download.
+    qint64 pendingDownload(const InstallPlan &plan) const;
+
     // Called by the install job.
     void addInstalled(const InstalledRuntime &rt);
 

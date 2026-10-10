@@ -8,6 +8,8 @@
 #include <QUrl>
 #include <QVariantMap>
 
+#include <memory>
+
 namespace lumen::net {
 class HttpClient;
 class HttpCall;
@@ -16,6 +18,17 @@ class HttpCall;
 namespace lumen::ai {
 
 enum class ProviderKind { Image, Llm };
+
+// Something that must be up before a provider's requests, e.g. a local server Lumen starts on
+// demand. Requests go through ai/Gate.h, which acquires the gate first and releases it afterwards.
+class ProviderGate
+{
+public:
+    virtual ~ProviderGate() = default;
+    // Resolves to "" once requests can be sent, or to an error message.
+    virtual QFuture<QString> acquire() = 0;
+    virtual void release() = 0;
+};
 
 // Describes one configurable setting of a provider; the settings UI is generated from these.
 struct SettingField
@@ -64,6 +77,10 @@ public:
     QString text(const QString &key) const { return setting(key).toString().trimmed(); }
     QUrl baseUrl(const QString &key = QStringLiteral("url")) const;
 
+    // Installed by the app for providers bound to a managed server; null otherwise.
+    void setGate(std::shared_ptr<ProviderGate> gate) { m_gate = std::move(gate); }
+    std::shared_ptr<ProviderGate> gate() const { return m_gate; }
+
     // Lightweight connectivity check. Resolves to a human readable summary or throws ProviderError.
     virtual QFuture<QString> testConnection() = 0;
     // Model names available for the "model" setting.
@@ -86,6 +103,7 @@ private:
     QString m_name;
     QVariantMap m_settings;
     net::HttpClient *m_http;
+    std::shared_ptr<ProviderGate> m_gate;
 };
 
 class ImageProvider : public Provider

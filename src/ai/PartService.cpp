@@ -1,5 +1,6 @@
 #include "ai/PartService.h"
 
+#include "ai/Gate.h"
 #include "core/Async.h"
 #include "core/ImageOps.h"
 #include "core/JobQueue.h"
@@ -129,7 +130,7 @@ Job *PartService::segment(doc::PartSet *setIn, const QString &providerId, const 
             return;
         }
         const QJsonObject params{{QStringLiteral("parts"), requested}};
-        ImageOperation *op = guard->runUtility(Utility::SegmentParts, opaqueForModel(set->source()), params);
+        ImageOperation *op = gatedUtility(guard, Utility::SegmentParts, opaqueForModel(set->source()), params);
         job->setCancelHandler([op = QPointer<ImageOperation>(op), job] {
             if (op)
                 op->cancel();

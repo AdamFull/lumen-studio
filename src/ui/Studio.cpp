@@ -20,6 +20,8 @@ namespace lumen::ui {
 Studio::Studio(QObject *parent)
     : QObject(parent)
     , m_registry(&m_http)
+    , m_runtimes(&m_http, &m_jobs)
+    , m_servers(&m_runtimes, &m_http)
     , m_generation(&m_registry, &m_jobs)
     , m_director(&m_registry)
     , m_parts(&m_registry, &m_jobs, &m_generation)
@@ -28,6 +30,12 @@ Studio::Studio(QObject *parent)
     m_registry.load();
     applyConcurrency();
     connect(&m_registry, &ai::ProviderRegistry::providersChanged, this, &Studio::applyConcurrency);
+    m_runtimes.load();
+    m_servers.load();
+    applyServerBindings();
+    connect(&m_registry, &ai::ProviderRegistry::providersChanged, this, &Studio::applyServerBindings);
+    connect(&m_servers, &runtime::ServerSupervisor::profilesChanged, this, &Studio::applyServerBindings);
+    QTimer::singleShot(0, &m_servers, &runtime::ServerSupervisor::startAutoStartServers);
 
     m_autosave.setInterval(std::max(10, Settings::instance().autosaveIntervalSec()) * 1000);
     connect(&m_autosave, &QTimer::timeout, this, &Studio::autosave);
@@ -51,6 +59,71 @@ Studio::Studio(QObject *parent)
 }
 
 Studio::~Studio() = default;
+
+namespace {
+
+// Starts a managed server before a provider's requests and keeps it from idling out meanwhile.
+class ServerGate : public ai::ProviderGate
+{
+public:
+    ServerGate(runtime::ServerSupervisor *servers, QString profileId)
+        : m_servers(servers)
+        , m_profileId(std::move(profileId))
+    {
+    }
+    QFuture<QString> acquire() override
+    {
+        if (!m_servers)
+            return QtFuture::makeReadyValueFuture(QObject::tr("Lumen is shutting down."));
+        return m_servers->acquire(m_profileId);
+    }
+    void release() override
+    {
+        if (m_servers)
+            m_servers->release(m_profileId);
+    }
+
+private:
+    QPointer<runtime::ServerSupervisor> m_servers;
+    QString m_profileId;
+};
+
+} // namespace
+
+ai::Provider *Studio::providerForServer(const QString &profileId) const
+{
+    for (ai::Provider *p : m_registry.providers()) {
+        if (!profileId.isEmpty() && p->text(QStringLiteral("managed_server")) == profileId)
+            return p;
+    }
+    return nullptr;
+}
+
+void Studio::applyServerBindings()
+{
+    QList<QPair<QString, QVariantMap>> urlUpdates;
+    for (ai::Provider *p : m_registry.providers()) {
+        const QString profileId = p->text(QStringLiteral("managed_server"));
+        const auto profile = profileId.isEmpty() ? std::nullopt : m_servers.profile(profileId);
+        if (!profile) {
+            p->setGate(nullptr);
+            continue;
+        }
+        p->setGate(std::make_shared<ServerGate>(&m_servers, profileId));
+        const QString kind = m_servers.kindOf(profileId);
+        const QString url = runtime::providerUrl(kind, profile->port);
+        if (!kind.isEmpty() && p->text(QStringLiteral("url")) != url) {
+            QVariantMap settings = m_registry.settingsFor(p->instanceId());
+            settings.insert(QStringLiteral("url"), url);
+            urlUpdates.append({p->instanceId(), settings});
+        }
+    }
+    // Updating re-creates provider instances (and re-enters here), so do it after the loop.
+    for (const auto &[id, settings] : std::as_const(urlUpdates)) {
+        if (ai::Provider *p = m_registry.provider(id))
+            m_registry.updateProvider(id, p->displayName(), settings);
+    }
+}
 
 void Studio::applyConcurrency()
 {

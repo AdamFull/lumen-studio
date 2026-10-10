@@ -10,6 +10,8 @@
 #include "doc/Project.h"
 #include "net/HttpClient.h"
 #include "pose/Skeleton.h"
+#include "runtime/RuntimeStore.h"
+#include "runtime/Supervisor.h"
 
 #include <QObject>
 #include <QPointer>
@@ -37,6 +39,11 @@ public:
     ai::GenerationService *generation() { return &m_generation; }
     ai::Director *director() { return &m_director; }
     ai::PartService *parts() { return &m_parts; }
+    // Local server programs (installed or adopted) and the servers Lumen runs with them.
+    runtime::RuntimeStore *runtimes() { return &m_runtimes; }
+    runtime::ServerSupervisor *servers() { return &m_servers; }
+    // Provider of a managed server (bound through its "managed_server" setting), if any.
+    ai::Provider *providerForServer(const QString &profileId) const;
     doc::Project *project() { return m_project; }
     // The director workflow (the Create page), used by the assistant. May be null.
     DirectorActions *directorActions() const { return m_directorOwner ? m_directorActions : nullptr; }
@@ -111,6 +118,8 @@ signals:
 
 private:
     void applyConcurrency();
+    // Gates providers bound to managed servers and keeps their URLs in sync with the server ports.
+    void applyServerBindings();
     void autosave();
     void adoptDocument(doc::Document *doc);
     void scheduleSessionSave();
@@ -119,6 +128,8 @@ private:
     net::HttpClient m_http;
     ai::ProviderRegistry m_registry;
     JobQueue m_jobs;
+    runtime::RuntimeStore m_runtimes;
+    runtime::ServerSupervisor m_servers; // destroyed before the providers: stops the servers
     ai::GenerationService m_generation;
     ai::Director m_director;
     ai::PartService m_parts;

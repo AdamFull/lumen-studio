@@ -19,10 +19,10 @@ namespace lumen::runtime {
 
 namespace {
 
-QString tr(const char *s)
+class Text
 {
-    return QCoreApplication::translate("lumen::runtime::Catalog", s);
-}
+    Q_DECLARE_TR_FUNCTIONS(lumen::runtime::Catalog)
+};
 
 QStringList toStringList(const QJsonValue &v)
 {
@@ -139,12 +139,12 @@ bool backendSupported(const BackendSpec &backend, const HardwareInfo &hw, QStrin
     if (backend.vendor == QLatin1String("nvidia")) {
         const bool any = std::any_of(hw.gpus.begin(), hw.gpus.end(), [](const GpuInfo &g) { return g.isNvidia(); });
         if (!any)
-            return refuse(tr("needs an NVIDIA GPU"));
+            return refuse(Text::tr("needs an NVIDIA GPU"));
         if (!backend.minCuda.isNull()) {
             if (hw.cudaVersion.isNull())
-                return refuse(tr("the NVIDIA driver version is unknown"));
+                return refuse(Text::tr("the NVIDIA driver version is unknown"));
             if (hw.cudaVersion < backend.minCuda)
-                return refuse(tr("needs a driver with CUDA %1 (installed: %2); update the NVIDIA driver")
+                return refuse(Text::tr("needs a driver with CUDA %1 (installed: %2); update the NVIDIA driver")
                                   .arg(backend.minCuda.toString(), hw.cudaVersion.toString()));
         }
     } else if (!backend.vendor.isEmpty()) {
@@ -152,10 +152,10 @@ bool backendSupported(const BackendSpec &backend, const HardwareInfo &hw, QStrin
             return g.vendor().compare(backend.vendor, Qt::CaseInsensitive) == 0;
         });
         if (!any)
-            return refuse(tr("needs a %1 GPU").arg(backend.vendor));
+            return refuse(Text::tr("needs a %1 GPU").arg(backend.vendor));
     }
     if (backend.needsGpu && hw.gpus.isEmpty())
-        return refuse(tr("needs a GPU"));
+        return refuse(Text::tr("needs a GPU"));
     return true;
 }
 
@@ -185,7 +185,7 @@ QList<Release> parseReleases(const QByteArray &json, QString *error)
     const QJsonDocument doc = QJsonDocument::fromJson(json, &pe);
     if (!doc.isArray()) {
         if (error)
-            *error = pe.error != QJsonParseError::NoError ? pe.errorString() : tr("unexpected response");
+            *error = pe.error != QJsonParseError::NoError ? pe.errorString() : Text::tr("unexpected response");
         return out;
     }
     for (const QJsonValue &v : doc.array()) {
@@ -234,7 +234,7 @@ InstallPlan planInstall(const RuntimeSpec &runtime, const QString &backendId, co
     plan.backendId = backendId;
     const BackendSpec *backend = runtime.backend(backendId);
     if (!backend) {
-        plan.error = tr("%1 has no '%2' build for this platform.").arg(runtime.name, backendId);
+        plan.error = Text::tr("%1 has no '%2' build for this platform.").arg(runtime.name, backendId);
         return plan;
     }
     QString missingDigest;
@@ -287,8 +287,8 @@ InstallPlan planInstall(const RuntimeSpec &runtime, const QString &backendId, co
         return plan;
     }
     plan.error = missingDigest.isEmpty()
-                     ? tr("No release of %1 has a %2 build.").arg(runtime.name, backend->label)
-                     : tr("Release %1 of %2 has no published checksum, so it cannot be verified.").arg(missingDigest, runtime.name);
+                     ? Text::tr("No release of %1 has a %2 build.").arg(runtime.name, backend->label)
+                     : Text::tr("Release %1 of %2 has no published checksum, so it cannot be verified.").arg(missingDigest, runtime.name);
     return plan;
 }
 
@@ -349,9 +349,9 @@ QFuture<QList<Release>> ReleaseFeed::fetch(const RuntimeSpec &runtime)
             qCInfo(lcNet) << "GitHub unreachable, using cached releases of" << repo << call->errorString();
             body = cachedBody;
         } else {
-            QString message = tr("Cannot list the releases of %1: %2").arg(repo, call->errorString());
+            QString message = Text::tr("Cannot list the releases of %1: %2").arg(repo, call->errorString());
             if (call->status() == 403 || call->status() == 429)
-                message = tr("GitHub's hourly request limit is reached. Try again later.");
+                message = Text::tr("GitHub's hourly request limit is reached. Try again later.");
             promise->setException(std::make_exception_ptr(Error(message)));
             promise->finish();
             return;
@@ -359,7 +359,7 @@ QFuture<QList<Release>> ReleaseFeed::fetch(const RuntimeSpec &runtime)
         QString error;
         QList<Release> releases = parseReleases(body, &error);
         if (!error.isEmpty()) {
-            promise->setException(std::make_exception_ptr(Error(tr("Unexpected answer from GitHub: %1").arg(error))));
+            promise->setException(std::make_exception_ptr(Error(Text::tr("Unexpected answer from GitHub: %1").arg(error))));
         } else {
             promise->addResult(releases);
         }

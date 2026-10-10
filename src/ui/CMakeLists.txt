@@ -21,10 +21,12 @@ add_library(lumen_ui STATIC
     widgets/ProviderCombo.h widgets/ProviderCombo.cpp
     widgets/JobCard.h widgets/JobCard.cpp
     widgets/Toasts.h widgets/Toasts.cpp
+    widgets/ServerStatus.h widgets/ServerStatus.cpp
     pages/AiPanel.h pages/AiPanel.cpp
     pages/EditorPage.h pages/EditorPage.cpp
     dialogs/SettingsDialog.h dialogs/SettingsDialog.cpp
     dialogs/ShortcutsPage.h dialogs/ShortcutsPage.cpp
+    dialogs/LocalServersPage.h dialogs/LocalServersPage.cpp
     dialogs/PoseEditDialog.h dialogs/PoseEditDialog.cpp
     widgets/ThumbnailCache.h widgets/ThumbnailCache.cpp
     pose/PoseCanvas.h pose/PoseCanvas.cpp

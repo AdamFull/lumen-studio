@@ -39,5 +39,7 @@ lumen_add_test(tst_slicing SOURCES tst_slicing.cpp MockHttpServer.h LIBS lumen_a
 lumen_add_test(tst_live SOURCES tst_live.cpp LIBS lumen_ui)
 lumen_add_test(tst_perf SOURCES tst_perf.cpp LIBS lumen_ui)
 lumen_add_test(tst_canvas SOURCES tst_canvas.cpp MockHttpServer.h LIBS lumen_ui)
+target_compile_definitions(tst_canvas PRIVATE FAKE_SERVER_PATH="$<TARGET_FILE:fake_server>")
+add_dependencies(tst_canvas fake_server)
 lumen_add_test(tst_parts_ui SOURCES tst_parts_ui.cpp LIBS lumen_ui)
 lumen_add_test(tst_live2d SOURCES tst_live2d.cpp LIBS lumen_live2d)

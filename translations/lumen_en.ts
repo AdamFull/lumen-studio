@@ -256,4 +256,12 @@
         <translation><numerusform>%n option found.</numerusform><numerusform>%n options found.</numerusform></translation>
     </message>
 </context>
+<context>
+    <name>lumen::ui::ServerStatusButton</name>
+    <message numerus="yes">
+        <location filename="../src/ui/widgets/ServerStatus.cpp" line="+45" />
+        <source>%n server(s) running</source>
+        <translation><numerusform>%n server running</numerusform><numerusform>%n servers running</numerusform></translation>
+    </message>
+</context>
 </TS>

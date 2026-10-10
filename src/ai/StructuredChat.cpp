@@ -1,5 +1,6 @@
 #include "ai/StructuredChat.h"
 
+#include "ai/Gate.h"
 #include "core/JsonSchema.h"
 #include "core/JsonUtil.h"
 #include "core/Log.h"
@@ -35,7 +36,7 @@ void StructuredChatOperation::runAttempt()
     }
     ++m_attempt;
     reportProgress(-1.0, m_attempt == 1 ? tr("Thinking...") : tr("Correcting the answer (attempt %1)...").arg(m_attempt));
-    ChatOperation *op = m_provider->chat(m_request);
+    ChatOperation *op = gatedChat(m_provider, m_request);
     m_current = op;
     connect(op, &ChatOperation::textDelta, this, &StructuredChatOperation::textDelta);
     connect(op, &Operation::finished, this, [this, op] {

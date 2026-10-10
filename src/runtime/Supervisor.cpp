@@ -21,10 +21,10 @@ namespace lumen::runtime {
 
 namespace {
 
-QString tr(const char *s)
+class Text
 {
-    return QCoreApplication::translate("lumen::runtime::ServerSupervisor", s);
-}
+    Q_DECLARE_TR_FUNCTIONS(lumen::runtime::ServerSupervisor)
+};
 
 constexpr int kLogLines = 1500;
 
@@ -58,15 +58,15 @@ QString serverStateLabel(ServerState s)
 {
     switch (s) {
     case ServerState::Stopped:
-        return tr("Stopped");
+        return Text::tr("Stopped");
     case ServerState::Starting:
-        return tr("Starting");
+        return Text::tr("Starting");
     case ServerState::Ready:
-        return tr("Running");
+        return Text::tr("Running");
     case ServerState::Stopping:
-        return tr("Stopping");
+        return Text::tr("Stopping");
     case ServerState::Failed:
-        return tr("Failed");
+        return Text::tr("Failed");
     }
     return {};
 }
@@ -151,7 +151,7 @@ ServerProfile ServerSupervisor::createProfile(const QString &runtimeId, const QS
     p.runtimeId = runtimeId;
     const auto rt = m_store->runtime(runtimeId);
     const RuntimeSpec *spec = rt ? Catalog::instance().runtime(rt->kind) : nullptr;
-    p.name = !name.isEmpty() ? name : spec ? spec->name : tr("Server");
+    p.name = !name.isEmpty() ? name : spec ? spec->name : Text::tr("Server");
     QList<int> taken;
     for (const ServerProfile &other : m_profiles)
         taken << other.port;
@@ -197,13 +197,13 @@ LaunchCommand ServerSupervisor::launchFor(const QString &profileId) const
     const auto p = profile(profileId);
     if (!p) {
         LaunchCommand c;
-        c.error = tr("Unknown server.");
+        c.error = Text::tr("Unknown server.");
         return c;
     }
     const auto rt = m_store->runtime(p->runtimeId);
     if (!rt) {
         LaunchCommand c;
-        c.error = tr("The runtime of %1 is no longer installed.").arg(p->name);
+        c.error = Text::tr("The runtime of %1 is no longer installed.").arg(p->name);
         return c;
     }
     return buildLaunch(*p, *rt);
@@ -326,13 +326,13 @@ void ServerSupervisor::launch(const QString &id)
         settleWaiters(s, error);
     };
     if (!p)
-        return failNow(tr("Unknown server."));
+        return failNow(Text::tr("Unknown server."));
     if (!cmd.error.isEmpty())
         return failNow(cmd.error);
     if (!QFileInfo::exists(cmd.program))
-        return failNow(tr("%1 is missing. Reinstall the runtime.").arg(QDir::toNativeSeparators(cmd.program)));
+        return failNow(Text::tr("%1 is missing. Reinstall the runtime.").arg(QDir::toNativeSeparators(cmd.program)));
     if (!portIsFree(p->port))
-        return failNow(tr("Port %1 is already used by another program. Stop it or choose another port for %2.").arg(p->port).arg(p->name));
+        return failNow(Text::tr("Port %1 is already used by another program. Stop it or choose another port for %2.").arg(p->port).arg(p->name));
     const auto rt = m_store->runtime(p->runtimeId);
 
     s->error.clear();
@@ -373,7 +373,7 @@ void ServerSupervisor::launch(const QString &id)
         if (server(id)->process == proc)
             onExited(id, code, status == QProcess::CrashExit);
     });
-    setState(id, ServerState::Starting, tr("Starting…"));
+    setState(id, ServerState::Starting, Text::tr("Starting…"));
     s->started.start();
     proc->start();
 #ifdef Q_OS_WIN
@@ -413,7 +413,7 @@ void ServerSupervisor::appendLog(const QString &id, Server *s, const QString &li
     }
     if (s->state == ServerState::Starting && !line.trimmed().isEmpty() && !line.startsWith(QLatin1String("> "))) {
         // Show loading progress ("load_tensors: …") while waiting for the health check.
-        s->status = tr("Starting: %1").arg(line.trimmed().left(90));
+        s->status = Text::tr("Starting: %1").arg(line.trimmed().left(90));
         emit stateChanged(id);
     }
     emit logAppended(id, line);
@@ -425,7 +425,7 @@ void ServerSupervisor::probeHealth(const QString &id)
     if (s->state != ServerState::Starting || s->probe)
         return;
     if (s->started.elapsed() > qint64(s->startTimeoutSec) * 1000) {
-        const QString error = tr("The server did not become ready within %1 s. See its log.").arg(s->startTimeoutSec);
+        const QString error = Text::tr("The server did not become ready within %1 s. See its log.").arg(s->startTimeoutSec);
         s->error = error;
         s->stopping = true;
         killProcess(s);
@@ -451,7 +451,7 @@ void ServerSupervisor::probeHealth(const QString &id)
             return;
         if (call->status() == 200) {
             srv->probeTimer.stop();
-            appendLog(id, srv, tr("[lumen] ready after %1 s").arg(srv->started.elapsed() / 1000.0, 0, 'f', 1));
+            appendLog(id, srv, QStringLiteral("[lumen] ready after %1 s").arg(srv->started.elapsed() / 1000.0, 0, 'f', 1));
             setState(id, ServerState::Ready);
             settleWaiters(srv, {});
             armIdle(id);
@@ -472,7 +472,7 @@ void ServerSupervisor::onExited(const QString &id, int code, bool crashed)
         s->process->deleteLater();
         s->process = nullptr;
         if (!startError.isEmpty())
-            s->error = tr("Cannot start %1: %2").arg(launchFor(id).program, startError);
+            s->error = Text::tr("Cannot start %1: %2").arg(launchFor(id).program, startError);
     }
     s->logFile.reset();
     const ServerState previous = s->state;
@@ -494,8 +494,8 @@ void ServerSupervisor::onExited(const QString &id, int code, bool crashed)
             if (!it->trimmed().isEmpty() && !it->startsWith(QLatin1String("[lumen]")))
                 tail.prepend(it->trimmed());
         }
-        s->error = (previous == ServerState::Starting ? tr("The server exited while starting (code %1).")
-                                                      : tr("The server stopped unexpectedly (code %1)."))
+        s->error = (previous == ServerState::Starting ? Text::tr("The server exited while starting (code %1).")
+                                                      : Text::tr("The server stopped unexpectedly (code %1)."))
                        .arg(crashed ? QStringLiteral("0x%1").arg(quint32(code), 8, 16, QLatin1Char('0')) : QString::number(code));
         if (!tail.isEmpty())
             s->error += QLatin1Char('\n') + tail.join(QLatin1Char('\n'));
@@ -514,7 +514,7 @@ void ServerSupervisor::onExited(const QString &id, int code, bool crashed)
     const bool wanted = s->users > 0 || (p && p->startPolicy == StartPolicy::AtStartup);
     if (wanted && s->crashTimes.size() <= maxRestarts) {
         const int delay = 2000 * s->crashTimes.size();
-        appendLog(id, s, tr("[lumen] restarting in %1 s").arg(delay / 1000));
+        appendLog(id, s, QStringLiteral("[lumen] restarting in %1 s").arg(delay / 1000));
         QTimer::singleShot(delay, this, [this, id] {
             Server *srv = server(id);
             if (srv->state == ServerState::Failed && !srv->process)
@@ -548,12 +548,12 @@ void ServerSupervisor::stop(const QString &id)
             s->error.clear();
             setState(id, ServerState::Stopped);
         }
-        settleWaiters(s, tr("The server was stopped."));
+        settleWaiters(s, Text::tr("The server was stopped."));
         return;
     }
     s->stopping = true;
-    setState(id, ServerState::Stopping, tr("Stopping…"));
-    settleWaiters(s, tr("The server was stopped."));
+    setState(id, ServerState::Stopping, Text::tr("Stopping…"));
+    settleWaiters(s, Text::tr("The server was stopped."));
     killProcess(s);
 }
 

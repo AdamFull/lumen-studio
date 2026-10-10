@@ -1,6 +1,7 @@
 add_library(lumen_ai STATIC
     Types.h Types.cpp
     Operation.h Operation.cpp
+    Gate.h Gate.cpp
     Provider.h ProviderImpl.h Provider.cpp
     ProviderUtil.h ProviderUtil.cpp
     ProviderRegistry.h ProviderRegistry.cpp

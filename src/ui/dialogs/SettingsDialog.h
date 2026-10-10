@@ -6,6 +6,7 @@
 #include <QHash>
 #include <QPointer>
 
+class QComboBox;
 class QFormLayout;
 class QLabel;
 class QLineEdit;
@@ -40,6 +41,7 @@ private:
     QPointer<ai::Provider> m_provider;
     QLineEdit *m_name;
     QHash<QString, QWidget *> m_fields;
+    QComboBox *m_server = nullptr; // managed server binding (local server kinds only)
     QLabel *m_status;
 };
 

@@ -15,10 +15,10 @@ namespace lumen::runtime {
 
 namespace {
 
-QString tr(const char *s)
+class Text
 {
-    return QCoreApplication::translate("lumen::runtime::Zip", s);
-}
+    Q_DECLARE_TR_FUNCTIONS(lumen::runtime::Zip)
+};
 
 quint16 u16(const uchar *p)
 {
@@ -56,16 +56,16 @@ QString listZip(const QString &zipPath, QList<ZipEntry> *entries)
     entries->clear();
     QFile f(zipPath);
     if (!f.open(QIODevice::ReadOnly))
-        return tr("Cannot open %1: %2").arg(QDir::toNativeSeparators(zipPath), f.errorString());
+        return Text::tr("Cannot open %1: %2").arg(QDir::toNativeSeparators(zipPath), f.errorString());
     const quint64 fileSize = quint64(f.size());
     if (fileSize < 22)
-        return tr("Not a zip archive.");
+        return Text::tr("Not a zip archive.");
 
     // End of central directory: the last 22 bytes plus up to 64 KiB of comment.
     const quint64 tailSize = std::min<quint64>(fileSize, 22 + 65535);
     QByteArray tail;
     if (!readAt(f, fileSize - tailSize, qint64(tailSize), &tail))
-        return tr("Cannot read the archive.");
+        return Text::tr("Cannot read the archive.");
     qint64 eocd = -1;
     for (qint64 i = tail.size() - 22; i >= 0; --i) {
         if (u32(reinterpret_cast<const uchar *>(tail.constData()) + i) == kEocd) {
@@ -74,7 +74,7 @@ QString listZip(const QString &zipPath, QList<ZipEntry> *entries)
         }
     }
     if (eocd < 0)
-        return tr("Not a zip archive (no central directory).");
+        return Text::tr("Not a zip archive (no central directory).");
     const auto *e = reinterpret_cast<const uchar *>(tail.constData()) + eocd;
     quint64 count = u16(e + 10);
     quint64 cdSize = u32(e + 12);
@@ -83,27 +83,27 @@ QString listZip(const QString &zipPath, QList<ZipEntry> *entries)
     if ((count == 0xFFFF || cdSize == 0xFFFFFFFF || cdOffset == 0xFFFFFFFF) && eocdPos >= 20) {
         QByteArray loc;
         if (!readAt(f, eocdPos - 20, 20, &loc) || u32(reinterpret_cast<const uchar *>(loc.constData())) != kZip64Locator)
-            return tr("Damaged Zip64 archive.");
+            return Text::tr("Damaged Zip64 archive.");
         const quint64 z64Pos = u64(reinterpret_cast<const uchar *>(loc.constData()) + 8);
         QByteArray rec;
         if (!readAt(f, z64Pos, 56, &rec) || u32(reinterpret_cast<const uchar *>(rec.constData())) != kZip64Eocd)
-            return tr("Damaged Zip64 archive.");
+            return Text::tr("Damaged Zip64 archive.");
         const auto *r = reinterpret_cast<const uchar *>(rec.constData());
         count = u64(r + 32);
         cdSize = u64(r + 40);
         cdOffset = u64(r + 48);
     }
     if (cdOffset + cdSize > fileSize || cdSize > 512ull * 1024 * 1024)
-        return tr("Damaged archive (central directory out of range).");
+        return Text::tr("Damaged archive (central directory out of range).");
     QByteArray cd;
     if (!readAt(f, cdOffset, qint64(cdSize), &cd))
-        return tr("Cannot read the central directory.");
+        return Text::tr("Cannot read the central directory.");
 
     const auto *p = reinterpret_cast<const uchar *>(cd.constData());
     const auto *end = p + cd.size();
     for (quint64 i = 0; i < count; ++i) {
         if (end - p < 46 || u32(p) != kCentral)
-            return tr("Damaged archive (bad central directory entry).");
+            return Text::tr("Damaged archive (bad central directory entry).");
         ZipEntry entry;
         const quint16 madeBy = u16(p + 4);
         const quint16 flags = u16(p + 8);
@@ -117,7 +117,7 @@ QString listZip(const QString &zipPath, QList<ZipEntry> *entries)
         const quint32 externalAttr = u32(p + 38);
         entry.localHeaderOffset = u32(p + 42);
         if (end - p < 46 + nameLen + extraLen + commentLen)
-            return tr("Damaged archive (truncated entry).");
+            return Text::tr("Damaged archive (truncated entry).");
         const QByteArray rawName(reinterpret_cast<const char *>(p + 46), nameLen);
         // Bit 11: UTF-8 names. Older archivers use code page 437; Latin-1 keeps ASCII names intact.
         entry.name = (flags & 0x0800) ? QString::fromUtf8(rawName) : QString::fromLatin1(rawName);
@@ -191,23 +191,23 @@ QString extractZip(const QString &zipPath, const QString &destDir, const std::fu
     for (const ZipEntry &e : std::as_const(entries)) {
         const QString rel = safeEntryPath(e.name);
         if (rel.isEmpty() && !e.directory)
-            return tr("The archive contains an unsafe path: %1").arg(e.name);
+            return Text::tr("The archive contains an unsafe path: %1").arg(e.name);
         if (e.symlink)
-            return tr("The archive contains a symbolic link: %1").arg(e.name);
+            return Text::tr("The archive contains a symbolic link: %1").arg(e.name);
         if (e.encrypted)
-            return tr("The archive is encrypted.");
+            return Text::tr("The archive is encrypted.");
         if (!e.directory && e.method != 0 && e.method != 8)
-            return tr("Unsupported compression method %1 for %2.").arg(e.method).arg(e.name);
+            return Text::tr("Unsupported compression method %1 for %2.").arg(e.method).arg(e.name);
         targets << rel;
         total += qint64(e.size);
     }
 
     QFile zip(zipPath);
     if (!zip.open(QIODevice::ReadOnly))
-        return tr("Cannot open %1: %2").arg(QDir::toNativeSeparators(zipPath), zip.errorString());
+        return Text::tr("Cannot open %1: %2").arg(QDir::toNativeSeparators(zipPath), zip.errorString());
     QDir root(destDir);
     if (!root.mkpath(QStringLiteral(".")))
-        return tr("Cannot create %1.").arg(QDir::toNativeSeparators(destDir));
+        return Text::tr("Cannot create %1.").arg(QDir::toNativeSeparators(destDir));
     const QString rootPath = QFileInfo(root.absolutePath()).canonicalFilePath() + QLatin1Char('/');
 
     constexpr qint64 kChunk = 1 << 18;
@@ -222,27 +222,27 @@ QString extractZip(const QString &zipPath, const QString &destDir, const std::fu
         const QString target = root.absoluteFilePath(rel);
         if (e.directory) {
             if (!root.mkpath(rel))
-                return tr("Cannot create %1.").arg(QDir::toNativeSeparators(target));
+                return Text::tr("Cannot create %1.").arg(QDir::toNativeSeparators(target));
             continue;
         }
         if (!QDir().mkpath(QFileInfo(target).absolutePath()))
-            return tr("Cannot create %1.").arg(QDir::toNativeSeparators(QFileInfo(target).absolutePath()));
+            return Text::tr("Cannot create %1.").arg(QDir::toNativeSeparators(QFileInfo(target).absolutePath()));
         // Belt and braces: the parent must resolve inside the destination (no junction tricks).
         const QString parent = QFileInfo(QFileInfo(target).absolutePath()).canonicalFilePath() + QLatin1Char('/');
         if (!parent.startsWith(rootPath, Qt::CaseInsensitive))
-            return tr("The archive contains an unsafe path: %1").arg(e.name);
+            return Text::tr("The archive contains an unsafe path: %1").arg(e.name);
 
         QByteArray local;
         if (!readAt(zip, e.localHeaderOffset, 30, &local) || u32(reinterpret_cast<const uchar *>(local.constData())) != kLocal)
-            return tr("Damaged archive (bad local header for %1).").arg(e.name);
+            return Text::tr("Damaged archive (bad local header for %1).").arg(e.name);
         const auto *lh = reinterpret_cast<const uchar *>(local.constData());
         const quint64 dataOffset = e.localHeaderOffset + 30 + u16(lh + 26) + u16(lh + 28);
         if (!zip.seek(qint64(dataOffset)))
-            return tr("Damaged archive (%1).").arg(e.name);
+            return Text::tr("Damaged archive (%1).").arg(e.name);
 
         QFile file(target);
         if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
-            return tr("Cannot write %1: %2").arg(QDir::toNativeSeparators(target), file.errorString());
+            return Text::tr("Cannot write %1: %2").arg(QDir::toNativeSeparators(target), file.errorString());
 
         uLong crc = crc32(0L, Z_NULL, 0);
         quint64 remaining = e.compressedSize;
@@ -252,7 +252,7 @@ QString extractZip(const QString &zipPath, const QString &destDir, const std::fu
         std::unique_ptr<z_stream, void (*)(z_stream *)> inflater(nullptr, [](z_stream *s) { inflateEnd(s); });
         if (e.method == 8) {
             if (inflateInit2(&zs, -MAX_WBITS) != Z_OK)
-                return tr("Cannot initialise decompression.");
+                return Text::tr("Cannot initialise decompression.");
             inflater.reset(&zs);
         }
         bool streamEnd = e.method == 0;
@@ -260,11 +260,11 @@ QString extractZip(const QString &zipPath, const QString &destDir, const std::fu
             const qint64 want = qint64(std::min<quint64>(remaining, quint64(kChunk)));
             const qint64 got = want > 0 ? zip.read(in.data(), want) : 0;
             if (got < 0 || (want > 0 && got == 0))
-                return tr("Damaged archive (unexpected end in %1).").arg(e.name);
+                return Text::tr("Damaged archive (unexpected end in %1).").arg(e.name);
             remaining -= quint64(got);
             if (e.method == 0) {
                 if (file.write(in.constData(), got) != got)
-                    return tr("Cannot write %1: %2").arg(QDir::toNativeSeparators(target), file.errorString());
+                    return Text::tr("Cannot write %1: %2").arg(QDir::toNativeSeparators(target), file.errorString());
                 crc = crc32(crc, reinterpret_cast<const Bytef *>(in.constData()), uInt(got));
                 written += quint64(got);
                 done += got;
@@ -276,11 +276,11 @@ QString extractZip(const QString &zipPath, const QString &destDir, const std::fu
                     zs.avail_out = uInt(out.size());
                     const int rc = inflate(&zs, Z_NO_FLUSH);
                     if (rc != Z_OK && rc != Z_STREAM_END && !(rc == Z_BUF_ERROR && got == 0))
-                        return tr("Damaged archive (cannot decompress %1).").arg(e.name);
+                        return Text::tr("Damaged archive (cannot decompress %1).").arg(e.name);
                     const qint64 produced = out.size() - qint64(zs.avail_out);
                     if (produced > 0) {
                         if (file.write(out.constData(), produced) != produced)
-                            return tr("Cannot write %1: %2").arg(QDir::toNativeSeparators(target), file.errorString());
+                            return Text::tr("Cannot write %1: %2").arg(QDir::toNativeSeparators(target), file.errorString());
                         crc = crc32(crc, reinterpret_cast<const Bytef *>(out.constData()), uInt(produced));
                         written += quint64(produced);
                         done += produced;
@@ -290,21 +290,21 @@ QString extractZip(const QString &zipPath, const QString &destDir, const std::fu
                         break;
                     }
                     if (got == 0 && produced == 0)
-                        return tr("Damaged archive (truncated data in %1).").arg(e.name);
+                        return Text::tr("Damaged archive (truncated data in %1).").arg(e.name);
                 } while (zs.avail_out == 0 || zs.avail_in > 0);
             }
             if (written > e.size)
-                return tr("Damaged archive (%1 is larger than declared).").arg(e.name);
+                return Text::tr("Damaged archive (%1 is larger than declared).").arg(e.name);
             if (progress && !progress(done, total)) {
                 file.close();
                 file.remove();
-                return tr("Cancelled.");
+                return Text::tr("Cancelled.");
             }
         }
         file.close();
         if (written != e.size || quint32(crc) != e.crc32) {
             QFile::remove(target);
-            return tr("Damaged archive (checksum mismatch in %1).").arg(e.name);
+            return Text::tr("Damaged archive (checksum mismatch in %1).").arg(e.name);
         }
     }
     if (progress)

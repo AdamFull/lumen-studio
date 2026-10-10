@@ -1,11 +1,16 @@
 #include "ui/dialogs/SettingsDialog.h"
+#include "ui/dialogs/LocalServersPage.h"
 #include "ui/dialogs/ShortcutsPage.h"
 
+#include "ai/Gate.h"
 #include "ai/ProviderRegistry.h"
 #include "core/Async.h"
 #include "core/Error.h"
 #include "core/SecretStore.h"
 #include "core/Settings.h"
+#include "runtime/Catalog.h"
+#include "runtime/ServerProfile.h"
+#include "runtime/Supervisor.h"
 #include "ui/Icons.h"
 #include "ui/Studio.h"
 #include "ui/Theme.h"
@@ -74,6 +79,23 @@ ProviderForm::ProviderForm(Studio *studio, ai::Provider *provider, QWidget *pare
     form->setVerticalSpacing(10);
     m_name = new QLineEdit(provider->displayName(), content);
     form->addRow(tr("Name"), m_name);
+    // Providers that talk to a server kind Lumen can run may be bound to one of its servers.
+    QString serverKind;
+    for (const runtime::RuntimeSpec &spec : runtime::Catalog::instance().runtimes) {
+        if (runtime::providerTypeFor(spec.id) == type.id)
+            serverKind = spec.id;
+    }
+    if (!serverKind.isEmpty()) {
+        m_server = new QComboBox(content);
+        m_server->addItem(tr("External server (URL below)"), QString());
+        for (const runtime::ServerProfile &p : studio->servers()->profiles()) {
+            if (studio->servers()->kindOf(p.id) == serverKind)
+                m_server->addItem(Icons::get(QStringLiteral("server")), tr("%1 (started by Lumen)").arg(p.name), p.id);
+        }
+        m_server->setCurrentIndex(std::max(0, m_server->findData(provider->text(QStringLiteral("managed_server")))));
+        m_server->setToolTip(tr("Servers are set up under Settings → Local servers."));
+        form->addRow(tr("Server"), m_server);
+    }
     QList<ai::SettingField> advanced;
     for (const ai::SettingField &f : type.fields) {
         if (f.advanced) {
@@ -84,6 +106,20 @@ ProviderForm::ProviderForm(Studio *studio, ai::Provider *provider, QWidget *pare
         form->addRow(f.label + (f.required ? QStringLiteral(" *") : QString()), w);
     }
     v->addLayout(form);
+    if (m_server) {
+        auto syncUrl = [this] {
+            const QString id = m_server->currentData().toString();
+            const auto profile = m_studio->servers()->profile(id);
+            auto *url = qobject_cast<QLineEdit *>(m_fields.value(QStringLiteral("url")));
+            if (!url)
+                return;
+            url->setEnabled(!profile);
+            if (profile)
+                url->setText(runtime::providerUrl(m_studio->servers()->kindOf(id), profile->port));
+        };
+        connect(m_server, &QComboBox::currentIndexChanged, this, syncUrl);
+        syncUrl();
+    }
     if (!advanced.isEmpty()) {
         auto *box = new QGroupBox(tr("Advanced"), content);
         box->setCheckable(true);
@@ -236,6 +272,8 @@ QVariantMap ProviderForm::values() const
         else if (auto *pt = qobject_cast<QPlainTextEdit *>(w))
             out.insert(f.key, pt->toPlainText());
     }
+    if (m_server)
+        out.insert(QStringLiteral("managed_server"), m_server->currentData().toString());
     return out;
 }
 
@@ -247,7 +285,12 @@ void ProviderForm::refreshModels(const QString &key)
     m_provider->configure(values());
     auto *combo = qobject_cast<QComboBox *>(m_fields.value(key));
     m_status->setText(tr("Loading..."));
-    QFuture<QStringList> future = key == QLatin1String("model") ? m_provider->listModels() : m_provider->listOptions(key);
+    QPointer<ai::Provider> provider(m_provider);
+    QFuture<QStringList> future = ai::gatedList(m_provider, [provider, key] {
+        if (!provider)
+            return QtFuture::makeReadyValueFuture(QStringList());
+        return key == QLatin1String("model") ? provider->listModels() : provider->listOptions(key);
+    });
     QPointer<ProviderForm> self(this);
     future.then(this, [self, combo](QStringList items) {
               if (!self || !combo)
@@ -276,7 +319,8 @@ void ProviderForm::test()
     m_status->setText(tr("Connecting..."));
     Theme::setRole(m_status, QStringLiteral("muted"));
     QPointer<ProviderForm> self(this);
-    m_provider->testConnection()
+    QPointer<ai::Provider> provider(m_provider);
+    ai::gatedCall(m_provider, [provider] { return provider ? provider->testConnection() : QtFuture::makeReadyValueFuture(QString()); })
         .then(this, [self](QString msg) {
             if (!self)
                 return;
@@ -321,6 +365,7 @@ SettingsDialog::SettingsDialog(Studio *studio, QWidget *parent)
     m_tabs = new QTabWidget(this);
     m_tabs->addTab(buildProvidersTab(), Icons::get(QStringLiteral("server")), tr("Providers"));
     m_tabs->addTab(buildRolesTab(), Icons::get(QStringLiteral("chat")), tr("Models & roles"));
+    m_tabs->addTab(new LocalServersPage(studio, this), Icons::get(QStringLiteral("server")), tr("Local servers"));
     m_tabs->addTab(buildGeneralTab(), Icons::get(QStringLiteral("settings")), tr("General"));
     m_tabs->addTab(new ShortcutsPage(this), Icons::get(QStringLiteral("text")), tr("Shortcuts"));
     v->addWidget(m_tabs, 1);
@@ -335,10 +380,12 @@ void SettingsDialog::showTab(const QString &tab)
         m_tabs->setCurrentIndex(0);
     else if (tab == QLatin1String("roles"))
         m_tabs->setCurrentIndex(1);
-    else if (tab == QLatin1String("general"))
+    else if (tab == QLatin1String("servers"))
         m_tabs->setCurrentIndex(2);
-    else if (tab == QLatin1String("shortcuts"))
+    else if (tab == QLatin1String("general"))
         m_tabs->setCurrentIndex(3);
+    else if (tab == QLatin1String("shortcuts"))
+        m_tabs->setCurrentIndex(4);
 }
 
 QWidget *SettingsDialog::buildProvidersTab()
@@ -519,7 +566,7 @@ QWidget *SettingsDialog::buildRolesTab()
         connect(model, &QComboBox::currentTextChanged, this, store);
         connect(refresh, &QToolButton::clicked, this, [this, combo, model] {
             if (ai::LlmProvider *p = combo->llmProvider()) {
-                p->listModels().then(this, [model](QStringList items) {
+                ai::gatedList(p, [p = QPointer<ai::LlmProvider>(p)] { return p ? p->listModels() : QtFuture::makeReadyValueFuture(QStringList()); }).then(this, [model](QStringList items) {
                     const QString cur = model->currentText();
                     model->clear();
                     model->addItem(QString());

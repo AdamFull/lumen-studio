@@ -12,6 +12,7 @@
 #include "ui/canvas/ContextBar.h"
 #include "ui/canvas/EditorState.h"
 #include "ui/dialogs/SettingsDialog.h"
+#include "ui/widgets/ServerStatus.h"
 #include "ui/pages/EditorPage.h"
 #include "ui/widgets/Controls.h"
 #include "ui/widgets/JobCard.h"
@@ -70,6 +71,7 @@ MainWindow::MainWindow(Studio *studio, QWidget *parent)
     m_jobLabel = new QLabel(this);
     m_jobLabel->setProperty("role", QStringLiteral("muted"));
     statusBar()->addWidget(m_projectLabel);
+    statusBar()->addPermanentWidget(new ServerStatusButton(studio, [this] { openSettings(QStringLiteral("servers")); }, this));
     statusBar()->addPermanentWidget(m_jobLabel);
     statusBar()->setSizeGripEnabled(false);
 

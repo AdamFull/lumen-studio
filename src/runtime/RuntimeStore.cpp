@@ -20,6 +20,7 @@
 #include <QPointer>
 #include <QProcess>
 #include <QPromise>
+#include <QRegularExpression>
 #include <QStandardPaths>
 #include <QStorageInfo>
 #include <QTimer>
@@ -31,10 +32,10 @@ namespace lumen::runtime {
 
 namespace {
 
-QString tr(const char *s)
+class Text
 {
-    return QCoreApplication::translate("lumen::runtime::RuntimeStore", s);
-}
+    Q_DECLARE_TR_FUNCTIONS(lumen::runtime::RuntimeStore)
+};
 
 const QString kCompleteMarker = QStringLiteral(".lumen-complete");
 
@@ -132,7 +133,7 @@ QFuture<QString> probeVersion(const InstalledRuntime &rt, const QStringList &arg
     };
     QObject::connect(proc, &QProcess::errorOccurred, proc, [proc, settle](QProcess::ProcessError e) {
         if (e == QProcess::FailedToStart)
-            settle({}, tr("%1 cannot be started: %2").arg(QDir::toNativeSeparators(proc->program()), proc->errorString()));
+            settle({}, Text::tr("%1 cannot be started: %2").arg(QDir::toNativeSeparators(proc->program()), proc->errorString()));
     });
     QObject::connect(proc, &QProcess::finished, proc, [proc, settle](int code, QProcess::ExitStatus status) {
         const QString out = QString::fromLocal8Bit(proc->readAll());
@@ -146,9 +147,9 @@ QFuture<QString> probeVersion(const InstalledRuntime &rt, const QStringList &arg
         }
         // Windows reports missing DLLs as 0xC0000135 (STATUS_DLL_NOT_FOUND).
         if (status == QProcess::CrashExit || quint32(code) == 0xC0000135u) {
-            settle({}, quint32(code) == 0xC0000135u ? tr("%1 cannot start: a required DLL is missing (for CUDA builds: the CUDA runtime "
+            settle({}, quint32(code) == 0xC0000135u ? Text::tr("%1 cannot start: a required DLL is missing (for CUDA builds: the CUDA runtime "
                                                          "or a recent NVIDIA driver).").arg(QFileInfo(proc->program()).fileName())
-                                                    : tr("%1 crashed while reporting its version (exit code 0x%2).")
+                                                    : Text::tr("%1 crashed while reporting its version (exit code 0x%2).")
                                                           .arg(QFileInfo(proc->program()).fileName())
                                                           .arg(quint32(code), 8, 16, QLatin1Char('0')));
             return;
@@ -157,7 +158,7 @@ QFuture<QString> probeVersion(const InstalledRuntime &rt, const QStringList &arg
     });
     QTimer::singleShot(20000, proc, [proc, settle] {
         proc->kill();
-        settle({}, tr("%1 did not answer --version within 20 seconds.").arg(QFileInfo(proc->program()).fileName()));
+        settle({}, Text::tr("%1 did not answer --version within 20 seconds.").arg(QFileInfo(proc->program()).fileName()));
     });
     proc->start();
     return future;
@@ -228,7 +229,7 @@ public:
     {
         const RuntimeSpec *spec = Catalog::instance().runtime(m_plan.runtimeId);
         if (!spec) {
-            m_job->fail(tr("Unknown runtime %1.").arg(m_plan.runtimeId));
+            m_job->fail(Text::tr("Unknown runtime %1.").arg(m_plan.runtimeId));
             return;
         }
         m_spec = *spec;
@@ -236,7 +237,7 @@ public:
         const QStorageInfo storage(m_store->root());
         const qint64 needed = m_plan.downloadSize() * 3; // archives + unpacked files
         if (storage.isValid() && storage.bytesAvailable() < needed) {
-            m_job->fail(tr("Not enough disk space: %1 needed on %2, %3 free.")
+            m_job->fail(Text::tr("Not enough disk space: %1 needed on %2, %3 free.")
                             .arg(formatBytes(needed), storage.rootPath(), formatBytes(storage.bytesAvailable())));
             return;
         }
@@ -254,10 +255,7 @@ public:
 private:
     QString downloadsDir() const { return QDir(m_store->root()).filePath(QStringLiteral("downloads")); }
     QString kindDir() const { return QDir(m_store->root()).filePath(m_spec.id); }
-    QString libraryDir(const ReleaseAsset &a) const
-    {
-        return QDir(kindDir()).filePath(QStringLiteral("lib/%1-%2").arg(QFileInfo(a.name).completeBaseName(), a.sha256.left(12)));
-    }
+    QString libraryDir(const ReleaseAsset &a) const { return m_store->libraryDir(m_spec.id, a); }
 
     void nextDownload()
     {
@@ -269,7 +267,7 @@ private:
         }
         const ReleaseAsset &a = m_assets[m_index];
         // Shared CUDA runtimes already unpacked by an earlier install are reused as they are.
-        if (m_index < m_plan.libraries.size() && QFileInfo::exists(QDir(libraryDir(a)).filePath(kCompleteMarker))) {
+        if (m_index < m_plan.libraries.size() && m_store->hasLibrary(m_spec.id, a)) {
             m_done += a.size;
             ++m_index;
             nextDownload();
@@ -281,9 +279,9 @@ private:
         ds.sha256 = a.sha256;
         ds.size = a.size;
         m_download = new FileDownload(m_store->http()->nam(), ds, this);
-        m_job->setProgress(fraction(0), tr("Downloading %1…").arg(a.name));
+        m_job->setProgress(fraction(0), Text::tr("Downloading %1…").arg(a.name));
         connect(m_download, &FileDownload::progress, this, [this, a](qint64 received, qint64) {
-            m_job->setProgress(fraction(received), tr("Downloading %1 — %2 of %3")
+            m_job->setProgress(fraction(received), Text::tr("Downloading %1 — %2 of %3")
                                                        .arg(a.name, formatBytes(m_done + received), formatBytes(m_total)));
         });
         connect(m_download, &FileDownload::finished, this, [this, a] {
@@ -327,7 +325,7 @@ private:
         auto *poll = new QTimer(this);
         poll->setInterval(200);
         connect(poll, &QTimer::timeout, this, [this, progress] {
-            m_job->setProgress(0.85 + 0.13 * progress->load() / 1000.0, tr("Unpacking…"));
+            m_job->setProgress(0.85 + 0.13 * progress->load() / 1000.0, Text::tr("Unpacking…"));
         });
         poll->start();
         const async::CancelToken token = m_token;
@@ -377,17 +375,17 @@ private:
         }
         if (exe.isEmpty()) {
             QDir(staging).removeRecursively();
-            return m_job->fail(tr("The archive does not contain %1.").arg(m_spec.executable));
+            return m_job->fail(Text::tr("The archive does not contain %1.").arg(m_spec.executable));
         }
         const QString relativeExe = QDir(staging).relativeFilePath(exe);
         const QString finalDir = QDir(kindDir()).filePath(m_folder);
         if (QFileInfo::exists(finalDir) && !QDir(finalDir).removeRecursively()) {
             QDir(staging).removeRecursively();
-            return m_job->fail(tr("%1 is in use; stop its server and try again.").arg(QDir::toNativeSeparators(finalDir)));
+            return m_job->fail(Text::tr("%1 is in use; stop its server and try again.").arg(QDir::toNativeSeparators(finalDir)));
         }
         if (!QDir().rename(staging, finalDir)) {
             QDir(staging).removeRecursively();
-            return m_job->fail(tr("Cannot move the new files into %1.").arg(QDir::toNativeSeparators(finalDir)));
+            return m_job->fail(Text::tr("Cannot move the new files into %1.").arg(QDir::toNativeSeparators(finalDir)));
         }
         for (const QString &archive : std::as_const(m_archives))
             QFile::remove(archive);
@@ -406,7 +404,7 @@ private:
         for (const ReleaseAsset &a : std::as_const(m_assets))
             assets.append(QJsonObject{{QStringLiteral("name"), a.name}, {QStringLiteral("sha256"), a.sha256}, {QStringLiteral("size"), double(a.size)}});
         rt.assets = assets;
-        m_job->setProgress(0.98, tr("Checking that %1 runs…").arg(m_spec.executable));
+        m_job->setProgress(0.98, Text::tr("Checking that %1 runs…").arg(m_spec.executable));
         QPointer<Installer> self(this);
         probeVersion(rt, m_spec.versionArgs)
             .then(this, [self, rt](QString version) mutable {
@@ -422,7 +420,7 @@ private:
                 // Keep the files (the user may fix the driver) but say why it won't start.
                 rt.versionInfo = describeException(e);
                 self->m_store->addInstalled(rt);
-                self->m_job->fail(tr("Installed, but the server does not start: %1").arg(describeException(e)));
+                self->m_job->fail(Text::tr("Installed, but the server does not start: %1").arg(describeException(e)));
             });
     }
 
@@ -510,6 +508,26 @@ std::optional<InstalledRuntime> RuntimeStore::runtime(const QString &id) const
     return std::nullopt;
 }
 
+QString RuntimeStore::libraryDir(const QString &kind, const ReleaseAsset &asset) const
+{
+    return QDir(m_root).filePath(QStringLiteral("%1/lib/%2-%3").arg(kind, QFileInfo(asset.name).completeBaseName(), asset.sha256.left(12)));
+}
+
+bool RuntimeStore::hasLibrary(const QString &kind, const ReleaseAsset &asset) const
+{
+    return QFileInfo::exists(QDir(libraryDir(kind, asset)).filePath(kCompleteMarker));
+}
+
+qint64 RuntimeStore::pendingDownload(const InstallPlan &plan) const
+{
+    qint64 n = plan.main.size;
+    for (const ReleaseAsset &a : plan.libraries) {
+        if (!hasLibrary(plan.runtimeId, a))
+            n += a.size;
+    }
+    return n;
+}
+
 std::optional<InstalledRuntime> RuntimeStore::latestManaged(const QString &kind) const
 {
     std::optional<InstalledRuntime> best;
@@ -538,12 +556,12 @@ void RuntimeStore::addInstalled(const InstalledRuntime &rt)
 Job *RuntimeStore::install(const InstallPlan &plan)
 {
     const RuntimeSpec *spec = Catalog::instance().runtime(plan.runtimeId);
-    const QString title = tr("Install %1 %2").arg(spec ? spec->name : plan.runtimeId, plan.tag);
+    const QString title = Text::tr("Install %1 %2").arg(spec ? spec->name : plan.runtimeId, plan.tag);
     QPointer<RuntimeStore> self(this);
     m_jobs->setConcurrency(QStringLiteral("runtime-install"), 1);
     return m_jobs->submit(title, QStringLiteral("runtime-install"), [self, plan](Job *job) {
         if (!self)
-            return job->fail(tr("Shutting down."));
+            return job->fail(Text::tr("Shutting down."));
         auto *installer = new Installer(self, plan, job);
         job->setCancelHandler([installer = QPointer<Installer>(installer)] {
             if (installer)
@@ -559,8 +577,8 @@ QFuture<InstalledRuntime> RuntimeStore::adopt(const QString &executable)
     const RuntimeSpec *spec = Catalog::instance().runtimeForExecutable(fi.fileName());
     if (!spec || !fi.exists()) {
         return QtFuture::makeExceptionalFuture<InstalledRuntime>(std::make_exception_ptr(
-            Error(fi.exists() ? tr("%1 is not a server Lumen can run. Choose llama-server or sd-server.").arg(fi.fileName())
-                              : tr("%1 does not exist.").arg(QDir::toNativeSeparators(executable)))));
+            Error(fi.exists() ? Text::tr("%1 is not a server Lumen can run. Choose llama-server or sd-server.").arg(fi.fileName())
+                              : Text::tr("%1 does not exist.").arg(QDir::toNativeSeparators(executable)))));
     }
     const QString path = QDir::cleanPath(fi.absoluteFilePath());
     for (const InstalledRuntime &rt : std::as_const(m_runtimes)) {
@@ -577,10 +595,13 @@ QFuture<InstalledRuntime> RuntimeStore::adopt(const QString &executable)
     QPointer<RuntimeStore> self(this);
     return probeVersion(rt, spec->versionArgs).then(this, [self, rt](QString version) mutable {
         rt.versionInfo = version;
-        // "version: 6123 (abc1234)" → "6123"; sd.cpp prints "stable-diffusion.cpp version master-951-f89d9b1, …".
+        // llama.cpp: "version: 0.4.1-dev (build 10964, commit b29c606e2)" → "b10964" (its release tag);
+        // older builds: "version: 6123 (abc1234)"; sd.cpp: "… version master-951-f89d9b1, …".
+        static const QRegularExpression build(QStringLiteral(R"(build (\d+))"));
         static const QRegularExpression re(QStringLiteral(R"((?:version[:\s]+)(\S+))"), QRegularExpression::CaseInsensitiveOption);
+        const auto b = build.match(version);
         const auto m = re.match(version);
-        rt.version = m.hasMatch() ? m.captured(1).remove(QLatin1Char(',')) : QString();
+        rt.version = b.hasMatch() ? QStringLiteral("b") + b.captured(1) : m.hasMatch() ? m.captured(1).remove(QLatin1Char(',')) : QString();
         if (rt.version.isEmpty()) {
             // Fall back to the folder name of release zips: "llama-b10964-bin-win-cuda-12.4-x64".
             static const QRegularExpression tag(QStringLiteral(R"(\b(b\d{3,}|master-\d+-[0-9a-f]+)\b)"));
@@ -606,7 +627,7 @@ bool RuntimeStore::remove(const QString &id, QString *error)
             if (!root.isEmpty() && dir.startsWith(root + QLatin1Char('/'), Qt::CaseInsensitive)) {
                 if (!QDir(dir).removeRecursively()) {
                     if (error)
-                        *error = tr("Some files in %1 are in use. Stop the server and try again.").arg(QDir::toNativeSeparators(dir));
+                        *error = Text::tr("Some files in %1 are in use. Stop the server and try again.").arg(QDir::toNativeSeparators(dir));
                     return false;
                 }
             }
@@ -626,7 +647,7 @@ bool RuntimeStore::remove(const QString &id, QString *error)
         return true;
     }
     if (error)
-        *error = tr("Unknown runtime.");
+        *error = Text::tr("Unknown runtime.");
     return false;
 }
 

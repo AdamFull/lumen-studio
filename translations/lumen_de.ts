@@ -4,7 +4,7 @@
 <context>
     <name>QObject</name>
     <message>
-        <location filename="../src/ai/Director.cpp" line="+60"/>
+        <location filename="../src/ai/Director.cpp" line="+61"/>
         <source>General illustrations</source>
         <translation>Allgemeine Illustrationen</translation>
     </message>
@@ -74,7 +74,7 @@
         <translation>Profilbilder und Avatare.</translation>
     </message>
     <message>
-        <location filename="../src/ai/GenerationService.cpp" line="+285"/>
+        <location filename="../src/ai/GenerationService.cpp" line="+286"/>
         <source>The selection is empty - paint a mask or make a selection first.</source>
         <translation>Die Auswahl ist leer – malen Sie zuerst eine Maske oder erstellen Sie eine Auswahl.</translation>
     </message>
@@ -114,7 +114,7 @@
         <translation>Lächeln</translation>
     </message>
     <message>
-        <location filename="../src/ai/PartService.cpp" line="+205"/>
+        <location filename="../src/ai/PartService.cpp" line="+206"/>
         <source>The skeleton has no visible joints.</source>
         <translation>Das Skelett hat keine sichtbaren Gelenke.</translation>
     </message>
@@ -549,18 +549,18 @@
         <translation>Charakterteil</translation>
     </message>
     <message>
-        <location line="+169"/>
+        <location filename="../src/ui/parts/PartsPage.cpp" line="+1144"/>
+        <location filename="../src/doc/Project.cpp" line="+169"/>
         <location filename="../src/doc/PsdIO.cpp" line="+91"/>
-        <location filename="../src/live2d/Animation.cpp" line="+23"/>
-        <location filename="../src/live2d/CubismModel.cpp" line="+50"/>
         <location filename="../src/live2d/Motion.cpp" line="+20"/>
         <location filename="../src/live2d/Physics.cpp" line="+145"/>
-        <location filename="../src/ui/parts/PartsPage.cpp" line="+1144"/>
+        <location filename="../src/live2d/Animation.cpp" line="+23"/>
+        <location filename="../src/live2d/CubismModel.cpp" line="+50"/>
         <source>Cannot open %1: %2</source>
         <translation>%1 kann nicht geöffnet werden: %2</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location filename="../src/doc/Project.cpp" line="+12"/>
         <source>Unsupported or damaged image: %1</source>
         <translation>Nicht unterstütztes oder beschädigtes Bild: %1</translation>
     </message>
@@ -596,14 +596,14 @@
         <translation>nicht unterstützte Mischmodi als Normal angezeigt: %1</translation>
     </message>
     <message>
-        <location filename="../src/live2d/Animation.cpp" line="+7"/>
         <location filename="../src/live2d/Motion.cpp" line="+7"/>
         <location filename="../src/live2d/Physics.cpp" line="+7"/>
+        <location filename="../src/live2d/Animation.cpp" line="+7"/>
         <source>%1 is not valid JSON: %2</source>
         <translation>%1 ist kein gültiges JSON: %2</translation>
     </message>
     <message>
-        <location line="+148"/>
+        <location filename="../src/live2d/Animation.cpp" line="+148"/>
         <source>%1 is not a Live2D expression.</source>
         <translation>%1 ist kein Live2D-Ausdruck.</translation>
     </message>
@@ -695,7 +695,7 @@ Planning continues without a character sheet.</source>
 Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
-        <location line="+67"/>
+        <location line="+63"/>
         <source>Review and adjust the poses on the right, then press **Generate all** (or generate shots one by one).</source>
         <translation>Prüfen und passen Sie die Posen rechts an und klicken Sie dann auf **Alle generieren** (oder generieren Sie die Aufnahmen einzeln).</translation>
     </message>
@@ -710,7 +710,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Planung fehlgeschlagen: %1</translation>
     </message>
     <message>
-        <location line="+54"/>
+        <location line="+59"/>
         <source>Shot: %1</source>
         <translation>Aufnahme: %1</translation>
     </message>
@@ -971,12 +971,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Beim Malen werden niemals Hintergrundpixel außerhalb der Charaktersilhouette erfasst.</translation>
     </message>
     <message>
-        <location filename="../src/ui/assistant/AssistantTools.cpp" line="+78"/>
+        <location filename="../src/ui/assistant/AssistantTools.cpp" line="+80"/>
         <source>cancelled</source>
         <translation>abgebrochen</translation>
     </message>
     <message>
-        <location line="+29"/>
+        <location line="+35"/>
         <source>There is no asset &quot;%1&quot;. Use list_assets to find ids.</source>
         <translation>Es gibt kein Bild „%1“. Verwenden Sie list_assets, um IDs zu finden.</translation>
     </message>
@@ -1037,6 +1037,21 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <source>The director is not available.</source>
         <translation>Die Regie ist nicht verfügbar.</translation>
     </message>
+    <message>
+        <location filename="../src/ui/Studio.cpp" line="+77"/>
+        <source>Lumen is shutting down.</source>
+        <translation>Lumen wird beendet.</translation>
+    </message>
+    <message>
+        <location filename="../src/ai/Gate.cpp" line="+66"/>
+        <source>Starting %1…</source>
+        <translation>%1 wird gestartet…</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>The provider did not start the request.</source>
+        <translation>Der Anbieter hat die Anfrage nicht gestartet.</translation>
+    </message>
 </context>
 <context>
     <name>lumen</name>
@@ -1063,7 +1078,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ai::AgentRun</name>
     <message>
-        <location filename="../src/ai/Agent.cpp" line="+123"/>
+        <location filename="../src/ai/Agent.cpp" line="+124"/>
         <source>No language model is configured for the assistant. Add one in Settings → Providers.</source>
         <translation>Für den Assistenten ist kein Sprachmodell konfiguriert. Fügen Sie eines unter Einstellungen → Anbieter hinzu.</translation>
     </message>
@@ -1260,7 +1275,17 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Parallele Aufträge</translation>
     </message>
     <message>
-        <location line="+64"/>
+        <location line="+1"/>
+        <source>Free VRAM when idle</source>
+        <translation>VRAM im Leerlauf freigeben</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Unload ComfyUI&apos;s models a few seconds after the last job, so a local language model (llama.cpp, Ollama, LM Studio) on the same GPU runs at full speed. Recommended for GPUs with 8-12 GB.</source>
+        <translation>Entlädt die Modelle von ComfyUI einige Sekunden nach dem letzten Auftrag, damit ein lokales Sprachmodell (llama.cpp, Ollama, LM Studio) auf derselben GPU mit voller Geschwindigkeit läuft. Empfohlen für GPUs mit 8–12 GB.</translation>
+    </message>
+    <message>
+        <location line="+65"/>
         <source>Connected - ComfyUI %1 %2</source>
         <translation>Verbunden – ComfyUI %1 %2</translation>
     </message>
@@ -1335,7 +1360,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Hochladen eines Bildes zu ComfyUI fehlgeschlagen: %1</translation>
     </message>
     <message>
-        <location line="+112"/>
+        <location line="+181"/>
         <source>No upscale model found in ComfyUI&apos;s models/upscale_models folder.</source>
         <translation>Kein Hochskalierungsmodell im Ordner models/upscale_models von ComfyUI gefunden.</translation>
     </message>
@@ -1378,7 +1403,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ai::Director</name>
     <message>
-        <location filename="../src/ai/Director.cpp" line="+152"/>
+        <location filename="../src/ai/Director.cpp" line="+175"/>
         <source>The model assigned to &apos;Vision analysis&apos; (%1) cannot see images, so it cannot review results.</source>
         <translation>Das Modell für die Bildanalyse (%1) kann keine Bilder verarbeiten und daher keine Ergebnisse bewerten.</translation>
     </message>
@@ -1388,7 +1413,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Für die Bildanalyse ist kein Sprachmodell konfiguriert.</translation>
     </message>
     <message>
-        <location line="+64"/>
+        <location line="+102"/>
         <source>The model assigned to &apos;Vision analysis&apos; (%1) cannot see images. Choose a vision-capable model in Settings → Providers → Roles.</source>
         <translation>Das der &apos;Bildanalyse&apos; zugewiesene Modell (%1) kann keine Bilder sehen. Wählen Sie unter Einstellungen → Anbieter → Rollen ein bildfähiges Modell.</translation>
     </message>
@@ -1719,7 +1744,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Wird gespeichert...</translation>
     </message>
     <message>
-        <location line="+68"/>
+        <location line="+80"/>
         <source>No project is open.</source>
         <translation>Es ist kein Projekt geöffnet.</translation>
     </message>
@@ -2437,7 +2462,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ai::StructuredChatOperation</name>
     <message>
-        <location filename="../src/ai/StructuredChat.cpp" line="+33"/>
+        <location filename="../src/ai/StructuredChat.cpp" line="+34"/>
         <source>No language model is configured. Add one in Settings → Providers.</source>
         <translation>Kein Sprachmodell konfiguriert. Fügen Sie eines unter Einstellungen → Anbieter hinzu.</translation>
     </message>
@@ -2651,6 +2676,750 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <location line="+15"/>
         <source>Could not create request</source>
         <translation>Anfrage konnte nicht erstellt werden</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::runtime::Catalog</name>
+    <message>
+        <location filename="../src/runtime/Catalog.cpp" line="+142"/>
+        <source>needs an NVIDIA GPU</source>
+        <translation>benötigt eine NVIDIA-GPU</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>the NVIDIA driver version is unknown</source>
+        <translation>die Version des NVIDIA-Treibers ist unbekannt</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>needs a driver with CUDA %1 (installed: %2); update the NVIDIA driver</source>
+        <translation>benötigt einen Treiber mit CUDA %1 (installiert: %2); aktualisieren Sie den NVIDIA-Treiber</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>needs a %1 GPU</source>
+        <translation>benötigt eine %1-GPU</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>needs a GPU</source>
+        <translation>benötigt eine GPU</translation>
+    </message>
+    <message>
+        <location line="+30"/>
+        <source>unexpected response</source>
+        <translation>unerwartete Antwort</translation>
+    </message>
+    <message>
+        <location line="+49"/>
+        <source>%1 has no &apos;%2&apos; build for this platform.</source>
+        <translation>Für %1 gibt es auf dieser Plattform keinen Build „%2“.</translation>
+    </message>
+    <message>
+        <location line="+53"/>
+        <source>No release of %1 has a %2 build.</source>
+        <translation>Kein Release von %1 enthält einen Build „%2“.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Release %1 of %2 has no published checksum, so it cannot be verified.</source>
+        <translation>Release %1 von %2 hat keine veröffentlichte Prüfsumme und kann daher nicht überprüft werden.</translation>
+    </message>
+    <message>
+        <location line="+61"/>
+        <source>Cannot list the releases of %1: %2</source>
+        <translation>Die Releases von %1 können nicht abgerufen werden: %2</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>GitHub&apos;s hourly request limit is reached. Try again later.</source>
+        <translation>Das stündliche Anfragelimit von GitHub ist erreicht. Versuchen Sie es später erneut.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Unexpected answer from GitHub: %1</source>
+        <translation>Unerwartete Antwort von GitHub: %1</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::runtime::FileDownload</name>
+    <message>
+        <location filename="../src/runtime/Download.cpp" line="+63"/>
+        <source>No network access.</source>
+        <translation>Kein Netzwerkzugriff.</translation>
+    </message>
+    <message>
+        <location line="+75"/>
+        <location line="+46"/>
+        <source>Cannot write %1: %2</source>
+        <translation>%1 kann nicht geschrieben werden: %2</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>The download is larger than expected.</source>
+        <translation>Der Download ist größer als erwartet.</translation>
+    </message>
+    <message>
+        <location line="+37"/>
+        <source>HTTP %1 while downloading %2</source>
+        <translation>HTTP %1 beim Herunterladen von %2</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>access denied (a token may be required)</source>
+        <translation>Zugriff verweigert (möglicherweise ist ein Token nötig)</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Size mismatch for %1 (%2 instead of %3 bytes).</source>
+        <translation>Falsche Größe von %1 (%2 statt %3 Bytes).</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Checksum mismatch for %1: the file was damaged or tampered with.</source>
+        <translation>Prüfsumme von %1 stimmt nicht: Die Datei ist beschädigt oder wurde verändert.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Cannot move the download to %1.</source>
+        <translation>Der Download kann nicht nach %1 verschoben werden.</translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <source>Cancelled.</source>
+        <translation>Abgebrochen.</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::runtime::Hardware</name>
+    <message>
+        <location filename="../src/runtime/Hardware.cpp" line="+68"/>
+        <source>No GPU found</source>
+        <translation>Keine GPU gefunden</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source> · %1 RAM</source>
+        <translation> · %1 RAM</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::runtime::RuntimeStore</name>
+    <message>
+        <location filename="../src/runtime/RuntimeStore.cpp" line="+136"/>
+        <source>%1 cannot be started: %2</source>
+        <translation>%1 kann nicht gestartet werden: %2</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>%1 cannot start: a required DLL is missing (for CUDA builds: the CUDA runtime or a recent NVIDIA driver).</source>
+        <translation>%1 startet nicht: Eine benötigte DLL fehlt (bei CUDA-Builds: die CUDA-Laufzeit oder ein aktueller NVIDIA-Treiber).</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>%1 crashed while reporting its version (exit code 0x%2).</source>
+        <translation>%1 ist beim Ausgeben der Version abgestürzt (Exit-Code 0x%2).</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>%1 did not answer --version within 20 seconds.</source>
+        <translation>%1 hat nicht innerhalb von 20 Sekunden auf --version geantwortet.</translation>
+    </message>
+    <message>
+        <location line="+71"/>
+        <source>Unknown runtime %1.</source>
+        <translation>Unbekanntes Programm %1.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Not enough disk space: %1 needed on %2, %3 free.</source>
+        <translation>Nicht genug Speicherplatz: %1 auf %2 benötigt, %3 frei.</translation>
+    </message>
+    <message>
+        <location line="+42"/>
+        <source>Downloading %1…</source>
+        <translation>%1 wird heruntergeladen…</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Downloading %1 — %2 of %3</source>
+        <translation>%1 wird heruntergeladen – %2 von %3</translation>
+    </message>
+    <message>
+        <location line="+44"/>
+        <source>Unpacking…</source>
+        <translation>Wird entpackt…</translation>
+    </message>
+    <message>
+        <location line="+50"/>
+        <source>The archive does not contain %1.</source>
+        <translation>Das Archiv enthält %1 nicht.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>%1 is in use; stop its server and try again.</source>
+        <translation>%1 wird verwendet; beenden Sie den Server und versuchen Sie es erneut.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Cannot move the new files into %1.</source>
+        <translation>Die neuen Dateien können nicht nach %1 verschoben werden.</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>Checking that %1 runs…</source>
+        <translation>Prüft, ob %1 läuft…</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Installed, but the server does not start: %1</source>
+        <translation>Installiert, aber der Server startet nicht: %1</translation>
+    </message>
+    <message>
+        <location line="+136"/>
+        <source>Install %1 %2</source>
+        <translation>%1 %2 installieren</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Shutting down.</source>
+        <translation>Wird beendet.</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>%1 is not a server Lumen can run. Choose llama-server or sd-server.</source>
+        <translation>%1 ist kein Server, den Lumen ausführen kann. Wählen Sie llama-server oder sd-server.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1 does not exist.</source>
+        <translation>%1 existiert nicht.</translation>
+    </message>
+    <message>
+        <location line="+49"/>
+        <source>Some files in %1 are in use. Stop the server and try again.</source>
+        <translation>Einige Dateien in %1 werden verwendet. Beenden Sie den Server und versuchen Sie es erneut.</translation>
+    </message>
+    <message>
+        <location line="+20"/>
+        <source>Unknown runtime.</source>
+        <translation>Unbekanntes Programm.</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::runtime::ServerProfile</name>
+    <message>
+        <location filename="../src/runtime/ServerProfile.cpp" line="+34"/>
+        <source>GGUF models (*.gguf)</source>
+        <translation>GGUF-Modelle (*.gguf)</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Model</source>
+        <translation>Modell</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>The language model (.gguf).</source>
+        <translation>Das Sprachmodell (.gguf).</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Vision projector</source>
+        <translation>Vision-Projektor</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>mmproj-*.gguf file that lets a vision model (Qwen3-VL, Gemma 3…) see images.</source>
+        <translation>mmproj-*.gguf-Datei, mit der ein Vision-Modell (Qwen3-VL, Gemma 3…) Bilder sieht.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Context size</source>
+        <translation>Kontextgröße</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Tokens of context. Larger needs more VRAM; 16384 suits planning and the Critic.</source>
+        <translation>Kontext in Tokens. Mehr braucht mehr VRAM; 16384 reicht für Planung und Kritiker.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>GPU layers</source>
+        <translation>GPU-Schichten</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Layers kept on the GPU (999 = all). Lower it when the model does not fit.</source>
+        <translation>Schichten auf der GPU (999 = alle). Verringern, wenn das Modell nicht passt.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>KV cache type</source>
+        <translation>KV-Cache-Typ</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>q8_0 halves the context memory with no visible quality loss.</source>
+        <translation>q8_0 halbiert den Kontextspeicher ohne sichtbaren Qualitätsverlust.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <location line="+65"/>
+        <source>Flash attention</source>
+        <translation>Flash Attention</translation>
+    </message>
+    <message>
+        <location line="-62"/>
+        <source>Unload when idle (s)</source>
+        <translation>Im Leerlauf entladen (s)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Unloads the model from the GPU after this many idle seconds so an image model can use it (0 = never). Reloading takes a few seconds.</source>
+        <translation>Entlädt das Modell nach so vielen Sekunden Leerlauf von der GPU, damit ein Bildmodell sie nutzen kann (0 = nie). Das Neuladen dauert einige Sekunden.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Use the model&apos;s chat template (--jinja)</source>
+        <translation>Chat-Vorlage des Modells verwenden (--jinja)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Needed for tool calls and reasoning models.</source>
+        <translation>Nötig für Werkzeugaufrufe und Reasoning-Modelle.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Parallel requests</source>
+        <translation>Parallele Anfragen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Slots; the context is shared between them.</source>
+        <translation>Slots; der Kontext wird zwischen ihnen aufgeteilt.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <location line="+67"/>
+        <source>CPU threads</source>
+        <translation>CPU-Threads</translation>
+    </message>
+    <message>
+        <location line="-67"/>
+        <location line="+67"/>
+        <source>0 = automatic</source>
+        <translation>0 = automatisch</translation>
+    </message>
+    <message>
+        <location line="-63"/>
+        <source>Reasoning budget</source>
+        <translation>Reasoning-Budget</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>-1 = unlimited thinking, 0 = thinking off (faster for small models).</source>
+        <translation>-1 = unbegrenztes Nachdenken, 0 = Nachdenken aus (schneller bei kleinen Modellen).</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Models (*.safetensors *.gguf *.ckpt *.sft)</source>
+        <translation>Modelle (*.safetensors *.gguf *.ckpt *.sft)</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Checkpoint</source>
+        <translation>Checkpoint</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Single-file checkpoint (SD 1.5, SDXL, Illustrious, Pony…). For FLUX-style models use &quot;Diffusion model&quot; with separate text encoders instead.</source>
+        <translation>Checkpoint als einzelne Datei (SD 1.5, SDXL, Illustrious, Pony…). Für FLUX-artige Modelle stattdessen „Diffusionsmodell“ mit separaten Text-Encodern verwenden.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>VAE</source>
+        <translation>VAE</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Optional separate VAE (e.g. sdxl_vae.safetensors).</source>
+        <translation>Optionaler separater VAE (z. B. sdxl_vae.safetensors).</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>ControlNet</source>
+        <translation>ControlNet</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Needed for pose control (e.g. an SDXL OpenPose ControlNet).</source>
+        <translation>Nötig für die Posensteuerung (z. B. ein SDXL-OpenPose-ControlNet).</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>IP-Adapter</source>
+        <translation>IP-Adapter</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Keeps a character&apos;s identity from a reference image (e.g. ip-adapter_sdxl_vit-h). Needs the CLIP vision encoder below.</source>
+        <translation>Übernimmt die Identität einer Figur aus einem Referenzbild (z. B. ip-adapter_sdxl_vit-h). Benötigt den CLIP-Vision-Encoder unten.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>CLIP vision encoder</source>
+        <translation>CLIP-Vision-Encoder</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>ViT-H image encoder for the IP-Adapter (clip_vision_h.safetensors).</source>
+        <translation>ViT-H-Bild-Encoder für den IP-Adapter (clip_vision_h.safetensors).</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>LoRA folder</source>
+        <translation>LoRA-Ordner</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>LoRAs in this folder can be used in prompts.</source>
+        <translation>LoRAs in diesem Ordner können in Prompts verwendet werden.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Upscaler</source>
+        <translation>Hochskalierer</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>ESRGAN model for 2×/4× upscaling.</source>
+        <translation>ESRGAN-Modell für 2×/4×-Hochskalierung.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Keep weights in RAM</source>
+        <translation>Gewichte im RAM halten</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Moves weights to the GPU only while generating (--offload-to-cpu). Slower, but leaves VRAM for a language model on the same GPU.</source>
+        <translation>Lädt die Gewichte nur während der Generierung auf die GPU (--offload-to-cpu). Langsamer, lässt aber VRAM für ein Sprachmodell auf derselben GPU frei.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>VRAM budget (GB)</source>
+        <translation>VRAM-Budget (GB)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>0 = use what is free. A budget makes large models run in parts.</source>
+        <translation>0 = den freien Speicher nutzen. Mit einem Budget laufen große Modelle in Teilen.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Less VRAM, usually faster.</source>
+        <translation>Weniger VRAM, meist schneller.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Diffusion model</source>
+        <translation>Diffusionsmodell</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Standalone diffusion model (FLUX, Qwen-Image, Z-Image…), used instead of a checkpoint.</source>
+        <translation>Eigenständiges Diffusionsmodell (FLUX, Qwen-Image, Z-Image…), anstelle eines Checkpoints.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>CLIP-L text encoder</source>
+        <translation>CLIP-L-Text-Encoder</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>CLIP-G text encoder</source>
+        <translation>CLIP-G-Text-Encoder</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>T5-XXL text encoder</source>
+        <translation>T5-XXL-Text-Encoder</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>LLM text encoder</source>
+        <translation>LLM-Text-Encoder</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Text encoders on the CPU</source>
+        <translation>Text-Encoder auf der CPU</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>Extra arguments</source>
+        <translation>Zusätzliche Argumente</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Added to the command line as typed.</source>
+        <translation>Werden unverändert an die Befehlszeile angehängt.</translation>
+    </message>
+    <message>
+        <location line="+119"/>
+        <source>%1 does not exist.</source>
+        <translation>%1 existiert nicht.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Choose a model for %1.</source>
+        <translation>Wählen Sie ein Modell für %1.</translation>
+    </message>
+    <message>
+        <location line="+24"/>
+        <source>Choose a checkpoint or a diffusion model for %1.</source>
+        <translation>Wählen Sie einen Checkpoint oder ein Diffusionsmodell für %1.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The IP-Adapter needs a CLIP vision encoder.</source>
+        <translation>Der IP-Adapter benötigt einen CLIP-Vision-Encoder.</translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <source>Lumen cannot start %1 servers.</source>
+        <translation>Lumen kann keine %1-Server starten.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>No port set.</source>
+        <translation>Kein Port festgelegt.</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::runtime::ServerSupervisor</name>
+    <message>
+        <location filename="../src/runtime/Supervisor.cpp" line="+61"/>
+        <source>Stopped</source>
+        <translation>Gestoppt</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Starting</source>
+        <translation>Startet</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Running</source>
+        <translation>Läuft</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Stopping</source>
+        <translation>Wird beendet</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Failed</source>
+        <translation>Fehlgeschlagen</translation>
+    </message>
+    <message>
+        <location line="+85"/>
+        <source>Server</source>
+        <translation>Server</translation>
+    </message>
+    <message>
+        <location line="+46"/>
+        <location line="+129"/>
+        <source>Unknown server.</source>
+        <translation>Unbekannter Server.</translation>
+    </message>
+    <message>
+        <location line="-123"/>
+        <source>The runtime of %1 is no longer installed.</source>
+        <translation>Das Programm von %1 ist nicht mehr installiert.</translation>
+    </message>
+    <message>
+        <location line="+127"/>
+        <source>%1 is missing. Reinstall the runtime.</source>
+        <translation>%1 fehlt. Installieren Sie das Programm neu.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Port %1 is already used by another program. Stop it or choose another port for %2.</source>
+        <translation>Port %1 wird bereits von einem anderen Programm verwendet. Beenden Sie es oder wählen Sie einen anderen Port für %2.</translation>
+    </message>
+    <message>
+        <location line="+41"/>
+        <source>Starting…</source>
+        <translation>Startet…</translation>
+    </message>
+    <message>
+        <location line="+40"/>
+        <source>Starting: %1</source>
+        <translation>Startet: %1</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>The server did not become ready within %1 s. See its log.</source>
+        <translation>Der Server war nicht innerhalb von %1 s bereit. Siehe Protokoll.</translation>
+    </message>
+    <message>
+        <location line="+47"/>
+        <source>Cannot start %1: %2</source>
+        <translation>%1 kann nicht gestartet werden: %2</translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <source>The server exited while starting (code %1).</source>
+        <translation>Der Server wurde beim Start beendet (Code %1).</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The server stopped unexpectedly (code %1).</source>
+        <translation>Der Server wurde unerwartet beendet (Code %1).</translation>
+    </message>
+    <message>
+        <location line="+53"/>
+        <location line="+5"/>
+        <source>The server was stopped.</source>
+        <translation>Der Server wurde gestoppt.</translation>
+    </message>
+    <message>
+        <location line="-1"/>
+        <source>Stopping…</source>
+        <translation>Wird beendet…</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::runtime::Zip</name>
+    <message>
+        <location filename="../src/runtime/Zip.cpp" line="+59"/>
+        <location line="+148"/>
+        <source>Cannot open %1: %2</source>
+        <translation>%1 kann nicht geöffnet werden: %2</translation>
+    </message>
+    <message>
+        <location line="-145"/>
+        <source>Not a zip archive.</source>
+        <translation>Kein ZIP-Archiv.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Cannot read the archive.</source>
+        <translation>Das Archiv kann nicht gelesen werden.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Not a zip archive (no central directory).</source>
+        <translation>Kein ZIP-Archiv (kein zentrales Verzeichnis).</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <location line="+4"/>
+        <source>Damaged Zip64 archive.</source>
+        <translation>Beschädigtes Zip64-Archiv.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Damaged archive (central directory out of range).</source>
+        <translation>Beschädigtes Archiv (zentrales Verzeichnis außerhalb der Datei).</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Cannot read the central directory.</source>
+        <translation>Das zentrale Verzeichnis kann nicht gelesen werden.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Damaged archive (bad central directory entry).</source>
+        <translation>Beschädigtes Archiv (ungültiger Verzeichniseintrag).</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Damaged archive (truncated entry).</source>
+        <translation>Beschädigtes Archiv (abgeschnittener Eintrag).</translation>
+    </message>
+    <message>
+        <location line="+74"/>
+        <location line="+39"/>
+        <source>The archive contains an unsafe path: %1</source>
+        <translation>Das Archiv enthält einen unsicheren Pfad: %1</translation>
+    </message>
+    <message>
+        <location line="-37"/>
+        <source>The archive contains a symbolic link: %1</source>
+        <translation>Das Archiv enthält eine symbolische Verknüpfung: %1</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The archive is encrypted.</source>
+        <translation>Das Archiv ist verschlüsselt.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Unsupported compression method %1 for %2.</source>
+        <translation>Nicht unterstützte Kompressionsmethode %1 für %2.</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <location line="+15"/>
+        <location line="+4"/>
+        <source>Cannot create %1.</source>
+        <translation>%1 kann nicht erstellt werden.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Damaged archive (bad local header for %1).</source>
+        <translation>Beschädigtes Archiv (ungültiger lokaler Header für %1).</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Damaged archive (%1).</source>
+        <translation>Beschädigtes Archiv (%1).</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <location line="+22"/>
+        <location line="+16"/>
+        <source>Cannot write %1: %2</source>
+        <translation>%1 kann nicht geschrieben werden: %2</translation>
+    </message>
+    <message>
+        <location line="-28"/>
+        <source>Cannot initialise decompression.</source>
+        <translation>Die Dekompression kann nicht initialisiert werden.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Damaged archive (unexpected end in %1).</source>
+        <translation>Beschädigtes Archiv (unerwartetes Ende in %1).</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Damaged archive (cannot decompress %1).</source>
+        <translation>Beschädigtes Archiv (%1 kann nicht dekomprimiert werden).</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Damaged archive (truncated data in %1).</source>
+        <translation>Beschädigtes Archiv (abgeschnittene Daten in %1).</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Damaged archive (%1 is larger than declared).</source>
+        <translation>Beschädigtes Archiv (%1 ist größer als angegeben).</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Cancelled.</source>
+        <translation>Abgebrochen.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Damaged archive (checksum mismatch in %1).</source>
+        <translation>Beschädigtes Archiv (Prüfsummenfehler in %1).</translation>
     </message>
 </context>
 <context>
@@ -3280,7 +4049,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::CreatePage</name>
     <message>
-        <location filename="../src/ui/pages/CreatePage.cpp" line="-695"/>
+        <location filename="../src/ui/pages/CreatePage.cpp" line="-696"/>
         <source>Director</source>
         <translation>Regie</translation>
     </message>
@@ -3328,12 +4097,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="-398"/>
-        <location line="+959"/>
+        <location line="+1004"/>
         <source>Character</source>
         <translation>Charakter</translation>
     </message>
     <message>
-        <location line="-955"/>
+        <location line="-1000"/>
         <source>Edit sheet</source>
         <translation>Steckbrief bearbeiten</translation>
     </message>
@@ -3517,12 +4286,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Plan wird überarbeitet…</translation>
     </message>
     <message>
-        <location line="+33"/>
+        <location line="+59"/>
         <source>Planning was cancelled.</source>
         <translation>Die Planung wurde abgebrochen.</translation>
     </message>
     <message>
-        <location line="+44"/>
+        <location line="+19"/>
         <source>Add an image provider in Settings → Providers first.</source>
         <translation>Fügen Sie zuerst unter Einstellungen → Anbieter einen Bildanbieter hinzu.</translation>
     </message>
@@ -3532,12 +4301,17 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Wird vorbereitet…</translation>
     </message>
     <message>
-        <location line="+88"/>
+        <location line="+61"/>
+        <source>Waiting for the other shots before the Critic reviews…</source>
+        <translation>Wartet auf die anderen Aufnahmen, bevor der Kritiker prüft…</translation>
+    </message>
+    <message>
+        <location line="+63"/>
         <source>Critic is reviewing…</source>
         <translation>Kritiker bewertet…</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+21"/>
         <source>Critic failed: %1</source>
         <translation>Kritiker fehlgeschlagen: %1</translation>
     </message>
@@ -3552,7 +4326,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Kritiker: bestes Ergebnis %1/10 – neuer Versuch (%2/%3)…</translation>
     </message>
     <message numerus="yes">
-        <location line="+5"/>
+        <location line="+6"/>
         <source>Critic: best %1/10 after %n attempt(s)</source>
         <translation>
             <numerusform>Kritiker: bestes Ergebnis %1/10 nach %n Versuch</numerusform>
@@ -4303,13 +5077,13 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Die aktive Ebene ist gesperrt.</translation>
     </message>
     <message>
-        <location line="+22"/>
         <location filename="../src/ui/canvas/Tools.h" line="+12"/>
+        <location filename="../src/ui/canvas/Tools.cpp" line="+22"/>
         <source>Fill</source>
         <translation>Füllen</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location filename="../src/ui/canvas/Tools.cpp" line="+7"/>
         <source>Tolerance</source>
         <translation>Toleranz</translation>
     </message>
@@ -4622,6 +5396,90 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <location filename="../src/ui/canvas/Tools.h" line="+71"/>
         <source>Pan</source>
         <translation>Schwenken</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::ui::InstallRuntimeDialog</name>
+    <message>
+        <location filename="../src/ui/dialogs/LocalServersPage.cpp" line="+504"/>
+        <source>Download a server program</source>
+        <translation>Serverprogramm herunterladen</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Program</source>
+        <translation>Programm</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Build</source>
+        <translation>Build</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Files are downloaded from the project&apos;s GitHub releases, checked against the published SHA-256 checksums and unpacked into Lumen&apos;s data folder.</source>
+        <translation>Die Dateien werden aus den GitHub-Releases des Projekts heruntergeladen, mit den veröffentlichten SHA-256-Prüfsummen verglichen und in Lumens Datenordner entpackt.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <location line="+106"/>
+        <source>Download and install</source>
+        <translation>Herunterladen und installieren</translation>
+    </message>
+    <message>
+        <location line="-97"/>
+        <source>Installing %1 %2 — progress is shown in the Queue.</source>
+        <translation>%1 %2 wird installiert – der Fortschritt steht in der Warteschlange.</translation>
+    </message>
+    <message>
+        <location line="+30"/>
+        <source> (recommended)</source>
+        <translation> (empfohlen)</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Licence: %1</source>
+        <translation>Lizenz: %1</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Looking up the newest release on GitHub…</source>
+        <translation>Sucht das neueste Release auf GitHub…</translation>
+    </message>
+    <message>
+        <location line="+36"/>
+        <source>Release &lt;b&gt;%1&lt;/b&gt; from %2.</source>
+        <translation>Release &lt;b&gt;%1&lt;/b&gt; vom %2.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Download: %1</source>
+        <translation>Download: %1</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source> (the CUDA runtime is already installed)</source>
+        <translation> (die CUDA-Laufzeit ist bereits installiert)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source> (including the CUDA runtime, %1, shared by later versions)</source>
+        <translation> (einschließlich der CUDA-Laufzeit, %1, die spätere Versionen mitnutzen)</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Warning: this build %1.</source>
+        <translation>Warnung: Dieser Build %1.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>This version is already installed.</source>
+        <translation>Diese Version ist bereits installiert.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Reinstall</source>
+        <translation>Neu installieren</translation>
     </message>
 </context>
 <context>
@@ -5059,9 +5917,278 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
 </context>
 <context>
+    <name>lumen::ui::LocalServersPage</name>
+    <message>
+        <location filename="../src/ui/dialogs/LocalServersPage.cpp" line="-577"/>
+        <source>Existing install</source>
+        <translation>Vorhandene Installation</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>With Lumen</source>
+        <translation>Mit Lumen</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Manually</source>
+        <translation>Manuell</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>When needed</source>
+        <translation>Bei Bedarf</translation>
+    </message>
+    <message>
+        <location line="+43"/>
+        <source>Local AI servers</source>
+        <translation>Lokale KI-Server</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Lumen can download and run llama.cpp (language and vision models) and stable-diffusion.cpp (image models) on this computer, or use copies you already have. Servers start when a provider needs them and stop when Lumen closes.</source>
+        <translation>Lumen kann llama.cpp (Sprach- und Vision-Modelle) und stable-diffusion.cpp (Bildmodelle) herunterladen und auf diesem Computer ausführen oder vorhandene Installationen verwenden. Server starten, wenn ein Anbieter sie braucht, und werden mit Lumen beendet.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Checking this computer…</source>
+        <translation>Dieser Computer wird geprüft…</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Programs</source>
+        <translation>Programme</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+22"/>
+        <source>Program</source>
+        <translation>Programm</translation>
+    </message>
+    <message>
+        <location line="-22"/>
+        <source>Version</source>
+        <translation>Version</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Build</source>
+        <translation>Build</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Folder</source>
+        <translation>Ordner</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Download…</source>
+        <translation>Herunterladen…</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Download llama.cpp or stable-diffusion.cpp from GitHub</source>
+        <translation>llama.cpp oder stable-diffusion.cpp von GitHub herunterladen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Add existing…</source>
+        <translation>Vorhandenes hinzufügen…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Use llama-server or sd-server you installed yourself</source>
+        <translation>Selbst installierten llama-server oder sd-server verwenden</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Check for updates</source>
+        <translation>Nach Updates suchen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+22"/>
+        <location line="+262"/>
+        <location line="+6"/>
+        <location line="+4"/>
+        <location line="+49"/>
+        <source>Remove</source>
+        <translation>Entfernen</translation>
+    </message>
+    <message>
+        <location line="-331"/>
+        <source>Servers</source>
+        <translation>Server</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Server</source>
+        <translation>Server</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Port</source>
+        <translation>Port</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Starts</source>
+        <translation>Start</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>State</source>
+        <translation>Status</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>New server…</source>
+        <translation>Neuer Server…</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Edit…</source>
+        <translation>Bearbeiten…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Start</source>
+        <translation>Starten</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Stop</source>
+        <translation>Stopp</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Log…</source>
+        <translation>Protokoll…</translation>
+    </message>
+    <message>
+        <location line="+48"/>
+        <source>This computer: %1</source>
+        <translation>Dieser Computer: %1</translation>
+    </message>
+    <message>
+        <location line="+32"/>
+        <source>%1 — restart to apply changes</source>
+        <translation>%1 – Neustart übernimmt die Änderungen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>(missing)</source>
+        <translation>(fehlt)</translation>
+    </message>
+    <message>
+        <location line="+60"/>
+        <source>Browse…</source>
+        <translation>Durchsuchen…</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Choose a server program</source>
+        <translation>Serverprogramm wählen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Servers (llama-server.exe sd-server.exe llama-server sd-server)</source>
+        <translation>Server (llama-server.exe sd-server.exe llama-server sd-server)</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>%1 added.</source>
+        <translation>%1 hinzugefügt.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Add existing</source>
+        <translation>Vorhandenes hinzufügen</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Checking GitHub…</source>
+        <translation>GitHub wird abgefragt…</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Only programs downloaded by Lumen can be updated here.</source>
+        <translation>Hier lassen sich nur von Lumen heruntergeladene Programme aktualisieren.</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Everything is up to date.</source>
+        <translation>Alles ist aktuell.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>%1 %2 is available (you have %3).</source>
+        <translation>%1 %2 ist verfügbar (installiert: %3).</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Updates</source>
+        <translation>Updates</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Download now? Servers switch to the new version the next time they start; the current version is kept so you can go back.</source>
+        <translation>Jetzt herunterladen? Server verwenden die neue Version ab ihrem nächsten Start; die aktuelle Version bleibt erhalten, damit Sie zurückwechseln können.</translation>
+    </message>
+    <message>
+        <location line="+20"/>
+        <source>%1 updated. Servers use it from their next start.</source>
+        <translation>%1 aktualisiert. Server verwenden es ab ihrem nächsten Start.</translation>
+    </message>
+    <message>
+        <location line="+42"/>
+        <source>%1 is used by: %2. Remove those servers or switch them to another version first.</source>
+        <translation>%1 wird verwendet von: %2. Entfernen Sie diese Server zuerst oder stellen Sie sie auf eine andere Version um.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Delete %1 and its files (%2)?</source>
+        <translation>%1 und seine Dateien (%2) löschen?</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Forget %1? The program itself stays where it is.</source>
+        <translation>%1 vergessen? Das Programm selbst bleibt, wo es ist.</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>New server</source>
+        <translation>Neuer Server</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>No server program is installed yet. Download one now?</source>
+        <translation>Es ist noch kein Serverprogramm installiert. Jetzt eines herunterladen?</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>%1 added as a provider. It starts when Lumen first uses it.</source>
+        <translation>%1 als Anbieter hinzugefügt. Er startet, sobald Lumen ihn zum ersten Mal verwendet.</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Restart</source>
+        <translation>Neu starten</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Restart %1 now to apply the changes?</source>
+        <translation>%1 jetzt neu starten, um die Änderungen zu übernehmen?</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Stop and remove the server &apos;%1&apos;?</source>
+        <translation>Server „%1“ beenden und entfernen?</translation>
+    </message>
+</context>
+<context>
     <name>lumen::ui::MainWindow</name>
     <message>
-        <location filename="../src/ui/MainWindow.cpp" line="+129"/>
+        <location filename="../src/ui/MainWindow.cpp" line="+131"/>
         <source>Create</source>
         <translation>Erstellen</translation>
     </message>
@@ -5473,13 +6600,13 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Die aktive Ebene ist gesperrt.</translation>
     </message>
     <message>
-        <location line="+41"/>
         <location filename="../src/ui/canvas/Tools.h" line="+79"/>
+        <location filename="../src/ui/canvas/Tools.cpp" line="+41"/>
         <source>Move layer</source>
         <translation>Ebene verschieben</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location filename="../src/ui/canvas/Tools.cpp" line="+23"/>
         <source>Nudge layer</source>
         <translation>Ebene schrittweise verschieben</translation>
     </message>
@@ -5492,7 +6619,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::OnboardingDialog</name>
     <message>
-        <location filename="../src/ui/dialogs/SettingsDialog.cpp" line="+603"/>
+        <location filename="../src/ui/dialogs/SettingsDialog.cpp" line="+652"/>
         <source>Welcome to Lumen Studio</source>
         <translation>Willkommen bei Lumen Studio</translation>
     </message>
@@ -7266,7 +8393,7 @@ oder aus der Bibliothek ziehen</translation>
 <context>
     <name>lumen::ui::ProviderForm</name>
     <message>
-        <location filename="../src/ui/dialogs/SettingsDialog.cpp" line="-624"/>
+        <location filename="../src/ui/dialogs/SettingsDialog.cpp" line="-668"/>
         <source>Documentation</source>
         <translation>Dokumentation</translation>
     </message>
@@ -7276,7 +8403,27 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Name</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+9"/>
+        <source>External server (URL below)</source>
+        <translation>Externer Server (URL unten)</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>%1 (started by Lumen)</source>
+        <translation>%1 (von Lumen gestartet)</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Servers are set up under Settings → Local servers.</source>
+        <translation>Server richten Sie unter Einstellungen → Lokale Server ein.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Server</source>
+        <translation>Server</translation>
+    </message>
+    <message>
+        <location line="+27"/>
         <source>Advanced</source>
         <translation>Erweitert</translation>
     </message>
@@ -7311,12 +8458,12 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Liste vom Server laden</translation>
     </message>
     <message>
-        <location line="+59"/>
+        <location line="+61"/>
         <source>Loading...</source>
         <translation>Wird geladen...</translation>
     </message>
     <message numerus="yes">
-        <location line="+10"/>
+        <location line="+15"/>
         <source>%n option(s) found.</source>
         <translation>
             <numerusform>%n Option gefunden.</numerusform>
@@ -7329,7 +8476,7 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Verbindung wird hergestellt...</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+26"/>
         <source>&apos;%1&apos; is required.</source>
         <translation>„%1“ ist erforderlich.</translation>
     </message>
@@ -7452,6 +8599,213 @@ oder aus der Bibliothek ziehen</translation>
     </message>
 </context>
 <context>
+    <name>lumen::ui::ServerLogDialog</name>
+    <message>
+        <location filename="../src/ui/dialogs/LocalServersPage.cpp" line="+452"/>
+        <source>Server log — %1</source>
+        <translation>Serverprotokoll – %1</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Start</source>
+        <translation>Starten</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Stop</source>
+        <translation>Stopp</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Restart</source>
+        <translation>Neu starten</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Copy command line</source>
+        <translation>Befehlszeile kopieren</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Open log folder</source>
+        <translation>Protokollordner öffnen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Close</source>
+        <translation>Schließen</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::ui::ServerProfileDialog</name>
+    <message>
+        <location line="-306"/>
+        <source>New server</source>
+        <translation>Neuer Server</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Server settings</source>
+        <translation>Servereinstellungen</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Name</source>
+        <translation>Name</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Program</source>
+        <translation>Programm</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Port</source>
+        <translation>Port</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>“When needed” starts the server on the first request that uses it.</source>
+        <translation>„Bei Bedarf“ startet den Server bei der ersten Anfrage, die ihn nutzt.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Starts</source>
+        <translation>Start</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source> min</source>
+        <translation> min</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Never</source>
+        <translation>Nie</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Stops the server after it was unused for this long, freeing memory.</source>
+        <translation>Beendet den Server, wenn er so lange nicht benutzt wurde, und gibt Speicher frei.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Stop when idle</source>
+        <translation>Im Leerlauf beenden</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Command line</source>
+        <translation>Befehlszeile</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Add it as a provider</source>
+        <translation>Als Anbieter hinzufügen</translation>
+    </message>
+    <message>
+        <location line="+44"/>
+        <source>%1 options</source>
+        <translation>%1-Optionen</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Advanced</source>
+        <translation>Erweitert</translation>
+    </message>
+    <message>
+        <location line="+24"/>
+        <source>required</source>
+        <translation>erforderlich</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>none</source>
+        <translation>keine</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Browse…</source>
+        <translation>Durchsuchen…</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>All files (*)</source>
+        <translation>Alle Dateien (*)</translation>
+    </message>
+    <message>
+        <location line="+74"/>
+        <source>Lumen has no provider for %1 yet.</source>
+        <translation>Lumen hat noch keinen Anbieter für %1.</translation>
+    </message>
+    <message>
+        <location line="+49"/>
+        <source>Choose a program.</source>
+        <translation>Wählen Sie ein Programm.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Port %1 is already used by the server &apos;%2&apos;.</source>
+        <translation>Port %1 wird bereits vom Server „%2“ verwendet.</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::ui::ServerStatusButton</name>
+    <message>
+        <location filename="../src/ui/widgets/ServerStatus.cpp" line="+23"/>
+        <source>Local servers</source>
+        <translation>Lokale Server</translation>
+    </message>
+    <message>
+        <location line="+30"/>
+        <source>%1 failed</source>
+        <translation>%1 fehlgeschlagen</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Starting %1…</source>
+        <translation>%1 startet…</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+3"/>
+        <source>%n server(s) running</source>
+        <translation>
+            <numerusform>%n Server läuft</numerusform>
+            <numerusform>%n Server laufen</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Servers stopped</source>
+        <translation>Server gestoppt</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>Start</source>
+        <translation>Starten</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Stop</source>
+        <translation>Stopp</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Restart</source>
+        <translation>Neu starten</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Log…</source>
+        <translation>Protokoll…</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Local servers…</source>
+        <translation>Lokale Server…</translation>
+    </message>
+</context>
+<context>
     <name>lumen::ui::SettingsDialog</name>
     <message>
         <location filename="../src/ui/dialogs/SettingsDialog.cpp" line="+11"/>
@@ -7470,6 +8824,11 @@ oder aus der Bibliothek ziehen</translation>
     </message>
     <message>
         <location line="+1"/>
+        <source>Local servers</source>
+        <translation>Lokale Server</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>General</source>
         <translation>Allgemein</translation>
     </message>
@@ -7479,7 +8838,7 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Tastenkürzel</translation>
     </message>
     <message>
-        <location line="+30"/>
+        <location line="+32"/>
         <source>Add provider</source>
         <translation>Anbieter hinzufügen</translation>
     </message>
@@ -7589,7 +8948,7 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Systemstandard</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+16"/>
         <source>Language (restart)</source>
         <translation>Sprache (Neustart)</translation>
     </message>
@@ -7772,7 +9131,7 @@ oder aus der Bibliothek ziehen</translation>
 <context>
     <name>lumen::ui::Studio</name>
     <message>
-        <location filename="../src/ui/Studio.cpp" line="+106"/>
+        <location filename="../src/ui/Studio.cpp" line="+102"/>
         <source>Could not open project %1: %2</source>
         <translation>Projekt %1 konnte nicht geöffnet werden: %2</translation>
     </message>

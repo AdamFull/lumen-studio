@@ -11,10 +11,10 @@ namespace lumen::runtime {
 
 namespace {
 
-QString tr(const char *s)
+class Text
 {
-    return QCoreApplication::translate("lumen::runtime::ServerProfile", s);
-}
+    Q_DECLARE_TR_FUNCTIONS(lumen::runtime::ServerProfile)
+};
 
 using T = OptionField::Type;
 
@@ -31,51 +31,51 @@ OptionField field(const QString &key, const QString &label, T type, const QVaria
 
 QList<OptionField> llamaOptions()
 {
-    const QString gguf = tr("GGUF models (*.gguf)");
+    const QString gguf = Text::tr("GGUF models (*.gguf)");
     QList<OptionField> out;
-    OptionField model = field(QStringLiteral("model"), tr("Model"), T::File, {}, tr("The language model (.gguf)."));
+    OptionField model = field(QStringLiteral("model"), Text::tr("Model"), T::File, {}, Text::tr("The language model (.gguf)."));
     model.filter = gguf;
     model.required = true;
     out << model;
-    OptionField mmproj = field(QStringLiteral("mmproj"), tr("Vision projector"), T::File, {},
-                               tr("mmproj-*.gguf file that lets a vision model (Qwen3-VL, Gemma 3…) see images."));
+    OptionField mmproj = field(QStringLiteral("mmproj"), Text::tr("Vision projector"), T::File, {},
+                               Text::tr("mmproj-*.gguf file that lets a vision model (Qwen3-VL, Gemma 3…) see images."));
     mmproj.filter = gguf;
     out << mmproj;
-    OptionField ctx = field(QStringLiteral("context"), tr("Context size"), T::Integer, 16384,
-                            tr("Tokens of context. Larger needs more VRAM; 16384 suits planning and the Critic."));
+    OptionField ctx = field(QStringLiteral("context"), Text::tr("Context size"), T::Integer, 16384,
+                            Text::tr("Tokens of context. Larger needs more VRAM; 16384 suits planning and the Critic."));
     ctx.minimum = 512;
     ctx.maximum = 1048576;
     out << ctx;
-    OptionField ngl = field(QStringLiteral("gpu_layers"), tr("GPU layers"), T::Integer, 999,
-                            tr("Layers kept on the GPU (999 = all). Lower it when the model does not fit."));
+    OptionField ngl = field(QStringLiteral("gpu_layers"), Text::tr("GPU layers"), T::Integer, 999,
+                            Text::tr("Layers kept on the GPU (999 = all). Lower it when the model does not fit."));
     ngl.maximum = 999;
     out << ngl;
-    OptionField kv = field(QStringLiteral("kv_cache"), tr("KV cache type"), T::Choice, QStringLiteral("q8_0"),
-                           tr("q8_0 halves the context memory with no visible quality loss."));
+    OptionField kv = field(QStringLiteral("kv_cache"), Text::tr("KV cache type"), T::Choice, QStringLiteral("q8_0"),
+                           Text::tr("q8_0 halves the context memory with no visible quality loss."));
     kv.choices = {QStringLiteral("f16"), QStringLiteral("q8_0"), QStringLiteral("q4_0")};
     out << kv;
-    OptionField fa = field(QStringLiteral("flash_attention"), tr("Flash attention"), T::Choice, QStringLiteral("on"));
+    OptionField fa = field(QStringLiteral("flash_attention"), Text::tr("Flash attention"), T::Choice, QStringLiteral("on"));
     fa.choices = {QStringLiteral("auto"), QStringLiteral("on"), QStringLiteral("off")};
     out << fa;
-    OptionField sleep = field(QStringLiteral("sleep_idle"), tr("Unload when idle (s)"), T::Integer, 30,
-                              tr("Unloads the model from the GPU after this many idle seconds so an image model can use "
+    OptionField sleep = field(QStringLiteral("sleep_idle"), Text::tr("Unload when idle (s)"), T::Integer, 30,
+                              Text::tr("Unloads the model from the GPU after this many idle seconds so an image model can use "
                                  "it (0 = never). Reloading takes a few seconds."));
     sleep.maximum = 86400;
     out << sleep;
-    out << field(QStringLiteral("jinja"), tr("Use the model's chat template (--jinja)"), T::Boolean, true,
-                 tr("Needed for tool calls and reasoning models."));
-    OptionField parallel = field(QStringLiteral("parallel"), tr("Parallel requests"), T::Integer, 1,
-                                 tr("Slots; the context is shared between them."));
+    out << field(QStringLiteral("jinja"), Text::tr("Use the model's chat template (--jinja)"), T::Boolean, true,
+                 Text::tr("Needed for tool calls and reasoning models."));
+    OptionField parallel = field(QStringLiteral("parallel"), Text::tr("Parallel requests"), T::Integer, 1,
+                                 Text::tr("Slots; the context is shared between them."));
     parallel.minimum = 1;
     parallel.maximum = 64;
     parallel.advanced = true;
     out << parallel;
-    OptionField threads = field(QStringLiteral("threads"), tr("CPU threads"), T::Integer, 0, tr("0 = automatic"));
+    OptionField threads = field(QStringLiteral("threads"), Text::tr("CPU threads"), T::Integer, 0, Text::tr("0 = automatic"));
     threads.maximum = 256;
     threads.advanced = true;
     out << threads;
-    OptionField reasoning = field(QStringLiteral("reasoning_budget"), tr("Reasoning budget"), T::Integer, -1,
-                                  tr("-1 = unlimited thinking, 0 = thinking off (faster for small models)."));
+    OptionField reasoning = field(QStringLiteral("reasoning_budget"), Text::tr("Reasoning budget"), T::Integer, -1,
+                                  Text::tr("-1 = unlimited thinking, 0 = thinking off (faster for small models)."));
     reasoning.minimum = -1;
     reasoning.maximum = 1000000;
     reasoning.advanced = true;
@@ -85,59 +85,59 @@ QList<OptionField> llamaOptions()
 
 QList<OptionField> sdOptions()
 {
-    const QString models = tr("Models (*.safetensors *.gguf *.ckpt *.sft)");
+    const QString models = Text::tr("Models (*.safetensors *.gguf *.ckpt *.sft)");
     QList<OptionField> out;
-    OptionField model = field(QStringLiteral("model"), tr("Checkpoint"), T::File, {},
-                              tr("Single-file checkpoint (SD 1.5, SDXL, Illustrious, Pony…). For FLUX-style models use "
+    OptionField model = field(QStringLiteral("model"), Text::tr("Checkpoint"), T::File, {},
+                              Text::tr("Single-file checkpoint (SD 1.5, SDXL, Illustrious, Pony…). For FLUX-style models use "
                                  "\"Diffusion model\" with separate text encoders instead."));
     model.filter = models;
     out << model;
-    OptionField vae = field(QStringLiteral("vae"), tr("VAE"), T::File, {}, tr("Optional separate VAE (e.g. sdxl_vae.safetensors)."));
+    OptionField vae = field(QStringLiteral("vae"), Text::tr("VAE"), T::File, {}, Text::tr("Optional separate VAE (e.g. sdxl_vae.safetensors)."));
     vae.filter = models;
     out << vae;
-    OptionField cn = field(QStringLiteral("control_net"), tr("ControlNet"), T::File, {},
-                           tr("Needed for pose control (e.g. an SDXL OpenPose ControlNet)."));
+    OptionField cn = field(QStringLiteral("control_net"), Text::tr("ControlNet"), T::File, {},
+                           Text::tr("Needed for pose control (e.g. an SDXL OpenPose ControlNet)."));
     cn.filter = models;
     out << cn;
-    OptionField ipa = field(QStringLiteral("ip_adapter"), tr("IP-Adapter"), T::File, {},
-                            tr("Keeps a character's identity from a reference image (e.g. ip-adapter_sdxl_vit-h). "
+    OptionField ipa = field(QStringLiteral("ip_adapter"), Text::tr("IP-Adapter"), T::File, {},
+                            Text::tr("Keeps a character's identity from a reference image (e.g. ip-adapter_sdxl_vit-h). "
                                "Needs the CLIP vision encoder below."));
     ipa.filter = models;
     out << ipa;
-    OptionField clipVision = field(QStringLiteral("clip_vision"), tr("CLIP vision encoder"), T::File, {},
-                                   tr("ViT-H image encoder for the IP-Adapter (clip_vision_h.safetensors)."));
+    OptionField clipVision = field(QStringLiteral("clip_vision"), Text::tr("CLIP vision encoder"), T::File, {},
+                                   Text::tr("ViT-H image encoder for the IP-Adapter (clip_vision_h.safetensors)."));
     clipVision.filter = models;
     out << clipVision;
-    out << field(QStringLiteral("lora_dir"), tr("LoRA folder"), T::Directory, {}, tr("LoRAs in this folder can be used in prompts."));
-    OptionField upscale = field(QStringLiteral("upscale_model"), tr("Upscaler"), T::File, {}, tr("ESRGAN model for 2×/4× upscaling."));
+    out << field(QStringLiteral("lora_dir"), Text::tr("LoRA folder"), T::Directory, {}, Text::tr("LoRAs in this folder can be used in prompts."));
+    OptionField upscale = field(QStringLiteral("upscale_model"), Text::tr("Upscaler"), T::File, {}, Text::tr("ESRGAN model for 2×/4× upscaling."));
     upscale.filter = models;
     out << upscale;
-    out << field(QStringLiteral("offload_to_cpu"), tr("Keep weights in RAM"), T::Boolean, false,
-                 tr("Moves weights to the GPU only while generating (--offload-to-cpu). Slower, but leaves VRAM for a "
+    out << field(QStringLiteral("offload_to_cpu"), Text::tr("Keep weights in RAM"), T::Boolean, false,
+                 Text::tr("Moves weights to the GPU only while generating (--offload-to-cpu). Slower, but leaves VRAM for a "
                     "language model on the same GPU."));
-    OptionField maxVram = field(QStringLiteral("max_vram"), tr("VRAM budget (GB)"), T::Number, 0.0,
-                                tr("0 = use what is free. A budget makes large models run in parts."));
+    OptionField maxVram = field(QStringLiteral("max_vram"), Text::tr("VRAM budget (GB)"), T::Number, 0.0,
+                                Text::tr("0 = use what is free. A budget makes large models run in parts."));
     maxVram.maximum = 256;
     out << maxVram;
-    out << field(QStringLiteral("diffusion_fa"), tr("Flash attention"), T::Boolean, true, tr("Less VRAM, usually faster."));
-    OptionField diffusion = field(QStringLiteral("diffusion_model"), tr("Diffusion model"), T::File, {},
-                                  tr("Standalone diffusion model (FLUX, Qwen-Image, Z-Image…), used instead of a checkpoint."));
+    out << field(QStringLiteral("diffusion_fa"), Text::tr("Flash attention"), T::Boolean, true, Text::tr("Less VRAM, usually faster."));
+    OptionField diffusion = field(QStringLiteral("diffusion_model"), Text::tr("Diffusion model"), T::File, {},
+                                  Text::tr("Standalone diffusion model (FLUX, Qwen-Image, Z-Image…), used instead of a checkpoint."));
     diffusion.filter = models;
     diffusion.advanced = true;
     out << diffusion;
-    for (const auto &[key, label] : {std::pair{QStringLiteral("clip_l"), tr("CLIP-L text encoder")},
-                                     std::pair{QStringLiteral("clip_g"), tr("CLIP-G text encoder")},
-                                     std::pair{QStringLiteral("t5xxl"), tr("T5-XXL text encoder")},
-                                     std::pair{QStringLiteral("llm"), tr("LLM text encoder")}}) {
+    for (const auto &[key, label] : {std::pair{QStringLiteral("clip_l"), Text::tr("CLIP-L text encoder")},
+                                     std::pair{QStringLiteral("clip_g"), Text::tr("CLIP-G text encoder")},
+                                     std::pair{QStringLiteral("t5xxl"), Text::tr("T5-XXL text encoder")},
+                                     std::pair{QStringLiteral("llm"), Text::tr("LLM text encoder")}}) {
         OptionField f = field(key, label, T::File);
         f.filter = models;
         f.advanced = true;
         out << f;
     }
-    OptionField clipCpu = field(QStringLiteral("clip_on_cpu"), tr("Text encoders on the CPU"), T::Boolean, false);
+    OptionField clipCpu = field(QStringLiteral("clip_on_cpu"), Text::tr("Text encoders on the CPU"), T::Boolean, false);
     clipCpu.advanced = true;
     out << clipCpu;
-    OptionField threads = field(QStringLiteral("threads"), tr("CPU threads"), T::Integer, 0, tr("0 = automatic"));
+    OptionField threads = field(QStringLiteral("threads"), Text::tr("CPU threads"), T::Integer, 0, Text::tr("0 = automatic"));
     threads.maximum = 256;
     threads.advanced = true;
     out << threads;
@@ -273,14 +273,14 @@ LaunchCommand buildLaunch(const ServerProfile &p, const InstalledRuntime &rt)
         if (path.isEmpty())
             return;
         if (!QFileInfo::exists(path) && cmd.error.isEmpty())
-            cmd.error = tr("%1 does not exist.").arg(QDir::toNativeSeparators(path));
+            cmd.error = Text::tr("%1 does not exist.").arg(QDir::toNativeSeparators(path));
         cmd.arguments << flagName << QDir::toNativeSeparators(path);
     };
     QStringList &a = cmd.arguments;
 
     if (kind == QLatin1String("llama.cpp")) {
         if (str(QStringLiteral("model")).isEmpty())
-            cmd.error = tr("Choose a model for %1.").arg(p.name);
+            cmd.error = Text::tr("Choose a model for %1.").arg(p.name);
         file(QStringLiteral("-m"), QStringLiteral("model"));
         file(QStringLiteral("--mmproj"), QStringLiteral("mmproj"));
         a << QStringLiteral("--host") << QStringLiteral("127.0.0.1") << QStringLiteral("--port") << QString::number(p.port);
@@ -304,9 +304,9 @@ LaunchCommand buildLaunch(const ServerProfile &p, const InstalledRuntime &rt)
             a << QStringLiteral("--reasoning-budget") << QString::number(num(QStringLiteral("reasoning_budget")));
     } else if (kind == QLatin1String("sd.cpp")) {
         if (str(QStringLiteral("model")).isEmpty() && str(QStringLiteral("diffusion_model")).isEmpty())
-            cmd.error = tr("Choose a checkpoint or a diffusion model for %1.").arg(p.name);
+            cmd.error = Text::tr("Choose a checkpoint or a diffusion model for %1.").arg(p.name);
         if (!str(QStringLiteral("ip_adapter")).isEmpty() && str(QStringLiteral("clip_vision")).isEmpty() && cmd.error.isEmpty())
-            cmd.error = tr("The IP-Adapter needs a CLIP vision encoder.");
+            cmd.error = Text::tr("The IP-Adapter needs a CLIP vision encoder.");
         file(QStringLiteral("-m"), QStringLiteral("model"));
         file(QStringLiteral("--diffusion-model"), QStringLiteral("diffusion_model"));
         file(QStringLiteral("--vae"), QStringLiteral("vae"));
@@ -332,11 +332,11 @@ LaunchCommand buildLaunch(const ServerProfile &p, const InstalledRuntime &rt)
         if (num(QStringLiteral("threads")) > 0)
             a << QStringLiteral("-t") << QString::number(num(QStringLiteral("threads")));
     } else {
-        cmd.error = tr("Lumen cannot start %1 servers.").arg(kind);
+        cmd.error = Text::tr("Lumen cannot start %1 servers.").arg(kind);
     }
     a << splitArguments(str(QStringLiteral("extra_args")));
     if (p.port <= 0 && cmd.error.isEmpty())
-        cmd.error = tr("No port set.");
+        cmd.error = Text::tr("No port set.");
     return cmd;
 }
 

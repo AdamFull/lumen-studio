@@ -2,6 +2,7 @@
 
 #include "ai/Agent.h"
 #include "ai/Director.h"
+#include "ai/Gate.h"
 #include "ai/GenerationService.h"
 #include "ai/ProviderCatalog.h"
 #include "ai/StructuredChat.h"
@@ -12,6 +13,8 @@
 #include "net/HttpClient.h"
 
 #include <QJsonArray>
+#include <QPromise>
+#include <QTimer>
 #include <QTemporaryDir>
 #include <QSignalSpy>
 #include <QtTest>
@@ -43,6 +46,7 @@ private slots:
     void cleanShotPrompts();
     void agentNativeTools();
     void agentJsonProtocol();
+    void providerGate();
 
 private:
     net::HttpClient m_http;
@@ -549,6 +553,108 @@ void TestServices::cleanShotPrompts()
     QCOMPARE(shot.value(QStringLiteral("description")).toString(), QStringLiteral("front"));
     QCOMPARE(shot.value(QStringLiteral("pose")).toObject().value(QStringLiteral("yaw")).toInt(), 0); // the rig itself is untouched
     QCOMPARE(clean.value(QStringLiteral("title")).toString(), QStringLiteral("t"));
+}
+
+namespace {
+
+// Opens after a delay (like a server that is loading), or reports an error.
+class TestGate : public ProviderGate
+{
+public:
+    QString error;
+    int delayMs = 150;
+    int acquired = 0;
+    int released = 0;
+    QFuture<QString> acquire() override
+    {
+        ++acquired;
+        auto promise = std::make_shared<QPromise<QString>>();
+        promise->start();
+        QTimer::singleShot(delayMs, [promise, e = error] {
+            promise->addResult(e);
+            promise->finish();
+        });
+        return promise->future();
+    }
+    void release() override { ++released; }
+};
+
+} // namespace
+
+void TestServices::providerGate()
+{
+    MockHttpServer server;
+    int requests = 0;
+    server.route("POST", QStringLiteral("/v1/chat/completions"), [&](const MockRequest &) {
+        ++requests;
+        return chatReply(QJsonObject{{QStringLiteral("content"), QStringLiteral("hello")}}, QStringLiteral("stop"));
+    });
+    server.route("GET", QStringLiteral("/v1/models"), [](const MockRequest &) {
+        return MockResponse::json({{QStringLiteral("data"), QJsonArray{QJsonObject{{QStringLiteral("id"), QStringLiteral("qwen")}}}}});
+    });
+    OpenAiChatProvider llm(OpenAiChatProvider::describe(OpenAiChatProvider::Flavor::LlamaCpp), QStringLiteral("l"), &m_http, nullptr);
+    llm.configure({{QStringLiteral("url"), server.baseUrl().toString() + QStringLiteral("/v1")}});
+    ChatRequest req;
+    req.messages = {ChatMessage::user(QStringLiteral("hi"))};
+
+    // No gate: the provider's own operation.
+    ChatOperation *direct = gatedChat(&llm, req);
+    QTRY_VERIFY_WITH_TIMEOUT(direct->isFinished(), 5000);
+
+    auto gate = std::make_shared<TestGate>();
+    llm.setGate(gate);
+    // The request waits for the gate, reports that it is starting, then runs.
+    ChatOperation *op = gatedChat(&llm, req);
+    op->setAutoDelete(false);
+    QSignalSpy progress(op, &Operation::progress);
+    QCOMPARE(requests, 1);
+    QTRY_VERIFY_WITH_TIMEOUT(op->isFinished(), 5000);
+    QVERIFY2(op->state() == Operation::State::Succeeded, qPrintable(op->errorString()));
+    QCOMPARE(op->result().text, QStringLiteral("hello"));
+    QCOMPARE(requests, 2);
+    QCOMPARE(gate->acquired, 1);
+    QCOMPARE(gate->released, 1);
+    delete op;
+
+    // Cancelled while the server is still starting: nothing is sent, the gate is released.
+    gate->delayMs = 400;
+    op = gatedChat(&llm, req);
+    op->setAutoDelete(false);
+    op->cancel();
+    QVERIFY(op->state() == Operation::State::Cancelled);
+    QTest::qWait(600);
+    QCOMPARE(requests, 2);
+    QCOMPARE(gate->released, 2);
+    delete op;
+
+    // The server cannot start: the request fails with its error.
+    gate->delayMs = 10;
+    gate->error = QStringLiteral("CUDA out of memory");
+    op = gatedChat(&llm, req);
+    op->setAutoDelete(false);
+    QTRY_VERIFY_WITH_TIMEOUT(op->isFinished(), 5000);
+    QCOMPARE(op->errorString(), QStringLiteral("CUDA out of memory"));
+    QCOMPARE(requests, 2);
+    QCOMPARE(gate->released, 3);
+    delete op;
+
+    // One-off calls.
+    gate->error.clear();
+    QFuture<QStringList> models = gatedList(&llm, [&] { return llm.listModels(); });
+    QTRY_VERIFY_WITH_TIMEOUT(models.isFinished(), 5000);
+    QCOMPARE(models.result(), QStringList{QStringLiteral("qwen")});
+    QCOMPARE(gate->released, 4);
+    gate->error = QStringLiteral("no server");
+    QFuture<QString> test = gatedCall(&llm, [&] { return llm.testConnection(); });
+    QTRY_VERIFY_WITH_TIMEOUT(test.isFinished(), 5000);
+    bool threw = false;
+    try {
+        test.result();
+    } catch (const std::exception &e) {
+        threw = QString::fromUtf8(e.what()).contains(QLatin1String("no server"));
+    }
+    QVERIFY(threw);
+    QCOMPARE(gate->released, 5);
 }
 
 QTEST_MAIN(TestServices)

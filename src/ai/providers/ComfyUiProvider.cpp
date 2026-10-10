@@ -850,7 +850,7 @@ ImageOperation *ComfyUiProvider::generate(const ImageRequest &r)
     return track(generateImpl(r));
 }
 
-ImageOperation *ComfyUiProvider::runUtilityImpl(Utility utility, const QImage &image, const QJsonObject &params)
+ImageOperation *ComfyUiProvider::runUtility(Utility utility, const QImage &image, const QJsonObject &params)
 {
     return track(runUtilityImpl(utility, image, params));
 }
@@ -982,7 +982,7 @@ bool ComfyUiProvider::supportsUtility(Utility u) const
     return u == Utility::Upscale || u == Utility::DetectPose;
 }
 
-ImageOperation *ComfyUiProvider::runUtility(Utility utility, const QImage &image, const QJsonObject &params)
+ImageOperation *ComfyUiProvider::runUtilityImpl(Utility utility, const QImage &image, const QJsonObject &params)
 {
     if (utility == Utility::SegmentParts)
         return segmentParts(image, params);

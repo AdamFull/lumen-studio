@@ -16,13 +16,23 @@
 #include "ui/pages/CreatePage.h"
 #include "pose/Rig.h"
 #include "MockHttpServer.h"
+#include "ui/dialogs/LocalServersPage.h"
+#include "ui/dialogs/SettingsDialog.h"
 #include "ui/dialogs/ShortcutsPage.h"
+#include "ui/widgets/ServerStatus.h"
+#include "ai/Gate.h"
 #include "ui/widgets/Controls.h"
 
+#include <QComboBox>
 #include <QJsonArray>
+#include <QTabWidget>
+#include <QTreeWidget>
 #include <QAction>
 #include <QLineEdit>
 #include <QPainter>
+#include <QPlainTextEdit>
+#include <QPushButton>
+#include <QListWidget>
 #include <QSpinBox>
 #include <QTemporaryDir>
 #include <QToolButton>
@@ -70,6 +80,7 @@ private slots:
     void fitLabelWraps();
     void criticRetriesShot();
     void assistantRunsReferenceScenario();
+    void localServersWiring();
 
 private:
     ToolEvent at(double x, double y, Qt::KeyboardModifiers mods = Qt::NoModifier) const
@@ -688,6 +699,124 @@ void TestCanvas::assistantRunsReferenceScenario()
     QCOMPARE(panel.history().size(), 1);
     for (ai::Provider *p : studio.providers()->providers())
         studio.providers()->removeProvider(p->instanceId());
+}
+
+void TestCanvas::localServersWiring()
+{
+    Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
+    QTemporaryDir dir;
+    // A fake llama-server (see tests/fake_server.cpp), adopted as an existing install.
+    const QString exe = dir.filePath(QStringLiteral("llama/llama-server.exe"));
+    QDir().mkpath(QFileInfo(exe).absolutePath());
+    QVERIFY(QFile::copy(QStringLiteral(FAKE_SERVER_PATH), exe));
+    const QString model = dir.filePath(QStringLiteral("model.gguf"));
+    {
+        QFile f(model);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write("gguf");
+    }
+    Studio studio;
+    runtime::ServerSupervisor *servers = studio.servers();
+    servers->healthIntervalMs = 100;
+    for (const runtime::ServerProfile &old : servers->profiles())
+        servers->removeProfile(old.id);
+    runtime::InstalledRuntime rt;
+    rt.id = QStringLiteral("adopted/test-fake");
+    rt.kind = QStringLiteral("llama.cpp");
+    rt.executable = exe;
+    rt.directory = QFileInfo(exe).absolutePath();
+    studio.runtimes()->addInstalled(rt);
+    runtime::ServerProfile profile = servers->createProfile(rt.id, QStringLiteral("Local Qwen"));
+    profile.options = {{QStringLiteral("model"), model}, {QStringLiteral("extra_args"), QStringLiteral("--fake-ready-ms 100")}};
+    servers->addProfile(profile);
+
+    // A provider bound to the server gets a gate and the server's URL.
+    ai::Provider *provider = studio.providers()->addProvider(
+        QStringLiteral("llamacpp"), QStringLiteral("Local Qwen"),
+        {{QStringLiteral("url"), QStringLiteral("http://127.0.0.1:1/v1")}, {QStringLiteral("managed_server"), profile.id}});
+    QVERIFY(provider);
+    QVERIFY(provider->gate());
+    QCOMPARE(provider->text(QStringLiteral("url")), runtime::providerUrl(QStringLiteral("llama.cpp"), profile.port));
+    QCOMPARE(studio.providerForServer(profile.id), provider);
+
+    MainWindow window(&studio);
+    window.resize(1200, 800);
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    auto *chip = window.findChild<ServerStatusButton *>();
+    QVERIFY(chip && chip->isVisible());
+    QCOMPARE(chip->text(), QStringLiteral("Servers stopped"));
+
+    // The first request starts the server.
+    QFuture<QString> ready = provider->gate()->acquire();
+    QTRY_VERIFY_WITH_TIMEOUT(ready.isFinished(), 20000);
+    QCOMPARE(ready.result(), QString());
+    QCOMPARE(servers->state(profile.id), runtime::ServerState::Ready);
+    QCOMPARE(chip->text(), QStringLiteral("1 server(s) running"));
+    provider->gate()->release();
+
+    // Settings → Local servers lists the program and the server; the provider form shows the binding.
+    {
+        SettingsDialog dlg(&studio, &window);
+        dlg.showTab(QStringLiteral("servers"));
+        dlg.show();
+        auto *page = dlg.findChild<LocalServersPage *>();
+        QVERIFY(page && page->isVisible());
+        const QList<QTreeWidget *> trees = page->findChildren<QTreeWidget *>();
+        QCOMPARE(trees.size(), 2);
+        QCOMPARE(trees[0]->topLevelItemCount(), 1);
+        QCOMPARE(trees[1]->topLevelItemCount(), 1);
+        QCOMPARE(trees[1]->topLevelItem(0)->text(0), QStringLiteral("Local Qwen"));
+        QCOMPARE(trees[1]->topLevelItem(0)->text(4), QStringLiteral("Running"));
+        dlg.showTab(QStringLiteral("providers"));
+        QTest::qWait(50);
+        auto *form = dlg.findChild<ProviderForm *>();
+        QVERIFY(form);
+        QComboBox *serverCombo = nullptr;
+        for (QComboBox *c : form->findChildren<QComboBox *>()) {
+            if (c->findData(profile.id) >= 0)
+                serverCombo = c;
+        }
+        // The list opens on the first provider; select ours if needed.
+        if (!serverCombo || serverCombo->currentData().toString() != profile.id) {
+            auto *list = dlg.findChild<QListWidget *>();
+            for (int i = 0; list && i < list->count(); ++i) {
+                if (list->item(i)->data(Qt::UserRole).toString() == provider->instanceId())
+                    list->setCurrentRow(i);
+            }
+            QTest::qWait(50);
+            form = dlg.findChild<ProviderForm *>();
+            for (QComboBox *c : form->findChildren<QComboBox *>()) {
+                if (c->findData(profile.id) >= 0)
+                    serverCombo = c;
+            }
+        }
+        QVERIFY(serverCombo);
+        QCOMPARE(serverCombo->currentData().toString(), profile.id);
+        // Saving the form keeps the binding.
+        for (QPushButton *b : form->findChildren<QPushButton *>()) {
+            if (b->text() == QLatin1String("Save"))
+                b->click();
+        }
+        QCOMPARE(studio.providers()->provider(provider->instanceId())->text(QStringLiteral("managed_server")), profile.id);
+    }
+
+    // Profile dialog: options form and command preview.
+    {
+        ServerProfileDialog dlg(&studio, profile, false, &window);
+        const runtime::ServerProfile edited = dlg.profile();
+        QCOMPARE(edited.options.value(QStringLiteral("model")).toString(), model);
+        QCOMPARE(edited.options.value(QStringLiteral("extra_args")).toString(), QStringLiteral("--fake-ready-ms 100"));
+        QVERIFY(!edited.options.contains(QStringLiteral("context"))); // defaults are not stored
+        auto *preview = dlg.findChild<QPlainTextEdit *>();
+        QVERIFY(preview && preview->toPlainText().contains(QStringLiteral("--port %1").arg(profile.port)));
+    }
+
+    servers->stop(profile.id);
+    QTRY_COMPARE_WITH_TIMEOUT(servers->state(profile.id), runtime::ServerState::Stopped, 10000);
+    studio.providers()->removeProvider(provider->instanceId());
+    servers->removeProfile(profile.id);
+    studio.runtimes()->remove(rt.id);
 }
 
 QTEST_MAIN(TestCanvas)

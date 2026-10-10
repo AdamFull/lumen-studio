@@ -1,5 +1,6 @@
 #include "ai/GenerationService.h"
 
+#include "ai/Gate.h"
 #include "ai/PromptStyle.h"
 #include "core/Async.h"
 #include "core/ImageOps.h"
@@ -216,7 +217,7 @@ void GenerationService::execute(Job *job, const GenerationSpec &specIn, OutputHa
             job->fail(tr("The provider is no longer available"));
             return;
         }
-        ImageOperation *op = providerGuard->generate(request);
+        ImageOperation *op = gatedGenerate(providerGuard, request);
         job->setCancelHandler([op = QPointer<ImageOperation>(op), job] {
             if (op)
                 op->cancel();
@@ -403,7 +404,7 @@ Job *GenerationService::submitUtilityImpl(const QString &providerId, Utility uti
                 job->fail(tr("The provider was removed."));
                 return;
             }
-            ImageOperation *op = guard->runUtility(utility, input, params);
+            ImageOperation *op = gatedUtility(guard, utility, input, params);
             job->setCancelHandler([op = QPointer<ImageOperation>(op), job] {
                 if (op)
                     op->cancel();
