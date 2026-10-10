@@ -120,7 +120,7 @@ void Studio::applyServerBindings()
             auto has = [&](const QString &key) { return !profile->option(key, kind).toString().trimmed().isEmpty(); };
             wanted.insert(QStringLiteral("control_net"), has(QStringLiteral("control_net")));
             wanted.insert(QStringLiteral("ip_adapter"), has(QStringLiteral("ip_adapter")) && has(QStringLiteral("clip_vision")));
-            wanted.insert(QStringLiteral("upscaler"), has(QStringLiteral("upscale_model")));
+            wanted.insert(QStringLiteral("upscaler"), has(QStringLiteral("upscalers_dir")));
         }
         QVariantMap settings = m_registry.settingsFor(p->instanceId());
         bool changed = false;

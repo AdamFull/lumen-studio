@@ -78,6 +78,7 @@ private slots:
     void installRuntime();
     void managedSdServer();
     void managedStudioScenario();
+    void managedSdUpscale();
 
 private:
     net::HttpClient m_http;
@@ -744,6 +745,51 @@ void TestLive::managedStudioScenario()
                                  && servers->state(image.id) == runtime::ServerState::Stopped, 30000);
     servers->removeProfile(llm.id);
     servers->removeProfile(image.id);
+}
+
+// LUMEN_LIVE_SD_RUNTIMES, LUMEN_LIVE_SD_MODEL, LUMEN_LIVE_SD_UPSCALERS=<folder with ESRGAN models>, LUMEN_LIVE_REFERENCE:
+// 2x upscale of the reference through sd-server's /upscale.
+void TestLive::managedSdUpscale()
+{
+    const QString root = qEnvironmentVariable("LUMEN_LIVE_SD_RUNTIMES");
+    const QString model = qEnvironmentVariable("LUMEN_LIVE_SD_MODEL");
+    const QString upscaler = qEnvironmentVariable("LUMEN_LIVE_SD_UPSCALERS");
+    if (root.isEmpty() || model.isEmpty() || upscaler.isEmpty() || referencePath().isEmpty())
+        QSKIP("LUMEN_LIVE_SD_RUNTIMES, LUMEN_LIVE_SD_MODEL, LUMEN_LIVE_SD_UPSCALERS and LUMEN_LIVE_REFERENCE are needed");
+    QTemporaryDir tmp;
+    JobQueue jobs;
+    runtime::RuntimeStore store(&m_http, &jobs);
+    store.setRoot(root);
+    store.load();
+    const auto rt = store.latestManaged(QStringLiteral("sd.cpp"));
+    QVERIFY(rt);
+    runtime::ServerSupervisor servers(&store, &m_http);
+    servers.setConfigPath(tmp.filePath(QStringLiteral("servers.json")));
+    servers.setLogDir(tmp.filePath(QStringLiteral("logs")));
+    runtime::ServerProfile profile = servers.createProfile(rt->id, QStringLiteral("Upscale"));
+    profile.options.insert(QStringLiteral("model"), model);
+    profile.options.insert(QStringLiteral("upscalers_dir"), upscaler);
+    servers.addProfile(profile);
+    SdCppProvider sd(SdCppProvider::describe(), QStringLiteral("live-up"), &m_http, nullptr);
+    sd.configure({{QStringLiteral("url"), runtime::providerUrl(rt->kind, profile.port)}, {QStringLiteral("upscaler"), true}});
+    sd.setGate(std::make_shared<SupervisorGate>(&servers, profile.id));
+    const QImage input(referencePath());
+    QElapsedTimer t;
+    t.start();
+    ImageOperation *op = gatedUtility(&sd, Utility::Upscale, input, {{QStringLiteral("factor"), 2.0}});
+    op->setAutoDelete(false);
+    QTRY_VERIFY_WITH_TIMEOUT(op->isFinished(), 600000);
+    if (op->state() != Operation::State::Succeeded)
+        qInfo().noquote() << servers.log(profile.id).mid(std::max<qsizetype>(0, servers.log(profile.id).size() - 20)).join(QLatin1Char('\n'));
+    QVERIFY2(op->state() == Operation::State::Succeeded, qPrintable(op->errorString()));
+    const QImage out = op->result().images.value(0).image;
+    qInfo() << "upscaled" << input.size() << "->" << out.size() << "in" << t.elapsed() << "ms (includes server start), with"
+            << op->result().info.value(QStringLiteral("upscaler")).toString();
+    QCOMPARE(out.size(), input.size() * 2);
+    save(out, QStringLiteral("sdcpp_upscaled.png"));
+    delete op;
+    servers.stop(profile.id);
+    QTRY_COMPARE_WITH_TIMEOUT(servers.state(profile.id), runtime::ServerState::Stopped, 30000);
 }
 
 QTEST_MAIN(TestLive)

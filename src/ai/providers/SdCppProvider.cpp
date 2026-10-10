@@ -66,7 +66,7 @@ ProviderType SdCppProvider::describe()
         {QStringLiteral("ip_adapter"), tr("Server has an IP-Adapter (character references)"), F::Boolean, false,
          tr("The server was started with --ip-adapter and --clip_vision. Set automatically for servers Lumen runs.")},
         {QStringLiteral("upscaler"), tr("Server has an upscaler"), F::Boolean, false,
-         tr("The server was started with --upscale-model. Set automatically for servers Lumen runs.")},
+         tr("The server was started with --hires-upscalers-dir. Set automatically for servers Lumen runs.")},
         {QStringLiteral("vae_tiling"), tr("VAE tiling"), F::Boolean, true,
          tr("Encodes and decodes images in tiles. Needed on 8 GB GPUs for SDXL with a ControlNet; slightly slower."), {}, 0, 0, false, true},
         {QStringLiteral("ip_adapter_pose_weight"), tr("IP-Adapter weight with pose control"), F::Number, 0.3,

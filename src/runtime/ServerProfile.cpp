@@ -109,9 +109,9 @@ QList<OptionField> sdOptions()
     clipVision.filter = models;
     out << clipVision;
     out << field(QStringLiteral("lora_dir"), Text::tr("LoRA folder"), T::Directory, {}, Text::tr("LoRAs in this folder can be used in prompts."));
-    OptionField upscale = field(QStringLiteral("upscale_model"), Text::tr("Upscaler"), T::File, {}, Text::tr("ESRGAN model for 2×/4× upscaling."));
-    upscale.filter = models;
-    out << upscale;
+    out << field(QStringLiteral("upscalers_dir"), Text::tr("Upscaler folder"), T::Directory, {},
+                 Text::tr("Folder with ESRGAN models (e.g. RealESRGAN_x4plus_anime_6B.pth) for upscaling and hires fix; "
+                          "ComfyUI's models/upscale_models works."));
     OptionField precision = field(QStringLiteral("weight_type"), Text::tr("Weight precision"), T::Choice, QStringLiteral("q8_0"),
                                   Text::tr("Converts the weights when loading. q8_0 halves an SDXL model with no visible change, so the "
                                            "model and a ControlNet fit in 8 GB and run faster; 'file' keeps what the file stores."));
@@ -323,7 +323,7 @@ LaunchCommand buildLaunch(const ServerProfile &p, const InstalledRuntime &rt)
         file(QStringLiteral("--ip-adapter"), QStringLiteral("ip_adapter"));
         file(QStringLiteral("--clip_vision"), QStringLiteral("clip_vision"));
         file(QStringLiteral("--lora-model-dir"), QStringLiteral("lora_dir"));
-        file(QStringLiteral("--upscale-model"), QStringLiteral("upscale_model"));
+        file(QStringLiteral("--hires-upscalers-dir"), QStringLiteral("upscalers_dir"));
         a << QStringLiteral("--listen-ip") << QStringLiteral("127.0.0.1") << QStringLiteral("--listen-port") << QString::number(p.port);
         const QString weightType = str(QStringLiteral("weight_type"));
         if (!weightType.isEmpty() && weightType != QLatin1String("file"))
