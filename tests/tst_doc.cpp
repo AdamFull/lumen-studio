@@ -1,6 +1,7 @@
 #include "core/ImageOps.h"
 #include "core/PngText.h"
 #include "doc/CharacterLibrary.h"
+#include "doc/LoraDataset.h"
 #include "doc/Document.h"
 #include "doc/Project.h"
 #include "doc/PsdIO.h"
@@ -23,6 +24,7 @@ class TestDoc : public QObject
 private slots:
     void psdImportExport();
     void characterLibrary();
+    void loraDataset();
     void projectImportsPsd();
     void addRemoveLayerUndo();
     void paintCommitUndo();
@@ -394,6 +396,103 @@ void TestDoc::characterLibrary()
     QVERIFY(library.remove(e.id));
     QVERIFY(library.entries().isEmpty());
     QVERIFY(!library.remove(e.id));
+}
+
+void TestDoc::loraDataset()
+{
+    // A character-like picture, a slightly changed copy (near duplicate) and a different one.
+    auto picture = [](const QColor &body, int shift) {
+        QImage img(512, 768, QImage::Format_ARGB32_Premultiplied);
+        img.fill(Qt::white);
+        QPainter p(&img);
+        p.setPen(Qt::NoPen);
+        p.setBrush(body);
+        p.drawEllipse(QRect(180 + shift, 60, 150, 150));
+        p.drawRect(QRect(160 + shift, 220, 190, 420));
+        p.setBrush(Qt::black);
+        p.drawRect(QRect(60, 600, 80, 120));
+        return img;
+    };
+    const QImage a = picture(QColor(200, 40, 40), 0);
+    const QImage nearA = picture(QColor(205, 45, 40), 3);
+    QImage b(512, 768, QImage::Format_ARGB32_Premultiplied);
+    b.fill(Qt::white);
+    {
+        QPainter p(&b);
+        p.setBrush(QColor(40, 60, 200));
+        p.drawRect(QRect(20, 300, 470, 200));
+    }
+    QVERIFY(hashDistance(differenceHash(a), differenceHash(nearA)) <= 6);
+    QVERIFY(hashDistance(differenceHash(a), differenceHash(b)) > 12);
+
+    // SDXL buckets: about one megapixel in multiples of 64; SD 1.5 about 512².
+    const QList<QSize> xl = trainingBuckets(QStringLiteral("SDXL"));
+    QVERIFY(xl.contains(QSize(1024, 1024)));
+    QVERIFY(xl.contains(QSize(832, 1216)));
+    QVERIFY(xl.contains(QSize(1216, 832)));
+    for (const QSize &s : xl) {
+        QCOMPARE(s.width() % 64, 0);
+        QCOMPARE(s.height() % 64, 0);
+        QVERIFY(qint64(s.width()) * s.height() <= 1024 * 1024 * 1.06);
+        QVERIFY(qint64(s.width()) * s.height() >= 1024 * 1024 * 0.85);
+    }
+    QVERIFY(trainingBuckets(QStringLiteral("SD 1.5")).contains(QSize(512, 512)));
+    QCOMPARE(bucketFor(QSize(832, 1216), xl), QSize(832, 1216));
+    QCOMPARE(bucketFor(QSize(1000, 1000), xl), QSize(1024, 1024));
+    QCOMPARE(bucketFor(QSize(512, 768), xl), QSize(832, 1216));
+    const QImage cropped = cropToBucket(a, QSize(832, 1216));
+    QCOMPARE(cropped.size(), QSize(832, 1216));
+
+    QTemporaryDir dir;
+    LoraDataset ds(dir.filePath(QStringLiteral("dataset")));
+    QSignalSpy changed(&ds, &LoraDataset::changed);
+    QStringList ids;
+    for (const QImage &img : {a, nearA, b}) {
+        auto f = ds.add(img, {{QStringLiteral("asset"), QStringLiteral("asset-%1").arg(ids.size())}},
+                        {{QStringLiteral("id"), QStringLiteral("ds%1").arg(ids.size() + 1)}});
+        QTRY_VERIFY(f.isFinished());
+        ids << f.result().id;
+    }
+    QCOMPARE(ds.items().size(), 3);
+    QCOMPARE(ds.keptCount(), 3);
+    QVERIFY(ds.hasAsset(QStringLiteral("asset-1")));
+    QVERIFY(!ds.hasAsset(QStringLiteral("asset-9")));
+    QVERIFY(QFile::exists(ds.imagePath(ids[0])));
+    // The near duplicate with the lower score is flagged and dropped from training.
+    ds.setCritique(ids[0], 6, {{QStringLiteral("identity"), 6}});
+    ds.setCritique(ids[1], 8, {{QStringLiteral("identity"), 8}});
+    QCOMPARE(ds.markDuplicates(), 1);
+    QCOMPARE(ds.item(ids[0])->duplicateOf, ids[1]);
+    QVERIFY(!ds.item(ids[0])->kept);
+    QCOMPARE(ds.keptCount(), 2);
+    ds.setKept(ids[0], true); // the user decides
+    QCOMPARE(ds.keptCount(), 3);
+    ds.setCaption(ids[1], QStringLiteral("lmn_mira, 1girl, standing"));
+
+    // Reloading keeps everything.
+    LoraDataset again(dir.filePath(QStringLiteral("dataset")));
+    again.load();
+    QCOMPARE(again.items().size(), 3);
+    QCOMPARE(again.item(ids[1])->score, 8);
+    QCOMPARE(again.item(ids[1])->caption, QStringLiteral("lmn_mira, 1girl, standing"));
+    QCOMPARE(again.item(ids[0])->hash, ds.item(ids[0])->hash);
+    QCOMPARE(again.item(ids[2])->shot.value(QStringLiteral("id")).toString(), QStringLiteral("ds3"));
+
+    // Training export: kept images at bucket sizes with captions.
+    again.setKept(ids[2], false);
+    auto exported = again.exportForTraining(dir.filePath(QStringLiteral("train/10_lmn_mira")), QStringLiteral("SDXL"));
+    QTRY_VERIFY(exported.isFinished());
+    QCOMPARE(exported.result(), 2);
+    const QDir train(dir.filePath(QStringLiteral("train/10_lmn_mira")));
+    QCOMPARE(train.entryList({QStringLiteral("*.png")}).size(), 2);
+    QCOMPARE(QImage(train.filePath(QStringLiteral("001.png"))).size(), QSize(832, 1216));
+    QFile caption(train.filePath(QStringLiteral("002.txt")));
+    QVERIFY(caption.open(QIODevice::ReadOnly));
+    QCOMPARE(caption.readAll(), QByteArray("lmn_mira, 1girl, standing"));
+
+    QVERIFY(again.remove(ids[0]));
+    QVERIFY(!QFile::exists(dir.filePath(QStringLiteral("dataset/images/")) + ids[0] + QStringLiteral(".png")));
+    QCOMPARE(again.items().size(), 2);
 }
 
 QTEST_MAIN(TestDoc)

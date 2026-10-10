@@ -46,6 +46,8 @@ public:
                                  const QString &notes = QString(), const QString &existingId = QString(),
                                  const std::optional<QJsonObject> &lora = std::nullopt);
     QFuture<QList<QImage>> loadReferences(const QString &id) const;
+    // Folder of the character's LoRA training set (doc::LoraDataset) and training runs.
+    QString datasetDirectory(const QString &id) const { return folder(id) + QStringLiteral("/dataset"); }
     bool rename(const QString &id, const QString &name);
     // Attaches a LoRA to the character (an empty object detaches it).
     bool setLora(const QString &id, const QJsonObject &lora);

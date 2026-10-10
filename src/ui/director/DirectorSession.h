@@ -65,6 +65,9 @@ public:
     // The character's LoRA ({file, trigger, weight, family}); empty when it has none.
     const QJsonObject &characterLora() const { return m_lora; }
     void setCharacterLora(const QJsonObject &lora);
+    // The character library entry the session's character was loaded from or saved to.
+    QString libraryCharacter() const { return m_libraryCharacter; }
+    void setLibraryCharacter(const QString &id);
 
     QString purpose() const { return m_purpose; }
     void setPurpose(const QString &p);
@@ -98,6 +101,7 @@ private:
     QStringList m_references;
     QJsonObject m_character;
     QJsonObject m_lora;
+    QString m_libraryCharacter;
     QString m_purpose = QStringLiteral("general");
     QJsonObject m_plan;
     QList<ShotState> m_shots;

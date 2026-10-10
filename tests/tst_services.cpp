@@ -11,8 +11,10 @@
 #include "core/JobQueue.h"
 #include "core/JsonSchema.h"
 #include "net/HttpClient.h"
+#include "pose/Rig.h"
 
 #include <QJsonArray>
+#include <QSet>
 #include <QPromise>
 #include <QTimer>
 #include <QTemporaryDir>
@@ -43,6 +45,7 @@ private slots:
     void generationServiceRegionEndToEnd();
     void utilityOnAssets();
     void directorCritique();
+    void directorDatasetPlan();
     void cleanShotPrompts();
     void agentNativeTools();
     void agentJsonProtocol();
@@ -655,6 +658,43 @@ void TestServices::providerGate()
     }
     QVERIFY(threw);
     QCOMPARE(gate->released, 5);
+}
+
+void TestServices::directorDatasetPlan()
+{
+    const QJsonObject sheet{{QStringLiteral("name"), QStringLiteral("Mira")},
+                            {QStringLiteral("gender_presentation"), QStringLiteral("female")},
+                            {QStringLiteral("tags"), QStringLiteral("red hair, long hair, red eyes, black robe, gold trim")}};
+    const QJsonObject plan = Director::datasetPlan(sheet);
+    const QJsonArray shots = plan.value(QStringLiteral("shots")).toArray();
+    QCOMPARE(shots.size(), 24);
+    QCOMPARE(Director::datasetPlan(sheet, 100).value(QStringLiteral("shots")).toArray().size(), Director::kMaxDatasetShots);
+    QCOMPARE(Director::datasetPlan(sheet, 5).value(QStringLiteral("shots")).toArray().size(), 5);
+    QSet<QString> ids;
+    QSet<QString> framings;
+    QSet<int> yaws;
+    for (const QJsonValue &value : shots) {
+        const QJsonObject s = value.toObject();
+        ids << s.value(QStringLiteral("id")).toString();
+        const QString prompt = s.value(QStringLiteral("prompt")).toString();
+        QVERIFY2(prompt.startsWith(QStringLiteral("1girl, solo, red hair, long hair, red eyes, black robe, gold trim")), qPrintable(prompt));
+        QVERIFY(prompt.contains(QStringLiteral("background")));
+        const pose::RigParams rig = pose::RigParams::fromJson(s.value(QStringLiteral("pose")).toObject());
+        framings << rig.framing;
+        yaws << int(rig.yaw);
+        if (rig.yaw >= 170) // a back view shows no face: no expression tags
+            QVERIFY(!prompt.contains(QStringLiteral("smile")) && !prompt.contains(QStringLiteral("closed mouth")));
+    }
+    QCOMPARE(ids.size(), shots.size());
+    QCOMPARE(framings, (QSet<QString>{QStringLiteral("full_body"), QStringLiteral("cowboy_shot"), QStringLiteral("upper_body"), QStringLiteral("headshot")}));
+    QVERIFY(yaws.contains(0) && yaws.contains(45) && yaws.contains(-45) && yaws.contains(90) && yaws.contains(180));
+    QCOMPARE(purposeProfile(QStringLiteral("lora_dataset")).defaultCount, 24);
+
+    // Without tags the appearance comes from the sheet's fields.
+    const QJsonObject fields{{QStringLiteral("hair"), QJsonObject{{QStringLiteral("color"), QStringLiteral("Silver")}, {QStringLiteral("length"), QStringLiteral("short")}}},
+                             {QStringLiteral("eyes"), QJsonObject{{QStringLiteral("color"), QStringLiteral("green")}}},
+                             {QStringLiteral("outfit"), QJsonArray{QJsonObject{{QStringLiteral("item"), QStringLiteral("hoodie")}, {QStringLiteral("color"), QStringLiteral("yellow")}}}}};
+    QCOMPARE(Director::appearanceTags(fields), QStringLiteral("silver hair, short hair, green eyes, yellow hoodie"));
 }
 
 QTEST_MAIN(TestServices)

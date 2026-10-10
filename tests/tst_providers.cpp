@@ -614,8 +614,10 @@ void TestProviders::lorasAcrossProviders()
         l.weight = 0.7;
         r.loras << l;
         ImageOperation *op = sd.generate(r);
+        op->setAutoDelete(false);
         QTRY_VERIFY_WITH_TIMEOUT(op->isFinished(), 10000);
         QVERIFY2(op->state() == Operation::State::Succeeded, qPrintable(op->errorString()));
+        delete op;
         const QJsonArray sent = submitted.value(QStringLiteral("lora")).toArray();
         QCOMPARE(sent.size(), 1);
         QCOMPARE(sent[0].toObject().value(QStringLiteral("path")).toString(), QStringLiteral("chars/akane_v2.safetensors"));
@@ -625,10 +627,12 @@ void TestProviders::lorasAcrossProviders()
         r.loras[0].file.clear();
         r.loras[0].name = QStringLiteral("unknown_lora");
         op = sd.generate(r);
+        op->setAutoDelete(false);
         QTRY_VERIFY_WITH_TIMEOUT(op->isFinished(), 10000);
         QCOMPARE(op->state(), Operation::State::Failed);
         QVERIFY(op->errorString().contains(QStringLiteral("unknown_lora")));
         QVERIFY(submitted.isEmpty());
+        delete op;
     }
 
     // WebUI: LoRAs go into the prompt by the server's name for them.

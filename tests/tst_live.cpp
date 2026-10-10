@@ -32,6 +32,7 @@
 #include <QElapsedTimer>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QPainter>
 #include <QSignalSpy>
 #include <QSpinBox>
 #include <QTemporaryDir>
@@ -84,6 +85,7 @@ private slots:
     void managedComfyUi();
     void hubDownload();
     void managedSdLora();
+    void managedDatasetShots();
 
 private:
     net::HttpClient m_http;
@@ -1009,6 +1011,93 @@ void TestLive::managedSdLora()
     const auto failed = run(missing, QStringLiteral("sdcpp_lora_missing.png"));
     QVERIFY(failed.second.contains(QStringLiteral("no_such_lora")));
 
+    servers.stop(profile.id);
+    QTRY_COMPARE_WITH_TIMEOUT(servers.state(profile.id), runtime::ServerState::Stopped, 30000);
+}
+
+// LUMEN_LIVE_DATASET_SHOTS=<n> with LUMEN_LIVE_SD_* (ControlNet + IP-Adapter) and LUMEN_LIVE_REFERENCE:
+// the first n shots of a LoRA training plan through a Lumen-run sd-server, saved with a contact sheet.
+// LUMEN_LIVE_DATASET_TAGS overrides the character's appearance tags.
+void TestLive::managedDatasetShots()
+{
+    const QString root = qEnvironmentVariable("LUMEN_LIVE_SD_RUNTIMES");
+    const QString model = qEnvironmentVariable("LUMEN_LIVE_SD_MODEL");
+    const int count = qEnvironmentVariableIntValue("LUMEN_LIVE_DATASET_SHOTS");
+    if (root.isEmpty() || model.isEmpty() || count <= 0 || referencePath().isEmpty())
+        QSKIP("LUMEN_LIVE_DATASET_SHOTS, LUMEN_LIVE_SD_* and LUMEN_LIVE_REFERENCE are needed");
+    QTemporaryDir tmp;
+    JobQueue jobs;
+    runtime::RuntimeStore store(&m_http, &jobs);
+    store.setRoot(root);
+    store.load();
+    const auto rt = store.latestManaged(QStringLiteral("sd.cpp"));
+    QVERIFY(rt);
+    runtime::ServerSupervisor servers(&store, &m_http);
+    servers.setConfigPath(tmp.filePath(QStringLiteral("servers.json")));
+    servers.setLogDir(tmp.filePath(QStringLiteral("logs")));
+    runtime::ServerProfile profile = servers.createProfile(rt->id, QStringLiteral("Live dataset"));
+    profile.options = runtime::presetOptions(QStringLiteral("sd.cpp"), runtime::VramTier::Small);
+    profile.options.insert(QStringLiteral("model"), model);
+    profile.options.insert(QStringLiteral("control_net"), qEnvironmentVariable("LUMEN_LIVE_SD_CONTROLNET"));
+    profile.options.insert(QStringLiteral("ip_adapter"), qEnvironmentVariable("LUMEN_LIVE_SD_IPADAPTER"));
+    profile.options.insert(QStringLiteral("clip_vision"), qEnvironmentVariable("LUMEN_LIVE_SD_CLIPVISION"));
+    profile.startupTimeoutSec = 300;
+    servers.addProfile(profile);
+    SdCppProvider sd(SdCppProvider::describe(), QStringLiteral("live-sd"), &m_http, nullptr);
+    sd.configure({{QStringLiteral("url"), runtime::providerUrl(rt->kind, profile.port)},
+                  {QStringLiteral("control_net"), true},
+                  {QStringLiteral("ip_adapter"), true}});
+    sd.setGate(std::make_shared<SupervisorGate>(&servers, profile.id));
+
+    const QJsonObject sheet{{QStringLiteral("name"), QStringLiteral("Live character")},
+                            {QStringLiteral("gender_presentation"), QStringLiteral("female")},
+                            {QStringLiteral("tags"), qEnvironmentVariable("LUMEN_LIVE_DATASET_TAGS",
+                                                                          QStringLiteral("long red hair, yellow eyes, black hooded cloak, black choker"))}};
+    const QJsonArray shots = Director::datasetPlan(sheet, count).value(QStringLiteral("shots")).toArray();
+    ReferenceImage ref;
+    ref.image = QImage(referencePath());
+    ref.role = ReferenceRole::Character;
+    QVERIFY(!ref.image.isNull());
+    const ImageCapabilities caps = sd.capabilities();
+    PromptStyle style;
+    style.qualityPrefix = QStringLiteral("masterpiece, best quality");
+    style.defaultNegative = QStringLiteral("lowres, bad anatomy, bad hands, extra fingers, worst quality");
+    QList<QImage> results;
+    QElapsedTimer total;
+    total.start();
+    for (const QJsonValue &v : shots) {
+        const QJsonObject shot = v.toObject();
+        const QSize size = Director::sizeForAspect(shot.value(QStringLiteral("aspect_ratio")).toString(), caps.nativePixels, caps.sizeMultiple);
+        ImageRequest r = Director::buildShotRequest(shot, {ref}, Director::poseForShot(shot, size), style, caps);
+        r.seed = 21;
+        r.steps = 24;
+        r.sampler = QStringLiteral("euler_a");
+        QElapsedTimer t;
+        t.start();
+        ImageOperation *op = gatedGenerate(&sd, r);
+        op->setAutoDelete(false);
+        QTRY_VERIFY_WITH_TIMEOUT(op->isFinished(), 900000);
+        QVERIFY2(op->state() == Operation::State::Succeeded, qPrintable(op->errorString()));
+        const QImage image = op->result().images.value(0).image;
+        qInfo().noquote() << shot.value(QStringLiteral("id")).toString() << shot.value(QStringLiteral("title")).toString() << r.size << t.elapsed() << "ms";
+        save(image, QStringLiteral("dataset_%1.png").arg(shot.value(QStringLiteral("id")).toString()));
+        if (!r.controls.isEmpty())
+            save(r.controls.first().image, QStringLiteral("dataset_%1_pose.png").arg(shot.value(QStringLiteral("id")).toString()));
+        results << image;
+        delete op;
+    }
+    qInfo() << shots.size() << "shots in" << total.elapsed() / 1000 << "s";
+    // Contact sheet: 256 px tiles.
+    const int columns = 4;
+    QImage sheetImage(columns * 256, ((int(results.size()) + columns - 1) / columns) * 256, QImage::Format_RGB32);
+    sheetImage.fill(Qt::white);
+    QPainter p(&sheetImage);
+    for (int i = 0; i < results.size(); ++i) {
+        const QImage tile = results[i].scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        p.drawImage((i % columns) * 256 + (256 - tile.width()) / 2, (i / columns) * 256 + (256 - tile.height()) / 2, tile);
+    }
+    p.end();
+    save(sheetImage, QStringLiteral("dataset_contact_sheet.png"));
     servers.stop(profile.id);
     QTRY_COMPARE_WITH_TIMEOUT(servers.state(profile.id), runtime::ServerState::Stopped, 30000);
 }

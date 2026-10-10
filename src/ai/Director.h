@@ -64,6 +64,14 @@ public:
     // A plan with cleaned prompts, negative prompts and descriptions.
     static QJsonObject sanitizePlan(const QJsonObject &plan);
 
+    // Shots for a character LoRA's training set (M13), built without a language model: views ×
+    // framings × expressions × arm poses on plain, changing backgrounds, so that only the character
+    // stays the same. count 0 = 24; at most kMaxDatasetShots.
+    static constexpr int kMaxDatasetShots = 32;
+    static QJsonObject datasetPlan(const QJsonObject &sheet, int count = 0);
+    // Appearance tags of a character sheet: its "tags", else built from hair, eyes and outfit.
+    static QString appearanceTags(const QJsonObject &sheet);
+
     static QJsonObject characterSheetSchema();
     static QJsonObject shotSchema();
     static QJsonObject shotPlanSchema(int maxShots = 12);

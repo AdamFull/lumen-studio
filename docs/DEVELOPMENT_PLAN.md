@@ -1034,8 +1034,40 @@ A LoRA learns from 15–40 varied images of the character. They come from what L
     33.4 s without and 35.8 s with `pixel-art-xl`. All 2,166 LoRA tensors were applied at
     runtime in 0.5 s, and the style change is obvious.
   - ComfyUI and WebUI are covered by unit tests, not live yet.
-- [ ] Dataset builder: "LoRA dataset" purpose profile, generation with pose + IP-Adapter, curation
-  grid with Critic scores, de-duplication, crop / bucket export.
+- [x] Dataset builder:
+  - "LoRA training set" purpose. With a character sheet, `Director::datasetPlan` builds the plan
+    without the language model (24 shots by default, up to 32):
+    - views: front, three-quarter both ways, side, back, looking back;
+    - framings: full body, cowboy shot, upper body, portrait;
+    - six expressions, eight arm and leg poses;
+    - five plain backgrounds.
+    Any prefix of the list covers views and framings evenly. Prompts are the sheet's appearance
+    tags plus view, framing, expression, pose and background tags (no expression on back views).
+    The rig poses drive the OpenPose ControlNet.
+  - `doc::LoraDataset` lives in `characters/<id>/dataset`: images plus `dataset.json` with source,
+    shot, kept, Critic score and critique, difference hash, near-duplicate link and caption.
+  - Create page → Character → LoRA → **Training set…**:
+    - plan the training shots; add the session's results (Critic verdicts from the Create page
+      carry over); add files;
+    - score with the Critic (the lower of identity and overall; images below the minimum are
+      rejected);
+    - find near-duplicates (64-bit difference hash, ≤ 6 bits; the lower-scored copy is
+      rejected);
+    - keep or reject by hand, with a count against the 15 / 20 image goals.
+  - The session remembers its library character; the set needs one, so Lumen offers to save it
+    first.
+  - Export: kept images cropped to the standard SDXL buckets (1024², 896×1152, 832×1216,
+    768×1344, 640×1536 and their landscape twins; SD 1.5: 512-class), keeping more of the top,
+    with a `.txt` caption per image.
+  - Tests: plan coverage, appearance fallback, hash, buckets, crop, dataset bookkeeping and export,
+    and the window end to end (plan → generate → import → Critic → duplicates).
+  - Measured (RTX 4060 8 GB, WAI-Illustrious q8_0 + offload, pose ControlNet + IP-Adapter at 0.3,
+    24 steps): the first 8 plan shots took 585 s (about 73 s each). 24 shots take about 30 min, or
+    about 1 h with two variants.
+    - The character stayed recognisable in every view.
+    - The back view lost the hood: the kind of image the curation step rejects.
+    - The reference's grey background sometimes beats the requested one (IP-Adapter).
+    - Three-quarter views use 45°; 35° read as almost frontal.
 - [ ] Captioning with the vision model, identity-tag pruning, caption table editor.
 - [ ] Trainer runtime: uv-managed venv with pinned sd-scripts + PyTorch (hash-checked), adopt
   existing kohya installs.

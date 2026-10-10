@@ -191,7 +191,23 @@ face, hair, eyes, outfit and colours stay the same while pose, framing and backg
   a server Lumen runs, *Use the LoRA's folder* fixes that.
 * **Saving:** the LoRA is saved with the character in the character library.
 
-Training LoRAs inside Lumen comes next (development plan, M13).
+**Building a training set.** To train a LoRA for your own character, Lumen first needs 20–40 good
+images of it:
+1. Load or create the character on the Create page (references and a character sheet), then
+   choose **LoRA → Training set…**. The character is saved to the character library if it is not
+   there yet; the training set belongs to it.
+2. **Plan training shots** fills the shot plan with 24 varied shots: front, three-quarter, side
+   and back views; full body to portrait; several expressions and arm poses; plain backgrounds.
+   Generate them on the Create page, with pose control and the character reference. Two variants
+   per shot give the best choice.
+3. **Add session results**, then **Score with Critic**. A vision model compares each image with
+   the references; images below the minimum are rejected. **Find near-duplicates** drops repeats.
+4. Look through the rest yourself: double-click keeps or rejects an image. Only images where the
+   character looks exactly right should stay; mistakes in the set end up in the LoRA.
+5. **Export for training…** writes the kept images at training sizes, for example for an
+   external trainer.
+
+Training the LoRA inside Lumen comes next (development plan, M13).
 
 ### Critic
 

@@ -9,10 +9,12 @@
 
 class QCheckBox;
 class QComboBox;
+class QDialog;
 class QLabel;
 class QPushButton;
 class QScrollArea;
 class QSpinBox;
+class QToolButton;
 class QVBoxLayout;
 
 namespace lumen::ui {
@@ -52,8 +54,12 @@ private:
     void generateShot(const QString &shotId, int attempt = 0, const QJsonObject &shotOverride = {});
     // Critic: reviews new results of a shot and retries it while the best score is below the threshold.
     void critique(const QString &shotId, const QStringList &assetIds, int attempt, const QJsonObject &shotUsed);
-    void saveCharacterToLibrary();
+    // `then` runs once the character is saved.
+    void saveCharacterToLibrary(std::function<void()> then = {});
     void editCharacterLora();
+    // The character's LoRA training set; saves the character to the library first if needed.
+    void openTrainingSet();
+    void planTrainingShots();
     void loadCharacterFromLibrary();
     void generateAll();
     void newSession();
@@ -84,7 +90,8 @@ private:
     QVBoxLayout *m_refThumbs;
     QWidget *m_refRow;
     QPushButton *m_analyze;
-    QPushButton *m_lora;
+    QToolButton *m_lora;
+    QPointer<QDialog> m_trainingSet;
     ProviderCombo *m_provider;
     QSpinBox *m_variants;
     QCheckBox *m_critic;

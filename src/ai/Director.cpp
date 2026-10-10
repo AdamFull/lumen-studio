@@ -97,6 +97,13 @@ QList<PurposeProfile> purposeProfiles()
          QStringLiteral("Plan polished portraits (bust or headshot) with flattering lighting and varied but tasteful backgrounds, "
                         "different head angles and expressions."),
          3, QStringLiteral("1:1")},
+        {QStringLiteral("lora_dataset"), QObject::tr("LoRA training set"),
+         QObject::tr("20–32 varied images of one character for training its LoRA."),
+         QStringLiteral("The images train a LoRA of this character, so only the character may stay the same. Vary the view (front, "
+                        "three-quarter both ways, side, back), the framing (full body, cowboy shot, upper body, headshot), the "
+                        "expression and the arm pose. Always the same outfit, one character, plain or simple backgrounds in "
+                        "changing light colours, no props, no other people, no text."),
+         24, QStringLiteral("2:3")},
     };
 }
 
@@ -478,6 +485,238 @@ pose::Pose Director::poseForShot(const QJsonObject &shot, const QSize &canvas)
 {
     const pose::RigParams rig = pose::RigParams::fromJson(shot.value(QStringLiteral("pose")).toObject());
     return pose::solvePose({rig}, canvas);
+}
+
+namespace {
+
+struct DatasetShot
+{
+    const char *title;
+    double yaw;
+    const char *framing;
+    const char *expression;
+    const char *pose;
+    const char *background;
+};
+
+// Ordered so that any prefix covers the views and framings evenly.
+const DatasetShot kDatasetShots[] = {
+    {"Front, full body", 0, "full_body", "neutral", "stand", "white"},
+    {"Three-quarter right, full body", 45, "full_body", "smile", "stand", "grey"},
+    {"Three-quarter left, cowboy shot", -45, "cowboy_shot", "smile", "hip", "blue"},
+    {"Side, full body", 90, "full_body", "neutral", "stand", "white"},
+    {"Back, full body", 180, "full_body", "neutral", "stand", "grey"},
+    {"Front, upper body, waving", 0, "upper_body", "smile", "wave", "gradient"},
+    {"Front, portrait", 0, "headshot", "neutral", "stand", "white"},
+    {"Three-quarter right, portrait", 45, "headshot", "smile", "stand", "beige"},
+    {"Three-quarter left, upper body, peace sign", -45, "upper_body", "smile", "peace", "white"},
+    {"Front, cowboy shot, hands on hips", 0, "cowboy_shot", "open_mouth", "hips", "grey"},
+    {"Front, upper body, surprised", 0, "upper_body", "surprised", "stand", "blue"},
+    {"Three-quarter right, upper body, crossed arms", 45, "upper_body", "angry", "cross", "white"},
+    {"Front, portrait, eyes closed", 0, "headshot", "closed_eyes", "stand", "gradient"},
+    {"Side left, upper body", -90, "upper_body", "neutral", "stand", "grey"},
+    {"Front, full body, walking", 0, "full_body", "smile", "walk", "beige"},
+    {"Three-quarter left, full body, arms behind back", -45, "full_body", "smile", "behind", "white"},
+    {"Three-quarter right, cowboy shot, reaching", 45, "cowboy_shot", "open_mouth", "reach", "blue"},
+    {"Front, upper body, sad", 0, "upper_body", "sad", "stand", "grey"},
+    {"Three-quarter left, portrait", -45, "headshot", "neutral", "stand", "white"},
+    {"Front, full body, waving", 0, "full_body", "open_mouth", "wave", "gradient"},
+    {"Looking back, cowboy shot", 150, "cowboy_shot", "neutral", "stand", "white"},
+    {"Front, cowboy shot", 0, "cowboy_shot", "neutral", "stand", "beige"},
+    {"Three-quarter right, full body, hands on hips", 45, "full_body", "smile", "hips", "grey"},
+    {"Front, upper body, reaching", 0, "upper_body", "smile", "reach", "white"},
+    {"Three-quarter left, cowboy shot, waving", -45, "cowboy_shot", "open_mouth", "wave", "grey"},
+    {"Front, portrait, angry", 0, "headshot", "angry", "stand", "blue"},
+    {"Three-quarter right, portrait, surprised", 45, "headshot", "surprised", "stand", "white"},
+    {"Side, cowboy shot, walking", 90, "cowboy_shot", "neutral", "walk", "gradient"},
+    {"Front, full body, crossed arms", 0, "full_body", "neutral", "cross", "white"},
+    {"Three-quarter left, upper body, hand on hip", -45, "upper_body", "smile", "hip", "beige"},
+    {"Front, upper body, peace sign", 0, "upper_body", "smile", "peace", "grey"},
+    {"Three-quarter right, full body, eyes closed", 45, "full_body", "closed_eyes", "stand", "blue"},
+};
+static_assert(std::size(kDatasetShots) == Director::kMaxDatasetShots);
+
+QString viewTags(double yaw)
+{
+    if (yaw >= 170)
+        return QStringLiteral("from behind");
+    if (yaw >= 120)
+        return QStringLiteral("from behind, looking back, looking at viewer");
+    if (std::abs(yaw) >= 80)
+        return QStringLiteral("from side, profile");
+    return QStringLiteral("looking at viewer");
+}
+
+QString framingTags(const QString &framing)
+{
+    if (framing == QLatin1String("full_body"))
+        return QStringLiteral("full body, standing");
+    if (framing == QLatin1String("cowboy_shot"))
+        return QStringLiteral("cowboy shot");
+    if (framing == QLatin1String("upper_body"))
+        return QStringLiteral("upper body");
+    return QStringLiteral("portrait, close-up");
+}
+
+QString expressionTags(const QString &e)
+{
+    if (e == QLatin1String("smile"))
+        return QStringLiteral("smile");
+    if (e == QLatin1String("open_mouth"))
+        return QStringLiteral("open mouth, happy");
+    if (e == QLatin1String("surprised"))
+        return QStringLiteral("surprised, open mouth");
+    if (e == QLatin1String("closed_eyes"))
+        return QStringLiteral("closed eyes, smile");
+    if (e == QLatin1String("angry"))
+        return QStringLiteral("angry, frown");
+    if (e == QLatin1String("sad"))
+        return QStringLiteral("sad");
+    return QStringLiteral("closed mouth");
+}
+
+QString backgroundTags(const QString &b)
+{
+    if (b == QLatin1String("grey"))
+        return QStringLiteral("simple background, grey background");
+    if (b == QLatin1String("blue"))
+        return QStringLiteral("simple background, light blue background");
+    if (b == QLatin1String("gradient"))
+        return QStringLiteral("gradient background");
+    if (b == QLatin1String("beige"))
+        return QStringLiteral("simple background, beige background");
+    return QStringLiteral("simple background, white background");
+}
+
+// Arm (and leg) pose: rig values and the matching tags.
+QString applyArmPose(pose::RigParams &rig, const QString &pose)
+{
+    auto set = [](pose::LimbParams &l, double raise, double direction, double bend, double twist) { l = {raise, direction, bend, twist}; };
+    if (pose == QLatin1String("hip")) {
+        set(rig.rightArm, 40, 90, 110, 90);
+        return QStringLiteral("hand on hip");
+    }
+    if (pose == QLatin1String("hips")) {
+        set(rig.leftArm, 40, 90, 110, 90);
+        set(rig.rightArm, 40, 90, 110, 90);
+        return QStringLiteral("hands on hips");
+    }
+    if (pose == QLatin1String("wave")) {
+        set(rig.rightArm, 100, 90, 70, -90);
+        rig.rightHand = QStringLiteral("open");
+        return QStringLiteral("waving, raised hand");
+    }
+    if (pose == QLatin1String("peace")) {
+        set(rig.rightArm, 60, 30, 130, -90);
+        rig.rightHand = QStringLiteral("peace");
+        return QStringLiteral("peace sign");
+    }
+    if (pose == QLatin1String("reach")) {
+        set(rig.rightArm, 85, 10, 10, 0);
+        rig.rightHand = QStringLiteral("open");
+        return QStringLiteral("reaching towards viewer, outstretched arm");
+    }
+    if (pose == QLatin1String("behind")) {
+        set(rig.leftArm, 20, 180, 60, 90);
+        set(rig.rightArm, 20, 180, 60, 90);
+        rig.leftHand = rig.rightHand = QStringLiteral("none");
+        return QStringLiteral("arms behind back");
+    }
+    if (pose == QLatin1String("cross")) {
+        set(rig.leftArm, 40, -60, 120, 90);
+        set(rig.rightArm, 40, -60, 120, 90);
+        return QStringLiteral("crossed arms");
+    }
+    if (pose == QLatin1String("walk")) {
+        set(rig.leftLeg, 20, 0, 0, 0);
+        set(rig.rightLeg, 15, 180, 20, 0);
+        set(rig.leftArm, 15, 180, 10, 0);
+        set(rig.rightArm, 15, 0, 15, 0);
+        return QStringLiteral("walking");
+    }
+    return QStringLiteral("arms at sides");
+}
+
+} // namespace
+
+QString Director::appearanceTags(const QJsonObject &sheet)
+{
+    const QString tags = sheet.value(QStringLiteral("tags")).toString().trimmed();
+    if (!tags.isEmpty())
+        return tags;
+    QStringList out;
+    const QJsonObject hair = sheet.value(QStringLiteral("hair")).toObject();
+    for (const char *key : {"color", "length"}) {
+        const QString v = hair.value(QLatin1String(key)).toString().trimmed().toLower();
+        if (!v.isEmpty())
+            out << (v.endsWith(QLatin1String("hair")) ? v : v + QStringLiteral(" hair"));
+    }
+    if (!hair.value(QStringLiteral("style")).toString().trimmed().isEmpty())
+        out << hair.value(QStringLiteral("style")).toString().trimmed().toLower();
+    const QString eyes = sheet.value(QStringLiteral("eyes")).toObject().value(QStringLiteral("color")).toString().trimmed().toLower();
+    if (!eyes.isEmpty())
+        out << (eyes.endsWith(QLatin1String("eyes")) ? eyes : eyes + QStringLiteral(" eyes"));
+    for (const QJsonValue &v : sheet.value(QStringLiteral("outfit")).toArray()) {
+        const QJsonObject o = v.toObject();
+        const QString item = (o.value(QStringLiteral("color")).toString() + QLatin1Char(' ') + o.value(QStringLiteral("item")).toString()).trimmed().toLower();
+        if (!item.isEmpty())
+            out << item;
+    }
+    for (const QJsonValue &v : sheet.value(QStringLiteral("accessories")).toArray())
+        out << v.toString().trimmed().toLower();
+    for (const QJsonValue &v : sheet.value(QStringLiteral("distinctive_features")).toArray())
+        out << v.toString().trimmed().toLower();
+    out.removeAll(QString());
+    return out.join(QStringLiteral(", "));
+}
+
+QJsonObject Director::datasetPlan(const QJsonObject &sheet, int count)
+{
+    const int n = std::clamp(count > 0 ? count : 24, 1, kMaxDatasetShots);
+    const QString gender = sheet.value(QStringLiteral("gender_presentation")).toString().toLower();
+    QString subject = QStringLiteral("solo");
+    if (gender.contains(QLatin1String("female")) || gender.contains(QLatin1String("girl")) || gender.contains(QLatin1String("woman"))
+        || gender.contains(QLatin1String("feminine")))
+        subject = QStringLiteral("1girl, solo");
+    else if (gender.contains(QLatin1String("male")) || gender.contains(QLatin1String("boy")) || gender.contains(QLatin1String("man"))
+             || gender.contains(QLatin1String("masculine")))
+        subject = QStringLiteral("1boy, solo");
+    const QString appearance = appearanceTags(sheet);
+    const QString name = sheet.value(QStringLiteral("name")).toString();
+    QJsonArray shots;
+    for (int i = 0; i < n; ++i) {
+        const DatasetShot &d = kDatasetShots[i];
+        pose::RigParams rig;
+        rig.yaw = d.yaw;
+        rig.framing = QLatin1String(d.framing);
+        rig.expression = QLatin1String(d.expression);
+        rig.perspective = 0.1;
+        const QString poseTags = applyArmPose(rig, QLatin1String(d.pose));
+        const QString framing = QLatin1String(d.framing);
+        QStringList prompt{subject};
+        if (!appearance.isEmpty())
+            prompt << appearance;
+        prompt << viewTags(d.yaw) << framingTags(framing) << poseTags;
+        if (d.yaw < 120)
+            prompt << expressionTags(QLatin1String(d.expression));
+        prompt << backgroundTags(QLatin1String(d.background));
+        const QString aspect = framing == QLatin1String("headshot") ? QStringLiteral("1:1")
+                               : framing == QLatin1String("upper_body") ? QStringLiteral("3:4")
+                                                                        : QStringLiteral("2:3");
+        shots.append(QJsonObject{{QStringLiteral("id"), QStringLiteral("ds%1").arg(i + 1, 2, 10, QLatin1Char('0'))},
+                                 {QStringLiteral("title"), QLatin1String(d.title)},
+                                 {QStringLiteral("description"), QStringLiteral("Training image %1 of %2").arg(i + 1).arg(n)},
+                                 {QStringLiteral("aspect_ratio"), aspect},
+                                 {QStringLiteral("background"), backgroundTags(QLatin1String(d.background))},
+                                 {QStringLiteral("pose"), rig.toJson()},
+                                 {QStringLiteral("prompt"), prompt.join(QStringLiteral(", "))},
+                                 {QStringLiteral("negative_prompt"),
+                                  QStringLiteral("multiple views, 2girls, 2boys, text, watermark, signature, detailed background, scenery, props")}});
+    }
+    return QJsonObject{{QStringLiteral("title"), name.isEmpty() ? QStringLiteral("LoRA training set") : QStringLiteral("LoRA training set: %1").arg(name)},
+                       {QStringLiteral("summary"), QStringLiteral("%1 shots: front, three-quarter, side and back views; full body to portrait; "
+                                                                  "several expressions and arm poses on plain backgrounds.").arg(n)},
+                       {QStringLiteral("shots"), shots}};
 }
 
 bool Director::applyCharacterLora(ImageRequest &r, const CharacterLora &lora, const ImageCapabilities &caps)

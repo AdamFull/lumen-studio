@@ -18,6 +18,9 @@
 #include "MockHttpServer.h"
 #include "ui/dialogs/CharacterLoraDialog.h"
 #include "ui/dialogs/LocalServersPage.h"
+#include "ui/dialogs/LoraDatasetDialog.h"
+#include "doc/CharacterLibrary.h"
+#include "doc/LoraDataset.h"
 #include "ui/dialogs/LocalSetupDialog.h"
 #include "ui/dialogs/ModelHubDialog.h"
 #include "runtime/ModelLibrary.h"
@@ -90,6 +93,7 @@ private slots:
     void localServersWiring();
     void localSetupWizard();
     void characterLoraChecks();
+    void loraTrainingSet();
 
 private:
     ToolEvent at(double x, double y, Qt::KeyboardModifiers mods = Qt::NoModifier) const
@@ -1148,6 +1152,146 @@ void TestCanvas::characterLoraChecks()
         QTest::qWait(200);
         dlg.grab().save(shots + QStringLiteral("/character-lora.png"));
     }
+}
+
+void TestCanvas::loraTrainingSet()
+{
+    // Three generated images: two different pictures, the third repeats the first.
+    MockHttpServer server;
+    int generated = 0;
+    server.route("POST", QStringLiteral("/sdapi/v1/txt2img"), [&](const MockRequest &) {
+        QImage im(256, 384, QImage::Format_ARGB32);
+        im.fill(Qt::white);
+        {
+            QPainter p(&im);
+            p.setPen(Qt::NoPen);
+            p.setBrush(QColor(200, 40, 40));
+            if (generated % 2 == 0)
+                p.drawEllipse(QRect(20, 40, 120, 160));
+            else
+                p.drawRect(QRect(120, 180, 120, 180));
+        }
+        ++generated;
+        return MockResponse::json({{QStringLiteral("images"), QJsonArray{QString::fromLatin1(img::encode(im).toBase64())}},
+                                   {QStringLiteral("info"), QStringLiteral("{\"seed\": 1, \"all_seeds\": [1]}")}});
+    });
+    server.route("GET", QStringLiteral("/sdapi/v1/progress"), [](const MockRequest &) { return MockResponse::json({}); });
+    server.route("GET", QStringLiteral("/controlnet/model_list"), [](const MockRequest &) {
+        return MockResponse::json({{QStringLiteral("model_list"), QJsonArray{QStringLiteral("control_openpose [abc]")}}});
+    });
+    QList<int> scores{8, 4, 9};
+    int critiques = 0;
+    server.route("POST", QStringLiteral("/v1/chat/completions"), [&](const MockRequest &) {
+        const int score = scores.value(critiques++, 7);
+        const QJsonObject verdict{{QStringLiteral("overall"), 9},
+                                  {QStringLiteral("identity"), score},
+                                  {QStringLiteral("pose"), 9},
+                                  {QStringLiteral("issues"), QJsonArray{QStringLiteral("hair colour differs")}},
+                                  {QStringLiteral("revised_prompt"), QStringLiteral("1girl")},
+                                  {QStringLiteral("negative_additions"), QString()}};
+        return MockResponse::json(
+            {{QStringLiteral("choices"),
+              QJsonArray{QJsonObject{{QStringLiteral("message"),
+                                      QJsonObject{{QStringLiteral("content"), QString::fromUtf8(QJsonDocument(verdict).toJson(QJsonDocument::Compact))}}},
+                                     {QStringLiteral("finish_reason"), QStringLiteral("stop")}}}}});
+    });
+    Settings::instance().setValue(QStringLiteral("director/critic"), false);
+    QTemporaryDir dir;
+    Studio studio;
+    for (ai::Provider *p : studio.providers()->providers())
+        studio.providers()->removeProvider(p->instanceId());
+    QVERIFY(studio.providers()->addProvider(QStringLiteral("sdwebui"), QStringLiteral("SD"), {{QStringLiteral("url"), server.baseUrl().toString()}}));
+    QVERIFY(studio.providers()->addProvider(QStringLiteral("llamacpp"), QStringLiteral("Vision"),
+                                            {{QStringLiteral("url"), server.baseUrl().toString() + QStringLiteral("/v1")}}));
+    studio.openProject(dir.filePath(QStringLiteral("dataset.lumen")));
+    QTRY_VERIFY_WITH_TIMEOUT(studio.isProjectOpen(), 5000);
+
+    // A library character with a reference.
+    const QJsonObject sheet{{QStringLiteral("name"), QStringLiteral("Mira")},
+                            {QStringLiteral("gender_presentation"), QStringLiteral("female")},
+                            {QStringLiteral("tags"), QStringLiteral("red hair, red eyes, black robe")}};
+    QImage ref(64, 96, QImage::Format_ARGB32);
+    ref.fill(Qt::red);
+    auto saved = studio.characters()->save(QStringLiteral("Mira (test)"), sheet, {ref});
+    QTRY_VERIFY(saved.isFinished());
+    const QString characterId = saved.result().id;
+    auto cleanup = qScopeGuard([&] {
+        studio.characters()->remove(characterId);
+        for (ai::Provider *p : studio.providers()->providers())
+            studio.providers()->removeProvider(p->instanceId());
+    });
+
+    CreatePage page(&studio);
+    QTRY_VERIFY(page.findChild<DirectorSession *>());
+    DirectorSession *session = page.findChild<DirectorSession *>();
+    session->setCharacter(sheet);
+    session->setLibraryCharacter(characterId);
+    for (QSpinBox *spin : page.findChildren<QSpinBox *>()) {
+        if (spin->suffix().contains(QLatin1String("per shot")))
+            spin->setValue(1);
+    }
+    LoraDatasetDialog dlg(&studio, characterId, session, [&] { session->setPlan(ai::Director::datasetPlan(sheet, 3)); });
+    dlg.resize(1080, 720);
+    dlg.show();
+    QPushButton *planButton = nullptr;
+    for (QPushButton *b : dlg.findChildren<QPushButton *>()) {
+        if (b->text() == QLatin1String("Plan training shots"))
+            planButton = b;
+    }
+    QVERIFY(planButton);
+    planButton->click();
+    QCOMPARE(session->shots().size(), 3);
+    QTRY_COMPARE(page.findChildren<ShotCard *>().size(), 3);
+    for (const ShotState &s : session->shots())
+        emit page.findChild<ShotCard *>()->generateRequested(s.id());
+    QTRY_VERIFY_WITH_TIMEOUT(std::all_of(session->shots().begin(), session->shots().end(), [](const ShotState &s) { return s.results.size() == 1; }), 20000);
+
+    // Import, then importing again adds nothing.
+    int added = -1;
+    dlg.addSessionResults([&](int n) { added = n; });
+    QTRY_COMPARE_WITH_TIMEOUT(added, 3, 10000);
+    added = -1;
+    dlg.addSessionResults([&](int n) { added = n; });
+    QTRY_COMPARE(added, 0);
+    doc::LoraDataset *ds = dlg.dataset();
+    QCOMPARE(ds->items().size(), 3);
+    QVERIFY(!ds->items()[0].shot.value(QStringLiteral("prompt")).toString().isEmpty());
+
+    // The Critic scores each image; the one below the minimum (6) is rejected.
+    dlg.scoreAll();
+    QTRY_VERIFY_WITH_TIMEOUT(!dlg.isScoring() && critiques == 3, 20000);
+    int rejected = 0;
+    for (const doc::DatasetItem &i : ds->items()) {
+        QVERIFY(i.score >= 0);
+        if (!i.kept) {
+            QCOMPARE(i.score, 4);
+            ++rejected;
+        }
+    }
+    QCOMPARE(rejected, 1);
+    // The repeated picture is a near-duplicate of the better-scored one.
+    QCOMPARE(ds->markDuplicates(), 1);
+    for (const doc::DatasetItem &i : ds->items()) {
+        if (i.duplicateOf.isEmpty())
+            continue;
+        const auto better = ds->item(i.duplicateOf);
+        QVERIFY(better && better->score >= i.score);
+        QVERIFY(!i.kept);
+        QVERIFY(doc::hashDistance(i.hash, better->hash) <= 6);
+    }
+    auto *grid = dlg.findChild<QListWidget *>();
+    QVERIFY(grid);
+    QCOMPARE(grid->count(), 3);
+    const QString shots = qEnvironmentVariable("LUMEN_SCREENSHOT_DIR");
+    if (!shots.isEmpty()) {
+        grid->setCurrentRow(0);
+        QTest::qWait(500);
+        dlg.grab().save(shots + QStringLiteral("/lora-training-set.png"));
+    }
+    // The set lives with the library character.
+    doc::LoraDataset reloaded(studio.characters()->datasetDirectory(characterId));
+    reloaded.load();
+    QCOMPARE(reloaded.items().size(), 3);
 }
 
 QTEST_MAIN(TestCanvas)

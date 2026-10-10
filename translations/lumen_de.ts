@@ -74,6 +74,16 @@
         <translation>Profilbilder und Avatare.</translation>
     </message>
     <message>
+        <location line="+4"/>
+        <source>LoRA training set</source>
+        <translation>LoRA-Trainingsset</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>20–32 varied images of one character for training its LoRA.</source>
+        <translation>20–32 abwechslungsreiche Bilder eines Charakters, um seine LoRA zu trainieren.</translation>
+    </message>
+    <message>
         <location filename="../src/ai/GenerationService.cpp" line="+286"/>
         <source>The selection is empty - paint a mask or make a selection first.</source>
         <translation>Die Auswahl ist leer – malen Sie zuerst eine Maske oder erstellen Sie eine Auswahl.</translation>
@@ -683,7 +693,7 @@
         <translation>Physikeinstellung %1 benötigt mindestens zwei Eckpunkte.</translation>
     </message>
     <message>
-        <location filename="../src/ui/pages/CreatePage.cpp" line="+657"/>
+        <location filename="../src/ui/pages/CreatePage.cpp" line="+706"/>
         <source>**Character sheet:** %1 — %2</source>
         <translation>**Charakterblatt:** %1 — %2</translation>
     </message>
@@ -695,7 +705,7 @@ Planning continues without a character sheet.</source>
 Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
-        <location line="+63"/>
+        <location line="+79"/>
         <source>Review and adjust the poses on the right, then press **Generate all** (or generate shots one by one).</source>
         <translation>Prüfen und passen Sie die Posen rechts an und klicken Sie dann auf **Alle generieren** (oder generieren Sie die Aufnahmen einzeln).</translation>
     </message>
@@ -1404,7 +1414,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ai::Director</name>
     <message>
-        <location filename="../src/ai/Director.cpp" line="+175"/>
+        <location filename="../src/ai/Director.cpp" line="+177"/>
         <source>The model assigned to &apos;Vision analysis&apos; (%1) cannot see images, so it cannot review results.</source>
         <translation>Das Modell für die Bildanalyse (%1) kann keine Bilder verarbeiten und daher keine Ergebnisse bewerten.</translation>
     </message>
@@ -4697,7 +4707,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::CreatePage</name>
     <message>
-        <location filename="../src/ui/pages/CreatePage.cpp" line="-728"/>
+        <location filename="../src/ui/pages/CreatePage.cpp" line="-792"/>
         <source>Director</source>
         <translation>Regie</translation>
     </message>
@@ -4708,12 +4718,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+275"/>
+        <location line="+282"/>
         <source>New session</source>
         <translation>Neue Sitzung</translation>
     </message>
     <message>
-        <location line="-251"/>
+        <location line="-258"/>
         <source>Describe what you need, e.g. &quot;3 images of my character for a Live2D avatar: neutral front A-pose, eyes closed and mouth open variants&quot;. Attach reference images above. Enter sends, Shift+Enter = new line.</source>
         <translation>Beschreiben Sie, was Sie benötigen, z. B. „3 Bilder meines Charakters für einen Live2D-Avatar: neutrale A-Pose von vorn, Varianten mit geschlossenen Augen und offenem Mund“. Hängen Sie oben Referenzbilder an. Eingabe sendet, Umschalt+Eingabe = neue Zeile.</translation>
     </message>
@@ -4739,29 +4749,29 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+446"/>
+        <location line="+494"/>
         <source>Send</source>
         <translation>Senden</translation>
     </message>
     <message>
-        <location line="-428"/>
-        <location line="+1036"/>
+        <location line="-476"/>
+        <location line="+1100"/>
         <source>Character</source>
         <translation>Charakter</translation>
     </message>
     <message>
-        <location line="-1032"/>
+        <location line="-1096"/>
         <source>Edit sheet</source>
         <translation>Steckbrief bearbeiten</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+365"/>
+        <location line="+372"/>
         <source>Analyze references</source>
         <translation>Referenzen analysieren</translation>
     </message>
     <message>
-        <location line="-362"/>
+        <location line="-369"/>
         <source>Library</source>
         <translation>Bibliothek</translation>
     </message>
@@ -4781,24 +4791,34 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Figur aus der Bibliothek laden…</translation>
     </message>
     <message>
-        <location line="+2"/>
-        <location line="+358"/>
-        <source>LoRA…</source>
-        <translation>LoRA…</translation>
+        <location line="+4"/>
+        <location line="+363"/>
+        <source>LoRA</source>
+        <translation>LoRA</translation>
     </message>
     <message>
-        <location line="-357"/>
-        <source>Attach a LoRA trained on this character, so it looks the same in every image</source>
-        <translation>Eine auf diesen Charakter trainierte LoRA anhängen, damit er in jedem Bild gleich aussieht</translation>
+        <location line="-360"/>
+        <source>A LoRA keeps the character looking the same in every image</source>
+        <translation>Eine LoRA hält das Aussehen des Charakters in jedem Bild gleich</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Attach a LoRA…</source>
+        <translation>LoRA anhängen…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Training set…</source>
+        <translation>Trainingsset…</translation>
     </message>
     <message>
         <location line="+21"/>
-        <location line="+371"/>
+        <location line="+412"/>
         <source>Shot plan</source>
         <translation>Aufnahmeplan</translation>
     </message>
     <message>
-        <location line="-368"/>
+        <location line="-409"/>
         <source>Generator</source>
         <translation>Generator</translation>
     </message>
@@ -4927,7 +4947,32 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Gewichtung %1</translation>
     </message>
     <message>
-        <location line="+39"/>
+        <location line="+13"/>
+        <source>Training shots</source>
+        <translation>Trainingsaufnahmen</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Replace the current shot plan with the LoRA training shots?</source>
+        <translation>Den aktuellen Aufnahmeplan durch die LoRA-Trainingsaufnahmen ersetzen?</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Create the character sheet first (Analyze references).</source>
+        <translation>Erstellen Sie zuerst das Charakterblatt (Referenzen analysieren).</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Training set</source>
+        <translation>Trainingsset</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The training set belongs to a character in the character library. Save this character to the library now?</source>
+        <translation>Das Trainingsset gehört zu einem Charakter in der Charakterbibliothek. Diesen Charakter jetzt in der Bibliothek speichern?</translation>
+    </message>
+    <message>
+        <location line="+49"/>
         <source>Generating…</source>
         <translation>Wird generiert…</translation>
     </message>
@@ -4965,7 +5010,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Plan wird überarbeitet…</translation>
     </message>
     <message>
-        <location line="+59"/>
+        <location line="+27"/>
+        <source>Generate them (two variants per shot work well), then add the results to the training set: Character → LoRA → Training set…</source>
+        <translation>Erzeugen Sie sie (zwei Varianten pro Aufnahme funktionieren gut) und fügen Sie die Ergebnisse dann dem Trainingsset hinzu: Charakter → LoRA → Trainingsset…</translation>
+    </message>
+    <message>
+        <location line="+48"/>
         <source>Planning was cancelled.</source>
         <translation>Die Planung wurde abgebrochen.</translation>
     </message>
@@ -5075,7 +5125,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Die gespeicherte Figur „%1“ ersetzen?</translation>
     </message>
     <message numerus="yes">
-        <location line="+11"/>
+        <location line="+14"/>
         <source>Saved &quot;%1&quot; with %n reference(s) to the character library.</source>
         <translation>
             <numerusform>„%1“ mit %n Referenz in der Figurenbibliothek gespeichert.</numerusform>
@@ -5083,7 +5133,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         </translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+13"/>
         <location line="+40"/>
         <source>Character library</source>
         <translation>Figurenbibliothek</translation>
@@ -5122,7 +5172,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Die Bibliothek ist leer. Speichern Sie zuerst eine Figur aus einem beliebigen Projekt.</translation>
     </message>
     <message>
-        <location line="+19"/>
+        <location line="+20"/>
         <source>Loaded &quot;%1&quot;.</source>
         <translation>„%1“ geladen.</translation>
     </message>
@@ -5411,7 +5461,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::DirectorSession</name>
     <message>
-        <location filename="../src/ui/director/DirectorSession.cpp" line="+258"/>
+        <location filename="../src/ui/director/DirectorSession.cpp" line="+269"/>
         <source>Untitled session</source>
         <translation>Unbenannte Sitzung</translation>
     </message>
@@ -7201,6 +7251,259 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <location line="+8"/>
         <source>The test failed: %1</source>
         <translation>Der Test ist fehlgeschlagen: %1</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::ui::LoraDatasetDialog</name>
+    <message>
+        <location filename="../src/ui/dialogs/LoraDatasetDialog.cpp" line="+54"/>
+        <source>LoRA training set — %1</source>
+        <translation>LoRA-Trainingsset — %1</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>A LoRA learns the character from 20–40 varied images: different views, framings, expressions and poses, but always the same character on simple backgrounds. Generate the planned shots, add them here, let the Critic score them and keep only the ones that look exactly right.</source>
+        <translation>Eine LoRA lernt den Charakter aus 20–40 abwechslungsreichen Bildern: verschiedene Ansichten, Bildausschnitte, Ausdrücke und Posen, aber immer derselbe Charakter auf einfachem Hintergrund. Erzeugen Sie die geplanten Aufnahmen, fügen Sie sie hier hinzu, lassen Sie den Kritiker sie bewerten und behalten Sie nur die, die genau stimmen.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Plan training shots</source>
+        <translation>Trainingsaufnahmen planen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Puts 24 varied shots into the Create page&apos;s plan; generate them there</source>
+        <translation>Legt 24 abwechslungsreiche Aufnahmen in den Plan der Seite Erstellen; erzeugen Sie sie dort</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Add session results</source>
+        <translation>Ergebnisse der Sitzung hinzufügen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Adds the images generated in the current Create session</source>
+        <translation>Fügt die in der aktuellen Erstellen-Sitzung erzeugten Bilder hinzu</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Add images…</source>
+        <translation>Bilder hinzufügen…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+180"/>
+        <source>Score with Critic</source>
+        <translation>Mit Kritiker bewerten</translation>
+    </message>
+    <message>
+        <location line="-179"/>
+        <source>A vision model compares each image with the character&apos;s references</source>
+        <translation>Ein Bildverständnismodell vergleicht jedes Bild mit den Referenzen des Charakters</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>reject below </source>
+        <translation>verwerfen unter </translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Find near-duplicates</source>
+        <translation>Beinahe-Duplikate finden</translation>
+    </message>
+    <message>
+        <location line="+31"/>
+        <source>Keep</source>
+        <translation>Behalten</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Reject</source>
+        <translation>Verwerfen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+196"/>
+        <source>Remove</source>
+        <translation>Entfernen</translation>
+    </message>
+    <message>
+        <location line="-192"/>
+        <source>Export for training…</source>
+        <translation>Für das Training exportieren…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Writes the kept images cropped to training sizes, with their captions, to a folder</source>
+        <translation>Schreibt die behaltenen Bilder, auf Trainingsgrößen zugeschnitten und mit Beschreibungen, in einen Ordner</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Close</source>
+        <translation>Schließen</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+16"/>
+        <source>Added %n image(s) from the session.</source>
+        <translation>
+            <numerusform>%n Bild aus der Sitzung hinzugefügt.</numerusform>
+            <numerusform>%n Bilder aus der Sitzung hinzugefügt.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>No new images in the session.</source>
+        <translation>Keine neuen Bilder in der Sitzung.</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+15"/>
+        <source>%n near-duplicate(s) rejected.</source>
+        <translation>
+            <numerusform>%n Beinahe-Duplikat verworfen.</numerusform>
+            <numerusform>%n Beinahe-Duplikate verworfen.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>No near-duplicates.</source>
+        <translation>Keine Beinahe-Duplikate.</translation>
+    </message>
+    <message>
+        <location line="+52"/>
+        <source>%1/10</source>
+        <translation>%1/10</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>not scored</source>
+        <translation>nicht bewertet</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>duplicate</source>
+        <translation>Duplikat</translation>
+    </message>
+    <message>
+        <location line="+36"/>
+        <source>ready for training</source>
+        <translation>bereit zum Training</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>enough, more helps</source>
+        <translation>genug, mehr hilft</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+3"/>
+        <source>%n more needed</source>
+        <translation>
+            <numerusform>%n weiteres nötig</numerusform>
+            <numerusform>%n weitere nötig</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>&lt;b&gt;%1 kept&lt;/b&gt; of %2 · %3 scored</source>
+        <translation>&lt;b&gt;%1 behalten&lt;/b&gt; von %2 · %3 bewertet</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+3"/>
+        <source>scoring, %n left</source>
+        <translation>
+            <numerusform>Bewertung läuft, %n übrig</numerusform>
+            <numerusform>Bewertung läuft, %n übrig</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Stop scoring</source>
+        <translation>Bewertung stoppen</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>No images yet.&lt;br&gt;&lt;br&gt;1. &lt;b&gt;Plan training shots&lt;/b&gt; fills the Create page with 24 shots.&lt;br&gt;2. Generate them there (two variants per shot work well).&lt;br&gt;3. &lt;b&gt;Add session results&lt;/b&gt;.&lt;br&gt;4. &lt;b&gt;Score with Critic&lt;/b&gt;, then check the rest yourself.</source>
+        <translation>Noch keine Bilder.&lt;br&gt;&lt;br&gt;1. &lt;b&gt;Trainingsaufnahmen planen&lt;/b&gt; füllt die Seite Erstellen mit 24 Aufnahmen.&lt;br&gt;2. Erzeugen Sie sie dort (zwei Varianten pro Aufnahme funktionieren gut).&lt;br&gt;3. &lt;b&gt;Ergebnisse der Sitzung hinzufügen&lt;/b&gt;.&lt;br&gt;4. &lt;b&gt;Mit Kritiker bewerten&lt;/b&gt;, dann den Rest selbst prüfen.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Select an image. Double-click keeps or rejects it.</source>
+        <translation>Wählen Sie ein Bild. Doppelklick behält oder verwirft es.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Imported image</source>
+        <translation>Importiertes Bild</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>%1 × %2 px</source>
+        <translation>%1 × %2 px</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Kept for training</source>
+        <translation>Für das Training behalten</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Rejected</source>
+        <translation>Verworfen</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Nearly the same as a better image.</source>
+        <translation>Fast gleich wie ein besseres Bild.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Critic: %1/10 (identity %2, overall %3)</source>
+        <translation>Kritiker: %1/10 (Identität %2, gesamt %3)</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+31"/>
+        <source>Remove %n image(s) from the training set?</source>
+        <translation>
+            <numerusform>%n Bild aus dem Trainingsset entfernen?</numerusform>
+            <numerusform>%n Bilder aus dem Trainingsset entfernen?</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+65"/>
+        <source>Add images</source>
+        <translation>Bilder hinzufügen</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Images (*.png *.jpg *.jpeg *.webp)</source>
+        <translation>Bilder (*.png *.jpg *.jpeg *.webp)</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Every kept image has a score.</source>
+        <translation>Jedes behaltene Bild hat eine Bewertung.</translation>
+    </message>
+    <message>
+        <location line="+52"/>
+        <source>The Critic failed: %1</source>
+        <translation>Der Kritiker ist fehlgeschlagen: %1</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Keep some images first.</source>
+        <translation>Behalten Sie zuerst einige Bilder.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Export training images to</source>
+        <translation>Trainingsbilder exportieren nach</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+7"/>
+        <source>Exported %n training image(s) to %1.</source>
+        <translation>
+            <numerusform>%n Trainingsbild nach %1 exportiert.</numerusform>
+            <numerusform>%n Trainingsbilder nach %1 exportiert.</numerusform>
+        </translation>
     </message>
 </context>
 <context>

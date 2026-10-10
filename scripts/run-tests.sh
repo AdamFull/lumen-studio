@@ -14,6 +14,11 @@ for exe in "$BUILD_DIR"/bin/tst_*; do
     rc=$?
     grep -E "^(FAIL|XPASS|QFATAL)|Totals" "$out" | sed "s|^|$(basename "$exe"): |"
     grep -A2 -E "^FAIL" "$out" | grep "failure location" | sed 's|^|    |'
+    # A crash leaves no summary; say so instead of printing nothing.
+    if ! grep -q "Totals" "$out"; then
+        echo "$(basename "$exe"): CRASHED (exit $rc) after: $(grep -E "^(PASS|FAIL)" "$out" | tail -1)"
+        rc=1
+    fi
     rm -f "$out"
     [ $rc -ne 0 ] && status=1
 done

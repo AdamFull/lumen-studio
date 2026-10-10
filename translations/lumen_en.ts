@@ -293,4 +293,37 @@
         <translation><numerusform>%n step</numerusform><numerusform>%n steps</numerusform></translation>
     </message>
 </context>
+<context>
+    <name>lumen::ui::LoraDatasetDialog</name>
+    <message numerus="yes">
+        <location filename="../src/ui/dialogs/LoraDatasetDialog.cpp" line="+1" />
+        <source>Added %n image(s) from the session.</source>
+        <translation><numerusform>Added %n image from the session.</numerusform><numerusform>Added %n images from the session.</numerusform></translation>
+    </message>
+    <message numerus="yes">
+        <location filename="../src/ui/dialogs/LoraDatasetDialog.cpp" line="+1" />
+        <source>%n near-duplicate(s) rejected.</source>
+        <translation><numerusform>%n near-duplicate rejected.</numerusform><numerusform>%n near-duplicates rejected.</numerusform></translation>
+    </message>
+    <message numerus="yes">
+        <location filename="../src/ui/dialogs/LoraDatasetDialog.cpp" line="+1" />
+        <source>%n more needed</source>
+        <translation><numerusform>%n more needed</numerusform><numerusform>%n more needed</numerusform></translation>
+    </message>
+    <message numerus="yes">
+        <location filename="../src/ui/dialogs/LoraDatasetDialog.cpp" line="+1" />
+        <source>scoring, %n left</source>
+        <translation><numerusform>scoring, %n left</numerusform><numerusform>scoring, %n left</numerusform></translation>
+    </message>
+    <message numerus="yes">
+        <location filename="../src/ui/dialogs/LoraDatasetDialog.cpp" line="+1" />
+        <source>Remove %n image(s) from the training set?</source>
+        <translation><numerusform>Remove %n image from the training set?</numerusform><numerusform>Remove %n images from the training set?</numerusform></translation>
+    </message>
+    <message numerus="yes">
+        <location filename="../src/ui/dialogs/LoraDatasetDialog.cpp" line="+1" />
+        <source>Exported %n training image(s) to %1.</source>
+        <translation><numerusform>Exported %n training image to %1.</numerusform><numerusform>Exported %n training images to %1.</numerusform></translation>
+    </message>
+</context>
 </TS>
