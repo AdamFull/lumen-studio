@@ -43,6 +43,9 @@ int main(int argc, char **argv)
         if (a == "--version") {
             std::printf("ggml_cuda_init: no devices\nversion: 42 (fake)\nbuilt with test\n");
             return 0;
+        } else if (a == "--help") {
+            std::printf("usage: fake\n  -m,    --model FNAME   model path\n  --models-preset PATH    presets\n  --port PORT\n");
+            return 0;
         } else if (a == "--port" || a == "--listen-port") {
             port = int(next(0));
         } else if (a == "--fake-ready-ms") {
@@ -95,6 +98,7 @@ int main(int argc, char **argv)
             std::_Exit(3);
         }).detach();
     }
+    long unloadAt = -1;
     for (int i = 0; i < 3; ++i)
         std::printf("load_tensors: loading layer %d\n", i);
     for (;;) {
@@ -106,7 +110,15 @@ int main(int argc, char **argv)
         buf[n > 0 ? n : 0] = 0;
         const long elapsed = long(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count());
         const bool ready = elapsed >= readyMs;
-        const std::string body = ready ? "{\"status\":\"ok\"}" : "{\"error\":\"loading\"}";
+        const std::string request(buf);
+        std::string body = ready ? "{\"status\":\"ok\"}" : "{\"error\":\"loading\"}";
+        if (request.rfind("POST /models/unload", 0) == 0) {
+            unloadAt = elapsed + 300;
+            body = "{\"success\":true}";
+        } else if (request.rfind("GET /models", 0) == 0) {
+            const bool loaded = unloadAt < 0 || elapsed < unloadAt;
+            body = std::string("{\"data\":[{\"id\":\"fake-model\",\"status\":{\"value\":\"") + (loaded ? "loaded" : "unloaded") + "\"}}]}";
+        }
         const std::string resp = std::string("HTTP/1.1 ") + (ready ? "200 OK" : "503 Service Unavailable")
                                  + "\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: "
                                  + std::to_string(body.size()) + "\r\n\r\n" + body;

@@ -75,6 +75,8 @@ QJsonObject InstalledRuntime::toJson() const
                        {QStringLiteral("libraryDirs"), QJsonArray::fromStringList(libraryDirs)},
                        {QStringLiteral("installed"), installed.toString(Qt::ISODate)},
                        {QStringLiteral("versionInfo"), versionInfo},
+                       {QStringLiteral("options"), QJsonArray::fromStringList(options)},
+                       {QStringLiteral("settings"), QJsonObject::fromVariantMap(settings)},
                        {QStringLiteral("assets"), assets}};
 }
 
@@ -92,6 +94,9 @@ InstalledRuntime InstalledRuntime::fromJson(const QJsonObject &o)
         rt.libraryDirs << v.toString();
     rt.installed = QDateTime::fromString(o.value(QStringLiteral("installed")).toString(), Qt::ISODate);
     rt.versionInfo = o.value(QStringLiteral("versionInfo")).toString();
+    for (const QJsonValue &v : o.value(QStringLiteral("options")).toArray())
+        rt.options << v.toString();
+    rt.settings = o.value(QStringLiteral("settings")).toObject().toVariantMap();
     rt.assets = o.value(QStringLiteral("assets")).toArray();
     return rt;
 }
@@ -108,14 +113,17 @@ QProcessEnvironment runtimeEnvironment(const InstalledRuntime &rt)
     return env;
 }
 
-QFuture<QString> probeVersion(const InstalledRuntime &rt, const QStringList &args)
+namespace {
+
+// Runs the program with args and returns its whole output; throws when it cannot run.
+QFuture<QString> probeOutput(const InstalledRuntime &rt, const QStringList &args)
 {
     auto promise = std::make_shared<QPromise<QString>>();
     promise->start();
     QFuture<QString> future = promise->future();
     auto *proc = new QProcess;
     proc->setProgram(rt.executable);
-    proc->setArguments(args.isEmpty() ? QStringList{QStringLiteral("--version")} : args);
+    proc->setArguments(args);
     proc->setProcessEnvironment(runtimeEnvironment(rt));
     proc->setWorkingDirectory(QFileInfo(rt.executable).absolutePath());
     proc->setProcessChannelMode(QProcess::MergedChannels);
@@ -137,14 +145,6 @@ QFuture<QString> probeVersion(const InstalledRuntime &rt, const QStringList &arg
     });
     QObject::connect(proc, &QProcess::finished, proc, [proc, settle](int code, QProcess::ExitStatus status) {
         const QString out = QString::fromLocal8Bit(proc->readAll());
-        QString line;
-        for (const QString &l : out.split(QLatin1Char('\n'))) {
-            const QString t = l.trimmed();
-            if (t.isEmpty() || t.startsWith(QLatin1String("ggml_")) || t.startsWith(QLatin1String("load_backend")))
-                continue; // backend initialisation chatter
-            line = t;
-            break;
-        }
         // Windows reports missing DLLs as 0xC0000135 (STATUS_DLL_NOT_FOUND).
         if (status == QProcess::CrashExit || quint32(code) == 0xC0000135u) {
             settle({}, quint32(code) == 0xC0000135u ? Text::tr("%1 cannot start: a required DLL is missing (for CUDA builds: the CUDA runtime "
@@ -154,7 +154,7 @@ QFuture<QString> probeVersion(const InstalledRuntime &rt, const QStringList &arg
                                                           .arg(quint32(code), 8, 16, QLatin1Char('0')));
             return;
         }
-        settle(line.left(200), {});
+        settle(out, {});
     });
     QTimer::singleShot(20000, proc, [proc, settle] {
         proc->kill();
@@ -162,6 +162,122 @@ QFuture<QString> probeVersion(const InstalledRuntime &rt, const QStringList &arg
     });
     proc->start();
     return future;
+}
+
+} // namespace
+
+QFuture<QString> probeVersion(const InstalledRuntime &rt, const QStringList &args)
+{
+    return probeOutput(rt, args.isEmpty() ? QStringList{QStringLiteral("--version")} : args).then([](const QString &out) {
+        for (const QString &l : out.split(QLatin1Char('\n'))) {
+            const QString t = l.trimmed();
+            if (t.isEmpty() || t.startsWith(QLatin1String("ggml_")) || t.startsWith(QLatin1String("load_backend"))
+                || t.startsWith(QLatin1String("Device ")))
+                continue; // backend initialisation chatter
+            return t.left(200);
+        }
+        return QString();
+    });
+}
+
+QStringList parseHelpOptions(const QString &help)
+{
+    static const QRegularExpression re(QStringLiteral(R"((?:^|[\s,])(--[a-z0-9][a-z0-9-]+))"));
+    QStringList out;
+    auto it = re.globalMatch(help);
+    while (it.hasNext()) {
+        const QString opt = it.next().captured(1);
+        if (!out.contains(opt))
+            out << opt;
+    }
+    return out;
+}
+
+QFuture<QStringList> probeOptions(const InstalledRuntime &rt)
+{
+    return probeOutput(rt, {QStringLiteral("--help")}).then([](const QString &out) { return parseHelpOptions(out); });
+}
+
+std::optional<InstalledRuntime> detectPythonApp(const QString &path, QString *error)
+{
+    auto fail = [error](const QString &message) -> std::optional<InstalledRuntime> {
+        if (error)
+            *error = message;
+        return std::nullopt;
+    };
+    const QFileInfo fi(path);
+    const QDir dir(fi.isDir() ? fi.absoluteFilePath() : fi.absolutePath());
+    InstalledRuntime rt;
+    rt.managed = false;
+    rt.installed = QDateTime::currentDateTime();
+    rt.directory = dir.absolutePath();
+    auto firstExisting = [](const QStringList &candidates) {
+        for (const QString &c : candidates) {
+            if (QFileInfo::exists(c))
+                return QDir::cleanPath(c);
+        }
+        return QString();
+    };
+
+    if (QFileInfo::exists(dir.filePath(QStringLiteral("main.py"))) && QFileInfo(dir.filePath(QStringLiteral("comfy"))).isDir()) {
+        rt.kind = QStringLiteral("comfyui");
+        rt.settings.insert(QStringLiteral("script"), dir.filePath(QStringLiteral("main.py")));
+        QString python;
+        // ComfyUI Desktop: the app lives in Programs\ComfyUI\resources\ComfyUI; its venv and models
+        // are in the base folder chosen at setup (config.json).
+        const bool desktop = dir.absolutePath().contains(QLatin1String("/resources/ComfyUI"), Qt::CaseInsensitive);
+        if (desktop) {
+            const QString appData = qEnvironmentVariable("APPDATA");
+            QFile config(QDir(appData).filePath(QStringLiteral("ComfyUI/config.json")));
+            QString basePath;
+            if (config.open(QIODevice::ReadOnly))
+                basePath = QJsonDocument::fromJson(config.readAll()).object().value(QStringLiteral("basePath")).toString();
+            if (basePath.isEmpty())
+                return fail(Text::tr("ComfyUI Desktop has not finished its first-run setup (no base folder in config.json)."));
+            python = firstExisting({QDir(basePath).filePath(QStringLiteral(".venv/Scripts/python.exe")),
+                                    QDir(basePath).filePath(QStringLiteral(".venv/bin/python"))});
+            rt.settings.insert(QStringLiteral("baseDirectory"), QDir::cleanPath(basePath));
+            const QString extra = QDir(appData).filePath(QStringLiteral("ComfyUI/extra_models_config.yaml"));
+            if (QFileInfo::exists(extra))
+                rt.settings.insert(QStringLiteral("extraModelPaths"), QDir::cleanPath(extra));
+            const QString frontEnd = dir.filePath(QStringLiteral("web_custom_versions/desktop_app"));
+            if (QFileInfo(frontEnd).isDir())
+                rt.settings.insert(QStringLiteral("frontEndRoot"), QDir::cleanPath(frontEnd));
+            rt.version = QStringLiteral("Desktop");
+        } else {
+            // Portable build (python_embeded next to the ComfyUI folder) or a checkout with a venv.
+            python = firstExisting({dir.filePath(QStringLiteral("../python_embeded/python.exe")), dir.filePath(QStringLiteral("venv/Scripts/python.exe")),
+                                    dir.filePath(QStringLiteral(".venv/Scripts/python.exe")), dir.filePath(QStringLiteral("venv/bin/python")),
+                                    dir.filePath(QStringLiteral(".venv/bin/python"))});
+        }
+        if (python.isEmpty())
+            return fail(Text::tr("No Python environment found for ComfyUI in %1 (expected python_embeded, venv or .venv).")
+                            .arg(QDir::toNativeSeparators(dir.absolutePath())));
+        rt.executable = python;
+        QFile versionFile(dir.filePath(QStringLiteral("comfyui_version.py")));
+        if (versionFile.open(QIODevice::ReadOnly)) {
+            static const QRegularExpression re(QStringLiteral("__version__\\s*=\\s*\"([^\"]+)\""));
+            const auto m = re.match(QString::fromUtf8(versionFile.readAll()));
+            if (m.hasMatch())
+                rt.version = rt.version.isEmpty() ? m.captured(1) : rt.version + QLatin1Char(' ') + m.captured(1);
+        }
+        rt.versionInfo = QStringLiteral("ComfyUI %1").arg(rt.version);
+        return rt;
+    }
+    if (QFileInfo::exists(dir.filePath(QStringLiteral("webui.bat"))) || QFileInfo::exists(dir.filePath(QStringLiteral("webui.sh")))) {
+        rt.kind = QStringLiteral("sdwebui");
+#ifdef Q_OS_WIN
+        rt.executable = dir.filePath(QStringLiteral("webui.bat"));
+#else
+        rt.executable = dir.filePath(QStringLiteral("webui.sh"));
+#endif
+        rt.settings.insert(QStringLiteral("script"), rt.executable);
+        const QString folder = dir.dirName().toLower();
+        rt.version = folder.contains(QLatin1String("forge")) ? QStringLiteral("Forge") : folder.contains(QLatin1String("reforge")) ? QStringLiteral("reForge") : QString();
+        rt.versionInfo = dir.dirName();
+        return rt;
+    }
+    return fail(Text::tr("%1 is not a ComfyUI or Stable Diffusion WebUI folder.").arg(QDir::toNativeSeparators(dir.absolutePath())));
 }
 
 QStringList findExistingInstalls()
@@ -191,6 +307,8 @@ QStringList findExistingInstalls()
         const QString onPath = QStandardPaths::findExecutable(base);
         if (!onPath.isEmpty())
             add(onPath);
+        if (spec.adoptOnly)
+            continue;
         for (const QString &root : std::as_const(roots)) {
             // One folder deep: "C:/Program Files/llama-b10964-bin-win-cuda-12.4-x64/llama-server.exe".
             const QDir dir(root);
@@ -200,6 +318,22 @@ QStringList findExistingInstalls()
                 const QString candidate = dir.filePath(sub + QLatin1Char('/') + spec.executable);
                 if (QFileInfo::exists(candidate))
                     add(candidate);
+            }
+        }
+    }
+    // ComfyUI Desktop, and ComfyUI / WebUI folders one level below the usual places.
+    const QString desktop = QDir(qEnvironmentVariable("LOCALAPPDATA")).filePath(QStringLiteral("Programs/ComfyUI/resources/ComfyUI/main.py"));
+    if (!qEnvironmentVariable("LOCALAPPDATA").isEmpty() && QFileInfo::exists(desktop))
+        found << QDir::cleanPath(desktop);
+    QStringList pythonRoots = roots;
+    pythonRoots << QStringLiteral("C:/") << QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+    for (const QString &root : std::as_const(pythonRoots)) {
+        const QDir dir(root);
+        for (const QString &sub : dir.entryList(QDir::Dirs | QDir::NoDotAndDotDot)) {
+            for (const QString &candidate : {dir.filePath(sub + QStringLiteral("/main.py")), dir.filePath(sub + QStringLiteral("/ComfyUI/main.py")),
+                                             dir.filePath(sub + QStringLiteral("/webui.bat"))}) {
+                if (QFileInfo::exists(candidate) && detectPythonApp(candidate) && !found.contains(QDir::cleanPath(candidate), Qt::CaseInsensitive))
+                    found << QDir::cleanPath(candidate);
             }
         }
     }
@@ -411,8 +545,14 @@ private:
                 if (!self)
                     return;
                 rt.versionInfo = version;
-                self->m_store->addInstalled(rt);
-                self->m_job->succeed(rt.id);
+                auto done = [self, rt](const QStringList &options) mutable {
+                    rt.options = options;
+                    if (self) {
+                        self->m_store->addInstalled(rt);
+                        self->m_job->succeed(rt.id);
+                    }
+                };
+                probeOptions(rt).then(self.data(), done).onFailed(self.data(), [done](const std::exception &) mutable { done({}); });
             })
             .onFailed(this, [self, rt](const std::exception &e) mutable {
                 if (!self)
@@ -574,10 +714,25 @@ Job *RuntimeStore::install(const InstallPlan &plan)
 QFuture<InstalledRuntime> RuntimeStore::adopt(const QString &executable)
 {
     const QFileInfo fi(executable);
+    // Python apps are recognised from their files; nothing is run.
+    if (fi.isDir() || fi.fileName() == QLatin1String("main.py") || fi.fileName().startsWith(QLatin1String("webui"))) {
+        QString error;
+        std::optional<InstalledRuntime> app = detectPythonApp(executable, &error);
+        if (!app)
+            return QtFuture::makeExceptionalFuture<InstalledRuntime>(std::make_exception_ptr(Error(error)));
+        for (const InstalledRuntime &rt : std::as_const(m_runtimes)) {
+            if (rt.kind == app->kind && QDir(rt.directory) == QDir(app->directory))
+                return QtFuture::makeReadyValueFuture(rt);
+        }
+        app->id = QStringLiteral("adopted/") + QUuid::createUuid().toString(QUuid::Id128).left(12);
+        addInstalled(*app);
+        return QtFuture::makeReadyValueFuture(*app);
+    }
     const RuntimeSpec *spec = Catalog::instance().runtimeForExecutable(fi.fileName());
     if (!spec || !fi.exists()) {
         return QtFuture::makeExceptionalFuture<InstalledRuntime>(std::make_exception_ptr(
-            Error(fi.exists() ? Text::tr("%1 is not a server Lumen can run. Choose llama-server or sd-server.").arg(fi.fileName())
+            Error(fi.exists() ? Text::tr("%1 is not a server Lumen can run. Choose llama-server, sd-server, ComfyUI's main.py or "
+                                          "the WebUI's webui.bat.").arg(fi.fileName())
                               : Text::tr("%1 does not exist.").arg(QDir::toNativeSeparators(executable)))));
     }
     const QString path = QDir::cleanPath(fi.absoluteFilePath());
@@ -608,6 +763,15 @@ QFuture<InstalledRuntime> RuntimeStore::adopt(const QString &executable)
             const auto t = tag.match(QFileInfo(rt.directory).fileName());
             rt.version = t.hasMatch() ? t.captured(1) : QString();
         }
+        return rt;
+    }).then(this, [](InstalledRuntime rt) {
+        return probeOptions(rt)
+            .then([rt](QStringList options) mutable {
+                rt.options = options;
+                return rt;
+            })
+            .onFailed([rt](const std::exception &) { return rt; });
+    }).unwrap().then(this, [self](InstalledRuntime rt) {
         if (self)
             self->addInstalled(rt);
         return rt;

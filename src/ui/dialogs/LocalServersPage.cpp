@@ -5,6 +5,7 @@
 #include "core/Job.h"
 #include "core/Settings.h"
 #include "runtime/Hardware.h"
+#include "runtime/ServerProfile.h"
 #include "runtime/RuntimeStore.h"
 #include "runtime/Supervisor.h"
 #include "ui/Icons.h"
@@ -37,6 +38,7 @@
 #include <QScrollArea>
 #include <QSpinBox>
 #include <QStandardItemModel>
+#include <QTableWidget>
 #include <QToolButton>
 #include <QTreeWidget>
 #include <QUrl>
@@ -93,6 +95,84 @@ QColor stateColor(ServerState s)
     return Theme::palette().textMuted;
 }
 
+// Editor for a list of llama.cpp models: name, model file, optional vision projector.
+class ModelListEditor : public QWidget
+{
+public:
+    ModelListEditor(const QVariantList &value, const QString &filter, std::function<void()> changed, QWidget *parent)
+        : QWidget(parent)
+        , m_filter(filter)
+        , m_changed(std::move(changed))
+    {
+        auto *v = new QVBoxLayout(this);
+        v->setContentsMargins(0, 0, 0, 0);
+        m_table = new QTableWidget(0, 3, this);
+        m_table->setHorizontalHeaderLabels({QCoreApplication::translate("lumen::ui::ServerProfileDialog", "Name"),
+                                            QCoreApplication::translate("lumen::ui::ServerProfileDialog", "Model file"),
+                                            QCoreApplication::translate("lumen::ui::ServerProfileDialog", "Vision projector")});
+        m_table->horizontalHeader()->setStretchLastSection(true);
+        m_table->verticalHeader()->setVisible(false);
+        m_table->setMinimumHeight(110);
+        v->addWidget(m_table);
+        auto *bar = new QHBoxLayout;
+        auto *add = new QPushButton(Icons::get(QStringLiteral("plus")), QCoreApplication::translate("lumen::ui::ServerProfileDialog", "Add model…"), this);
+        auto *remove = new QPushButton(Icons::get(QStringLiteral("trash")), QCoreApplication::translate("lumen::ui::ServerProfileDialog", "Remove"), this);
+        bar->addWidget(add);
+        bar->addWidget(remove);
+        bar->addStretch();
+        v->addLayout(bar);
+        for (const QVariant &item : value) {
+            const QVariantMap m = item.toMap();
+            addRow(m.value(QStringLiteral("name")).toString(), m.value(QStringLiteral("model")).toString(), m.value(QStringLiteral("mmproj")).toString());
+        }
+        connect(add, &QPushButton::clicked, this, [this] {
+            const QString start = Settings::instance().value(QStringLiteral("servers/lastModelDir")).toString();
+            const QString path = QFileDialog::getOpenFileName(this, QCoreApplication::translate("lumen::ui::ServerProfileDialog", "Add model"), start,
+                                                              m_filter);
+            if (path.isEmpty())
+                return;
+            Settings::instance().setValue(QStringLiteral("servers/lastModelDir"), QFileInfo(path).absolutePath());
+            addRow(runtime::llamaModelName(path), QDir::toNativeSeparators(path), QDir::toNativeSeparators(runtime::findProjector(path)));
+            m_changed();
+        });
+        connect(remove, &QPushButton::clicked, this, [this] {
+            if (m_table->currentRow() >= 0) {
+                m_table->removeRow(m_table->currentRow());
+                m_changed();
+            }
+        });
+        connect(m_table, &QTableWidget::itemChanged, this, [this] { m_changed(); });
+    }
+
+    QVariantList value() const
+    {
+        QVariantList out;
+        for (int r = 0; r < m_table->rowCount(); ++r) {
+            auto text = [this, r](int c) { return m_table->item(r, c) ? m_table->item(r, c)->text().trimmed() : QString(); };
+            if (text(1).isEmpty())
+                continue;
+            out << QVariantMap{{QStringLiteral("name"), text(0)}, {QStringLiteral("model"), text(1)}, {QStringLiteral("mmproj"), text(2)}};
+        }
+        return out;
+    }
+
+private:
+    void addRow(const QString &name, const QString &model, const QString &mmproj)
+    {
+        QSignalBlocker block(m_table);
+        const int r = m_table->rowCount();
+        m_table->insertRow(r);
+        m_table->setItem(r, 0, new QTableWidgetItem(name));
+        m_table->setItem(r, 1, new QTableWidgetItem(model));
+        m_table->setItem(r, 2, new QTableWidgetItem(mmproj));
+        m_table->resizeColumnToContents(0);
+    }
+
+    QTableWidget *m_table;
+    QString m_filter;
+    std::function<void()> m_changed;
+};
+
 QTreeWidget *makeTree(const QStringList &headers, QWidget *parent)
 {
     auto *t = new QTreeWidget(parent);
@@ -135,7 +215,7 @@ LocalServersPage::LocalServersPage(Studio *studio, QWidget *parent)
     Theme::setRole(installBtn, QStringLiteral("primary"));
     installBtn->setToolTip(tr("Download llama.cpp or stable-diffusion.cpp from GitHub"));
     auto *existing = new QPushButton(Icons::get(QStringLiteral("folder")), tr("Add existing…"), this);
-    existing->setToolTip(tr("Use llama-server or sd-server you installed yourself"));
+    existing->setToolTip(tr("Use llama-server, sd-server, ComfyUI or Stable Diffusion WebUI you installed yourself"));
     auto *updates = new QPushButton(Icons::get(QStringLiteral("refresh")), tr("Check for updates"), this);
     m_removeRuntime = new QPushButton(Icons::get(QStringLiteral("trash")), tr("Remove"), this);
     Theme::setRole(m_removeRuntime, QStringLiteral("danger"));
@@ -307,7 +387,7 @@ void LocalServersPage::addExisting()
     QString path = chosen->data().toString();
     if (chosen == browse) {
         path = QFileDialog::getOpenFileName(this, tr("Choose a server program"), QString(),
-                                            tr("Servers (llama-server.exe sd-server.exe llama-server sd-server)"));
+                                            tr("Servers (llama-server.exe sd-server.exe llama-server sd-server main.py webui.bat)"));
     }
     if (path.isEmpty())
         return;
@@ -454,9 +534,28 @@ void LocalServersPage::newServer()
         const QString kind = m_studio->servers()->kindOf(p.id);
         QVariantMap settings{{QStringLiteral("url"), runtime::providerUrl(kind, p.port)}, {QStringLiteral("managed_server"), p.id}};
         if (ai::Provider *provider = m_studio->providers()->addProvider(runtime::providerTypeFor(kind), p.name, settings)) {
-            // A fresh setup has no roles yet: let the first local language model handle them.
-            if (provider->kind() == ai::ProviderKind::Llm && m_studio->providers()->role(ai::LlmRole::Assistant).providerId.isEmpty())
-                m_studio->providers()->setRole(ai::LlmRole::Assistant, {provider->instanceId(), QString()});
+            // Roles nobody handles yet go to this server. A vision model takes every role: on one
+            // GPU, switching between a vision and a text model costs a reload each time (measured:
+            // twice the time of the reference scenario), and the vision model handled tool calls better.
+            if (provider->kind() == ai::ProviderKind::Llm) {
+                const QList<runtime::LlamaModel> models = runtime::llamaModels(p);
+                QString vision;
+                QString text;
+                for (const runtime::LlamaModel &m : models) {
+                    if (m.vision() && vision.isEmpty())
+                        vision = m.name;
+                    if (!m.vision() && text.isEmpty())
+                        text = m.name;
+                }
+                if (text.isEmpty())
+                    text = vision;
+                for (ai::LlmRole role : ai::allLlmRoles()) {
+                    if (!m_studio->providers()->role(role).providerId.isEmpty())
+                        continue;
+                    const QString model = vision.isEmpty() ? text : vision;
+                    m_studio->providers()->setRole(role, {provider->instanceId(), model});
+                }
+            }
             m_studio->notify(tr("%1 added as a provider. It starts when Lumen first uses it.").arg(p.name), QStringLiteral("success"));
         }
     }
@@ -508,6 +607,8 @@ InstallRuntimeDialog::InstallRuntimeDialog(Studio *studio, const std::optional<r
     form->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
     m_runtime = new QComboBox(this);
     for (const runtime::RuntimeSpec &r : runtime::Catalog::instance().runtimes) {
+        if (r.adoptOnly)
+            continue;
         m_runtime->addItem(Icons::get(QStringLiteral("server")), r.name, r.id);
         m_runtime->setItemData(m_runtime->count() - 1, r.description, Qt::ToolTipRole);
     }
@@ -685,6 +786,14 @@ ServerProfileDialog::ServerProfileDialog(Studio *studio, const runtime::ServerPr
     m_idle->setValue(profile.idleStopMinutes);
     m_idle->setToolTip(tr("Stops the server after it was unused for this long, freeing memory."));
     form->addRow(tr("Stop when idle"), m_idle);
+    m_form = form;
+    m_preset = new QComboBox(content);
+    m_preset->addItem(tr("Custom"), -1);
+    m_preset->addItem(tr("GPUs up to 8 GB"), int(runtime::VramTier::Small));
+    m_preset->addItem(tr("GPUs with 12 GB"), int(runtime::VramTier::Medium));
+    m_preset->addItem(tr("GPUs with 16 GB or more"), int(runtime::VramTier::Large));
+    m_preset->setToolTip(tr("Fills in memory-related options for a GPU size. Measured on an 8 GB laptop GPU."));
+    form->addRow(tr("Tuned for"), m_preset);
     v->addLayout(form);
 
     m_optionsHost = new QWidget(content);
@@ -720,8 +829,38 @@ ServerProfileDialog::ServerProfileDialog(Studio *studio, const runtime::ServerPr
         buildOptions();
     });
     connect(m_name, &QLineEdit::textChanged, this, &ServerProfileDialog::updatePreview);
+    connect(m_preset, &QComboBox::activated, this, &ServerProfileDialog::applyPreset);
+    if (isNew) {
+        // New servers start tuned for this computer's GPU.
+        QPointer<ServerProfileDialog> self(this);
+        runtime::probeHardware().then(this, [self](runtime::HardwareInfo hw) {
+            if (!self || self->m_preset->currentData().toInt() != -1)
+                return;
+            self->m_preset->setCurrentIndex(self->m_preset->findData(int(runtime::vramTierFor(hw.maxVram()))));
+            self->applyPreset();
+        });
+    }
     connect(m_port, &QSpinBox::valueChanged, this, &ServerProfileDialog::updatePreview);
     buildOptions();
+}
+
+void ServerProfileDialog::applyPreset()
+{
+    const int tier = m_preset->currentData().toInt();
+    if (tier < 0)
+        return;
+    m_profile = profile();
+    const QVariantMap preset = runtime::presetOptions(kind(), runtime::VramTier(tier));
+    for (auto it = preset.cbegin(); it != preset.cend(); ++it)
+        m_profile.options.insert(it.key(), it.value());
+    m_builtFor.clear(); // rebuild the fields with the new values
+    buildOptions();
+}
+
+void ServerProfileDialog::updatePresetRow()
+{
+    const bool hasPresets = !runtime::presetOptions(kind(), runtime::VramTier::Small).isEmpty();
+    m_form->setRowVisible(m_preset, hasPresets);
 }
 
 QString ServerProfileDialog::kind() const
@@ -739,6 +878,7 @@ void ServerProfileDialog::buildOptions()
     }
     m_builtFor = k;
     m_fields.clear();
+    updatePresetRow();
     auto *host = m_optionsHost->layout();
     while (QLayoutItem *item = host->takeAt(0)) {
         delete item->widget();
@@ -775,6 +915,7 @@ void ServerProfileDialog::buildOptions()
             auto *h = new QHBoxLayout(row);
             h->setContentsMargins(0, 0, 0, 0);
             auto *edit = new QLineEdit(value.toString(), row);
+            edit->setProperty("optionKey", f.key);
             edit->setPlaceholderText(f.required ? tr("required") : tr("none"));
             edit->setMinimumWidth(320);
             auto *browse = iconButton(QStringLiteral("folder"), tr("Browse…"), row);
@@ -792,6 +933,11 @@ void ServerProfileDialog::buildOptions()
                     return;
                 edit->setText(QDir::toNativeSeparators(path));
                 Settings::instance().setValue(QStringLiteral("servers/lastModelDir"), dir ? path : QFileInfo(path).absolutePath());
+                // A vision model's projector usually sits next to it.
+                if (edit->property("optionKey").toString() == QLatin1String("model")) {
+                    if (auto *mmproj = qobject_cast<QLineEdit *>(m_fields.value(QStringLiteral("mmproj"))); mmproj && mmproj->text().isEmpty())
+                        mmproj->setText(QDir::toNativeSeparators(runtime::findProjector(path)));
+                }
             });
             connect(edit, &QLineEdit::textChanged, this, &ServerProfileDialog::updatePreview);
             w = edit;
@@ -801,6 +947,8 @@ void ServerProfileDialog::buildOptions()
             auto *s = new QSpinBox(box);
             s->setRange(int(f.maximum > f.minimum ? f.minimum : 0), int(f.maximum > f.minimum ? f.maximum : 1000000));
             s->setValue(value.toInt());
+            if (f.key == QLatin1String("gpu_layers"))
+                s->setSpecialValueText(tr("Automatic"));
             connect(s, &QSpinBox::valueChanged, this, &ServerProfileDialog::updatePreview);
             w = s;
             break;
@@ -835,6 +983,9 @@ void ServerProfileDialog::buildOptions()
             w = e;
             break;
         }
+        case OptionField::Type::ModelList:
+            w = new ModelListEditor(value.toList(), f.filter + QStringLiteral(";;") + tr("All files (*)"), [this] { updatePreview(); }, box);
+            break;
         }
         if (!f.help.isEmpty()) {
             w->setToolTip(f.help);
@@ -856,6 +1007,14 @@ void ServerProfileDialog::buildOptions()
     else
         delete advancedBox;
     host->addWidget(box);
+    // The model name defaults to the file name.
+    auto *modelEdit = qobject_cast<QLineEdit *>(m_fields.value(QStringLiteral("model")));
+    auto *nameEdit = qobject_cast<QLineEdit *>(m_fields.value(QStringLiteral("model_name")));
+    if (modelEdit && nameEdit) {
+        auto sync = [modelEdit, nameEdit] { nameEdit->setPlaceholderText(runtime::llamaModelName(modelEdit->text())); };
+        connect(modelEdit, &QLineEdit::textChanged, nameEdit, sync);
+        sync();
+    }
 
     // Providers exist for llama.cpp; the sd.cpp provider comes with the next step of M12.
     if (m_createProvider) {
@@ -891,6 +1050,8 @@ runtime::ServerProfile ServerProfileDialog::profile() const
             v = c->isChecked();
         else if (auto *cb = qobject_cast<QComboBox *>(w))
             v = cb->currentText();
+        else if (auto *list = dynamic_cast<ModelListEditor *>(w))
+            v = list->value().isEmpty() ? QVariant() : QVariant(list->value());
         // Only what differs from the defaults is stored, so better defaults reach existing servers.
         const bool isDefault = v == f.defaultValue || (v.toString().isEmpty() && !f.defaultValue.isValid());
         if (!isDefault)

@@ -79,6 +79,7 @@ private slots:
     void managedSdServer();
     void managedStudioScenario();
     void managedSdUpscale();
+    void managedComfyUi();
 
 private:
     net::HttpClient m_http;
@@ -668,6 +669,10 @@ void TestLive::managedStudioScenario()
     llm.options.insert(QStringLiteral("model"), llamaModel);
     if (!qEnvironmentVariable("LUMEN_LIVE_LLAMA_MMPROJ").isEmpty())
         llm.options.insert(QStringLiteral("mmproj"), qEnvironmentVariable("LUMEN_LIVE_LLAMA_MMPROJ"));
+    // Optional text model next to the vision model (router mode, one loaded at a time).
+    const QString textModel = qEnvironmentVariable("LUMEN_LIVE_LLAMA_TEXT_MODEL");
+    if (!textModel.isEmpty())
+        llm.options.insert(QStringLiteral("more_models"), QVariantList{QVariantMap{{QStringLiteral("model"), textModel}}});
     llm.startupTimeoutSec = 300;
     servers->addProfile(llm);
     runtime::ServerProfile image = servers->createProfile(studio.runtimes()->latestManaged(QStringLiteral("sd.cpp"))->id, QStringLiteral("SDXL"));
@@ -689,6 +694,22 @@ void TestLive::managedStudioScenario()
     QVERIFY(sdProvider->gate() && llmProvider->gate());
     QVERIFY(sdProvider->setting(QStringLiteral("control_net")).toBool());
     studio.providers()->setDefaultImageProvider(sdProvider->instanceId());
+    // Roles as Settings → Local servers assigns them: the vision model analyses references and
+    // reviews results, the text model plans and talks.
+    QString visionName;
+    QString textName;
+    for (const runtime::LlamaModel &m : runtime::llamaModels(*servers->profile(llm.id))) {
+        if (m.vision() && visionName.isEmpty())
+            visionName = m.name;
+        if (!m.vision() && textName.isEmpty())
+            textName = m.name;
+    }
+    if (textName.isEmpty())
+        textName = visionName;
+    for (LlmRole role : allLlmRoles())
+        studio.providers()->setRole(role, {llmProvider->instanceId(), role == LlmRole::Vision ? visionName : textName});
+    qInfo() << "roles: vision" << visionName << "text" << textName;
+    QCOMPARE(llmProvider->text(QStringLiteral("model")), visionName);
     QCOMPARE(servers->state(llm.id), runtime::ServerState::Stopped);
     QCOMPARE(servers->state(image.id), runtime::ServerState::Stopped);
 
@@ -790,6 +811,47 @@ void TestLive::managedSdUpscale()
     delete op;
     servers.stop(profile.id);
     QTRY_COMPARE_WITH_TIMEOUT(servers.state(profile.id), runtime::ServerState::Stopped, 30000);
+}
+
+// LUMEN_LIVE_COMFY_APP=<ComfyUI main.py or folder>: Lumen adopts the installation (e.g. ComfyUI
+// Desktop), starts it, talks to it through the ComfyUI provider and stops it again.
+void TestLive::managedComfyUi()
+{
+    const QString app = qEnvironmentVariable("LUMEN_LIVE_COMFY_APP");
+    if (app.isEmpty())
+        QSKIP("LUMEN_LIVE_COMFY_APP is not set");
+    QTemporaryDir tmp;
+    JobQueue jobs;
+    runtime::RuntimeStore store(&m_http, &jobs);
+    store.setRoot(tmp.filePath(QStringLiteral("runtimes")));
+    QFuture<runtime::InstalledRuntime> adopted = store.adopt(app);
+    QTRY_VERIFY_WITH_TIMEOUT(adopted.isFinished(), 10000);
+    const runtime::InstalledRuntime rt = adopted.result();
+    qInfo() << "adopted" << rt.displayName() << rt.executable << rt.settings;
+    runtime::ServerSupervisor servers(&store, &m_http);
+    servers.setConfigPath(tmp.filePath(QStringLiteral("servers.json")));
+    servers.setLogDir(tmp.filePath(QStringLiteral("logs")));
+    runtime::ServerProfile profile = servers.createProfile(rt.id, QStringLiteral("ComfyUI"));
+    profile.startupTimeoutSec = 300;
+    servers.addProfile(profile);
+    qInfo().noquote() << "command:" << servers.launchFor(profile.id).commandLine();
+    ComfyUiProvider comfy(ComfyUiProvider::describe(), QStringLiteral("live-comfy"), &m_http, nullptr);
+    comfy.configure({{QStringLiteral("url"), runtime::providerUrl(rt.kind, profile.port)}});
+    comfy.setGate(std::make_shared<SupervisorGate>(&servers, profile.id));
+    QElapsedTimer t;
+    t.start();
+    QFuture<QString> test = gatedCall(&comfy, [&comfy] { return comfy.testConnection(); });
+    QTRY_VERIFY_WITH_TIMEOUT(test.isFinished(), 300000);
+    if (servers.state(profile.id) != runtime::ServerState::Ready)
+        qInfo().noquote() << servers.log(profile.id).mid(std::max<qsizetype>(0, servers.log(profile.id).size() - 30)).join(QLatin1Char('\n'));
+    qInfo() << "ComfyUI answered after" << t.elapsed() << "ms:" << test.result();
+    QCOMPARE(servers.state(profile.id), runtime::ServerState::Ready);
+    QFuture<QStringList> models = gatedList(&comfy, [&comfy] { return comfy.listModels(); });
+    QTRY_VERIFY_WITH_TIMEOUT(models.isFinished(), 60000);
+    qInfo() << "checkpoints:" << models.result();
+    servers.stop(profile.id);
+    QTRY_COMPARE_WITH_TIMEOUT(servers.state(profile.id), runtime::ServerState::Stopped, 30000);
+    QVERIFY(runtime::portIsFree(profile.port));
 }
 
 QTEST_MAIN(TestLive)

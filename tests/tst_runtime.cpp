@@ -202,8 +202,10 @@ private slots:
     void supervisorLifecycle();
     void supervisorCrashAndFailures();
     void supervisorKillsProcessTree();
+    void supervisorUnloadsModels();
     void installFromGithub();
     void adoptExisting();
+    void adoptPythonApps();
 
 private:
     QTemporaryDir m_tmp;
@@ -521,6 +523,8 @@ void TestRuntime::launchArguments()
     InstalledRuntime rt;
     rt.kind = QStringLiteral("llama.cpp");
     rt.executable = m_tmp.filePath(QStringLiteral("llama/llama-server.exe"));
+    rt.options = {QStringLiteral("--model"), QStringLiteral("--mmproj")}; // an old build: no router mode
+    QVERIFY(!llamaRouter(rt));
     ServerProfile p;
     p.name = QStringLiteral("Vision");
     p.port = 8099;
@@ -531,7 +535,7 @@ void TestRuntime::launchArguments()
     QVERIFY2(cmd.error.isEmpty(), qPrintable(cmd.error));
     const QStringList expected = {QStringLiteral("-m"), QDir::toNativeSeparators(model), QStringLiteral("--mmproj"), QDir::toNativeSeparators(mmproj),
                                   QStringLiteral("--host"), QStringLiteral("127.0.0.1"), QStringLiteral("--port"), QStringLiteral("8099"),
-                                  QStringLiteral("-c"), QStringLiteral("16384"), QStringLiteral("-ngl"), QStringLiteral("999"),
+                                  QStringLiteral("-c"), QStringLiteral("16384"),
                                   QStringLiteral("-ctk"), QStringLiteral("q8_0"), QStringLiteral("-ctv"), QStringLiteral("q8_0"),
                                   QStringLiteral("-fa"), QStringLiteral("on"), QStringLiteral("--jinja"),
                                   QStringLiteral("--sleep-idle-seconds"), QStringLiteral("30"),
@@ -539,6 +543,55 @@ void TestRuntime::launchArguments()
     QCOMPARE(cmd.arguments, expected);
     QVERIFY(cmd.commandLine().contains(QStringLiteral("\"my model\"")));
     QCOMPARE(providerUrl(rt.kind, 8099), QStringLiteral("http://127.0.0.1:8099/v1"));
+
+    // Router mode: a presets file with every model; shared settings in [*].
+    InstalledRuntime router = rt;
+    router.options << QStringLiteral("--models-preset");
+    QVERIFY(llamaRouter(router));
+    const QString textModel = m_tmp.filePath(QStringLiteral("models/Qwen3-8B-Q4_K_M.gguf"));
+    QVERIFY(writeFile(textModel, "gguf"));
+    ServerProfile multi = p;
+    multi.id = QStringLiteral("abc");
+    multi.options.insert(QStringLiteral("model_name"), QStringLiteral("vision"));
+    multi.options.insert(QStringLiteral("gpu_layers"), 99);
+    multi.options.insert(QStringLiteral("more_models"),
+                         QVariantList{QVariantMap{{QStringLiteral("model"), textModel}},
+                                      QVariantMap{{QStringLiteral("name"), QStringLiteral("vision")}, {QStringLiteral("model"), textModel}}});
+    const QList<LlamaModel> models = llamaModels(multi);
+    QCOMPARE(models.size(), 3);
+    QCOMPARE(models[0].name, QStringLiteral("vision"));
+    QVERIFY(models[0].vision());
+    QCOMPARE(models[1].name, QStringLiteral("Qwen3-8B-Q4_K_M"));
+    QCOMPARE(models[2].name, QStringLiteral("vision-2")); // names stay unique
+    const QString filesDir = m_tmp.filePath(QStringLiteral("servers"));
+    cmd = buildLaunch(multi, router, filesDir);
+    QVERIFY2(cmd.error.isEmpty(), qPrintable(cmd.error));
+    const QString ini = QDir(filesDir).filePath(QStringLiteral("abc-models.ini"));
+    QVERIFY(cmd.files.contains(ini));
+    QCOMPARE(cmd.arguments.mid(0, 4), (QStringList{QStringLiteral("--models-preset"), QDir::toNativeSeparators(ini),
+                                                   QStringLiteral("--models-max"), QStringLiteral("1")}));
+    QVERIFY(cmd.arguments.contains(QStringLiteral("--temp"))); // extra arguments go to the router
+    QVERIFY(!cmd.arguments.contains(QStringLiteral("-m")));
+    const QString text = QString::fromUtf8(cmd.files.value(ini));
+    QVERIFY2(text.startsWith(QStringLiteral("version = 1\n\n[*]\nc = 16384\nngl = 99\nctk = q8_0\nctv = q8_0\nfa = on\njinja = true\n"
+                                            "sleep-idle-seconds = 30\n")),
+             qPrintable(text));
+    QVERIFY(text.contains(QStringLiteral("\n[vision]\nmodel = %1\nmmproj = %2\n").arg(QDir::fromNativeSeparators(model), QDir::fromNativeSeparators(mmproj))));
+    QVERIFY(text.contains(QStringLiteral("\n[Qwen3-8B-Q4_K_M]\nmodel = %1\n").arg(QDir::fromNativeSeparators(textModel))));
+    // Changing a model changes the signature (so a running server needs a restart) but not the command line.
+    ServerProfile changed = multi;
+    changed.options.insert(QStringLiteral("model_name"), QStringLiteral("seer"));
+    const LaunchCommand cmd2 = buildLaunch(changed, router, filesDir);
+    QCOMPARE(cmd2.commandLine(), cmd.commandLine());
+    QVERIFY(cmd2.signature() != cmd.signature());
+
+    // Projectors are found next to their model.
+    QVERIFY(writeFile(m_tmp.filePath(QStringLiteral("dl/Qwen3VL-8B-Instruct-Q4_K_M.gguf")), "g"));
+    QVERIFY(writeFile(m_tmp.filePath(QStringLiteral("dl/mmproj-Qwen3VL-8B-Instruct-Q8_0.gguf")), "g"));
+    QVERIFY(writeFile(m_tmp.filePath(QStringLiteral("dl/Qwen3-8B-Q4_K_M.gguf")), "g"));
+    QCOMPARE(findProjector(m_tmp.filePath(QStringLiteral("dl/Qwen3VL-8B-Instruct-Q4_K_M.gguf"))),
+             QDir(m_tmp.filePath(QStringLiteral("dl"))).filePath(QStringLiteral("mmproj-Qwen3VL-8B-Instruct-Q8_0.gguf")));
+    QVERIFY(findProjector(m_tmp.filePath(QStringLiteral("dl/Qwen3-8B-Q4_K_M.gguf"))).isEmpty());
 
     p.options.remove(QStringLiteral("model"));
     QVERIFY(buildLaunch(p, rt).error.contains(QLatin1String("model")));
@@ -565,6 +618,15 @@ void TestRuntime::launchArguments()
     QVERIFY(cmd.arguments.contains(QStringLiteral("--offload-to-cpu")));
     QCOMPARE(cmd.arguments.value(cmd.arguments.indexOf(QStringLiteral("--max-vram")) + 1), QStringLiteral("6.5"));
     QVERIFY(cmd.arguments.contains(QStringLiteral("--diffusion-fa")));
+
+    // VRAM presets.
+    QCOMPARE(vramTierFor(8ull << 30), VramTier::Small);
+    QCOMPARE(vramTierFor(12ull << 30), VramTier::Medium);
+    QCOMPARE(vramTierFor(24ull << 30), VramTier::Large);
+    QCOMPARE(presetOptions(QStringLiteral("sd.cpp"), VramTier::Small).value(QStringLiteral("offload_to_cpu")).toBool(), true);
+    QCOMPARE(presetOptions(QStringLiteral("sd.cpp"), VramTier::Large).value(QStringLiteral("weight_type")).toString(), QStringLiteral("file"));
+    QCOMPARE(presetOptions(QStringLiteral("llama.cpp"), VramTier::Large).value(QStringLiteral("unload_for_images")).toBool(), false);
+    QVERIFY(presetOptions(QStringLiteral("sdwebui"), VramTier::Small).isEmpty());
 
     QCOMPARE(splitArguments(QStringLiteral(" a  \"b c\" \"\" d")), (QStringList{QStringLiteral("a"), QStringLiteral("b c"), QString(), QStringLiteral("d")}));
 }
@@ -746,6 +808,27 @@ void TestRuntime::supervisorKillsProcessTree()
 #endif
 }
 
+void TestRuntime::supervisorUnloadsModels()
+{
+    FakeRuntime fx; // the fake llama-server was not probed: router mode
+    const ServerProfile p = fx.profile(QStringLiteral("--fake-ready-ms 100"));
+    QVERIFY(QString::fromUtf8(fx.supervisor.launchFor(p.id).signature()).contains(QLatin1String("[model]")));
+    // Stopped servers have nothing to unload.
+    QFuture<void> idle = fx.supervisor.unloadModels(p.id);
+    QVERIFY(idle.isFinished());
+    QCOMPARE(await(fx.supervisor.start(p.id)), QString());
+    QVERIFY(QFileInfo::exists(QDir(fx.supervisor.filesDir()).filePath(p.id + QStringLiteral("-models.ini"))));
+    QElapsedTimer t;
+    t.start();
+    QFuture<void> unload = fx.supervisor.unloadModels(p.id);
+    QTRY_VERIFY_WITH_TIMEOUT(unload.isFinished(), 10000);
+    // The fake answers "loaded" for 300 ms after the unload request: the supervisor waited for it.
+    QVERIFY(t.elapsed() >= 250);
+    QCOMPARE(fx.supervisor.state(p.id), ServerState::Ready); // the server keeps running
+    fx.supervisor.stop(p.id);
+    QTRY_COMPARE_WITH_TIMEOUT(fx.supervisor.state(p.id), ServerState::Stopped, 10000);
+}
+
 void TestRuntime::installFromGithub()
 {
     MockHttpServer github;
@@ -893,6 +976,76 @@ void TestRuntime::adoptExisting()
         threw = true;
     }
     QVERIFY(threw);
+}
+
+void TestRuntime::adoptPythonApps()
+{
+    QTemporaryDir dir;
+    // ComfyUI portable: python_embeded next to the ComfyUI folder.
+    const QString root = dir.filePath(QStringLiteral("ComfyUI_windows_portable"));
+    QVERIFY(writeFile(root + QStringLiteral("/ComfyUI/main.py"), "print('comfy')"));
+    QVERIFY(writeFile(root + QStringLiteral("/ComfyUI/comfy/__init__.py"), ""));
+    QVERIFY(writeFile(root + QStringLiteral("/ComfyUI/comfyui_version.py"), "__version__ = \"0.18.5\"\n"));
+    QVERIFY(writeFile(root + QStringLiteral("/python_embeded/python.exe"), "MZ"));
+    QString error;
+    auto comfy = detectPythonApp(root + QStringLiteral("/ComfyUI/main.py"), &error);
+    QVERIFY2(comfy, qPrintable(error));
+    QCOMPARE(comfy->kind, QStringLiteral("comfyui"));
+    QCOMPARE(comfy->version, QStringLiteral("0.18.5"));
+    QCOMPARE(QFileInfo(comfy->executable).fileName(), QStringLiteral("python.exe"));
+    ServerProfile p;
+    p.name = QStringLiteral("ComfyUI");
+    p.port = 8190;
+    p.options.insert(QStringLiteral("vram_mode"), QStringLiteral("lowvram"));
+    LaunchCommand cmd = buildLaunch(p, *comfy);
+    QVERIFY2(cmd.error.isEmpty(), qPrintable(cmd.error));
+    QCOMPARE(cmd.program, comfy->executable);
+    QCOMPARE(cmd.arguments, (QStringList{QDir::toNativeSeparators(root + QStringLiteral("/ComfyUI/main.py")), QStringLiteral("--listen"),
+                                         QStringLiteral("127.0.0.1"), QStringLiteral("--port"), QStringLiteral("8190"),
+                                         QStringLiteral("--disable-auto-launch"), QStringLiteral("--lowvram")}));
+    QCOMPARE(cmd.environment.value(QStringLiteral("PYTHONUNBUFFERED")), QStringLiteral("1"));
+    QCOMPARE(providerTypeFor(comfy->kind), QStringLiteral("comfyui"));
+    QCOMPARE(providerUrl(comfy->kind, 8190), QStringLiteral("http://127.0.0.1:8190"));
+
+    // A checkout without any Python environment is refused with a reason.
+    QVERIFY(writeFile(dir.filePath(QStringLiteral("bare/main.py")), ""));
+    QVERIFY(writeFile(dir.filePath(QStringLiteral("bare/comfy/x.py")), ""));
+    QVERIFY(!detectPythonApp(dir.filePath(QStringLiteral("bare")), &error));
+    QVERIFY(error.contains(QLatin1String("Python")));
+
+    // Forge: webui.bat, API and port through COMMANDLINE_ARGS.
+    QVERIFY(writeFile(dir.filePath(QStringLiteral("stable-diffusion-webui-forge/webui.bat")), "@echo off"));
+    auto forge = detectPythonApp(dir.filePath(QStringLiteral("stable-diffusion-webui-forge")), &error);
+    QVERIFY2(forge, qPrintable(error));
+    QCOMPARE(forge->kind, QStringLiteral("sdwebui"));
+    QCOMPARE(forge->version, QStringLiteral("Forge"));
+    ServerProfile w;
+    w.port = 7870;
+    w.options.insert(QStringLiteral("extra_args"), QStringLiteral("--xformers"));
+    cmd = buildLaunch(w, *forge);
+    QVERIFY2(cmd.error.isEmpty(), qPrintable(cmd.error));
+#ifdef Q_OS_WIN
+    QCOMPARE(cmd.program, QStringLiteral("cmd.exe"));
+    QCOMPARE(cmd.arguments.value(0), QStringLiteral("/c"));
+#endif
+    QCOMPARE(cmd.environment.value(QStringLiteral("COMMANDLINE_ARGS")), QStringLiteral("--api --port 7870 --skip-version-check --xformers"));
+
+    QVERIFY(!detectPythonApp(dir.filePath(QStringLiteral("nothing-here")), &error));
+
+    // Adopting goes through the same detection and does not run anything.
+    net::HttpClient http;
+    JobQueue jobs;
+    RuntimeStore store(&http, &jobs);
+    store.setRoot(dir.filePath(QStringLiteral("runtimes")));
+    QFuture<InstalledRuntime> adopted = store.adopt(root + QStringLiteral("/ComfyUI"));
+    QVERIFY(adopted.isFinished());
+    QCOMPARE(adopted.result().kind, QStringLiteral("comfyui"));
+    QCOMPARE(store.adopt(root + QStringLiteral("/ComfyUI/main.py")).result().id, adopted.result().id);
+    QCOMPARE(store.runtimes().size(), 1);
+    RuntimeStore reloaded(&http, &jobs);
+    reloaded.setRoot(store.root());
+    reloaded.load();
+    QCOMPARE(reloaded.runtimes().first().settings.value(QStringLiteral("script")).toString(), root + QStringLiteral("/ComfyUI/main.py"));
 }
 
 QTEST_MAIN(TestRuntime)

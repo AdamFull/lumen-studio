@@ -37,6 +37,7 @@ struct RuntimeSpec
     QString description;
     QString role;               // "llm" | "image"
     QString repo;               // GitHub owner/name — the only source Lumen downloads from
+    bool adoptOnly = false;     // Python apps (ComfyUI, SD WebUI): Lumen only runs existing installs
     QUrl homepage;
     QString license;
     QString tagPattern;

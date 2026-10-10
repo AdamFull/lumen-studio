@@ -206,7 +206,12 @@ LaunchCommand ServerSupervisor::launchFor(const QString &profileId) const
         c.error = Text::tr("The runtime of %1 is no longer installed.").arg(p->name);
         return c;
     }
-    return buildLaunch(*p, *rt);
+    return buildLaunch(*p, *rt, filesDir());
+}
+
+QString ServerSupervisor::filesDir() const
+{
+    return QDir(QFileInfo(configPath()).absolutePath()).filePath(QStringLiteral("servers"));
 }
 
 ServerSupervisor::Server *ServerSupervisor::server(const QString &id)
@@ -270,7 +275,7 @@ bool ServerSupervisor::needsRestart(const QString &id) const
     const Server *s = server(id);
     if (!s || (s->state != ServerState::Ready && s->state != ServerState::Starting))
         return false;
-    return launchFor(id).commandLine() != s->commandLine;
+    return launchFor(id).signature() != s->signature;
 }
 
 int ServerSupervisor::users(const QString &id) const
@@ -341,6 +346,13 @@ void ServerSupervisor::launch(const QString &id)
     if (!s->log.isEmpty())
         s->log << QString(); // the in-memory log keeps earlier runs (crash restarts) for the viewer
     s->commandLine = cmd.commandLine();
+    s->signature = cmd.signature();
+    for (auto it = cmd.files.cbegin(); it != cmd.files.cend(); ++it) {
+        QDir().mkpath(QFileInfo(it.key()).absolutePath());
+        QFile f(it.key());
+        if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate) || f.write(it.value()) != it.value().size())
+            return failNow(Text::tr("Cannot write %1.").arg(QDir::toNativeSeparators(it.key())));
+    }
     s->startTimeoutSec = std::max(10, p->startupTimeoutSec);
 
     // Log file: the previous run is kept as <id>.1.log.
@@ -362,7 +374,10 @@ void ServerSupervisor::launch(const QString &id)
     proc->setProgram(cmd.program);
     proc->setArguments(cmd.arguments);
     proc->setWorkingDirectory(cmd.workingDirectory);
-    proc->setProcessEnvironment(runtimeEnvironment(*rt));
+    QProcessEnvironment env = runtimeEnvironment(*rt);
+    for (auto it = cmd.environment.cbegin(); it != cmd.environment.cend(); ++it)
+        env.insert(it.key(), it.value());
+    proc->setProcessEnvironment(env);
     proc->setProcessChannelMode(QProcess::MergedChannels);
     connect(proc, &QProcess::readyRead, this, [this, id] { onOutput(id); });
     connect(proc, &QProcess::errorOccurred, this, [this, id, proc](QProcess::ProcessError e) {
@@ -603,6 +618,76 @@ void ServerSupervisor::startAutoStartServers()
         if (p.startPolicy == StartPolicy::AtStartup)
             start(p.id);
     }
+}
+
+QFuture<void> ServerSupervisor::unloadModels(const QString &id)
+{
+    const auto p = profile(id);
+    const auto rt = p ? m_store->runtime(p->runtimeId) : std::nullopt;
+    if (!p || !rt || rt->kind != QLatin1String("llama.cpp") || !llamaRouter(*rt) || state(id) != ServerState::Ready)
+        return QtFuture::makeReadyVoidFuture();
+    auto promise = std::make_shared<QPromise<void>>();
+    promise->start();
+    QFuture<void> future = promise->future();
+    const QString base = QStringLiteral("http://127.0.0.1:%1").arg(p->port);
+    net::CallOptions o;
+    o.maxRetries = 0;
+    o.quiet = true;
+    o.timeoutMs = 15000;
+    QPointer<ServerSupervisor> self(this);
+    // Models still in memory ("sleeping" ones already gave their memory back).
+    auto loadedModels = [](const QJsonObject &list) {
+        QStringList out;
+        for (const QJsonValue &v : list.value(QStringLiteral("data")).toArray()) {
+            const QJsonObject m = v.toObject();
+            const QString st = m.value(QStringLiteral("status")).toObject().value(QStringLiteral("value")).toString();
+            if (st == QLatin1String("loaded") || st == QLatin1String("loading"))
+                out << m.value(QStringLiteral("id")).toString();
+        }
+        return out;
+    };
+    net::HttpCall *list = m_http->get(net::HttpClient::makeRequest(QUrl(base + QStringLiteral("/models"))), o);
+    connect(list, &net::HttpCall::finished, this, [self, list, promise, base, o, loadedModels, id] {
+        const QStringList loaded = list->ok() ? loadedModels(list->json()) : QStringList();
+        if (!self || loaded.isEmpty()) {
+            promise->finish();
+            return;
+        }
+        qCInfo(lcApp) << "unloading" << loaded << "from server" << id << "to free the GPU";
+        auto pending = std::make_shared<int>(int(loaded.size()));
+        for (const QString &model : loaded) {
+            net::HttpCall *call = self->m_http->postJson(net::HttpClient::makeRequest(QUrl(base + QStringLiteral("/models/unload"))),
+                                                         QJsonObject{{QStringLiteral("model"), model}}, o);
+            connect(call, &net::HttpCall::finished, self, [self, pending, promise, base, o, loadedModels] {
+                if (--*pending > 0)
+                    return;
+                // The unload is asynchronous: wait until the instances are gone (at most ~15 s).
+                auto tries = std::make_shared<int>(0);
+                auto poll = std::make_shared<std::function<void()>>();
+                *poll = [self, promise, base, o, loadedModels, tries, poll] {
+                    if (!self || ++*tries > 60) {
+                        promise->finish();
+                        *poll = nullptr;
+                        return;
+                    }
+                    net::HttpCall *check = self->m_http->get(net::HttpClient::makeRequest(QUrl(base + QStringLiteral("/models"))), o);
+                    connect(check, &net::HttpCall::finished, self, [check, promise, loadedModels, poll, self] {
+                        if (!check->ok() || loadedModels(check->json()).isEmpty()) {
+                            promise->finish();
+                            *poll = nullptr;
+                            return;
+                        }
+                        QTimer::singleShot(250, self, [poll] {
+                            if (*poll)
+                                (*poll)();
+                        });
+                    });
+                };
+                (*poll)();
+            });
+        }
+    });
+    return future;
 }
 
 void ServerSupervisor::stopAll()

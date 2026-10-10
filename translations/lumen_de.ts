@@ -1039,6 +1039,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location filename="../src/ui/Studio.cpp" line="+77"/>
+        <location line="+17"/>
         <source>Lumen is shutting down.</source>
         <translation>Lumen wird beendet.</translation>
     </message>
@@ -2327,8 +2328,8 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>The server was started with --upscale-model. Set automatically for servers Lumen runs.</source>
-        <translation>Der Server wurde mit --upscale-model gestartet. Wird für von Lumen gestartete Server automatisch gesetzt.</translation>
+        <source>The server was started with --hires-upscalers-dir. Set automatically for servers Lumen runs.</source>
+        <translation>Der Server wurde mit --hires-upscalers-dir gestartet. Wird für von Lumen gestartete Server automatisch gesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -2889,7 +2890,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::runtime::Catalog</name>
     <message>
-        <location filename="../src/runtime/Catalog.cpp" line="+142"/>
+        <location filename="../src/runtime/Catalog.cpp" line="+143"/>
         <source>needs an NVIDIA GPU</source>
         <translation>benötigt eine NVIDIA-GPU</translation>
     </message>
@@ -3014,12 +3015,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::runtime::RuntimeStore</name>
     <message>
-        <location filename="../src/runtime/RuntimeStore.cpp" line="+136"/>
+        <location filename="../src/runtime/RuntimeStore.cpp" line="+144"/>
         <source>%1 cannot be started: %2</source>
         <translation>%1 kann nicht gestartet werden: %2</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+6"/>
         <source>%1 cannot start: a required DLL is missing (for CUDA builds: the CUDA runtime or a recent NVIDIA driver).</source>
         <translation>%1 startet nicht: Eine benötigte DLL fehlt (bei CUDA-Builds: die CUDA-Laufzeit oder ein aktueller NVIDIA-Treiber).</translation>
     </message>
@@ -3034,7 +3035,22 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>%1 hat nicht innerhalb von 20 Sekunden auf --version geantwortet.</translation>
     </message>
     <message>
-        <location line="+71"/>
+        <location line="+75"/>
+        <source>ComfyUI Desktop has not finished its first-run setup (no base folder in config.json).</source>
+        <translation>ComfyUI Desktop hat die Ersteinrichtung noch nicht abgeschlossen (kein Basisordner in config.json).</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>No Python environment found for ComfyUI in %1 (expected python_embeded, venv or .venv).</source>
+        <translation>Keine Python-Umgebung für ComfyUI in %1 gefunden (erwartet: python_embeded, venv oder .venv).</translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <source>%1 is not a ComfyUI or Stable Diffusion WebUI folder.</source>
+        <translation>%1 ist kein ComfyUI- oder Stable-Diffusion-WebUI-Ordner.</translation>
+    </message>
+    <message>
+        <location line="+86"/>
         <source>Unknown runtime %1.</source>
         <translation>Unbekanntes Programm %1.</translation>
     </message>
@@ -3079,7 +3095,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Prüft, ob %1 läuft…</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+22"/>
         <source>Installed, but the server does not start: %1</source>
         <translation>Installiert, aber der Server startet nicht: %1</translation>
     </message>
@@ -3094,17 +3110,17 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Wird beendet.</translation>
     </message>
     <message>
-        <location line="+16"/>
-        <source>%1 is not a server Lumen can run. Choose llama-server or sd-server.</source>
-        <translation>%1 ist kein Server, den Lumen ausführen kann. Wählen Sie llama-server oder sd-server.</translation>
+        <location line="+30"/>
+        <source>%1 is not a server Lumen can run. Choose llama-server, sd-server, ComfyUI&apos;s main.py or the WebUI&apos;s webui.bat.</source>
+        <translation>%1 ist kein Server, den Lumen ausführen kann. Wählen Sie llama-server, sd-server, die main.py von ComfyUI oder die webui.bat der WebUI.</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>%1 does not exist.</source>
         <translation>%1 existiert nicht.</translation>
     </message>
     <message>
-        <location line="+49"/>
+        <location line="+58"/>
         <source>Some files in %1 are in use. Stop the server and try again.</source>
         <translation>Einige Dateien in %1 werden verwendet. Beenden Sie den Server und versuchen Sie es erneut.</translation>
     </message>
@@ -3117,7 +3133,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::runtime::ServerProfile</name>
     <message>
-        <location filename="../src/runtime/ServerProfile.cpp" line="+34"/>
+        <location filename="../src/runtime/ServerProfile.cpp" line="+35"/>
         <source>GGUF models (*.gguf)</source>
         <translation>GGUF-Modelle (*.gguf)</translation>
     </message>
@@ -3133,6 +3149,16 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+4"/>
+        <source>Model name</source>
+        <translation>Modellname</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Name used to pick this model (roles, requests). Empty = the file name.</source>
+        <translation>Name, mit dem dieses Modell gewählt wird (Rollen, Anfragen). Leer = Dateiname.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Vision projector</source>
         <translation>Vision-Projektor</translation>
     </message>
@@ -3143,6 +3169,16 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+3"/>
+        <source>More models</source>
+        <translation>Weitere Modelle</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Further models of this server, e.g. a vision model for the analyst and a faster text model for the assistant. Each request picks its model; on small GPUs one is loaded at a time.</source>
+        <translation>Weitere Modelle dieses Servers, z. B. ein Vision-Modell für die Analyse und ein schnelleres Textmodell für den Assistenten. Jede Anfrage wählt ihr Modell; auf kleinen GPUs ist jeweils eines geladen.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
         <source>Context size</source>
         <translation>Kontextgröße</translation>
     </message>
@@ -3158,11 +3194,11 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Layers kept on the GPU (999 = all). Lower it when the model does not fit.</source>
-        <translation>Schichten auf der GPU (999 = alle). Verringern, wenn das Modell nicht passt.</translation>
+        <source>-1 = automatic: llama.cpp fits as many layers as free VRAM allows (--fit). 999 = all.</source>
+        <translation>-1 = automatisch: llama.cpp legt so viele Schichten auf die GPU, wie freier VRAM erlaubt (--fit). 999 = alle.</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+4"/>
         <source>KV cache type</source>
         <translation>KV-Cache-Typ</translation>
     </message>
@@ -3173,12 +3209,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+3"/>
-        <location line="+70"/>
+        <location line="+79"/>
         <source>Flash attention</source>
         <translation>Flash Attention</translation>
     </message>
     <message>
-        <location line="-67"/>
+        <location line="-76"/>
         <source>Unload when idle (s)</source>
         <translation>Im Leerlauf entladen (s)</translation>
     </message>
@@ -3199,6 +3235,26 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
+        <source>Free the GPU for image generation</source>
+        <translation>GPU für die Bildgenerierung freigeben</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Unloads the language model before Lumen generates images on a local image server, so both fit on one GPU. The model reloads on its next request.</source>
+        <translation>Entlädt das Sprachmodell, bevor Lumen auf einem lokalen Bildserver Bilder generiert, damit beide auf eine GPU passen. Das Modell wird bei der nächsten Anfrage neu geladen.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Models loaded at once</source>
+        <translation>Gleichzeitig geladene Modelle</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>With several models: how many may be in memory together.</source>
+        <translation>Bei mehreren Modellen: wie viele gleichzeitig im Speicher sein dürfen.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
         <source>Parallel requests</source>
         <translation>Parallele Anfragen</translation>
     </message>
@@ -3296,16 +3352,16 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Upscaler</source>
-        <translation>Hochskalierer</translation>
+        <source>Upscaler folder</source>
+        <translation>Ordner für Hochskalierer</translation>
     </message>
     <message>
-        <location line="+0"/>
-        <source>ESRGAN model for 2×/4× upscaling.</source>
-        <translation>ESRGAN-Modell für 2×/4×-Hochskalierung.</translation>
+        <location line="+1"/>
+        <source>Folder with ESRGAN models (e.g. RealESRGAN_x4plus_anime_6B.pth) for upscaling and hires fix; ComfyUI&apos;s models/upscale_models works.</source>
+        <translation>Ordner mit ESRGAN-Modellen (z. B. RealESRGAN_x4plus_anime_6B.pth) für Hochskalierung und Hires-Fix; models/upscale_models von ComfyUI funktioniert.</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+2"/>
         <source>Weight precision</source>
         <translation>Gewichtsgenauigkeit</translation>
     </message>
@@ -3375,7 +3431,17 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Text-Encoder auf der CPU</translation>
     </message>
     <message>
-        <location line="+19"/>
+        <location line="+14"/>
+        <source>VRAM mode</source>
+        <translation>VRAM-Modus</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>ComfyUI&apos;s memory strategy: lowvram moves models out of VRAM more eagerly (8 GB GPUs with a language model), highvram keeps them loaded.</source>
+        <translation>Speicherstrategie von ComfyUI: lowvram räumt Modelle früher aus dem VRAM (8-GB-GPUs mit Sprachmodell), highvram hält sie geladen.</translation>
+    </message>
+    <message>
+        <location line="+16"/>
         <source>Extra arguments</source>
         <translation>Zusätzliche Argumente</translation>
     </message>
@@ -3385,17 +3451,20 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Werden unverändert an die Befehlszeile angehängt.</translation>
     </message>
     <message>
-        <location line="+119"/>
+        <location line="+223"/>
+        <location line="+34"/>
+        <location line="+87"/>
         <source>%1 does not exist.</source>
         <translation>%1 existiert nicht.</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="-112"/>
+        <location line="+41"/>
         <source>Choose a model for %1.</source>
         <translation>Wählen Sie ein Modell für %1.</translation>
     </message>
     <message>
-        <location line="+24"/>
+        <location line="+25"/>
         <source>Choose a checkpoint or a diffusion model for %1.</source>
         <translation>Wählen Sie einen Checkpoint oder ein Diffusionsmodell für %1.</translation>
     </message>
@@ -3405,12 +3474,13 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Der IP-Adapter benötigt einen CLIP-Vision-Encoder.</translation>
     </message>
     <message>
-        <location line="+29"/>
+        <location line="+62"/>
         <source>Lumen cannot start %1 servers.</source>
         <translation>Lumen kann keine %1-Server starten.</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="-3"/>
+        <location line="+7"/>
         <source>No port set.</source>
         <translation>Kein Port festgelegt.</translation>
     </message>
@@ -3449,17 +3519,17 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+46"/>
-        <location line="+129"/>
+        <location line="+134"/>
         <source>Unknown server.</source>
         <translation>Unbekannter Server.</translation>
     </message>
     <message>
-        <location line="-123"/>
+        <location line="-128"/>
         <source>The runtime of %1 is no longer installed.</source>
         <translation>Das Programm von %1 ist nicht mehr installiert.</translation>
     </message>
     <message>
-        <location line="+127"/>
+        <location line="+132"/>
         <source>%1 is missing. Reinstall the runtime.</source>
         <translation>%1 fehlt. Installieren Sie das Programm neu.</translation>
     </message>
@@ -3469,7 +3539,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Port %1 wird bereits von einem anderen Programm verwendet. Beenden Sie es oder wählen Sie einen anderen Port für %2.</translation>
     </message>
     <message>
-        <location line="+41"/>
+        <location line="+14"/>
+        <source>Cannot write %1.</source>
+        <translation>%1 kann nicht geschrieben werden.</translation>
+    </message>
+    <message>
+        <location line="+37"/>
         <source>Starting…</source>
         <translation>Startet…</translation>
     </message>
@@ -5619,12 +5694,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::InstallRuntimeDialog</name>
     <message>
-        <location filename="../src/ui/dialogs/LocalServersPage.cpp" line="+504"/>
+        <location filename="../src/ui/dialogs/LocalServersPage.cpp" line="+603"/>
         <source>Download a server program</source>
         <translation>Serverprogramm herunterladen</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+14"/>
         <source>Program</source>
         <translation>Programm</translation>
     </message>
@@ -6137,7 +6212,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::LocalServersPage</name>
     <message>
-        <location filename="../src/ui/dialogs/LocalServersPage.cpp" line="-577"/>
+        <location filename="../src/ui/dialogs/LocalServersPage.cpp" line="-676"/>
         <source>Existing install</source>
         <translation>Vorhandene Installation</translation>
     </message>
@@ -6157,7 +6232,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Bei Bedarf</translation>
     </message>
     <message>
-        <location line="+43"/>
+        <location line="+121"/>
         <source>Local AI servers</source>
         <translation>Lokale KI-Server</translation>
     </message>
@@ -6213,12 +6288,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Vorhandenes hinzufügen…</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Use llama-server or sd-server you installed yourself</source>
-        <translation>Selbst installierten llama-server oder sd-server verwenden</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>Check for updates</source>
         <translation>Nach Updates suchen</translation>
     </message>
@@ -6228,12 +6298,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <location line="+262"/>
         <location line="+6"/>
         <location line="+4"/>
-        <location line="+49"/>
+        <location line="+68"/>
         <source>Remove</source>
         <translation>Entfernen</translation>
     </message>
     <message>
-        <location line="-331"/>
+        <location line="-350"/>
         <source>Servers</source>
         <translation>Server</translation>
     </message>
@@ -6308,9 +6378,14 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Serverprogramm wählen</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Servers (llama-server.exe sd-server.exe llama-server sd-server)</source>
-        <translation>Server (llama-server.exe sd-server.exe llama-server sd-server)</translation>
+        <location line="-171"/>
+        <source>Use llama-server, sd-server, ComfyUI or Stable Diffusion WebUI you installed yourself</source>
+        <translation>Selbst installierten llama-server, sd-server, ComfyUI oder Stable Diffusion WebUI verwenden</translation>
+    </message>
+    <message>
+        <location line="+172"/>
+        <source>Servers (llama-server.exe sd-server.exe llama-server sd-server main.py webui.bat)</source>
+        <translation>Server (llama-server.exe sd-server.exe llama-server sd-server main.py webui.bat)</translation>
     </message>
     <message>
         <location line="+9"/>
@@ -6383,7 +6458,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Es ist noch kein Serverprogramm installiert. Jetzt eines herunterladen?</translation>
     </message>
     <message>
-        <location line="+18"/>
+        <location line="+37"/>
         <source>%1 added as a provider. It starts when Lumen first uses it.</source>
         <translation>%1 als Anbieter hinzugefügt. Er startet, sobald Lumen ihn zum ersten Mal verwendet.</translation>
     </message>
@@ -8819,7 +8894,7 @@ oder aus der Bibliothek ziehen</translation>
 <context>
     <name>lumen::ui::ServerLogDialog</name>
     <message>
-        <location filename="../src/ui/dialogs/LocalServersPage.cpp" line="+453"/>
+        <location filename="../src/ui/dialogs/LocalServersPage.cpp" line="+515"/>
         <source>Server log — %1</source>
         <translation>Serverprotokoll – %1</translation>
     </message>
@@ -8857,7 +8932,7 @@ oder aus der Bibliothek ziehen</translation>
 <context>
     <name>lumen::ui::ServerProfileDialog</name>
     <message>
-        <location line="-307"/>
+        <location line="-367"/>
         <source>New server</source>
         <translation>Neuer Server</translation>
     </message>
@@ -8867,12 +8942,38 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Servereinstellungen</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="-641"/>
+        <location line="+656"/>
         <source>Name</source>
         <translation>Name</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="-655"/>
+        <source>Model file</source>
+        <translation>Modelldatei</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Vision projector</source>
+        <translation>Vision-Projektor</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Add model…</source>
+        <translation>Modell hinzufügen…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Remove</source>
+        <translation>Entfernen</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Add model</source>
+        <translation>Modell hinzufügen</translation>
+    </message>
+    <message>
+        <location line="+641"/>
         <source>Program</source>
         <translation>Programm</translation>
     </message>
@@ -8912,6 +9013,36 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Im Leerlauf beenden</translation>
     </message>
     <message>
+        <location line="+3"/>
+        <source>Custom</source>
+        <translation>Benutzerdefiniert</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>GPUs up to 8 GB</source>
+        <translation>GPUs bis 8 GB</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>GPUs with 12 GB</source>
+        <translation>GPUs mit 12 GB</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>GPUs with 16 GB or more</source>
+        <translation>GPUs mit 16 GB oder mehr</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Fills in memory-related options for a GPU size. Measured on an 8 GB laptop GPU.</source>
+        <translation>Füllt speicherbezogene Optionen für eine GPU-Größe aus. Gemessen auf einer 8-GB-Laptop-GPU.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Tuned for</source>
+        <translation>Abgestimmt auf</translation>
+    </message>
+    <message>
         <location line="+8"/>
         <source>Command line</source>
         <translation>Befehlszeile</translation>
@@ -8922,7 +9053,7 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Als Anbieter hinzufügen</translation>
     </message>
     <message>
-        <location line="+44"/>
+        <location line="+75"/>
         <source>%1 options</source>
         <translation>%1-Optionen</translation>
     </message>
@@ -8932,7 +9063,7 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Erweitert</translation>
     </message>
     <message>
-        <location line="+24"/>
+        <location line="+25"/>
         <source>required</source>
         <translation>erforderlich</translation>
     </message>
@@ -8948,16 +9079,22 @@ oder aus der Bibliothek ziehen</translation>
     </message>
     <message>
         <location line="+10"/>
+        <location line="+56"/>
         <source>All files (*)</source>
         <translation>Alle Dateien (*)</translation>
     </message>
     <message>
-        <location line="+75"/>
+        <location line="-36"/>
+        <source>Automatic</source>
+        <translation>Automatisch</translation>
+    </message>
+    <message>
+        <location line="+73"/>
         <source>Lumen has no provider for %1 yet.</source>
         <translation>Lumen hat noch keinen Anbieter für %1.</translation>
     </message>
     <message>
-        <location line="+49"/>
+        <location line="+51"/>
         <source>Choose a program.</source>
         <translation>Wählen Sie ein Programm.</translation>
     </message>
@@ -9349,7 +9486,7 @@ oder aus der Bibliothek ziehen</translation>
 <context>
     <name>lumen::ui::Studio</name>
     <message>
-        <location filename="../src/ui/Studio.cpp" line="+117"/>
+        <location filename="../src/ui/Studio.cpp" line="+126"/>
         <source>Could not open project %1: %2</source>
         <translation>Projekt %1 konnte nicht geöffnet werden: %2</translation>
     </message>

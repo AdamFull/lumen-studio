@@ -69,6 +69,7 @@ Catalog Catalog::fromJson(const QByteArray &json, const QString &platform)
         r.description = o.value(QStringLiteral("description")).toString();
         r.role = o.value(QStringLiteral("role")).toString();
         r.repo = o.value(QStringLiteral("repo")).toString();
+        r.adoptOnly = o.value(QStringLiteral("adoptOnly")).toBool();
         r.homepage = QUrl(o.value(QStringLiteral("homepage")).toString());
         r.license = o.value(QStringLiteral("license")).toString();
         r.tagPattern = o.value(QStringLiteral("tagPattern")).toString();
@@ -89,7 +90,7 @@ Catalog Catalog::fromJson(const QByteArray &json, const QString &platform)
             spec.libraryPatterns = toStringList(b.value(QStringLiteral("libraries")));
             r.backends << spec;
         }
-        if (!r.id.isEmpty() && !r.repo.isEmpty())
+        if (!r.id.isEmpty() && (!r.repo.isEmpty() || r.adoptOnly))
             c.runtimes << r;
     }
     return c;

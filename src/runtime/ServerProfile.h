@@ -3,6 +3,7 @@
 #include "runtime/RuntimeStore.h"
 
 #include <QJsonObject>
+#include <QMap>
 #include <QString>
 #include <QStringList>
 #include <QVariant>
@@ -13,7 +14,8 @@ namespace lumen::runtime {
 // A launch option of a server kind; the settings form is generated from these.
 struct OptionField
 {
-    enum class Type { Text, File, Directory, Integer, Number, Boolean, Choice };
+    // ModelList: a list of {name, model, mmproj} maps (further models of a llama.cpp server).
+    enum class Type { Text, File, Directory, Integer, Number, Boolean, Choice, ModelList };
     QString key;
     QString label;
     Type type = Type::Text;
@@ -55,12 +57,45 @@ struct LaunchCommand
     QString program;
     QStringList arguments;
     QString workingDirectory;
+    QMap<QString, QByteArray> files; // written before the start (llama.cpp model presets)
+    QMap<QString, QString> environment; // added to the runtime's environment
     QString error;            // set when a required option is missing
 
     QString commandLine() const; // quoted, for display and copying
+    // Command line plus file contents: changes when a restart is needed.
+    QByteArray signature() const;
 };
 
-LaunchCommand buildLaunch(const ServerProfile &profile, const InstalledRuntime &rt);
+// filesDir: where generated files (llama.cpp presets) go; empty = the temporary folder.
+LaunchCommand buildLaunch(const ServerProfile &profile, const InstalledRuntime &rt, const QString &filesDir = QString());
+
+// ---- llama.cpp ----------------------------------------------------------------------------------
+
+// One model of a llama.cpp server. Several models are served through llama.cpp's router mode
+// (a presets file); requests pick one by name, and on small GPUs one is loaded at a time.
+struct LlamaModel
+{
+    QString name;
+    QString model;
+    QString mmproj;
+    bool vision() const { return !mmproj.isEmpty(); }
+};
+// The profile's main model followed by its further models (names made unique).
+QList<LlamaModel> llamaModels(const ServerProfile &profile);
+// Default model name for a file: its stem ("Qwen3VL-8B-Instruct-Q4_K_M").
+QString llamaModelName(const QString &path);
+// Router mode (llama.cpp ≥ b7xxx): the build lists --models-preset, or was not probed yet.
+bool llamaRouter(const InstalledRuntime &rt);
+// The vision projector next to a model ("mmproj-Qwen3VL-8B-Instruct-Q8_0.gguf" for
+// "Qwen3VL-8B-Instruct-Q4_K_M.gguf"); empty when there is none.
+QString findProjector(const QString &modelPath);
+
+// ---- VRAM presets -------------------------------------------------------------------------------
+
+enum class VramTier { Small, Medium, Large }; // up to 8 GB, up to 12 GB, more
+VramTier vramTierFor(quint64 vramBytes);
+// Launch options suited to a GPU size; empty for kinds without presets.
+QVariantMap presetOptions(const QString &kind, VramTier tier);
 
 // Splits an "extra arguments" string like a shell would (double quotes group words).
 QStringList splitArguments(const QString &text);

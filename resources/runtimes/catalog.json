@@ -11,7 +11,9 @@
       "license": "MIT",
       "tagPattern": "^b(\\d+)$",
       "executable": "llama-server.exe",
-      "versionArgs": ["--version"],
+      "versionArgs": [
+        "--version"
+      ],
       "defaultPort": 8080,
       "healthPath": "/health",
       "platforms": {
@@ -19,21 +21,33 @@
           {
             "id": "cuda-13",
             "label": "NVIDIA CUDA 13",
-            "requires": { "vendor": "nvidia", "cuda": "13.0" },
+            "requires": {
+              "vendor": "nvidia",
+              "cuda": "13.0"
+            },
             "asset": "^llama-{tag}-bin-win-cuda-13\\.\\d+-x64\\.zip$",
-            "libraries": ["^cudart-llama-bin-win-cuda-13\\.\\d+-x64\\.zip$"]
+            "libraries": [
+              "^cudart-llama-bin-win-cuda-13\\.\\d+-x64\\.zip$"
+            ]
           },
           {
             "id": "cuda-12",
             "label": "NVIDIA CUDA 12",
-            "requires": { "vendor": "nvidia", "cuda": "12.4" },
+            "requires": {
+              "vendor": "nvidia",
+              "cuda": "12.4"
+            },
             "asset": "^llama-{tag}-bin-win-cuda-12\\.\\d+-x64\\.zip$",
-            "libraries": ["^cudart-llama-bin-win-cuda-12\\.\\d+-x64\\.zip$"]
+            "libraries": [
+              "^cudart-llama-bin-win-cuda-12\\.\\d+-x64\\.zip$"
+            ]
           },
           {
             "id": "vulkan",
             "label": "Vulkan (NVIDIA, AMD, Intel)",
-            "requires": { "gpu": true },
+            "requires": {
+              "gpu": true
+            },
             "asset": "^llama-{tag}-bin-win-vulkan-x64\\.zip$"
           },
           {
@@ -54,7 +68,9 @@
       "license": "MIT",
       "tagPattern": "^master-(\\d+)-([0-9a-f]+)$",
       "executable": "sd-server.exe",
-      "versionArgs": ["--version"],
+      "versionArgs": [
+        "--version"
+      ],
       "defaultPort": 7861,
       "healthPath": "/sdcpp/v1/capabilities",
       "platforms": {
@@ -62,14 +78,21 @@
           {
             "id": "cuda-12",
             "label": "NVIDIA CUDA 12",
-            "requires": { "vendor": "nvidia", "cuda": "12.4" },
+            "requires": {
+              "vendor": "nvidia",
+              "cuda": "12.4"
+            },
             "asset": "^sd-master-{2}-bin-win-cuda12-x64\\.zip$",
-            "libraries": ["^cudart-sd-bin-win-cu12-x64\\.zip$"]
+            "libraries": [
+              "^cudart-sd-bin-win-cu12-x64\\.zip$"
+            ]
           },
           {
             "id": "vulkan",
             "label": "Vulkan (NVIDIA, AMD, Intel)",
-            "requires": { "gpu": true },
+            "requires": {
+              "gpu": true
+            },
             "asset": "^sd-master-{2}-bin-win-vulkan-x64\\.zip$"
           },
           {
@@ -79,6 +102,30 @@
           }
         ]
       }
+    },
+    {
+      "id": "comfyui",
+      "name": "ComfyUI",
+      "description": "Node-based image generation (Python). Lumen starts an existing installation: ComfyUI Desktop, the portable build or a git checkout with its venv.",
+      "role": "image",
+      "adoptOnly": true,
+      "homepage": "https://github.com/comfyanonymous/ComfyUI",
+      "license": "GPL-3.0",
+      "executable": "main.py",
+      "defaultPort": 8188,
+      "healthPath": "/system_stats"
+    },
+    {
+      "id": "sdwebui",
+      "name": "Stable Diffusion WebUI / Forge",
+      "description": "AUTOMATIC1111 WebUI, Forge or reForge (Python). Lumen starts an existing installation with its API enabled.",
+      "role": "image",
+      "adoptOnly": true,
+      "homepage": "https://github.com/AUTOMATIC1111/stable-diffusion-webui",
+      "license": "AGPL-3.0",
+      "executable": "webui.bat",
+      "defaultPort": 7860,
+      "healthPath": "/sdapi/v1/options"
     }
   ]
 }

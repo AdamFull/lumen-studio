@@ -774,10 +774,34 @@ Phase B — stable-diffusion.cpp
     (phase C).
 
 Phase C — llama.cpp management
-- [ ] llama-server profiles. Done: model + mmproj, context, `-ngl`, KV type, FA, `--jinja`,
-  sleep-idle, reasoning budget, and the first local LLM becomes the assistant. Still to do: VRAM
-  presets, `--fit`, and role defaults (a vision profile for the analyst and the Critic).
-- [ ] Adopted ComfyUI / SD WebUI start-stop through the supervisor.
+- [x] llama-server profiles in **router mode** (`--models-preset`, `--models-max`):
+  - Lumen writes the presets file: the main model plus "More models", each with an optional
+    vision projector (found automatically next to the model). Shared settings go to `[*]`.
+  - A build's options are read from `--help` at install/adopt; older builds fall back to
+    single-model command lines.
+  - The provider's default model stays a valid preset name.
+  - GPU layers default to automatic (`--fit`).
+  - Verified on b10964: presets load, `--models-max 1` swaps models, and `/models/unload` frees
+    the VRAM in 2.5 s.
+- [x] GPU handoff: before an image server's request, Lumen unloads the models of llama.cpp servers
+  that have "Free the GPU for image generation" on (default).
+  - The managed reference scenario now peaks at 6.8 GB instead of 7.9 GB, and the two servers never
+    hold the GPU together.
+  - Splitting roles across a vision model and a text model doubled the time (10.2 min instead of
+    5.0) because every switch reloads a model, and Qwen3-8B mangled a tool call. So a vision model
+    takes all roles by default.
+- [x] VRAM presets ("Tuned for": up to 8 GB / 12 GB / 16 GB+) for llama.cpp, sd.cpp and ComfyUI;
+  new servers start with the detected GPU's preset.
+- [x] Role defaults for new llama.cpp providers: unassigned roles go to the server's vision model
+  (or its first model).
+- [x] Adopted ComfyUI and SD WebUI / Forge start and stop through the supervisor.
+  - ComfyUI Desktop (base folder, venv, extra model paths and front-end from its config), the
+    portable build and git checkouts with a venv are recognised from the files; nothing is run to
+    detect them.
+  - WebUI / Forge starts through `webui.bat` with `COMMANDLINE_ARGS` (`--api --port …`).
+  - Verified live: Lumen adopted ComfyUI Desktop 0.18.5, started it (ready after 14.7 s), listed
+    its checkpoints and stopped it, leaving no Python process behind.
+  - SD WebUI / Forge is covered by unit tests only (no install on the test machine).
 
 Phase D — model library
 - [ ] Index (scan roots, GGUF / safetensors header parsing, lazy sha256), browser UI, fit hints,

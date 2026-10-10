@@ -75,7 +75,25 @@ public:
     {
         if (!m_servers)
             return QtFuture::makeReadyValueFuture(QObject::tr("Lumen is shutting down."));
-        return m_servers->acquire(m_profileId);
+        const QString kind = m_servers->kindOf(m_profileId);
+        if (kind == QLatin1String("llama.cpp"))
+            return m_servers->acquire(m_profileId);
+        // An image server: first let language servers that share the GPU unload their models.
+        QList<QFuture<void>> unloads;
+        for (const runtime::ServerProfile &p : m_servers->profiles()) {
+            if (m_servers->kindOf(p.id) == QLatin1String("llama.cpp") && p.option(QStringLiteral("unload_for_images"), QStringLiteral("llama.cpp")).toBool()
+                && m_servers->state(p.id) == runtime::ServerState::Ready)
+                unloads << m_servers->unloadModels(p.id);
+        }
+        if (unloads.isEmpty())
+            return m_servers->acquire(m_profileId);
+        QPointer<runtime::ServerSupervisor> servers = m_servers;
+        const QString id = m_profileId;
+        return QtFuture::whenAll(unloads.begin(), unloads.end())
+            .then(servers.data(), [servers, id](const QList<QFuture<void>> &) {
+                return servers ? servers->acquire(id) : QtFuture::makeReadyValueFuture(QObject::tr("Lumen is shutting down."));
+            })
+            .unwrap();
     }
     void release() override
     {
@@ -123,6 +141,14 @@ void Studio::applyServerBindings()
             wanted.insert(QStringLiteral("upscaler"), has(QStringLiteral("upscalers_dir")));
         }
         QVariantMap settings = m_registry.settingsFor(p->instanceId());
+        if (kind == QLatin1String("llama.cpp")) {
+            // Router mode needs a model name in every request: keep the provider's default valid.
+            QStringList names;
+            for (const runtime::LlamaModel &m : runtime::llamaModels(*profile))
+                names << m.name;
+            if (!names.isEmpty() && !names.contains(settings.value(QStringLiteral("model")).toString()))
+                wanted.insert(QStringLiteral("model"), names.first());
+        }
         bool changed = false;
         for (auto it = wanted.cbegin(); it != wanted.cend(); ++it) {
             if (settings.value(it.key()) != it.value()) {

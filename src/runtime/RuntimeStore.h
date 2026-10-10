@@ -31,6 +31,10 @@ struct InstalledRuntime
     QStringList libraryDirs;  // shared DLL folders (CUDA runtime), prepended to PATH at start
     QDateTime installed;
     QString versionInfo;      // first line of `<exe> --version`
+    QStringList options;      // long options listed by `<exe> --help` (empty = not probed)
+    // Python apps: "script" (main.py / webui.bat), and for ComfyUI Desktop "baseDirectory",
+    // "extraModelPaths", "frontEndRoot".
+    QVariantMap settings;
     QJsonArray assets;        // [{name, sha256, size}] of a managed install
 
     QString displayName() const;
@@ -44,9 +48,16 @@ QProcessEnvironment runtimeEnvironment(const InstalledRuntime &rt);
 // Runs `<exe> --version` (or the catalogue's version arguments) and returns the first meaningful
 // output line. Throws lumen::Error when the program cannot start (missing DLLs, wrong platform).
 QFuture<QString> probeVersion(const InstalledRuntime &rt, const QStringList &args);
+// Long options the program lists in `--help` (e.g. "--models-preset"), to adapt to its version.
+QFuture<QStringList> probeOptions(const InstalledRuntime &rt);
+QStringList parseHelpOptions(const QString &help);
 
 // Known server executables in PATH and the usual install folders (for "Add existing").
 QStringList findExistingInstalls();
+
+// Recognises a ComfyUI (Desktop, portable, git + venv) or SD WebUI / Forge installation from its
+// main.py / webui.bat / folder. Returns the runtime to add, or nothing with *error set.
+std::optional<InstalledRuntime> detectPythonApp(const QString &path, QString *error = nullptr);
 
 class RuntimeStore : public QObject
 {

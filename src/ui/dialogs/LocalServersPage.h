@@ -100,6 +100,8 @@ public:
 private:
     void buildOptions();
     void updatePreview();
+    void applyPreset();
+    void updatePresetRow();
     QString kind() const;
 
     Studio *m_studio;
@@ -110,6 +112,8 @@ private:
     QSpinBox *m_port;
     QComboBox *m_start;
     QSpinBox *m_idle;
+    QComboBox *m_preset;
+    QFormLayout *m_form;
     QWidget *m_optionsHost;
     QHash<QString, QWidget *> m_fields;
     QPlainTextEdit *m_preview;

@@ -58,6 +58,12 @@ public:
     void removeProfile(const QString &id);
     QString kindOf(const QString &profileId) const;
     LaunchCommand launchFor(const QString &profileId) const;
+    // Folder for generated files (llama.cpp presets), next to the configuration.
+    QString filesDir() const;
+
+    // Frees GPU memory without stopping the server: llama.cpp unloads its models (router mode);
+    // resolves once they are unloaded. Other kinds and stopped servers resolve at once.
+    QFuture<void> unloadModels(const QString &id);
 
     // ---- control --------------------------------------------------------------------------------
     // Resolves to "" once the server is ready, or to an error message. Never throws.
@@ -104,6 +110,7 @@ private:
         QElapsedTimer started;
         QPointer<net::HttpCall> probe;
         QString commandLine;
+        QByteArray signature; // command line + generated files of the running process
         int users = 0;
         int startTimeoutSec = 600;
         QList<qint64> crashTimes; // msecs since epoch

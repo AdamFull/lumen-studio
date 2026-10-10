@@ -89,6 +89,25 @@ is limited to 0.3 (provider setting *IP-Adapter weight with pose control*). An i
 already generating cannot be stopped by the server: cancelling ends the job in Lumen at once, and
 the server finishes that image in the background.
 
+**Language models with llama.cpp.**
+* **Models:** a server can offer several models. Use *More models* for further ones; each has a
+  name that roles and requests use. Choosing a vision model fills in its *Vision projector* (the
+  `mmproj-…gguf` next to it).
+* **Memory:** on GPUs with up to 12 GB only one model is loaded at a time. *Free the GPU for image
+  generation* unloads it before Lumen generates images locally; the model reloads (a few seconds)
+  on its next request.
+* **Roles:** Lumen gives roles nobody handles yet to the server's vision model. On one GPU this is
+  faster than splitting roles between a vision and a text model, because every switch reloads a
+  model.
+
+**ComfyUI and Stable Diffusion WebUI.** **Add existing…** also accepts ComfyUI (Desktop, portable
+or a git checkout with its venv: pick `main.py` or the folder) and WebUI / Forge (pick `webui.bat`).
+Lumen then starts and stops them like the other servers. ComfyUI Desktop keeps its own models,
+extra model paths and custom nodes.
+
+**Tuned for.** New servers start with options for the GPU Lumen detected (up to 8 GB, 12 GB, or
+16 GB and more). Change *Tuned for* to apply another set.
+
 The server button in the status bar shows what runs and offers start, stop, restart and the
 server's log. **Check for updates** downloads newer releases. Servers switch to them at their next
 start, and the previous version stays installed, so you can switch back in the server's settings.
