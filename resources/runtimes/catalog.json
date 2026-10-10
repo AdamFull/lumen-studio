@@ -1,0 +1,84 @@
+{
+  "version": 1,
+  "runtimes": [
+    {
+      "id": "llama.cpp",
+      "name": "llama.cpp",
+      "description": "Runs GGUF language and vision models (llama-server, OpenAI-compatible API).",
+      "role": "llm",
+      "repo": "ggml-org/llama.cpp",
+      "homepage": "https://github.com/ggml-org/llama.cpp",
+      "license": "MIT",
+      "tagPattern": "^b(\\d+)$",
+      "executable": "llama-server.exe",
+      "versionArgs": ["--version"],
+      "defaultPort": 8080,
+      "healthPath": "/health",
+      "platforms": {
+        "windows-x64": [
+          {
+            "id": "cuda-13",
+            "label": "NVIDIA CUDA 13",
+            "requires": { "vendor": "nvidia", "cuda": "13.0" },
+            "asset": "^llama-{tag}-bin-win-cuda-13\\.\\d+-x64\\.zip$",
+            "libraries": ["^cudart-llama-bin-win-cuda-13\\.\\d+-x64\\.zip$"]
+          },
+          {
+            "id": "cuda-12",
+            "label": "NVIDIA CUDA 12",
+            "requires": { "vendor": "nvidia", "cuda": "12.4" },
+            "asset": "^llama-{tag}-bin-win-cuda-12\\.\\d+-x64\\.zip$",
+            "libraries": ["^cudart-llama-bin-win-cuda-12\\.\\d+-x64\\.zip$"]
+          },
+          {
+            "id": "vulkan",
+            "label": "Vulkan (NVIDIA, AMD, Intel)",
+            "requires": { "gpu": true },
+            "asset": "^llama-{tag}-bin-win-vulkan-x64\\.zip$"
+          },
+          {
+            "id": "cpu",
+            "label": "CPU only",
+            "asset": "^llama-{tag}-bin-win-cpu-x64\\.zip$"
+          }
+        ]
+      }
+    },
+    {
+      "id": "sd.cpp",
+      "name": "stable-diffusion.cpp",
+      "description": "Runs Stable Diffusion, SDXL, FLUX and other image models (sd-server, native async API).",
+      "role": "image",
+      "repo": "leejet/stable-diffusion.cpp",
+      "homepage": "https://github.com/leejet/stable-diffusion.cpp",
+      "license": "MIT",
+      "tagPattern": "^master-(\\d+)-([0-9a-f]+)$",
+      "executable": "sd-server.exe",
+      "versionArgs": ["--version"],
+      "defaultPort": 7861,
+      "healthPath": "/sdcpp/v1/capabilities",
+      "platforms": {
+        "windows-x64": [
+          {
+            "id": "cuda-12",
+            "label": "NVIDIA CUDA 12",
+            "requires": { "vendor": "nvidia", "cuda": "12.4" },
+            "asset": "^sd-master-{2}-bin-win-cuda12-x64\\.zip$",
+            "libraries": ["^cudart-sd-bin-win-cu12-x64\\.zip$"]
+          },
+          {
+            "id": "vulkan",
+            "label": "Vulkan (NVIDIA, AMD, Intel)",
+            "requires": { "gpu": true },
+            "asset": "^sd-master-{2}-bin-win-vulkan-x64\\.zip$"
+          },
+          {
+            "id": "cpu",
+            "label": "CPU only (slow)",
+            "asset": "^sd-master-{2}-bin-win-cpu-x64\\.zip$"
+          }
+        ]
+      }
+    }
+  ]
+}

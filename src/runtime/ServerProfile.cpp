@@ -1,0 +1,373 @@
+#include "runtime/ServerProfile.h"
+
+#include <QCoreApplication>
+#include <QDir>
+#include <QFileInfo>
+#include <QHostAddress>
+#include <QJsonDocument>
+#include <QTcpServer>
+
+namespace lumen::runtime {
+
+namespace {
+
+QString tr(const char *s)
+{
+    return QCoreApplication::translate("lumen::runtime::ServerProfile", s);
+}
+
+using T = OptionField::Type;
+
+OptionField field(const QString &key, const QString &label, T type, const QVariant &def = {}, const QString &help = {})
+{
+    OptionField f;
+    f.key = key;
+    f.label = label;
+    f.type = type;
+    f.defaultValue = def;
+    f.help = help;
+    return f;
+}
+
+QList<OptionField> llamaOptions()
+{
+    const QString gguf = tr("GGUF models (*.gguf)");
+    QList<OptionField> out;
+    OptionField model = field(QStringLiteral("model"), tr("Model"), T::File, {}, tr("The language model (.gguf)."));
+    model.filter = gguf;
+    model.required = true;
+    out << model;
+    OptionField mmproj = field(QStringLiteral("mmproj"), tr("Vision projector"), T::File, {},
+                               tr("mmproj-*.gguf file that lets a vision model (Qwen3-VL, Gemma 3…) see images."));
+    mmproj.filter = gguf;
+    out << mmproj;
+    OptionField ctx = field(QStringLiteral("context"), tr("Context size"), T::Integer, 16384,
+                            tr("Tokens of context. Larger needs more VRAM; 16384 suits planning and the Critic."));
+    ctx.minimum = 512;
+    ctx.maximum = 1048576;
+    out << ctx;
+    OptionField ngl = field(QStringLiteral("gpu_layers"), tr("GPU layers"), T::Integer, 999,
+                            tr("Layers kept on the GPU (999 = all). Lower it when the model does not fit."));
+    ngl.maximum = 999;
+    out << ngl;
+    OptionField kv = field(QStringLiteral("kv_cache"), tr("KV cache type"), T::Choice, QStringLiteral("q8_0"),
+                           tr("q8_0 halves the context memory with no visible quality loss."));
+    kv.choices = {QStringLiteral("f16"), QStringLiteral("q8_0"), QStringLiteral("q4_0")};
+    out << kv;
+    OptionField fa = field(QStringLiteral("flash_attention"), tr("Flash attention"), T::Choice, QStringLiteral("on"));
+    fa.choices = {QStringLiteral("auto"), QStringLiteral("on"), QStringLiteral("off")};
+    out << fa;
+    OptionField sleep = field(QStringLiteral("sleep_idle"), tr("Unload when idle (s)"), T::Integer, 30,
+                              tr("Unloads the model from the GPU after this many idle seconds so an image model can use "
+                                 "it (0 = never). Reloading takes a few seconds."));
+    sleep.maximum = 86400;
+    out << sleep;
+    out << field(QStringLiteral("jinja"), tr("Use the model's chat template (--jinja)"), T::Boolean, true,
+                 tr("Needed for tool calls and reasoning models."));
+    OptionField parallel = field(QStringLiteral("parallel"), tr("Parallel requests"), T::Integer, 1,
+                                 tr("Slots; the context is shared between them."));
+    parallel.minimum = 1;
+    parallel.maximum = 64;
+    parallel.advanced = true;
+    out << parallel;
+    OptionField threads = field(QStringLiteral("threads"), tr("CPU threads"), T::Integer, 0, tr("0 = automatic"));
+    threads.maximum = 256;
+    threads.advanced = true;
+    out << threads;
+    OptionField reasoning = field(QStringLiteral("reasoning_budget"), tr("Reasoning budget"), T::Integer, -1,
+                                  tr("-1 = unlimited thinking, 0 = thinking off (faster for small models)."));
+    reasoning.minimum = -1;
+    reasoning.maximum = 1000000;
+    reasoning.advanced = true;
+    out << reasoning;
+    return out;
+}
+
+QList<OptionField> sdOptions()
+{
+    const QString models = tr("Models (*.safetensors *.gguf *.ckpt *.sft)");
+    QList<OptionField> out;
+    OptionField model = field(QStringLiteral("model"), tr("Checkpoint"), T::File, {},
+                              tr("Single-file checkpoint (SD 1.5, SDXL, Illustrious, Pony…). For FLUX-style models use "
+                                 "\"Diffusion model\" with separate text encoders instead."));
+    model.filter = models;
+    out << model;
+    OptionField vae = field(QStringLiteral("vae"), tr("VAE"), T::File, {}, tr("Optional separate VAE (e.g. sdxl_vae.safetensors)."));
+    vae.filter = models;
+    out << vae;
+    OptionField cn = field(QStringLiteral("control_net"), tr("ControlNet"), T::File, {},
+                           tr("Needed for pose control (e.g. an SDXL OpenPose ControlNet)."));
+    cn.filter = models;
+    out << cn;
+    OptionField ipa = field(QStringLiteral("ip_adapter"), tr("IP-Adapter"), T::File, {},
+                            tr("Keeps a character's identity from a reference image (e.g. ip-adapter_sdxl_vit-h). "
+                               "Needs the CLIP vision encoder below."));
+    ipa.filter = models;
+    out << ipa;
+    OptionField clipVision = field(QStringLiteral("clip_vision"), tr("CLIP vision encoder"), T::File, {},
+                                   tr("ViT-H image encoder for the IP-Adapter (clip_vision_h.safetensors)."));
+    clipVision.filter = models;
+    out << clipVision;
+    out << field(QStringLiteral("lora_dir"), tr("LoRA folder"), T::Directory, {}, tr("LoRAs in this folder can be used in prompts."));
+    OptionField upscale = field(QStringLiteral("upscale_model"), tr("Upscaler"), T::File, {}, tr("ESRGAN model for 2×/4× upscaling."));
+    upscale.filter = models;
+    out << upscale;
+    out << field(QStringLiteral("offload_to_cpu"), tr("Keep weights in RAM"), T::Boolean, false,
+                 tr("Moves weights to the GPU only while generating (--offload-to-cpu). Slower, but leaves VRAM for a "
+                    "language model on the same GPU."));
+    OptionField maxVram = field(QStringLiteral("max_vram"), tr("VRAM budget (GB)"), T::Number, 0.0,
+                                tr("0 = use what is free. A budget makes large models run in parts."));
+    maxVram.maximum = 256;
+    out << maxVram;
+    out << field(QStringLiteral("diffusion_fa"), tr("Flash attention"), T::Boolean, true, tr("Less VRAM, usually faster."));
+    OptionField diffusion = field(QStringLiteral("diffusion_model"), tr("Diffusion model"), T::File, {},
+                                  tr("Standalone diffusion model (FLUX, Qwen-Image, Z-Image…), used instead of a checkpoint."));
+    diffusion.filter = models;
+    diffusion.advanced = true;
+    out << diffusion;
+    for (const auto &[key, label] : {std::pair{QStringLiteral("clip_l"), tr("CLIP-L text encoder")},
+                                     std::pair{QStringLiteral("clip_g"), tr("CLIP-G text encoder")},
+                                     std::pair{QStringLiteral("t5xxl"), tr("T5-XXL text encoder")},
+                                     std::pair{QStringLiteral("llm"), tr("LLM text encoder")}}) {
+        OptionField f = field(key, label, T::File);
+        f.filter = models;
+        f.advanced = true;
+        out << f;
+    }
+    OptionField clipCpu = field(QStringLiteral("clip_on_cpu"), tr("Text encoders on the CPU"), T::Boolean, false);
+    clipCpu.advanced = true;
+    out << clipCpu;
+    OptionField threads = field(QStringLiteral("threads"), tr("CPU threads"), T::Integer, 0, tr("0 = automatic"));
+    threads.maximum = 256;
+    threads.advanced = true;
+    out << threads;
+    return out;
+}
+
+} // namespace
+
+QList<OptionField> serverOptions(const QString &kind)
+{
+    QList<OptionField> out;
+    if (kind == QLatin1String("llama.cpp"))
+        out = llamaOptions();
+    else if (kind == QLatin1String("sd.cpp"))
+        out = sdOptions();
+    OptionField extra = field(QStringLiteral("extra_args"), QCoreApplication::translate("lumen::runtime::ServerProfile", "Extra arguments"),
+                              T::Text, {}, QCoreApplication::translate("lumen::runtime::ServerProfile", "Added to the command line as typed."));
+    extra.advanced = true;
+    out << extra;
+    return out;
+}
+
+QString startPolicyKey(StartPolicy p)
+{
+    switch (p) {
+    case StartPolicy::AtStartup:
+        return QStringLiteral("startup");
+    case StartPolicy::Manual:
+        return QStringLiteral("manual");
+    case StartPolicy::OnDemand:
+        break;
+    }
+    return QStringLiteral("demand");
+}
+
+StartPolicy startPolicyFromKey(const QString &key)
+{
+    if (key == QLatin1String("startup"))
+        return StartPolicy::AtStartup;
+    if (key == QLatin1String("manual"))
+        return StartPolicy::Manual;
+    return StartPolicy::OnDemand;
+}
+
+QVariant ServerProfile::option(const QString &key, const QString &kind) const
+{
+    const QVariant v = options.value(key);
+    if (v.isValid() && !(v.typeId() == QMetaType::QString && v.toString().isEmpty()))
+        return v;
+    for (const OptionField &f : serverOptions(kind)) {
+        if (f.key == key)
+            return f.defaultValue;
+    }
+    return {};
+}
+
+QJsonObject ServerProfile::toJson() const
+{
+    return QJsonObject{{QStringLiteral("id"), id},
+                       {QStringLiteral("name"), name},
+                       {QStringLiteral("runtime"), runtimeId},
+                       {QStringLiteral("port"), port},
+                       {QStringLiteral("options"), QJsonObject::fromVariantMap(options)},
+                       {QStringLiteral("start"), startPolicyKey(startPolicy)},
+                       {QStringLiteral("idleStopMinutes"), idleStopMinutes},
+                       {QStringLiteral("startupTimeoutSec"), startupTimeoutSec}};
+}
+
+ServerProfile ServerProfile::fromJson(const QJsonObject &o)
+{
+    ServerProfile p;
+    p.id = o.value(QStringLiteral("id")).toString();
+    p.name = o.value(QStringLiteral("name")).toString();
+    p.runtimeId = o.value(QStringLiteral("runtime")).toString();
+    p.port = o.value(QStringLiteral("port")).toInt();
+    p.options = o.value(QStringLiteral("options")).toObject().toVariantMap();
+    p.startPolicy = startPolicyFromKey(o.value(QStringLiteral("start")).toString());
+    p.idleStopMinutes = o.value(QStringLiteral("idleStopMinutes")).toInt();
+    p.startupTimeoutSec = o.value(QStringLiteral("startupTimeoutSec")).toInt(600);
+    return p;
+}
+
+QStringList splitArguments(const QString &text)
+{
+    QStringList out;
+    QString cur;
+    bool quoted = false;
+    bool have = false;
+    for (const QChar c : text) {
+        if (c == QLatin1Char('"')) {
+            quoted = !quoted;
+            have = true;
+        } else if (c.isSpace() && !quoted) {
+            if (have)
+                out << cur;
+            cur.clear();
+            have = false;
+        } else {
+            cur += c;
+            have = true;
+        }
+    }
+    if (have)
+        out << cur;
+    return out;
+}
+
+QString LaunchCommand::commandLine() const
+{
+    QStringList parts;
+    auto quote = [](const QString &s) {
+        return s.isEmpty() || s.contains(QLatin1Char(' ')) || s.contains(QLatin1Char('"'))
+                   ? QLatin1Char('"') + QString(s).replace(QLatin1Char('"'), QStringLiteral("\\\"")) + QLatin1Char('"')
+                   : s;
+    };
+    parts << quote(QDir::toNativeSeparators(program));
+    for (const QString &a : arguments)
+        parts << quote(a);
+    return parts.join(QLatin1Char(' '));
+}
+
+LaunchCommand buildLaunch(const ServerProfile &p, const InstalledRuntime &rt)
+{
+    LaunchCommand cmd;
+    cmd.program = rt.executable;
+    cmd.workingDirectory = QFileInfo(rt.executable).absolutePath();
+    const QString kind = rt.kind;
+    auto str = [&](const QString &key) { return p.option(key, kind).toString().trimmed(); };
+    auto num = [&](const QString &key) { return p.option(key, kind).toLongLong(); };
+    auto flag = [&](const QString &key) { return p.option(key, kind).toBool(); };
+    auto file = [&](const QString &flagName, const QString &key) {
+        const QString path = str(key);
+        if (path.isEmpty())
+            return;
+        if (!QFileInfo::exists(path) && cmd.error.isEmpty())
+            cmd.error = tr("%1 does not exist.").arg(QDir::toNativeSeparators(path));
+        cmd.arguments << flagName << QDir::toNativeSeparators(path);
+    };
+    QStringList &a = cmd.arguments;
+
+    if (kind == QLatin1String("llama.cpp")) {
+        if (str(QStringLiteral("model")).isEmpty())
+            cmd.error = tr("Choose a model for %1.").arg(p.name);
+        file(QStringLiteral("-m"), QStringLiteral("model"));
+        file(QStringLiteral("--mmproj"), QStringLiteral("mmproj"));
+        a << QStringLiteral("--host") << QStringLiteral("127.0.0.1") << QStringLiteral("--port") << QString::number(p.port);
+        a << QStringLiteral("-c") << QString::number(num(QStringLiteral("context")));
+        a << QStringLiteral("-ngl") << QString::number(num(QStringLiteral("gpu_layers")));
+        const QString kv = str(QStringLiteral("kv_cache"));
+        if (!kv.isEmpty() && kv != QLatin1String("f16"))
+            a << QStringLiteral("-ctk") << kv << QStringLiteral("-ctv") << kv;
+        const QString fa = str(QStringLiteral("flash_attention"));
+        if (!fa.isEmpty())
+            a << QStringLiteral("-fa") << fa;
+        if (flag(QStringLiteral("jinja")))
+            a << QStringLiteral("--jinja");
+        if (num(QStringLiteral("sleep_idle")) > 0)
+            a << QStringLiteral("--sleep-idle-seconds") << QString::number(num(QStringLiteral("sleep_idle")));
+        if (num(QStringLiteral("parallel")) > 1)
+            a << QStringLiteral("-np") << QString::number(num(QStringLiteral("parallel")));
+        if (num(QStringLiteral("threads")) > 0)
+            a << QStringLiteral("-t") << QString::number(num(QStringLiteral("threads")));
+        if (num(QStringLiteral("reasoning_budget")) >= 0)
+            a << QStringLiteral("--reasoning-budget") << QString::number(num(QStringLiteral("reasoning_budget")));
+    } else if (kind == QLatin1String("sd.cpp")) {
+        if (str(QStringLiteral("model")).isEmpty() && str(QStringLiteral("diffusion_model")).isEmpty())
+            cmd.error = tr("Choose a checkpoint or a diffusion model for %1.").arg(p.name);
+        if (!str(QStringLiteral("ip_adapter")).isEmpty() && str(QStringLiteral("clip_vision")).isEmpty() && cmd.error.isEmpty())
+            cmd.error = tr("The IP-Adapter needs a CLIP vision encoder.");
+        file(QStringLiteral("-m"), QStringLiteral("model"));
+        file(QStringLiteral("--diffusion-model"), QStringLiteral("diffusion_model"));
+        file(QStringLiteral("--vae"), QStringLiteral("vae"));
+        file(QStringLiteral("--clip_l"), QStringLiteral("clip_l"));
+        file(QStringLiteral("--clip_g"), QStringLiteral("clip_g"));
+        file(QStringLiteral("--t5xxl"), QStringLiteral("t5xxl"));
+        file(QStringLiteral("--llm"), QStringLiteral("llm"));
+        file(QStringLiteral("--control-net"), QStringLiteral("control_net"));
+        file(QStringLiteral("--ip-adapter"), QStringLiteral("ip_adapter"));
+        file(QStringLiteral("--clip_vision"), QStringLiteral("clip_vision"));
+        file(QStringLiteral("--lora-model-dir"), QStringLiteral("lora_dir"));
+        file(QStringLiteral("--upscale-model"), QStringLiteral("upscale_model"));
+        a << QStringLiteral("--listen-ip") << QStringLiteral("127.0.0.1") << QStringLiteral("--listen-port") << QString::number(p.port);
+        if (flag(QStringLiteral("offload_to_cpu")))
+            a << QStringLiteral("--offload-to-cpu");
+        const double vram = p.option(QStringLiteral("max_vram"), kind).toDouble();
+        if (vram > 0)
+            a << QStringLiteral("--max-vram") << QString::number(vram);
+        if (flag(QStringLiteral("diffusion_fa")))
+            a << QStringLiteral("--diffusion-fa");
+        if (flag(QStringLiteral("clip_on_cpu")))
+            a << QStringLiteral("--clip-on-cpu");
+        if (num(QStringLiteral("threads")) > 0)
+            a << QStringLiteral("-t") << QString::number(num(QStringLiteral("threads")));
+    } else {
+        cmd.error = tr("Lumen cannot start %1 servers.").arg(kind);
+    }
+    a << splitArguments(str(QStringLiteral("extra_args")));
+    if (p.port <= 0 && cmd.error.isEmpty())
+        cmd.error = tr("No port set.");
+    return cmd;
+}
+
+QString providerUrl(const QString &kind, int port)
+{
+    const QString base = QStringLiteral("http://127.0.0.1:%1").arg(port);
+    return kind == QLatin1String("llama.cpp") ? base + QStringLiteral("/v1") : base;
+}
+
+QString providerTypeFor(const QString &kind)
+{
+    if (kind == QLatin1String("llama.cpp"))
+        return QStringLiteral("llamacpp");
+    if (kind == QLatin1String("sd.cpp"))
+        return QStringLiteral("sdcpp");
+    return {};
+}
+
+bool portIsFree(int port)
+{
+    QTcpServer probe;
+    return probe.listen(QHostAddress::LocalHost, quint16(port));
+}
+
+int choosePort(int preferred, const QList<int> &taken)
+{
+    for (int port = std::max(1024, preferred); port < 65535; ++port) {
+        if (!taken.contains(port) && portIsFree(port))
+            return port;
+    }
+    return 0;
+}
+
+} // namespace lumen::runtime

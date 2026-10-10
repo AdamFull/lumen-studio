@@ -1,4 +1,4 @@
-foreach(module core net pose doc ai live2d ui app)
+foreach(module core net runtime pose doc ai live2d ui app)
     if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${module}/CMakeLists.txt")
         add_subdirectory(${module})
     endif()
