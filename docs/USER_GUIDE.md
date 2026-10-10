@@ -214,7 +214,9 @@ editor's AI panel and on the Parts page. Its menu picks another character or non
   struck through.
 * **Re-run** (Library) brings back the words you wrote and the character. If the image was drawn
   without one, the character is switched off on the Generate page.
-* The assistant knows the active character and can switch it ("use Akane").
+* The assistant knows the active character and can switch it ("use Akane"). Its images, edits and
+  region fixes draw the character the same way as the pages do, so "draw her at the beach" is
+  enough; it says what it used (LoRA, reference image or description).
 
 ### Character LoRA: the same look in every image
 

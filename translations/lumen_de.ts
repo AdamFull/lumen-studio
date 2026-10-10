@@ -981,7 +981,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Beim Malen werden niemals Hintergrundpixel außerhalb der Charaktersilhouette erfasst.</translation>
     </message>
     <message>
-        <location filename="../src/ui/assistant/AssistantTools.cpp" line="+90"/>
+        <location filename="../src/ui/assistant/AssistantTools.cpp" line="+92"/>
         <source>cancelled</source>
         <translation>abgebrochen</translation>
     </message>
@@ -996,7 +996,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Das Bild konnte nicht geladen werden.</translation>
     </message>
     <message>
-        <location line="+53"/>
+        <location line="+99"/>
         <location line="+40"/>
         <location line="+16"/>
         <source>No project is open.</source>
@@ -1008,8 +1008,8 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Es gibt keinen Charakter %1 in der Bibliothek; siehe list_characters.</translation>
     </message>
     <message>
-        <location line="+44"/>
-        <location line="+56"/>
+        <location line="+47"/>
+        <location line="+58"/>
         <source>No image provider is configured.</source>
         <translation>Es ist kein Bildanbieter konfiguriert.</translation>
     </message>
@@ -1019,7 +1019,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Bearbeitung: %1</translation>
     </message>
     <message>
-        <location line="+28"/>
+        <location line="+30"/>
         <source>The region is empty; give x, y, width and height as fractions between 0 and 1.</source>
         <translation>Der Bereich ist leer; geben Sie x, y, Breite und Höhe als Anteile zwischen 0 und 1 an.</translation>
     </message>
@@ -1029,7 +1029,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Inpainting: %1</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+16"/>
         <location line="+14"/>
         <location line="+12"/>
         <source>There is no asset &quot;%1&quot;.</source>
@@ -1054,7 +1054,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Die Regie ist nicht verfügbar.</translation>
     </message>
     <message>
-        <location line="-295"/>
+        <location line="-305"/>
         <location filename="../src/ui/Studio.cpp" line="+93"/>
         <location line="+17"/>
         <source>Lumen is shutting down.</source>

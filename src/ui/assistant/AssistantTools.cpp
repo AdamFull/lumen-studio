@@ -1,5 +1,6 @@
 #include "ui/assistant/AssistantTools.h"
 
+#include "ai/CharacterContext.h"
 #include "ai/Director.h"
 #include "ai/GenerationService.h"
 #include "ai/PromptStyle.h"
@@ -8,6 +9,7 @@
 #include "core/JsonUtil.h"
 #include "doc/CharacterLibrary.h"
 #include "ui/Studio.h"
+#include "ui/dialogs/CharacterLoraDialog.h"
 #include "ui/assistant/DirectorActions.h"
 
 #include <QJsonArray>
@@ -169,6 +171,52 @@ QString assistantSystemPrompt()
         "- Ask a short question when the request is ambiguous instead of guessing expensive generations.");
 }
 
+namespace {
+
+const char *kCharacterParam = "true (default) draws the project's active character (see get_state); false leaves it out";
+
+// Adds the project's active character to an image request (M14), unless the call passes
+// "character": false, then submits it. The result tells the model what went in.
+QFuture<ToolResult> submitWithCharacter(Studio *studio, ai::ImageProvider *provider, ai::GenerationSpec spec, ai::CharacterUse use,
+                                        const QJsonObject &args)
+{
+    QPointer<Studio> s(studio);
+    const QString id = args.value(QStringLiteral("character")).toBool(true) ? studio->activeCharacter() : QString();
+    if (id.isEmpty() || !provider)
+        return waitForJob(studio, studio->generation()->submit(spec));
+    const ai::ImageCapabilities caps = provider->capabilities();
+    const ai::PromptStyle style = ai::promptStyleFor(provider);
+    const QString family = checkpointFamily(studio, provider);
+    const QString providerName = provider->displayName();
+    return studio->characterContext(id)
+        .then(studio, [s, spec, use, caps, style, family, providerName](const ai::CharacterContext &c) mutable -> QFuture<ToolResult> {
+            if (!s)
+                return fail(QStringLiteral("closed"));
+            QJsonObject extra;
+            if (!c.isEmpty()) {
+                const ai::CharacterApplied applied = ai::applyCharacter(spec.request, c, caps, use, style, family);
+                if (applied.any())
+                    spec.meta.insert(QStringLiteral("character"), applied.toJson(c));
+                QStringList used;
+                if (applied.lora)
+                    used << QStringLiteral("LoRA");
+                if (applied.reference)
+                    used << QStringLiteral("reference image");
+                if (applied.description)
+                    used << QStringLiteral("description");
+                QJsonObject info{{QStringLiteral("name"), c.name}, {QStringLiteral("used"), used.join(QStringLiteral(", "))}};
+                const QString note = applied.fallbackNote(c, providerName);
+                if (!note.isEmpty())
+                    info.insert(QStringLiteral("note"), note);
+                extra.insert(QStringLiteral("character"), info);
+            }
+            return waitForJob(s, s->generation()->submit(spec), extra);
+        })
+        .unwrap();
+}
+
+} // namespace
+
 ai::ToolSet assistantTools(Studio *studio)
 {
     ai::ToolSet tools;
@@ -254,8 +302,11 @@ ai::ToolSet assistantTools(Studio *studio)
                   return ready(r);
               });
 
-    tools.add(tool("generate_image", "Generates new images from a prompt with the default image provider. Waits until they are done.",
+    tools.add(tool("generate_image", "Generates new images from a prompt with the default image provider. Waits until they are done. "
+                                     "The project's active character is drawn automatically (its LoRA, reference or description): "
+                                     "describe only the scene, pose and mood.",
                    schema({{QStringLiteral("prompt"), prop("string", "the image prompt, in English")},
+                           {QStringLiteral("character"), prop("boolean", kCharacterParam)},
                            {QStringLiteral("negative_prompt"), prop("string", "optional things to avoid")},
                            {QStringLiteral("aspect_ratio"), prop("string", "e.g. 1:1, 2:3, 3:2, 16:9 (default 1:1)")},
                            {QStringLiteral("count"), prop("integer", "number of variants, 1-4 (default 1)")},
@@ -291,7 +342,7 @@ ai::ToolSet assistantTools(Studio *studio)
                       }
                       spec.title = spec.request.prompt.left(60);
                       spec.meta.insert(QStringLiteral("assistant"), true);
-                      return waitForJob(s, s->generation()->submit(spec));
+                      return submitWithCharacter(s, provider, spec, ai::CharacterUse::Full, args);
                   };
                   if (refIds.isEmpty() || !s->project())
                       return submit({});
@@ -312,8 +363,10 @@ ai::ToolSet assistantTools(Studio *studio)
                       .unwrap();
               });
 
-    tools.add(tool("edit_image", "Changes a whole library image by instruction (e.g. 'make it night', 'add a red scarf'). The result is a new image.",
+    tools.add(tool("edit_image", "Changes a whole library image by instruction (e.g. 'make it night', 'add a red scarf'). The result is a new image. "
+                                 "The active character's reference or description helps keep the character.",
                    schema({{QStringLiteral("asset_id"), prop("string", "the image to edit")},
+                           {QStringLiteral("character"), prop("boolean", kCharacterParam)},
                            {QStringLiteral("instruction"), prop("string", "what to change, in English")},
                            {QStringLiteral("strength"), prop("number", "0.2 (subtle) to 0.9 (strong), default 0.6; ignored by instruction-edit models")}},
                           {QStringLiteral("asset_id"), QStringLiteral("instruction")})),
@@ -340,13 +393,15 @@ ai::ToolSet assistantTools(Studio *studio)
                       spec.parentAssetId = assetId;
                       spec.title = QObject::tr("Edit: %1").arg(spec.request.prompt.left(40));
                       spec.meta.insert(QStringLiteral("assistant"), true);
-                      return waitForJob(s, s->generation()->submit(spec));
+                      return submitWithCharacter(s, provider, spec, ai::CharacterUse::Edit, args);
                   });
               });
 
     tools.add(tool("inpaint_region", "Regenerates a rectangular region of a library image from a prompt (local fix or replacement); "
-                                     "the rest stays untouched. Coordinates are fractions (0-1) of the image width and height.",
+                                     "the rest stays untouched. Coordinates are fractions (0-1) of the image width and height. The "
+                                     "active character's LoRA keeps a fixed face or hand in its style; the prompt describes only the region.",
                    schema({{QStringLiteral("asset_id"), prop("string", "the image")},
+                           {QStringLiteral("character"), prop("boolean", kCharacterParam)},
                            {QStringLiteral("x"), prop("number", "left edge, 0-1")},
                            {QStringLiteral("y"), prop("number", "top edge, 0-1")},
                            {QStringLiteral("width"), prop("number", "0-1")},
@@ -378,7 +433,10 @@ ai::ToolSet assistantTools(Studio *studio)
                       spec.parentAssetId = assetId;
                       spec.title = QObject::tr("Inpaint: %1").arg(spec.request.prompt.left(40));
                       spec.meta.insert(QStringLiteral("assistant"), true);
-                      return waitForJob(s, s->generation()->submit(spec));
+                      ai::ImageProvider *provider = s->providers()->defaultImageProvider();
+                      if (provider)
+                          spec.providerId = provider->instanceId();
+                      return submitWithCharacter(s, provider, spec, ai::CharacterUse::Region, args);
                   });
               });
 

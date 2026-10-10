@@ -121,6 +121,7 @@ private slots:
     void editorCharacter();
     void partsPageCharacter();
     void expressionCheck();
+    void assistantCharacter();
 
 private:
     ToolEvent at(double x, double y, Qt::KeyboardModifiers mods = Qt::NoModifier) const
@@ -2261,6 +2262,102 @@ void TestCanvas::expressionCheck()
     // Choosing or adding another result drops the warning (it was about the old one).
     set.addVariant(variant, QStringLiteral("asset-2"), rect, true);
     QVERIFY(set.part(variant)->warning.isEmpty());
+}
+
+void TestCanvas::assistantCharacter()
+{
+    Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
+    MockHttpServer server;
+    QList<QJsonObject> generations;
+    server.route("GET", QStringLiteral("/sdcpp/v1/capabilities"), [](const MockRequest &) {
+        return MockResponse::json({{QStringLiteral("loras"), QJsonArray{QJsonObject{{QStringLiteral("name"), QStringLiteral("lmn_aki")},
+                                                                                    {QStringLiteral("path"), QStringLiteral("lmn_aki.safetensors")}}}}});
+    });
+    server.route("POST", QStringLiteral("/sdcpp/v1/img_gen"), [&](const MockRequest &req) {
+        generations << req.json();
+        return MockResponse::json({{QStringLiteral("id"), QStringLiteral("job_1")}}, 202);
+    });
+    server.route("GET", QStringLiteral("/sdcpp/v1/jobs/job_1"), [](const MockRequest &) {
+        QImage im(128, 128, QImage::Format_ARGB32);
+        im.fill(Qt::darkCyan);
+        const QJsonArray images{QJsonObject{{QStringLiteral("index"), 0}, {QStringLiteral("b64_json"), QString::fromLatin1(img::encode(im).toBase64())}}};
+        return MockResponse::json({{QStringLiteral("status"), QStringLiteral("completed")}, {QStringLiteral("result"), QJsonObject{{QStringLiteral("images"), images}}}});
+    });
+    QTemporaryDir dir;
+    Studio studio;
+    for (ai::Provider *p : studio.providers()->providers())
+        studio.providers()->removeProvider(p->instanceId());
+    QVERIFY(studio.providers()->addProvider(QStringLiteral("sdcpp"), QStringLiteral("SD"), {{QStringLiteral("url"), server.baseUrl().toString()}}));
+    studio.openProject(dir.filePath(QStringLiteral("assistant.lumen")));
+    QTRY_VERIFY_WITH_TIMEOUT(studio.isProjectOpen(), 5000);
+    QImage ref(64, 96, QImage::Format_ARGB32);
+    ref.fill(Qt::red);
+    auto saved = studio.characters()->save(QStringLiteral("Aki (assistant test)"), {{QStringLiteral("tags"), QStringLiteral("red hair, green eyes")}},
+                                           {ref}, QString(), QString(),
+                                           QJsonObject{{QStringLiteral("file"), dir.filePath(QStringLiteral("lmn_aki.safetensors"))},
+                                                       {QStringLiteral("trigger"), QStringLiteral("lmn_aki")},
+                                                       {QStringLiteral("weight"), 0.7}});
+    QTRY_VERIFY(saved.isFinished());
+    const QString aki = saved.result().id;
+    auto cleanup = qScopeGuard([&] {
+        studio.characters()->remove(aki);
+        for (ai::Provider *p : studio.providers()->providers())
+            studio.providers()->removeProvider(p->instanceId());
+    });
+    studio.setActiveCharacter(aki);
+    const ai::ToolSet tools = assistantTools(&studio);
+    auto run = [&tools](const char *name, const QJsonObject &args) {
+        auto f = tools.run(QLatin1String(name), args);
+        return f;
+    };
+    auto promptOf = [&generations](int i) { return generations.value(i).value(QStringLiteral("prompt")).toString(); };
+    auto lorasOf = [&generations](int i) { return generations.value(i).value(QStringLiteral("lora")).toArray(); };
+
+    // "Draw Aki at the beach": the scene only; the LoRA and the description come with the character.
+    auto drawn = run("generate_image", {{QStringLiteral("prompt"), QStringLiteral("at the beach, sunset")}});
+    QTRY_VERIFY_WITH_TIMEOUT(drawn.isFinished(), 10000);
+    QVERIFY2(drawn.result().error.isEmpty(), qPrintable(drawn.result().error));
+    QVERIFY2(promptOf(0).startsWith(QStringLiteral("lmn_aki, at the beach, sunset")), qPrintable(promptOf(0)));
+    QVERIFY(promptOf(0).contains(QStringLiteral("red hair, green eyes")));
+    QCOMPARE(lorasOf(0).size(), 1);
+    const QJsonObject info = drawn.result().data.value(QStringLiteral("character")).toObject();
+    QCOMPARE(info.value(QStringLiteral("name")).toString(), QStringLiteral("Aki (assistant test)"));
+    QCOMPARE(info.value(QStringLiteral("used")).toString(), QStringLiteral("LoRA, description"));
+    QCOMPARE(drawn.result().assetIds.size(), 1);
+    const QString image = drawn.result().assetIds.first();
+    QCOMPARE(studio.project()->asset(image)->metadata.value(QStringLiteral("character")).toObject().value(QStringLiteral("character")).toString(), aki);
+
+    // character: false leaves it out.
+    auto plain = run("generate_image", {{QStringLiteral("prompt"), QStringLiteral("an empty beach")}, {QStringLiteral("character"), false}});
+    QTRY_VERIFY_WITH_TIMEOUT(plain.isFinished(), 10000);
+    QCOMPARE(promptOf(1), QStringLiteral("an empty beach"));
+    QVERIFY(lorasOf(1).isEmpty());
+    QVERIFY(!plain.result().data.contains(QStringLiteral("character")));
+
+    // inpaint_region: the LoRA for the region, without the appearance words.
+    auto fixed = run("inpaint_region", {{QStringLiteral("asset_id"), image}, {QStringLiteral("x"), 0.25}, {QStringLiteral("y"), 0.25},
+                                        {QStringLiteral("width"), 0.5}, {QStringLiteral("height"), 0.5},
+                                        {QStringLiteral("prompt"), QStringLiteral("a hand holding a shell")}});
+    QTRY_VERIFY_WITH_TIMEOUT(fixed.isFinished(), 10000);
+    QVERIFY2(fixed.result().error.isEmpty(), qPrintable(fixed.result().error));
+    QVERIFY(promptOf(2).startsWith(QStringLiteral("lmn_aki, a hand holding a shell")));
+    QVERIFY(!promptOf(2).contains(QStringLiteral("red hair")));
+    QCOMPARE(lorasOf(2).size(), 1);
+
+    // edit_image: no LoRA (edits take none); this back-end takes no reference either, so the description.
+    auto edited = run("edit_image", {{QStringLiteral("asset_id"), image}, {QStringLiteral("instruction"), QStringLiteral("make it night")}});
+    QTRY_VERIFY_WITH_TIMEOUT(edited.isFinished(), 10000);
+    QVERIFY2(edited.result().error.isEmpty(), qPrintable(edited.result().error));
+    QVERIFY(promptOf(3).startsWith(QStringLiteral("make it night")));
+    QVERIFY(promptOf(3).contains(QStringLiteral("red hair, green eyes")));
+    QVERIFY(lorasOf(3).isEmpty());
+    QCOMPARE(edited.result().data.value(QStringLiteral("character")).toObject().value(QStringLiteral("used")).toString(), QStringLiteral("description"));
+
+    // No active character: the tools behave as before.
+    studio.setActiveCharacter(QString());
+    auto none = run("generate_image", {{QStringLiteral("prompt"), QStringLiteral("a lighthouse")}});
+    QTRY_VERIFY_WITH_TIMEOUT(none.isFinished(), 10000);
+    QCOMPARE(promptOf(4), QStringLiteral("a lighthouse"));
 }
 
 QTEST_MAIN(TestCanvas)

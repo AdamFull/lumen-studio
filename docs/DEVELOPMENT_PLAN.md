@@ -1358,8 +1358,16 @@ Rules per mode:
   - Test: the crops; a changed eye colour, a clean check and a weak expression against a mock
     vision model (three images sent: result, face before, character reference); the warning
     cleared by a new result.
-- [ ] Assistant tools: `generate_image`, `edit_image` and `inpaint_region` use the active character
-  unless the call passes `character: false`; tool descriptions say so.
+- [x] Assistant tools:
+  - `generate_image` (`Full`), `edit_image` (`Edit`) and `inpaint_region` (`Region`, now on the
+    default provider explicitly) go through `submitWithCharacter`, which applies the active
+    character unless the call passes `character: false`, records it in the metadata, and tells
+    the model in the result what went in (`character: {name, used, note}`).
+  - The tool descriptions say that the character comes automatically, so prompts describe only
+    the scene; each tool has the `character` parameter.
+  - Test against a mock sd.cpp server: generate (LoRA and description, metadata, the result's
+    `character`), `character: false`, inpaint (LoRA, no appearance words), edit (description, no
+    LoRA), and no active character.
 - [ ] Live measurements (RTX 4060 8 GB, the M13 character): identity checklist scores with and
   without the character on 8 Generate-page prompts, 4 editor fixes (hand, face, sleeve, hair) and
   the 5 expression variants.
