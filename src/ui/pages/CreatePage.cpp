@@ -1,5 +1,6 @@
 #include "ui/pages/CreatePage.h"
 
+#include "ai/CharacterContext.h"
 #include "ai/Director.h"
 #include "ai/GenerationService.h"
 #include "ai/PromptStyle.h"
@@ -834,7 +835,11 @@ void CreatePage::generateShot(const QString &shotId, int attempt, const QJsonObj
     const QJsonObject shotJson = shotOverride.isEmpty() ? shot->shot : shotOverride;
     const ShotState shotCopy = *shot;
     const int variants = m_variants->value();
-    const ai::CharacterLora lora = ai::CharacterLora::fromJson(m_session->characterLora());
+    ai::CharacterContext character;
+    character.id = m_session->libraryCharacter();
+    character.sheet = m_session->character();
+    character.name = character.sheet.value(QStringLiteral("name")).toString();
+    character.lora = ai::CharacterLora::fromJson(m_session->characterLora());
     const QString providerId = provider->instanceId();
     const QString sessionId = m_session->id();
     if (ShotCard *card = m_cards.value(shotId))
@@ -842,29 +847,25 @@ void CreatePage::generateShot(const QString &shotId, int attempt, const QJsonObj
     m_running[shotId]++;
     QPointer<CreatePage> self(this);
     QPointer<DirectorSession> session = m_session;
-    loadReferenceImages([self, session, shotId, shotJson, shotCopy, caps, style, variants, providerId, sessionId, attempt, lora](QList<QImage> images) {
+    loadReferenceImages([self, session, shotId, shotJson, shotCopy, caps, style, variants, providerId, sessionId, attempt,
+                         character](QList<QImage> images) mutable {
         if (!self || !session)
             return;
-        QList<ai::ReferenceImage> refs;
-        for (const QImage &img : images) {
-            ai::ReferenceImage r;
-            r.image = img;
-            r.role = ai::ReferenceRole::Character;
-            r.weight = 0.8;
-            refs << r;
-        }
+        character.references = images;
         const QSize size = ai::Director::sizeForAspect(shotCopy.aspect(), caps.nativePixels, std::max(64, caps.sizeMultiple));
         const pose::Pose pose = ShotCard::shotPose(shotCopy, size);
         ai::GenerationSpec spec;
         spec.providerId = providerId;
-        spec.request = ai::Director::buildShotRequest(shotJson, refs, pose, style, caps);
+        spec.request = ai::Director::buildShotRequest(shotJson, {}, pose, style, caps);
         spec.request.batchCount = variants;
-        ai::Director::applyCharacterLora(spec.request, lora, caps);
+        const ai::CharacterApplied applied = ai::applyCharacter(spec.request, character, caps, ai::CharacterUse::Shot, style);
         if (shotJson.value(QStringLiteral("background")).toString().contains(QLatin1String("transparent"), Qt::CaseInsensitive))
             spec.request.transparentBackground = caps.transparentBackground;
         spec.title = QObject::tr("Shot: %1").arg(shotJson.value(QStringLiteral("title")).toString());
         spec.meta = QJsonObject{{QStringLiteral("director_session"), sessionId}, {QStringLiteral("shot"), shotId},
                                 {QStringLiteral("shot_title"), shotJson.value(QStringLiteral("title"))}};
+        if (applied.any())
+            spec.meta.insert(QStringLiteral("character"), applied.toJson(character));
         if (attempt > 0)
             spec.meta.insert(QStringLiteral("critic_attempt"), attempt);
         Job *job = self->m_studio->generation()->submit(spec);

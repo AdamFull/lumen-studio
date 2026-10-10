@@ -1,6 +1,7 @@
 #include "MockHttpServer.h"
 
 #include "ai/Agent.h"
+#include "ai/CharacterContext.h"
 #include "ai/Director.h"
 #include "ai/Gate.h"
 #include "ai/LoraCaptions.h"
@@ -49,6 +50,7 @@ private slots:
     void directorDatasetPlan();
     void loraCaptions();
     void identityChecklist();
+    void characterContext();
     void cleanShotPrompts();
     void agentNativeTools();
     void agentJsonProtocol();
@@ -784,6 +786,130 @@ void TestServices::identityChecklist()
     QCOMPARE(Director::loraTestScore(hidden), 9.0);
     // A critiqueShot() verdict still works.
     QCOMPARE(Director::loraTestScore({{QStringLiteral("identity"), 9}, {QStringLiteral("pose"), 6}}), 8.0);
+}
+
+void TestServices::characterContext()
+{
+    CharacterContext akane;
+    akane.id = QStringLiteral("c1");
+    akane.name = QStringLiteral("Akane");
+    akane.sheet = {{QStringLiteral("tags"), QStringLiteral("long red hair, yellow eyes, black hooded cloak")},
+                   {QStringLiteral("description"), QStringLiteral("A girl with long red hair and yellow eyes in a black hooded cloak.")}};
+    QImage ref(32, 48, QImage::Format_ARGB32);
+    ref.fill(Qt::red);
+    akane.references = {ref, ref};
+    akane.lora.file = QStringLiteral("D:/loras/lmn_akane.safetensors");
+    akane.lora.trigger = QStringLiteral("lmn_akane");
+    akane.lora.weight = 0.7;
+    akane.lora.family = QStringLiteral("SDXL");
+    PromptStyle tags;
+    tags.dialect = PromptStyle::Dialect::Tags;
+    PromptStyle prose;
+    ImageCapabilities local;   // sd.cpp: LoRAs and one IP-Adapter reference
+    local.loras = true;
+    local.maxReferences = 1;
+    ImageCapabilities cloud;   // a multi-reference API without LoRAs
+    cloud.maxReferences = 4;
+    cloud.edit = true;
+    ImageCapabilities bare;    // neither
+    auto request = [](const QString &prompt) {
+        ImageRequest r;
+        r.prompt = prompt;
+        return r;
+    };
+
+    // Full, LoRA back-end: trigger first, the tags after the user's words; no reference (its pose
+    // would leak in).
+    ImageRequest r = request(QStringLiteral("reading in a library"));
+    CharacterApplied a = applyCharacter(r, akane, local, CharacterUse::Full, tags, QStringLiteral("SDXL"));
+    QVERIFY(a.lora && a.description && !a.reference);
+    QCOMPARE(r.prompt, QStringLiteral("lmn_akane, reading in a library, long red hair, yellow eyes, black hooded cloak"));
+    QCOMPARE(r.loras.size(), 1);
+    QCOMPARE(r.loras[0].weight, 0.7);
+    QVERIFY(r.references.isEmpty());
+    QVERIFY(a.fallbackNote(akane, QStringLiteral("sd.cpp")).isEmpty());
+    // Applying twice adds nothing.
+    a = applyCharacter(r, akane, local, CharacterUse::Full, tags, QStringLiteral("SDXL"));
+    QCOMPARE(r.loras.size(), 1);
+    QCOMPARE(r.prompt.count(QStringLiteral("long red hair")), 1);
+    QCOMPARE(r.prompt.count(QStringLiteral("lmn_akane")), 1);
+
+    // Full, cloud: one reference and the description in prose; the note says what replaced the LoRA.
+    r = request(QStringLiteral("Reading in a library."));
+    a = applyCharacter(r, akane, cloud, CharacterUse::Full, prose);
+    QVERIFY(!a.lora && a.reference && a.description);
+    QCOMPARE(a.loraSkipped, QStringLiteral("no_lora_support"));
+    QCOMPARE(r.references.size(), 1);
+    QVERIFY(r.references[0].role == ReferenceRole::Character);
+    QVERIFY(r.prompt.endsWith(QStringLiteral("in a black hooded cloak.")));
+    QCOMPARE(a.fallbackNote(akane, QStringLiteral("Gemini")), QStringLiteral("Gemini cannot load LoRAs: using the reference image of Akane."));
+    // Neither LoRAs nor references: the description alone.
+    r = request(QString());
+    a = applyCharacter(r, akane, bare, CharacterUse::Full, tags);
+    QVERIFY(!a.lora && !a.reference && a.description);
+    QCOMPARE(r.prompt, QStringLiteral("long red hair, yellow eyes, black hooded cloak"));
+    QCOMPARE(a.fallbackNote(akane, QStringLiteral("Stability")), QStringLiteral("Stability cannot load LoRAs: describing Akane in the prompt."));
+
+    // A LoRA of another family is left out, with a note.
+    r = request(QStringLiteral("smile"));
+    a = applyCharacter(r, akane, local, CharacterUse::Full, tags, QStringLiteral("SD 1.5"));
+    QVERIFY(!a.lora && a.reference);
+    QCOMPARE(a.loraSkipped, QStringLiteral("family"));
+    QVERIFY(r.loras.isEmpty() && !r.prompt.contains(QStringLiteral("lmn_akane")));
+    QVERIFY(a.fallbackNote(akane, QStringLiteral("sd.cpp")).contains(QStringLiteral("for SDXL models")));
+    // An unknown family does not block the LoRA.
+    r = request(QStringLiteral("smile"));
+    QVERIFY(applyCharacter(r, akane, local, CharacterUse::Full, tags).lora);
+
+    // Region (inpaint, expand): the LoRA, never the appearance tags; else a reference.
+    r = request(QStringLiteral("a hand holding a cup"));
+    a = applyCharacter(r, akane, local, CharacterUse::Region, tags, QStringLiteral("SDXL"));
+    QVERIFY(a.lora && !a.description && !a.reference);
+    QCOMPARE(r.prompt, QStringLiteral("lmn_akane, a hand holding a cup"));
+    r = request(QStringLiteral("a hand holding a cup"));
+    a = applyCharacter(r, akane, cloud, CharacterUse::Region, prose);
+    QVERIFY(!a.lora && a.reference && !a.description);
+    QCOMPARE(r.prompt, QStringLiteral("a hand holding a cup"));
+    r = request(QStringLiteral("a hand"));
+    QVERIFY(!applyCharacter(r, akane, bare, CharacterUse::Region, tags).any());
+
+    // Edit: never the LoRA (and no note about it); the reference, else the description.
+    r = request(QStringLiteral("make it night"));
+    a = applyCharacter(r, akane, local, CharacterUse::Edit, tags, QStringLiteral("SDXL"));
+    QVERIFY(!a.lora && a.reference && !a.description);
+    QCOMPARE(a.loraSkipped, QStringLiteral("use"));
+    QVERIFY(a.fallbackNote(akane, QStringLiteral("sd.cpp")).isEmpty());
+    r = request(QStringLiteral("make it night"));
+    a = applyCharacter(r, akane, bare, CharacterUse::Edit, tags);
+    QVERIFY(!a.reference && a.description);
+
+    // Shot (Create): LoRA and every reference that fits, as M13 did; the planned prompt stays.
+    r = request(QStringLiteral("1girl, long red hair, standing"));
+    ImageCapabilities two = local;
+    two.maxReferences = 2;
+    a = applyCharacter(r, akane, two, CharacterUse::Shot, tags);
+    QVERIFY(a.lora && a.reference && !a.description);
+    QCOMPARE(r.references.size(), 2);
+    QCOMPARE(r.prompt, QStringLiteral("lmn_akane, 1girl, long red hair, standing"));
+    // References already in the request count against the limit.
+    r = request(QStringLiteral("x"));
+    r.references << ReferenceImage{};
+    applyCharacter(r, akane, two, CharacterUse::Shot, tags);
+    QCOMPARE(r.references.size(), 2);
+
+    // Metadata.
+    r = request(QStringLiteral("smile"));
+    a = applyCharacter(r, akane, local, CharacterUse::Full, tags, QStringLiteral("SDXL"));
+    const QJsonObject meta = a.toJson(akane);
+    QCOMPARE(meta.value(QStringLiteral("character")).toString(), QStringLiteral("c1"));
+    QCOMPARE(meta.value(QStringLiteral("lora")).toString(), akane.lora.file);
+    QCOMPARE(meta.value(QStringLiteral("lora_weight")).toDouble(), 0.7);
+    QVERIFY(meta.value(QStringLiteral("description")).toBool());
+    QVERIFY(!meta.contains(QStringLiteral("lora_skipped")));
+    // No character: nothing happens.
+    r = request(QStringLiteral("smile"));
+    QVERIFY(!applyCharacter(r, CharacterContext{}, local, CharacterUse::Full, tags).any());
+    QCOMPARE(r.prompt, QStringLiteral("smile"));
 }
 
 QTEST_MAIN(TestServices)

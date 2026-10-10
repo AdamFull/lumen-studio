@@ -20,6 +20,7 @@ add_library(lumen_ai STATIC
     StructuredChat.h StructuredChat.cpp
     PromptStyle.h PromptStyle.cpp
     GenerationService.h GenerationService.cpp
+    CharacterContext.h CharacterContext.cpp
     Director.h Director.cpp
     LoraCaptions.h LoraCaptions.cpp
     PartPipeline.h PartPipeline.cpp

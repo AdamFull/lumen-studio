@@ -1258,8 +1258,9 @@ mode)`. It goes down a ladder by what the back-end can do:
 3. **Description**: the appearance tags (tag-style back-ends) or the sheet summary (prose).
 
 Rules per mode:
-* txt2img, img2img, variations: the whole ladder; the appearance tags go into the prompt when
-  there is no LoRA.
+* txt2img, img2img, variations: the LoRA, else one reference; the appearance tags always go into
+  the prompt (the first M13 live test showed that the trigger word alone can lose the outfit).
+  No reference next to a LoRA: IP-Adapter pulls the reference's pose into the image.
 * Inpaint and expand: the LoRA (or reference) only. The user's prompt describes the region; the
   appearance tags would repaint hair or clothes into a hand fix.
 * Instruct edit: reference or description only; edit models do not take LoRAs.
@@ -1282,10 +1283,19 @@ Rules per mode:
   (eyes, mouth) than for whole parts. Start with the character's own weight.
 
 #### 14.5 Implementation steps
-- [ ] `CharacterContext` (ai): the ladder of §14.3 for one request and mode; the metadata it
-  records; unit tests for every rung, mode and provider family (sd.cpp, ComfyUI, WebUI, Gemini,
-  OpenAI), including a family mismatch. The Create page switches to it with no change in
-  behaviour (its tests stay green).
+- [x] `CharacterContext` (`ai/CharacterContext`):
+  - `applyCharacter(request, character, caps, use, style, modelFamily)` with four uses: `Full`,
+    `Region`, `Edit`, and `Shot` for the Create page (LoRA and every reference that fits, no
+    description: the planned prompt already has it). Nothing is added twice; references already
+    in the request count against the provider's limit.
+  - The family check compares the LoRA's family with the loaded checkpoint's; an unknown family
+    does not block the LoRA.
+  - `CharacterApplied` records what went in, as metadata (`character`, `lora`, `trigger`,
+    `lora_weight`, `reference`, `description`, `lora_skipped`), and words the fallback note.
+  - The Create page builds its shots through it (`Shot`) and stores the metadata; its tests are
+    unchanged and pass.
+  - Tests: every use on a LoRA back-end, a multi-reference cloud API and one with neither; tag and
+    prose prompts; a family mismatch and an unknown family; no duplicates; the metadata.
 - [ ] Active character: project setting, picker and chip widget, the Create page sets it, the
   assistant's state and `set_active_character` tool.
 - [ ] Generate page and *Re-run*: the chip, the ladder, metadata; *Re-run* restores the LoRA and

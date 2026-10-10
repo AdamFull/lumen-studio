@@ -693,7 +693,7 @@
         <translation>Physikeinstellung %1 benötigt mindestens zwei Eckpunkte.</translation>
     </message>
     <message>
-        <location filename="../src/ui/pages/CreatePage.cpp" line="+713"/>
+        <location filename="../src/ui/pages/CreatePage.cpp" line="+714"/>
         <source>**Character sheet:** %1 — %2</source>
         <translation>**Charakterblatt:** %1 — %2</translation>
     </message>
@@ -720,7 +720,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Planung fehlgeschlagen: %1</translation>
     </message>
     <message>
-        <location line="+61"/>
+        <location line="+59"/>
         <source>Shot: %1</source>
         <translation>Aufnahme: %1</translation>
     </message>
@@ -1186,6 +1186,34 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <location line="+120"/>
         <source>Anthropic API key is not set. Add it in Settings → Providers.</source>
         <translation>Der Anthropic-API-Schlüssel ist nicht festgelegt. Fügen Sie ihn unter Einstellungen → Anbieter hinzu.</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::ai::CharacterContext</name>
+    <message>
+        <location filename="../src/ai/CharacterContext.cpp" line="+105"/>
+        <source>using the reference image of %1</source>
+        <translation>das Referenzbild von %1 wird verwendet</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>describing %1 in the prompt</source>
+        <translation>%1 wird im Prompt beschrieben</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>without %1</source>
+        <translation>ohne %1</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The LoRA of %1 is for %2 models, not the loaded one: %3.</source>
+        <translation>Die LoRA von %1 ist für %2-Modelle, nicht für das geladene: %3.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1 cannot load LoRAs: %2.</source>
+        <translation>%1 kann keine LoRAs laden: %2.</translation>
     </message>
 </context>
 <context>
@@ -4995,7 +5023,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::CreatePage</name>
     <message>
-        <location filename="../src/ui/pages/CreatePage.cpp" line="-799"/>
+        <location filename="../src/ui/pages/CreatePage.cpp" line="-797"/>
         <source>Director</source>
         <translation>Regie</translation>
     </message>
@@ -5313,12 +5341,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Fügen Sie zuerst unter Einstellungen → Anbieter einen Bildanbieter hinzu.</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+16"/>
         <source>Preparing…</source>
         <translation>Wird vorbereitet…</translation>
     </message>
     <message>
-        <location line="+62"/>
+        <location line="+58"/>
         <source>Waiting for the other shots before the Critic reviews…</source>
         <translation>Wartet auf die anderen Aufnahmen, bevor der Kritiker prüft…</translation>
     </message>
