@@ -46,6 +46,7 @@ private:
     void mergeSelected();
     void deleteSelected();
     QString stateText(const doc::Part &p) const;
+    void showState(QTreeWidgetItem *item, const doc::Part &p) const;
 
     PartEditContext *m_context;
     QPointer<doc::PartSet> m_set;

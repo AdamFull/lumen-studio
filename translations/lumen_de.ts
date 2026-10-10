@@ -453,28 +453,28 @@
     </message>
     <message>
         <location line="+2"/>
-        <location line="+213"/>
+        <location line="+215"/>
         <source>Body</source>
         <translation>Körper</translation>
     </message>
     <message>
-        <location line="-210"/>
+        <location line="-212"/>
         <source>Arms</source>
         <translation>Arme</translation>
     </message>
     <message>
         <location line="+3"/>
-        <location line="+205"/>
+        <location line="+207"/>
         <source>Head</source>
         <translation>Kopf</translation>
     </message>
     <message>
-        <location line="-200"/>
+        <location line="-202"/>
         <source>Accessories</source>
         <translation>Accessoires</translation>
     </message>
     <message>
-        <location line="+204"/>
+        <location line="+206"/>
         <source>Extras</source>
         <translation>Extras</translation>
     </message>
@@ -559,7 +559,7 @@
         <translation>Charakterteil</translation>
     </message>
     <message>
-        <location filename="../src/ui/parts/PartsPage.cpp" line="+1154"/>
+        <location filename="../src/ui/parts/PartsPage.cpp" line="+1162"/>
         <location filename="../src/doc/Project.cpp" line="+169"/>
         <location filename="../src/doc/PsdIO.cpp" line="+91"/>
         <location filename="../src/live2d/Motion.cpp" line="+20"/>
@@ -871,7 +871,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Skalierung</translation>
     </message>
     <message>
-        <location filename="../src/ui/parts/PartsPage.cpp" line="-1066"/>
+        <location filename="../src/ui/parts/PartsPage.cpp" line="-1073"/>
         <source>1  Source</source>
         <translation>1  Quelle</translation>
     </message>
@@ -951,7 +951,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Noch nicht generiert</translation>
     </message>
     <message>
-        <location line="+991"/>
+        <location line="+998"/>
         <source>%1 has no visible pixel layers.</source>
         <translation>%1 hat keine sichtbaren Pixelebenen.</translation>
     </message>
@@ -2866,7 +2866,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Erweiterungsbereich zurücksetzen</translation>
     </message>
     <message>
-        <location line="+198"/>
+        <location line="+211"/>
         <source>Untitled parts</source>
         <translation>Unbenannte Teile</translation>
     </message>
@@ -6146,6 +6146,24 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <location line="+32"/>
         <source>Dropped image</source>
         <translation>Abgelegtes Bild</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::ui::ExpressionCheck</name>
+    <message>
+        <location filename="../src/ui/parts/ExpressionCheck.cpp" line="+83"/>
+        <source>the Critic sees a change: %1</source>
+        <translation>der Kritiker sieht eine Änderung: %1</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>the expression barely shows</source>
+        <translation>der Ausdruck ist kaum zu sehen</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>%1: %2.</source>
+        <translation>%1: %2.</translation>
     </message>
 </context>
 <context>
@@ -9643,29 +9661,29 @@ Trotzdem herunterladen?</translation>
     </message>
     <message>
         <location line="+3"/>
-        <location line="+354"/>
+        <location line="+361"/>
         <source>Left / right</source>
         <translation>Links / rechts</translation>
     </message>
     <message>
-        <location line="-350"/>
-        <location line="+351"/>
+        <location line="-357"/>
+        <location line="+358"/>
         <source>Separate islands</source>
         <translation>Inseln trennen</translation>
     </message>
     <message>
-        <location line="-347"/>
+        <location line="-354"/>
         <source>By skeleton (upper arm / forearm / hand...)</source>
         <translation>Nach Skelett (Oberarm / Unterarm / Hand...)</translation>
     </message>
     <message>
         <location line="+5"/>
-        <location line="+344"/>
+        <location line="+351"/>
         <source>Draw a cut line...</source>
         <translation>Schnittlinie zeichnen...</translation>
     </message>
     <message>
-        <location line="-342"/>
+        <location line="-349"/>
         <source>Delete the selected parts (their pixels become unassigned)</source>
         <translation>Ausgewählte Teile löschen (ihre Pixel werden nicht zugeordnet)</translation>
     </message>
@@ -9700,7 +9718,7 @@ Trotzdem herunterladen?</translation>
         <translation>Teil entsperren</translation>
     </message>
     <message>
-        <location line="+59"/>
+        <location line="+71"/>
         <source>empty</source>
         <translation>leer</translation>
     </message>
@@ -9745,7 +9763,7 @@ Trotzdem herunterladen?</translation>
         <translation>Benutzerdefiniertes Teil · Zeichenreihenfolge %1</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+3"/>
         <source>Hide</source>
         <translation>Ausblenden</translation>
     </message>
@@ -9775,7 +9793,7 @@ Trotzdem herunterladen?</translation>
         <translation>Quellbild auswählen</translation>
     </message>
     <message>
-        <location line="+51"/>
+        <location line="+49"/>
         <source>Choose a source image first</source>
         <translation>Wählen Sie zuerst ein Quellbild</translation>
     </message>
@@ -9991,7 +10009,7 @@ Trotzdem herunterladen?</translation>
 <context>
     <name>lumen::ui::PartsPage</name>
     <message>
-        <location filename="../src/ui/parts/PartsPage.cpp" line="-1288"/>
+        <location filename="../src/ui/parts/PartsPage.cpp" line="-1295"/>
         <source>Slicing sessions of this project</source>
         <translation>Zerlegungssitzungen dieses Projekts</translation>
     </message>
@@ -10077,13 +10095,13 @@ Trotzdem herunterladen?</translation>
     </message>
     <message>
         <location line="+15"/>
-        <location line="+1409"/>
+        <location line="+1425"/>
         <location line="+43"/>
         <source>Parts</source>
         <translation>Teile</translation>
     </message>
     <message>
-        <location line="-1450"/>
+        <location line="-1466"/>
         <source>Undo</source>
         <translation>Rückgängig</translation>
     </message>
@@ -10114,14 +10132,14 @@ Trotzdem herunterladen?</translation>
     </message>
     <message>
         <location line="+5"/>
-        <location line="+786"/>
+        <location line="+793"/>
         <source>Drop an image here
 or drag one from the Library</source>
         <translation>Bild hier ablegen
 oder aus der Bibliothek ziehen</translation>
     </message>
     <message>
-        <location line="-781"/>
+        <location line="-788"/>
         <source>Open image...</source>
         <translation>Bild öffnen...</translation>
     </message>
@@ -10147,12 +10165,12 @@ oder aus der Bibliothek ziehen</translation>
     </message>
     <message>
         <location line="+3"/>
-        <location line="+751"/>
+        <location line="+758"/>
         <source>Remove background</source>
         <translation>Hintergrund entfernen</translation>
     </message>
     <message>
-        <location line="-750"/>
+        <location line="-757"/>
         <source>Makes the background transparent with a background-removal provider; the character silhouette then guides every mask.</source>
         <translation>Macht den Hintergrund mit einem Anbieter zur Hintergrundentfernung transparent; die Silhouette der Figur steuert danach jede Maske.</translation>
     </message>
@@ -10229,12 +10247,12 @@ oder aus der Bibliothek ziehen</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+806"/>
+        <location line="+813"/>
         <source>Auto-segment</source>
         <translation>Automatisch segmentieren</translation>
     </message>
     <message>
-        <location line="-799"/>
+        <location line="-806"/>
         <source>Edit skeleton</source>
         <translation>Skelett bearbeiten</translation>
     </message>
@@ -10245,12 +10263,12 @@ oder aus der Bibliothek ziehen</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+815"/>
+        <location line="+822"/>
         <source>Detect skeleton</source>
         <translation>Skelett erkennen</translation>
     </message>
     <message>
-        <location line="-814"/>
+        <location line="-821"/>
         <source>Detect the pose from the image with a pose-detection provider (DWPose/OpenPose)</source>
         <translation>Die Pose im Bild mit einem Anbieter zur Posenerkennung erkennen (DWPose/OpenPose)</translation>
     </message>
@@ -10367,12 +10385,22 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Varianten</translation>
     </message>
     <message>
-        <location line="+957"/>
+        <location line="+34"/>
+        <source>Check each variant with the Critic</source>
+        <translation>Jede Variante vom Kritiker prüfen lassen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The vision model compares the face before and after; a variant that changes the eye colour or the face, or barely shows the expression, gets a warning in the part list</source>
+        <translation>Das Bildmodell vergleicht das Gesicht vorher und nachher; eine Variante, die die Augenfarbe oder das Gesicht ändert oder den Ausdruck kaum zeigt, erhält eine Warnung in der Teileliste</translation>
+    </message>
+    <message>
+        <location line="+929"/>
         <source>Character description (optional): hair colour, outfit, art style...</source>
         <translation>Figurenbeschreibung (optional): Haarfarbe, Outfit, Kunststil...</translation>
     </message>
     <message>
-        <location line="-944"/>
+        <location line="-951"/>
         <source>Generate all</source>
         <translation>Alle generieren</translation>
     </message>
@@ -10407,7 +10435,7 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Hinzufügen</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+12"/>
         <source>Review</source>
         <translation>Überprüfen</translation>
     </message>
@@ -10613,8 +10641,8 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Wird geladen...</translation>
     </message>
     <message>
-        <location line="-571"/>
-        <location line="+584"/>
+        <location line="-578"/>
+        <location line="+591"/>
         <source>Character</source>
         <translation>Figur</translation>
     </message>
@@ -10702,7 +10730,7 @@ oder aus der Bibliothek ziehen</translation>
         <translation>%1 ist der Charakter dieses Bildes und jetzt der Charakter des Projekts.</translation>
     </message>
     <message>
-        <location line="+176"/>
+        <location line="+185"/>
         <source>character</source>
         <translation>figur</translation>
     </message>

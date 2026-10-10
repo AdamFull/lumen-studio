@@ -217,6 +217,18 @@ QList<int> PartListPanel::selectedLabels() const
     return labels;
 }
 
+void PartListPanel::showState(QTreeWidgetItem *item, const doc::Part &p) const
+{
+    item->setText(kColState, stateText(p));
+    // A warning (the face check of an expression) shows until another result is chosen.
+    const bool warn = !p.warning.isEmpty() && p.state != doc::PartState::Failed;
+    item->setIcon(kColState, warn ? Icons::get(QStringLiteral("warning")) : QIcon());
+    item->setForeground(kColState, p.state == doc::PartState::Failed ? Theme::palette().danger
+                                   : warn                             ? Theme::palette().warning
+                                                                      : Theme::palette().textMuted);
+    item->setToolTip(kColState, warn ? p.warning : p.error);
+}
+
 QString PartListPanel::stateText(const doc::Part &p) const
 {
     switch (p.state) {
@@ -276,10 +288,7 @@ void PartListPanel::rebuild()
         item->setIcon(kColName, swatchIcon(p->color));
         item->setText(kColName, p->displayName());
         item->setToolTip(kColName, kind ? tr("%1 · draw order %2").arg(kind->name).arg(p->order) : tr("Custom part · draw order %1").arg(p->order));
-        item->setText(kColState, stateText(*p));
-        item->setForeground(kColState, p->state == doc::PartState::Failed ? Theme::palette().danger : Theme::palette().textMuted);
-        if (!p->error.isEmpty())
-            item->setToolTip(kColState, p->error);
+        showState(item, *p);
         item->setIcon(kColVisible, Icons::get(p->visible ? QStringLiteral("eye") : QStringLiteral("eye-off")));
         item->setToolTip(kColVisible, p->visible ? tr("Hide") : tr("Show"));
         item->setIcon(kColLock, Icons::get(p->locked ? QStringLiteral("lock") : QStringLiteral("unlock")));
@@ -317,9 +326,7 @@ void PartListPanel::updateStates()
     while (*it) {
         const int label = (*it)->data(0, kLabelRole).toInt();
         if (const doc::Part *p = label ? m_set->part(label) : nullptr) {
-            (*it)->setText(kColState, stateText(*p));
-            (*it)->setForeground(kColState, p->state == doc::PartState::Failed ? Theme::palette().danger : Theme::palette().textMuted);
-            (*it)->setToolTip(kColState, p->error);
+            showState(*it, *p);
         }
         ++it;
     }

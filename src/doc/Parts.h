@@ -75,6 +75,7 @@ struct Part
     // Generation state (not part of mask undo history).
     PartState state = PartState::Empty;
     QString error;
+    QString warning;       // a review's concern about the chosen result (face check of an expression)
     QStringList variants;  // result asset ids
     QList<QRect> variantRects;
     int chosen = -1;
@@ -176,6 +177,8 @@ public:
 
     // ---- generation state (no undo) -----------------------------------------------------------
     void setPartState(int label, PartState state, const QString &error = QString());
+    // A concern about the chosen result; cleared when another result is added or chosen.
+    void setPartWarning(int label, const QString &warning);
     void addVariant(int label, const QString &assetId, const QRect &rect, bool choose = true);
     void chooseVariant(int label, int index);
     void removeVariant(int label, int index);

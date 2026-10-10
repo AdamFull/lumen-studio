@@ -24,6 +24,7 @@
 #include "ui/parts/PartTools.h"
 #include "ui/parts/PuppetPreview.h"
 #include "ui/dialogs/CharacterLoraDialog.h"
+#include "ui/parts/ExpressionCheck.h"
 #include "ui/widgets/CharacterChip.h"
 #include "ui/widgets/Controls.h"
 #include "ui/widgets/ProviderCombo.h"
@@ -713,6 +714,13 @@ QWidget *PartsPage::buildGeneratePanel()
     exprRow->addWidget(m_expression, 1);
     exprRow->addWidget(m_expressionButton);
     v->addLayout(exprRow);
+    m_checkExpressions = new QCheckBox(tr("Check each variant with the Critic"), w);
+    m_checkExpressions->setToolTip(tr("The vision model compares the face before and after; a variant that changes the eye colour or the "
+                                      "face, or barely shows the expression, gets a warning in the part list"));
+    m_checkExpressions->setChecked(Settings::instance().value(QStringLiteral("parts/checkExpressions"), true).toBool());
+    connect(m_checkExpressions, &QCheckBox::toggled, this,
+            [](bool on) { Settings::instance().setValue(QStringLiteral("parts/checkExpressions"), on); });
+    v->addWidget(m_checkExpressions);
 
     v->addWidget(sectionLabel(tr("Review")));
     auto *scroll = new QScrollArea(w);
@@ -1703,9 +1711,18 @@ void PartsPage::generateExpression(const QString &kind)
             options.characterSummary = ai::Director::appearanceTags(character.sheet);
         Job *job = self->m_studio->parts()->generateExpression(set, base, options);
         self->m_running.append(job);
-        connect(job, &Job::finished, self, [self](Job *j) {
-            if (self && j->state() == Job::State::Failed)
+        connect(job, &Job::finished, self, [self, set, options](Job *j) {
+            if (!self)
+                return;
+            if (j->state() == Job::State::Failed)
                 self->m_studio->notify(j->errorString(), QStringLiteral("error"));
+            if (j->state() != Job::State::Succeeded || !set || !self->m_checkExpressions->isChecked())
+                return;
+            const ai::parts::ExpressionKind *kind = ai::parts::findExpression(options.kind);
+            for (const doc::Part &p : set->parts()) {
+                if (kind && p.tag == kind->tag)
+                    checkExpressionVariant(self->m_studio, set, p.label, options.character, options.characterSummary, kind->prompt);
+            }
         });
     });
 }

@@ -1345,8 +1345,19 @@ Rules per mode:
     LayerDiffuse completion whose graph has the LoraLoader feeding LayerDiffuse, with the trigger
     first and the metadata; the Parts page adopting the character from both kinds of image, and
     leaving it alone for an image without one.
-- [ ] Face check of expression variants: the identity checklist (M13) on a face crop of each
-  variant against the source face, so a variant that changes the eye colour is flagged.
+- [x] Face check of expression variants (`ui/parts/ExpressionCheck`):
+  - After each variant, the face area (three times the variant's size, at least 256 px) is cropped
+    before and after; `Director::checkIdentity` gets the after crop, the before crop first among the
+    references, then the character's reference. The shot names the planned expression, so the pose
+    score says whether it shows.
+  - Features marked "different", or a pose score of 4 or less, become the part's `warning`
+    (persisted; shown with a warning sign and tooltip in the part list). Adding or choosing
+    another result clears it. Without a character the description box gives the features.
+  - "Check each variant with the Critic" on the Parts page, on by default; without a vision model
+    the check does nothing.
+  - Test: the crops; a changed eye colour, a clean check and a weak expression against a mock
+    vision model (three images sent: result, face before, character reference); the warning
+    cleared by a new result.
 - [ ] Assistant tools: `generate_image`, `edit_image` and `inpaint_region` use the active character
   unless the call passes `character: false`; tool descriptions say so.
 - [ ] Live measurements (RTX 4060 8 GB, the M13 character): identity checklist scores with and

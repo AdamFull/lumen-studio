@@ -17,6 +17,8 @@
 #include "ui/pages/GeneratePage.h"
 #include "ui/pages/AiPanel.h"
 #include "ui/parts/PartsPage.h"
+#include "ui/parts/ExpressionCheck.h"
+#include "doc/Parts.h"
 #include "pose/Rig.h"
 #include "MockHttpServer.h"
 #include "ui/dialogs/CharacterLoraDialog.h"
@@ -118,6 +120,7 @@ private slots:
     void generatePageCharacter();
     void editorCharacter();
     void partsPageCharacter();
+    void expressionCheck();
 
 private:
     ToolEvent at(double x, double y, Qt::KeyboardModifiers mods = Qt::NoModifier) const
@@ -2183,6 +2186,81 @@ void TestCanvas::partsPageCharacter()
     studio.sliceAsset(plain.result().id);
     QTest::qWait(100);
     QCOMPARE(studio.activeCharacter(), bo);
+}
+
+void TestCanvas::expressionCheck()
+{
+    // The crops: the face area around the variant, before and after, at least 256 px.
+    QImage source(400, 400, QImage::Format_ARGB32_Premultiplied);
+    source.fill(QColor(240, 200, 180));
+    QImage layer(40, 20, QImage::Format_ARGB32_Premultiplied);
+    layer.fill(QColor(20, 20, 20));
+    const QRect rect(180, 180, 40, 20);
+    const auto [before, after] = expressionCrops(source, layer, rect);
+    QCOMPARE(before.size(), QSize(256, 256));
+    QCOMPARE(after.size(), before.size());
+    QVERIFY(before.pixelColor(128, 127) != after.pixelColor(128, 127)); // the variant sits at the centre
+
+    // A mock vision model answers the identity checklist (face, red hair, green eyes).
+    MockHttpServer server;
+    QString verdicts = QStringLiteral("mmd");
+    int pose = 9;
+    QByteArray lastRequest;
+    server.route("POST", QStringLiteral("/v1/chat/completions"), [&](const MockRequest &req) {
+        lastRequest = req.body;
+        QJsonObject features;
+        for (int i = 0; i < verdicts.size(); ++i)
+            features.insert(QStringLiteral("f%1").arg(i + 1), verdicts[i] == QLatin1Char('m') ? QStringLiteral("match") : QStringLiteral("different"));
+        const QJsonObject answer{{QStringLiteral("features"), features}, {QStringLiteral("pose"), pose}, {QStringLiteral("issues"), QJsonArray{}}};
+        return MockResponse::json(
+            {{QStringLiteral("choices"),
+              QJsonArray{QJsonObject{{QStringLiteral("message"),
+                                      QJsonObject{{QStringLiteral("content"), QString::fromUtf8(QJsonDocument(answer).toJson(QJsonDocument::Compact))}}},
+                                     {QStringLiteral("finish_reason"), QStringLiteral("stop")}}}}});
+    });
+    QTemporaryDir dir;
+    Studio studio;
+    for (ai::Provider *p : studio.providers()->providers())
+        studio.providers()->removeProvider(p->instanceId());
+    QVERIFY(studio.providers()->addProvider(QStringLiteral("llamacpp"), QStringLiteral("Vision"),
+                                            {{QStringLiteral("url"), server.baseUrl().toString() + QStringLiteral("/v1")}}));
+    auto cleanup = qScopeGuard([&] {
+        for (ai::Provider *p : studio.providers()->providers())
+            studio.providers()->removeProvider(p->instanceId());
+    });
+    doc::PartSet set;
+    set.setSource(source, QStringLiteral("src"), img::createMask(source.size(), 255));
+    const int variant = set.addPart(QStringLiteral("eyes closed"), QStringLiteral("Eyes closed"));
+    QVERIFY(variant);
+    set.addVariant(variant, QStringLiteral("asset-1"), rect, true);
+    set.setResultImage(QStringLiteral("asset-1"), layer);
+    ai::CharacterContext aki;
+    aki.name = QStringLiteral("Aki");
+    aki.sheet = {{QStringLiteral("tags"), QStringLiteral("red hair, green eyes")}};
+    QImage ref(64, 96, QImage::Format_ARGB32);
+    ref.fill(Qt::red);
+    aki.references = {ref};
+
+    // Another eye colour: a warning on the variant.
+    checkExpressionVariant(&studio, &set, variant, aki, QString(), QStringLiteral("both eyes gently closed"));
+    QTRY_VERIFY_WITH_TIMEOUT(!set.part(variant)->warning.isEmpty(), 10000);
+    QCOMPARE(set.part(variant)->warning, QStringLiteral("the Critic sees a change: green eyes"));
+    QVERIFY(lastRequest.contains("identity_checklist"));
+    QVERIFY(lastRequest.contains("Planned expression: both eyes gently closed"));
+    QCOMPARE(lastRequest.count("data:image/"), 3); // the result, the face before, the character's reference
+    // A clean check clears it.
+    verdicts = QStringLiteral("mmm");
+    checkExpressionVariant(&studio, &set, variant, aki, QString(), QStringLiteral("both eyes gently closed"));
+    QTRY_VERIFY_WITH_TIMEOUT(set.part(variant)->warning.isEmpty(), 10000);
+    // An expression that barely shows; without a character the description box gives the features.
+    pose = 3;
+    verdicts = QStringLiteral("mm");
+    checkExpressionVariant(&studio, &set, variant, ai::CharacterContext{}, QStringLiteral("silver hair"), QStringLiteral("a wide smile"));
+    QTRY_COMPARE_WITH_TIMEOUT(set.part(variant)->warning, QStringLiteral("the expression barely shows"), 10000);
+    QVERIFY(lastRequest.contains("silver hair"));
+    // Choosing or adding another result drops the warning (it was about the old one).
+    set.addVariant(variant, QStringLiteral("asset-2"), rect, true);
+    QVERIFY(set.part(variant)->warning.isEmpty());
 }
 
 QTEST_MAIN(TestCanvas)

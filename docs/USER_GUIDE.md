@@ -205,6 +205,11 @@ editor's AI panel and on the Parts page. Its menu picks another character or non
   project's one. Part completion (including LayerDiffuse on ComfyUI) and the expression variants
   then use its LoRA, so hidden parts and closed eyes or a smile keep the character's look. An empty
   *Character description* box uses the character's appearance; text you type there replaces it.
+* **Check each variant with the Critic** (Parts page, under *Expression variants*; on by default)
+  has the vision model compare the face before and after each expression variant, feature by
+  feature. A variant that changes the eye colour or the face, or barely shows the expression, gets
+  a warning sign in the part list; hover it for the reason. Choosing or generating another result
+  clears it.
 * **Use the character on this page** in the menu switches it off for one page; the name is then
   struck through.
 * **Re-run** (Library) brings back the words you wrote and the character. If the image was drawn

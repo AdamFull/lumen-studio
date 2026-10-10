@@ -48,6 +48,7 @@ add_library(lumen_ui STATIC
     parts/PartListPanel.h parts/PartListPanel.cpp
     parts/PuppetPreview.h parts/PuppetPreview.cpp
     parts/PartsPage.h parts/PartsPage.cpp
+    parts/ExpressionCheck.h parts/ExpressionCheck.cpp
     parts/CubismView.h parts/CubismView.cpp
     parts/CubismPanel.h parts/CubismPanel.cpp
 )

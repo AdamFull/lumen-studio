@@ -201,6 +201,7 @@ QJsonObject partToJson(const Part &p)
                   {QStringLiteral("extension_auto"), p.extensionAuto},
                   {QStringLiteral("state"), partStateName(p.state)},
                   {QStringLiteral("error"), p.error},
+                  {QStringLiteral("warning"), p.warning},
                   {QStringLiteral("chosen"), p.chosen}};
     QJsonArray variants;
     for (int i = 0; i < p.variants.size(); ++i) {
@@ -244,6 +245,7 @@ Part partFromJson(const QJsonObject &o)
     p.extensionAuto = o.value(QStringLiteral("extension_auto")).toBool(true);
     p.state = partStateFromName(o.value(QStringLiteral("state")).toString());
     p.error = o.value(QStringLiteral("error")).toString();
+    p.warning = o.value(QStringLiteral("warning")).toString();
     p.chosen = o.value(QStringLiteral("chosen")).toInt(-1);
     for (const QJsonValue &v : o.value(QStringLiteral("variants")).toArray()) {
         const QJsonObject vo = v.toObject();
@@ -1001,6 +1003,16 @@ void PartSet::setPartState(int label, PartState state, const QString &error)
     touch();
 }
 
+void PartSet::setPartWarning(int label, const QString &warning)
+{
+    Part *p = mutablePart(label);
+    if (!p || p->warning == warning)
+        return;
+    p->warning = warning;
+    emit partStateChanged(label);
+    touch();
+}
+
 void PartSet::addVariant(int label, const QString &assetId, const QRect &rect, bool choose)
 {
     Part *p = mutablePart(label);
@@ -1012,6 +1024,7 @@ void PartSet::addVariant(int label, const QString &assetId, const QRect &rect, b
         p->chosen = int(p->variants.size()) - 1;
     p->state = PartState::Ready;
     p->error.clear();
+    p->warning.clear();
     emit resultChanged(label);
     emit partStateChanged(label);
     touch();
@@ -1023,7 +1036,9 @@ void PartSet::chooseVariant(int label, int index)
     if (!p || index < 0 || index >= p->variants.size() || p->chosen == index)
         return;
     p->chosen = index;
+    p->warning.clear();
     emit resultChanged(label);
+    emit partStateChanged(label);
     touch();
 }
 

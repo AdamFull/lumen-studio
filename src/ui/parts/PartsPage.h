@@ -185,6 +185,7 @@ private:
     QPushButton *m_cancel;
     QComboBox *m_expression;
     QPushButton *m_expressionButton;
+    QCheckBox *m_checkExpressions;
     QVBoxLayout *m_cards;
     QHash<int, QPointer<PartCard>> m_cardWidgets;
     QList<int> m_cardOrder;
