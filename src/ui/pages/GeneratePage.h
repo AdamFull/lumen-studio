@@ -3,6 +3,7 @@
 #include "pose/Skeleton.h"
 
 #include <QPointer>
+#include <QSet>
 #include <QWidget>
 
 #include <optional>
@@ -16,9 +17,14 @@ class QPushButton;
 class QSpinBox;
 class QVBoxLayout;
 
+namespace lumen::ai {
+struct GenerationSpec;
+}
+
 namespace lumen::ui {
 
 class AutoTextEdit;
+class CharacterChip;
 class ProviderCombo;
 class ReferenceStrip;
 class SliderField;
@@ -41,6 +47,9 @@ private:
     QSize requestedSize() const;
     void rerun(const QString &assetId);
     void addResult(const QString &assetId, const QImage &image, const QString &prompt);
+    void submit(const ai::GenerationSpec &spec, const QString &prompt);
+    // Tells once per provider and character what replaced a LoRA that could not be used.
+    void noteFallback(const QString &note);
     void setInitImage(const QImage &image, const QString &assetId = QString());
 
     Studio *m_studio;
@@ -74,6 +83,8 @@ private:
     QVBoxLayout *m_jobs;
     QListWidget *m_results;
     QLabel *m_capsLabel;
+    CharacterChip *m_character;
+    QSet<QString> m_notes;
 };
 
 } // namespace lumen::ui

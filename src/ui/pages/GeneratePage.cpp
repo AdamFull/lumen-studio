@@ -1,5 +1,6 @@
 #include "ui/pages/GeneratePage.h"
 
+#include "ai/CharacterContext.h"
 #include "ai/Director.h"
 #include "ai/GenerationService.h"
 #include "ai/PromptStyle.h"
@@ -12,6 +13,8 @@
 #include "ui/Shortcuts.h"
 #include "ui/Studio.h"
 #include "ui/Theme.h"
+#include "ui/dialogs/CharacterLoraDialog.h"
+#include "ui/widgets/CharacterChip.h"
 #include "ui/widgets/Controls.h"
 #include "ui/widgets/JobCard.h"
 #include "ui/widgets/ProviderCombo.h"
@@ -104,6 +107,8 @@ GeneratePage::GeneratePage(Studio *studio, QWidget *parent)
     auto *promptHead = new QHBoxLayout;
     promptHead->addWidget(sectionLabel(tr("Prompt"), panel));
     promptHead->addStretch();
+    m_character = new CharacterChip(studio, QStringLiteral("generate"), panel);
+    promptHead->addWidget(m_character);
     auto *enhance = new QToolButton(panel);
     enhance->setIcon(Icons::get(QStringLiteral("wand")));
     enhance->setText(tr("Enhance"));
@@ -515,9 +520,39 @@ void GeneratePage::generate()
         r.denoise = m_denoise->value();
     }
     spec.title = prompt.left(60);
-    spec.meta = QJsonObject{{QStringLiteral("source"), QStringLiteral("generate")}};
+    spec.meta = QJsonObject{{QStringLiteral("source"), QStringLiteral("generate")}, {QStringLiteral("user_prompt"), prompt}};
     if (!m_randomSeed->isChecked())
         m_seed->setValue(int(r.seed));
+    const QString characterId = m_character->characterId();
+    if (characterId.isEmpty())
+        return submit(spec, prompt);
+    // The project's character: its LoRA (if this model family can load it), else its reference,
+    // and its description.
+    const QString family = checkpointFamily(m_studio, provider);
+    const QString providerName = provider->displayName();
+    QPointer<GeneratePage> self(this);
+    m_studio->characterContext(characterId).then(this, [self, spec, caps, style, family, providerName, prompt](const ai::CharacterContext &c) mutable {
+        if (!self)
+            return;
+        if (!c.isEmpty()) {
+            const ai::CharacterApplied applied = ai::applyCharacter(spec.request, c, caps, ai::CharacterUse::Full, style, family);
+            spec.meta.insert(QStringLiteral("character"), applied.toJson(c));
+            self->noteFallback(applied.fallbackNote(c, providerName));
+        }
+        self->submit(spec, prompt);
+    });
+}
+
+void GeneratePage::noteFallback(const QString &note)
+{
+    if (note.isEmpty() || m_notes.contains(note))
+        return;
+    m_notes.insert(note);
+    m_studio->notify(note);
+}
+
+void GeneratePage::submit(const ai::GenerationSpec &spec, const QString &prompt)
+{
     Job *job = m_studio->generation()->submit(spec);
     auto *card = new JobCard(job, m_studio->jobs(), this);
     m_jobs->insertWidget(0, card);
@@ -582,7 +617,8 @@ void GeneratePage::rerun(const QString &assetId)
     if (!info)
         return;
     const QJsonObject m = info->metadata;
-    m_prompt->setPlainText(m.value(QStringLiteral("prompt")).toString());
+    // The words the user wrote (without the character's trigger and description) when known.
+    m_prompt->setPlainText(m.value(m.contains(QStringLiteral("user_prompt")) ? QStringLiteral("user_prompt") : QStringLiteral("prompt")).toString());
     m_negative->setPlainText(m.value(QStringLiteral("negative_prompt")).toString());
     const int w = m.value(QStringLiteral("width")).toInt(), h = m.value(QStringLiteral("height")).toInt();
     if (w > 0 && h > 0) {
@@ -602,7 +638,26 @@ void GeneratePage::rerun(const QString &assetId)
         m_randomSeed->setChecked(false);
         m_seed->setValue(int(seed));
     }
-    m_studio->notify(tr("Settings restored from '%1'.").arg(info->name));
+    // The character the image was drawn with, or none.
+    QString note;
+    const QJsonObject character = m.value(QStringLiteral("character")).toObject();
+    const QString characterId = character.value(QStringLiteral("character")).toString();
+    if (!characterId.isEmpty()) {
+        if (const auto entry = m_studio->characters()->entry(characterId)) {
+            m_studio->setActiveCharacter(characterId);
+            m_character->setUsedHere(true);
+            const QString lora = character.value(QStringLiteral("lora")).toString();
+            if (!lora.isEmpty() && ai::CharacterLora::fromJson(entry->lora).file != lora)
+                note = tr("The LoRA of %1 has changed since; the current one is used.").arg(entry->name);
+        } else {
+            note = tr("%1 is no longer in the character library.").arg(character.value(QStringLiteral("name")).toString());
+        }
+    } else if (!m_character->characterId().isEmpty()) {
+        m_character->setUsedHere(false);
+        note = tr("The image was drawn without a character, so the character is switched off here.");
+    }
+    m_studio->notify(note.isEmpty() ? tr("Settings restored from '%1'.").arg(info->name)
+                                    : tr("Settings restored from '%1'. %2").arg(info->name, note));
 }
 
 } // namespace lumen::ui

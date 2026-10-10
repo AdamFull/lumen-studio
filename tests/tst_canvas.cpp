@@ -14,6 +14,7 @@
 #include "ui/director/DirectorSession.h"
 #include "ui/director/ShotCard.h"
 #include "ui/pages/CreatePage.h"
+#include "ui/pages/GeneratePage.h"
 #include "pose/Rig.h"
 #include "MockHttpServer.h"
 #include "ui/dialogs/CharacterLoraDialog.h"
@@ -112,6 +113,7 @@ private slots:
     void loraTrainingRun();
     void loraEvaluation();
     void activeCharacter();
+    void generatePageCharacter();
 
 private:
     ToolEvent at(double x, double y, Qt::KeyboardModifiers mods = Qt::NoModifier) const
@@ -1891,6 +1893,115 @@ void TestCanvas::activeCharacter()
     studio.characters()->remove(aki);
     QTRY_COMPARE(studio.activeCharacter(), QString());
     QCOMPARE(chip.text(), QStringLiteral("No character"));
+}
+
+void TestCanvas::generatePageCharacter()
+{
+    Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
+    // stable-diffusion.cpp with the character's LoRA in its folder.
+    MockHttpServer server;
+    QList<QJsonObject> generations;
+    server.route("GET", QStringLiteral("/sdcpp/v1/capabilities"), [](const MockRequest &) {
+        return MockResponse::json({{QStringLiteral("loras"), QJsonArray{QJsonObject{{QStringLiteral("name"), QStringLiteral("lmn_aki")},
+                                                                                    {QStringLiteral("path"), QStringLiteral("lmn_aki.safetensors")}}}}});
+    });
+    server.route("POST", QStringLiteral("/sdcpp/v1/img_gen"), [&](const MockRequest &req) {
+        generations << req.json();
+        return MockResponse::json({{QStringLiteral("id"), QStringLiteral("job_1")}}, 202);
+    });
+    server.route("GET", QStringLiteral("/sdcpp/v1/jobs/job_1"), [](const MockRequest &) {
+        QImage im(64, 64, QImage::Format_ARGB32);
+        im.fill(Qt::darkCyan);
+        const QJsonArray images{QJsonObject{{QStringLiteral("index"), 0}, {QStringLiteral("b64_json"), QString::fromLatin1(img::encode(im).toBase64())}}};
+        return MockResponse::json({{QStringLiteral("status"), QStringLiteral("completed")}, {QStringLiteral("result"), QJsonObject{{QStringLiteral("images"), images}}}});
+    });
+    QTemporaryDir dir;
+    Studio studio;
+    for (ai::Provider *p : studio.providers()->providers())
+        studio.providers()->removeProvider(p->instanceId());
+    QVERIFY(studio.providers()->addProvider(QStringLiteral("sdcpp"), QStringLiteral("SD"), {{QStringLiteral("url"), server.baseUrl().toString()}}));
+    studio.openProject(dir.filePath(QStringLiteral("generate.lumen")));
+    QTRY_VERIFY_WITH_TIMEOUT(studio.isProjectOpen(), 5000);
+    QImage ref(64, 96, QImage::Format_ARGB32);
+    ref.fill(Qt::red);
+    auto saved = studio.characters()->save(QStringLiteral("Aki (generate test)"), {{QStringLiteral("tags"), QStringLiteral("red hair, green eyes")}}, {ref},
+                                           QString(), QString(),
+                                           QJsonObject{{QStringLiteral("file"), dir.filePath(QStringLiteral("lmn_aki.safetensors"))},
+                                                       {QStringLiteral("trigger"), QStringLiteral("lmn_aki")},
+                                                       {QStringLiteral("weight"), 0.7}});
+    QTRY_VERIFY(saved.isFinished());
+    const QString aki = saved.result().id;
+    auto cleanup = qScopeGuard([&] {
+        Settings::instance().setValue(QStringLiteral("character/use/generate"), true);
+        studio.characters()->remove(aki);
+        for (ai::Provider *p : studio.providers()->providers())
+            studio.providers()->removeProvider(p->instanceId());
+    });
+    studio.setActiveCharacter(aki);
+
+    GeneratePage page(&studio);
+    auto *chip = page.findChild<CharacterChip *>();
+    QVERIFY(chip);
+    chip->setUsedHere(true);
+    QCOMPARE(chip->characterId(), aki);
+    AutoTextEdit *prompt = nullptr;
+    for (AutoTextEdit *e : page.findChildren<AutoTextEdit *>()) {
+        if (e->placeholderText().startsWith(QLatin1String("A portrait")))
+            prompt = e;
+    }
+    QPushButton *go = nullptr;
+    for (QPushButton *b : page.findChildren<QPushButton *>()) {
+        if (b->text() == QLatin1String("Generate"))
+            go = b;
+    }
+    QVERIFY(prompt && go);
+    // Generated images by the words the user wrote.
+    auto generated = [&studio](const QString &words) -> std::optional<doc::AssetInfo> {
+        for (const doc::AssetInfo &a : studio.project()->assets()) {
+            if (a.metadata.value(QStringLiteral("user_prompt")).toString() == words)
+                return a;
+        }
+        return std::nullopt;
+    };
+
+    // The prompt never names the character: the LoRA and the description bring it.
+    prompt->setPlainText(QStringLiteral("reading in a library"));
+    go->click();
+    QTRY_VERIFY_WITH_TIMEOUT(generated(QStringLiteral("reading in a library")), 10000);
+    QCOMPARE(generations.size(), 1);
+    const QString sent = generations[0].value(QStringLiteral("prompt")).toString();
+    QVERIFY2(sent.startsWith(QStringLiteral("lmn_aki, ")), qPrintable(sent));
+    QVERIFY(sent.contains(QStringLiteral("reading in a library")) && sent.contains(QStringLiteral("red hair, green eyes")));
+    const QJsonArray lora = generations[0].value(QStringLiteral("lora")).toArray();
+    QCOMPARE(lora.size(), 1);
+    QCOMPARE(lora[0][QStringLiteral("path")].toString(), QStringLiteral("lmn_aki.safetensors"));
+    QCOMPARE(lora[0][QStringLiteral("multiplier")].toDouble(), 0.7);
+    const doc::AssetInfo first = *generated(QStringLiteral("reading in a library"));
+    QCOMPARE(first.metadata.value(QStringLiteral("user_prompt")).toString(), QStringLiteral("reading in a library"));
+    const QJsonObject used = first.metadata.value(QStringLiteral("character")).toObject();
+    QCOMPARE(used.value(QStringLiteral("character")).toString(), aki);
+    QCOMPARE(used.value(QStringLiteral("trigger")).toString(), QStringLiteral("lmn_aki"));
+
+    // Switched off on this page: the prompt goes as written.
+    chip->setUsedHere(false);
+    prompt->setPlainText(QStringLiteral("a quiet street"));
+    go->click();
+    QTRY_VERIFY_WITH_TIMEOUT(generated(QStringLiteral("a quiet street")), 10000);
+    QVERIFY(!generations[1].value(QStringLiteral("prompt")).toString().contains(QStringLiteral("lmn_aki")));
+    QVERIFY(generations[1].value(QStringLiteral("lora")).toArray().isEmpty());
+    const doc::AssetInfo second = *generated(QStringLiteral("a quiet street"));
+    QVERIFY(!second.metadata.contains(QStringLiteral("character")));
+
+    // Re-run brings back the user's words and the character (switched on again here).
+    studio.rerunAsset(first.id);
+    QCOMPARE(prompt->toPlainText(), QStringLiteral("reading in a library"));
+    QVERIFY(chip->isUsedHere());
+    QCOMPARE(chip->characterId(), aki);
+    // Re-running an image drawn without the character switches it off here.
+    studio.rerunAsset(second.id);
+    QCOMPARE(prompt->toPlainText(), QStringLiteral("a quiet street"));
+    QVERIFY(!chip->isUsedHere());
+    QCOMPARE(studio.activeCharacter(), aki);
 }
 
 QTEST_MAIN(TestCanvas)

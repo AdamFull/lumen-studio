@@ -6193,8 +6193,8 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::GeneratePage</name>
     <message>
-        <location filename="../src/ui/pages/GeneratePage.cpp" line="+83"/>
-        <location line="+164"/>
+        <location filename="../src/ui/pages/GeneratePage.cpp" line="+86"/>
+        <location line="+166"/>
         <location line="+3"/>
         <location line="+1"/>
         <location line="+87"/>
@@ -6202,7 +6202,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Generieren</translation>
     </message>
     <message>
-        <location line="-247"/>
+        <location line="-249"/>
         <source>default model</source>
         <translation>Standardmodell</translation>
     </message>
@@ -6227,7 +6227,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Prompt</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+6"/>
         <source>Enhance</source>
         <translation>Verbessern</translation>
     </message>
@@ -6472,7 +6472,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Schreiben Sie zuerst einen Prompt.</translation>
     </message>
     <message>
-        <location line="+72"/>
+        <location line="+102"/>
         <source>Write a short idea first, then enhance it.</source>
         <translation>Schreiben Sie zuerst eine kurze Idee und verbessern Sie sie dann.</translation>
     </message>
@@ -6482,9 +6482,29 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Wird verbessert…</translation>
     </message>
     <message>
-        <location line="+46"/>
+        <location line="+57"/>
+        <source>The LoRA of %1 has changed since; the current one is used.</source>
+        <translation>Die LoRA von %1 hat sich seitdem geändert; die aktuelle wird verwendet.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>%1 is no longer in the character library.</source>
+        <translation>%1 ist nicht mehr in der Charakterbibliothek.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>The image was drawn without a character, so the character is switched off here.</source>
+        <translation>Das Bild wurde ohne Charakter gezeichnet, daher ist der Charakter hier ausgeschaltet.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
         <source>Settings restored from &apos;%1&apos;.</source>
         <translation>Einstellungen aus „%1“ wiederhergestellt.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Settings restored from &apos;%1&apos;. %2</source>
+        <translation>Einstellungen aus „%1“ wiederhergestellt. %2</translation>
     </message>
 </context>
 <context>

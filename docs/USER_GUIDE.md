@@ -181,6 +181,26 @@ character sheet and its reference images outside the project. **Library → Load
 library…** brings them into any other project: the references are added to the project and to the
 session, and the sheet is set. Saving under an existing name updates that character.
 
+### The project's character
+
+A project has one **active character** from the character library. The character button (round
+picture and name, "· LoRA" when it has one) sits above the prompt on the Generate page. Its menu
+picks another character or none.
+
+* The Create page makes a character active when you save it to the library or load it from there.
+* With a character active, the prompt only needs the scene ("reading in a library, evening light").
+  Lumen adds the character:
+  * its **LoRA** and trigger word, when the image server can load LoRAs of that model family;
+  * otherwise its **reference image** (IP-Adapter or a multi-reference model);
+  * and its **appearance** (hair, eyes, outfit) as tags or a sentence.
+* When the LoRA cannot be used (a cloud API, a model of another family), Lumen says once what it
+  uses instead.
+* **Use the character on this page** in the menu switches it off for one page; the name is then
+  struck through.
+* **Re-run** (Library) brings back the words you wrote and the character. If the image was drawn
+  without one, the character is switched off on the Generate page.
+* The assistant knows the active character and can switch it ("use Akane").
+
 ### Character LoRA: the same look in every image
 
 A LoRA is a small add-on to an image model (tens of MB) trained on one character. With it, the

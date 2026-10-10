@@ -1311,8 +1311,17 @@ Rules per mode:
     `set_active_character`; the system prompt says to name the character only when none is active.
   - Test: the chip, the per-page switch, the menu, reopening the project, the Create page hook,
     the assistant tools, and a character removed from the library.
-- [ ] Generate page and *Re-run*: the chip, the ladder, metadata; *Re-run* restores the LoRA and
-  the character.
+- [x] Generate page and *Re-run*:
+  - The chip sits in the prompt header. With a character, `generate()` loads it
+    (`Studio::characterContext`) and applies it with `CharacterUse::Full` and the checkpoint's
+    family (`checkpointFamily`) before submitting; txt2img and img2img alike.
+  - Metadata: `character` (what went in) and `user_prompt` (the words typed).
+  - The fallback note is shown once per provider and character.
+  - *Re-run* restores `user_prompt` (not the prompt with the trigger and tags) and the character,
+    switched on here. It says when the character's LoRA has changed since or the character is
+    gone. An image drawn without a character switches it off on this page, so the re-run matches.
+  - Test: a mock sd.cpp server gets the trigger first, the description and the LoRA at the
+    character's weight; the metadata; the per-page switch; *Re-run* both ways.
 - [ ] Editor AI panel: the chip; fill selection, variation, instruct edit and expand follow the
   mode rules; "remove" stays character-free.
 - [ ] Parts page: the character from the source asset or the active one; part completion and
