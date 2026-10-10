@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ai/CharacterContext.h"
 #include "ai/Director.h"
 #include "ai/GenerationService.h"
 #include "ai/PartService.h"
@@ -60,6 +61,13 @@ public:
     }
     // Characters shared by all projects.
     doc::CharacterLibrary *characters() { return &m_characters; }
+    // The project's active character (M14 §14.2): a character library id, or empty. Image tools
+    // draw it unless their page switches it off. Stored in the project.
+    QString activeCharacter() const { return m_activeCharacter; }
+    void setActiveCharacter(const QString &id);
+    // A library character as image requests use it (sheet, references, LoRA). Resolves with an
+    // empty context when the character does not exist.
+    QFuture<ai::CharacterContext> characterContext(const QString &id);
 
     // ---- project lifecycle --------------------------------------------------------------------
     void openProject(const QString &path);
@@ -121,6 +129,7 @@ signals:
     void sliceRequested(const QString &assetId);
     void notification(const QString &message, const QString &level);
     void sessionRestored();
+    void activeCharacterChanged();
 
 private:
     void applyConcurrency();
@@ -129,6 +138,7 @@ private:
     void autosave();
     void adoptDocument(doc::Document *doc);
     void scheduleSessionSave();
+    void restoreActiveCharacter();
     doc::Document *adoptLoaded(const std::shared_ptr<doc::LoadedDocument> &loaded);
 
     net::HttpClient m_http;
@@ -152,6 +162,7 @@ private:
     QTimer m_sessionSave;
     bool m_restoring = false;
     bool m_switching = false;
+    QString m_activeCharacter;
 };
 
 } // namespace lumen::ui

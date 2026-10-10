@@ -55,6 +55,18 @@ Studio::Studio(QObject *parent)
     connect(this, &Studio::projectOpened, this, [this] {
         if (Settings::instance().value(QStringLiteral("doc/restoreSession"), true).toBool())
             restoreSession();
+        restoreActiveCharacter();
+    });
+    connect(this, &Studio::projectClosed, this, [this] {
+        if (!m_activeCharacter.isEmpty()) {
+            m_activeCharacter.clear();
+            emit activeCharacterChanged();
+        }
+    });
+    // A character removed from the library stops being active.
+    connect(&m_characters, &doc::CharacterLibrary::changed, this, [this] {
+        if (!m_activeCharacter.isEmpty() && !m_characters.entry(m_activeCharacter))
+            setActiveCharacter(QString());
     });
     connect(&Settings::instance(), &Settings::changed, this, [this](const QString &key) {
         if (key == QLatin1String("doc/autosaveSec"))
@@ -281,6 +293,54 @@ QFuture<void> Studio::saveSession()
     record.json = QJsonObject{{QStringLiteral("documents"), ids},
                               {QStringLiteral("active"), m_active ? m_active->id() : QString()}};
     return m_project->saveRecord(record).then([](doc::Record) {});
+}
+
+void Studio::setActiveCharacter(const QString &id)
+{
+    if (id == m_activeCharacter)
+        return;
+    m_activeCharacter = id;
+    if (m_project && m_project->isOpen()) {
+        doc::Record record;
+        record.id = QStringLiteral("active_character");
+        record.type = QStringLiteral("active_character");
+        record.name = tr("Active character");
+        record.json = QJsonObject{{QStringLiteral("character"), id}};
+        m_project->saveRecord(record);
+    }
+    emit activeCharacterChanged();
+}
+
+void Studio::restoreActiveCharacter()
+{
+    QPointer<doc::Project> project = m_project;
+    if (!project)
+        return;
+    project->records(QStringLiteral("active_character")).then(this, [this, project](QList<doc::Record> records) {
+        if (project != m_project || records.isEmpty())
+            return;
+        const QString id = records.first().json.value(QStringLiteral("character")).toString();
+        if (id != m_activeCharacter && (id.isEmpty() || m_characters.entry(id))) {
+            m_activeCharacter = id;
+            emit activeCharacterChanged();
+        }
+    });
+}
+
+QFuture<ai::CharacterContext> Studio::characterContext(const QString &id)
+{
+    const auto entry = id.isEmpty() ? std::nullopt : m_characters.entry(id);
+    if (!entry)
+        return QtFuture::makeReadyValueFuture(ai::CharacterContext{});
+    ai::CharacterContext c;
+    c.id = entry->id;
+    c.name = entry->name;
+    c.sheet = entry->sheet;
+    c.lora = ai::CharacterLora::fromJson(entry->lora);
+    return m_characters.loadReferences(id).then([c](const QList<QImage> &refs) mutable {
+        c.references = refs;
+        return c;
+    });
 }
 
 void Studio::restoreSession()

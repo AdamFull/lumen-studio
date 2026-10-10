@@ -693,7 +693,7 @@
         <translation>Physikeinstellung %1 benötigt mindestens zwei Eckpunkte.</translation>
     </message>
     <message>
-        <location filename="../src/ui/pages/CreatePage.cpp" line="+714"/>
+        <location filename="../src/ui/pages/CreatePage.cpp" line="+720"/>
         <source>**Character sheet:** %1 — %2</source>
         <translation>**Charakterblatt:** %1 — %2</translation>
     </message>
@@ -981,7 +981,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Beim Malen werden niemals Hintergrundpixel außerhalb der Charaktersilhouette erfasst.</translation>
     </message>
     <message>
-        <location filename="../src/ui/assistant/AssistantTools.cpp" line="+80"/>
+        <location filename="../src/ui/assistant/AssistantTools.cpp" line="+90"/>
         <source>cancelled</source>
         <translation>abgebrochen</translation>
     </message>
@@ -996,13 +996,19 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Das Bild konnte nicht geladen werden.</translation>
     </message>
     <message>
-        <location line="+51"/>
-        <location line="+26"/>
+        <location line="+53"/>
+        <location line="+40"/>
+        <location line="+16"/>
         <source>No project is open.</source>
         <translation>Es ist kein Projekt geöffnet.</translation>
     </message>
     <message>
-        <location line="+31"/>
+        <location line="-13"/>
+        <source>There is no character %1 in the library; use list_characters.</source>
+        <translation>Es gibt keinen Charakter %1 in der Bibliothek; siehe list_characters.</translation>
+    </message>
+    <message>
+        <location line="+44"/>
         <location line="+56"/>
         <source>No image provider is configured.</source>
         <translation>Es ist kein Bildanbieter konfiguriert.</translation>
@@ -1048,7 +1054,8 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Die Regie ist nicht verfügbar.</translation>
     </message>
     <message>
-        <location filename="../src/ui/Studio.cpp" line="+81"/>
+        <location line="-295"/>
+        <location filename="../src/ui/Studio.cpp" line="+93"/>
         <location line="+17"/>
         <source>Lumen is shutting down.</source>
         <translation>Lumen wird beendet.</translation>
@@ -4788,6 +4795,51 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
 </context>
 <context>
+    <name>lumen::ui::CharacterChip</name>
+    <message>
+        <location filename="../src/ui/widgets/CharacterChip.cpp" line="+97"/>
+        <location line="+34"/>
+        <source>No character</source>
+        <translation>Kein Charakter</translation>
+    </message>
+    <message>
+        <location line="-33"/>
+        <source>Choose a character from the character library; image tools then draw it without repeating it in every prompt</source>
+        <translation>Wählen Sie einen Charakter aus der Charakterbibliothek; die Bildwerkzeuge zeichnen ihn dann, ohne dass er in jedem Prompt wiederholt werden muss</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <location line="+16"/>
+        <source>%1 · LoRA</source>
+        <translation>%1 · LoRA</translation>
+    </message>
+    <message>
+        <location line="-15"/>
+        <source>Images here draw %1 with the character&apos;s LoRA when the image generator can load it, else with the character&apos;s reference image or description</source>
+        <translation>Bilder hier zeichnen %1 mit der LoRA des Charakters, wenn der Bildgenerator sie laden kann, sonst mit dem Referenzbild oder der Beschreibung des Charakters</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Images here draw %1 with the character&apos;s reference image or description</source>
+        <translation>Bilder hier zeichnen %1 mit dem Referenzbild oder der Beschreibung des Charakters</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1 is the project&apos;s character, but switched off on this page</source>
+        <translation>%1 ist der Charakter des Projekts, auf dieser Seite aber ausgeschaltet</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>No characters in the library yet. Save one on the Create page.</source>
+        <translation>Noch keine Charaktere in der Bibliothek. Speichern Sie einen auf der Seite Erstellen.</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Use the character on this page</source>
+        <translation>Den Charakter auf dieser Seite verwenden</translation>
+    </message>
+</context>
+<context>
     <name>lumen::ui::CharacterLoraDialog</name>
     <message>
         <location filename="../src/ui/dialogs/CharacterLoraDialog.cpp" line="+116"/>
@@ -5023,7 +5075,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::CreatePage</name>
     <message>
-        <location filename="../src/ui/pages/CreatePage.cpp" line="-797"/>
+        <location filename="../src/ui/pages/CreatePage.cpp" line="-803"/>
         <source>Director</source>
         <translation>Regie</translation>
     </message>
@@ -5065,29 +5117,29 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+501"/>
+        <location line="+507"/>
         <source>Send</source>
         <translation>Senden</translation>
     </message>
     <message>
-        <location line="-483"/>
-        <location line="+1107"/>
+        <location line="-489"/>
+        <location line="+1113"/>
         <source>Character</source>
         <translation>Charakter</translation>
     </message>
     <message>
-        <location line="-1103"/>
+        <location line="-1109"/>
         <source>Edit sheet</source>
         <translation>Steckbrief bearbeiten</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+379"/>
+        <location line="+385"/>
         <source>Analyze references</source>
         <translation>Referenzen analysieren</translation>
     </message>
     <message>
-        <location line="-376"/>
+        <location line="-382"/>
         <source>Library</source>
         <translation>Bibliothek</translation>
     </message>
@@ -5108,12 +5160,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+4"/>
-        <location line="+370"/>
+        <location line="+376"/>
         <source>LoRA</source>
         <translation>LoRA</translation>
     </message>
     <message>
-        <location line="-367"/>
+        <location line="-373"/>
         <source>A LoRA keeps the character looking the same in every image</source>
         <translation>Eine LoRA hält das Aussehen des Charakters in jedem Bild gleich</translation>
     </message>
@@ -5129,12 +5181,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+21"/>
-        <location line="+419"/>
+        <location line="+425"/>
         <source>Shot plan</source>
         <translation>Aufnahmeplan</translation>
     </message>
     <message>
-        <location line="-416"/>
+        <location line="-422"/>
         <source>Generator</source>
         <translation>Generator</translation>
     </message>
@@ -5210,7 +5262,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Hängen Sie zunächst Referenzbilder Ihres Charakters an und beschreiben Sie die benötigten Bilder.</translation>
     </message>
     <message>
-        <location line="+26"/>
+        <location line="+32"/>
         <source>Reference — click to remove</source>
         <translation>Referenz – zum Entfernen klicken</translation>
     </message>
@@ -5777,7 +5829,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::DirectorSession</name>
     <message>
-        <location filename="../src/ui/director/DirectorSession.cpp" line="+269"/>
+        <location filename="../src/ui/director/DirectorSession.cpp" line="+270"/>
         <source>Untitled session</source>
         <translation>Unbenannte Sitzung</translation>
     </message>
@@ -7638,12 +7690,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+279"/>
+        <location line="+280"/>
         <source>Score with Critic</source>
         <translation>Mit Kritiker bewerten</translation>
     </message>
     <message>
-        <location line="-278"/>
+        <location line="-279"/>
         <source>A vision model compares each image with the character&apos;s references</source>
         <translation>Ein Bildverständnismodell vergleicht jedes Bild mit den Referenzen des Charakters</translation>
     </message>
@@ -7689,12 +7741,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+4"/>
-        <location line="+752"/>
+        <location line="+781"/>
         <source>Write captions</source>
         <translation>Beschreibungen schreiben</translation>
     </message>
     <message>
-        <location line="-751"/>
+        <location line="-780"/>
         <source>The vision model tags every kept image that has no tags yet</source>
         <translation>Das Bildverständnismodell vertaggt jedes behaltene Bild, das noch keine Tags hat</translation>
     </message>
@@ -7755,12 +7807,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+885"/>
+        <location line="+914"/>
         <source>Remove</source>
         <translation>Entfernen</translation>
     </message>
     <message>
-        <location line="-881"/>
+        <location line="-910"/>
         <source>Export for training…</source>
         <translation>Für das Training exportieren…</translation>
     </message>
@@ -7801,7 +7853,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Keine Beinahe-Duplikate.</translation>
     </message>
     <message>
-        <location line="+74"/>
+        <location line="+75"/>
         <source>%1/10</source>
         <translation>%1/10</translation>
     </message>
@@ -7934,12 +7986,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+6"/>
-        <location line="+177"/>
+        <location line="+118"/>
         <source>Test the LoRA</source>
         <translation>LoRA testen</translation>
     </message>
     <message>
-        <location line="-94"/>
+        <location line="-35"/>
         <source>Not installed (about 4 GB to download)</source>
         <translation>Nicht installiert (etwa 4 GB Download)</translation>
     </message>
@@ -7969,7 +8021,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Weniger als 15 Bilder: Die LoRA lernt wenig. Fügen Sie zuerst weitere hinzu.</translation>
     </message>
     <message numerus="yes">
-        <location line="+20"/>
+        <location line="+51"/>
         <source>%n earlier training(s), %1</source>
         <translation>
             <numerusform>%n früheres Training, %1</numerusform>
@@ -7997,12 +8049,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Trainieren Sie zuerst die LoRA.</translation>
     </message>
     <message>
-        <location line="+30"/>
+        <location line="-60"/>
         <source>Stop testing</source>
         <translation>Test stoppen</translation>
     </message>
     <message>
-        <location line="+61"/>
+        <location line="+148"/>
         <source>Mean</source>
         <translation>Mittel</translation>
     </message>
@@ -8078,18 +8130,18 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         </translation>
     </message>
     <message>
-        <location line="-351"/>
-        <location line="+353"/>
+        <location line="-379"/>
+        <location line="+381"/>
         <source>Stop</source>
         <translation>Stopp</translation>
     </message>
     <message>
-        <location line="-462"/>
+        <location line="-490"/>
         <source>The newest three epochs draw four new scenes with the LoRA; for comparison the same scenes are drawn without it, with the reference image through IP-Adapter. The Critic scores how well each image keeps the character (0–10). Takes about 45 minutes on an 8 GB GPU.</source>
         <translation>Die drei neuesten Epochen zeichnen vier neue Szenen mit der LoRA; zum Vergleich werden dieselben Szenen ohne sie gezeichnet, mit dem Referenzbild über IP-Adapter. Der Kritiker bewertet, wie gut jedes Bild den Charakter trifft (0–10). Dauert auf einer GPU mit 8 GB etwa 45 Minuten.</translation>
     </message>
     <message>
-        <location line="+268"/>
+        <location line="+296"/>
         <source>Identity %1 · pose %2</source>
         <translation>Identität %1 · Pose %2</translation>
     </message>
@@ -11955,7 +12007,12 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Dokumente öffnen</translation>
     </message>
     <message>
-        <location line="+97"/>
+        <location line="+15"/>
+        <source>Active character</source>
+        <translation>Aktiver Charakter</translation>
+    </message>
+    <message>
+        <location line="+130"/>
         <source>Background</source>
         <translation>Hintergrund</translation>
     </message>

@@ -21,6 +21,9 @@
 #include "ui/dialogs/LoraDatasetDialog.h"
 #include "ui/CharacterTraining.h"
 #include "ui/LoraEvaluation.h"
+#include "ui/assistant/AssistantTools.h"
+#include "ui/widgets/CharacterChip.h"
+#include "ai/Agent.h"
 #include "runtime/Supervisor.h"
 #include "runtime/RuntimeStore.h"
 #include "core/Async.h"
@@ -51,6 +54,7 @@
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QListWidget>
+#include <QMenu>
 #include <QMessageBox>
 #include <QSpinBox>
 #include <QScopeGuard>
@@ -107,6 +111,7 @@ private slots:
     void loraTrainingSet();
     void loraTrainingRun();
     void loraEvaluation();
+    void activeCharacter();
 
 private:
     ToolEvent at(double x, double y, Qt::KeyboardModifiers mods = Qt::NoModifier) const
@@ -1772,6 +1777,120 @@ void TestCanvas::loraEvaluation()
     QCOMPARE(lora.family, QStringLiteral("SDXL"));
     QTRY_VERIFY(studio.models()->entry(lora.file).has_value());
     QCOMPARE(studio.models()->entry(lora.file)->source.value(QStringLiteral("epoch")).toInt(), 3);
+}
+
+void TestCanvas::activeCharacter()
+{
+    Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
+    QTemporaryDir dir;
+    Studio studio;
+    studio.openProject(dir.filePath(QStringLiteral("characters.lumen")));
+    QTRY_VERIFY_WITH_TIMEOUT(studio.isProjectOpen(), 5000);
+    QImage ref(64, 96, QImage::Format_ARGB32);
+    ref.fill(Qt::red);
+    const QJsonObject loraJson{{QStringLiteral("file"), dir.filePath(QStringLiteral("lmn_aki.safetensors"))},
+                               {QStringLiteral("trigger"), QStringLiteral("lmn_aki")},
+                               {QStringLiteral("weight"), 0.7},
+                               {QStringLiteral("family"), QStringLiteral("SDXL")}};
+    auto a = studio.characters()->save(QStringLiteral("Aki (active test)"), {{QStringLiteral("tags"), QStringLiteral("red hair")}}, {ref},
+                                       QString(), QString(), loraJson);
+    auto b = studio.characters()->save(QStringLiteral("Bo (active test)"), {{QStringLiteral("tags"), QStringLiteral("blue hair")}}, {ref});
+    QTRY_VERIFY(a.isFinished() && b.isFinished());
+    const QString aki = a.result().id;
+    const QString bo = b.result().id;
+    auto cleanup = qScopeGuard([&] {
+        Settings::instance().setValue(QStringLiteral("character/use/test"), true);
+        studio.characters()->remove(aki);
+        studio.characters()->remove(bo);
+    });
+
+    // A chip follows the active character; its LoRA shows.
+    CharacterChip chip(&studio, QStringLiteral("test"));
+    chip.setUsedHere(true);
+    QSignalSpy chipChanged(&chip, &CharacterChip::characterChanged);
+    QCOMPARE(chip.characterId(), QString());
+    QCOMPARE(chip.text(), QStringLiteral("No character"));
+    QSignalSpy changed(&studio, &Studio::activeCharacterChanged);
+    studio.setActiveCharacter(aki);
+    QCOMPARE(changed.size(), 1);
+    QCOMPARE(chip.characterId(), aki);
+    QCOMPARE(chip.text(), QStringLiteral("Aki (active test) · LoRA"));
+    QVERIFY(chipChanged.size() >= 1);
+
+    // The character as requests use it.
+    auto context = studio.characterContext(aki);
+    QTRY_VERIFY(context.isFinished());
+    QCOMPARE(context.result().name, QStringLiteral("Aki (active test)"));
+    QCOMPARE(context.result().references.size(), 1);
+    QCOMPARE(context.result().lora.trigger, QStringLiteral("lmn_aki"));
+    auto missing = studio.characterContext(QStringLiteral("nope"));
+    QTRY_VERIFY(missing.isFinished());
+    QVERIFY(missing.result().isEmpty());
+
+    // Switched off on this page only: the project keeps its character; the switch is remembered.
+    chip.setUsedHere(false);
+    QCOMPARE(chip.characterId(), QString());
+    QCOMPARE(studio.activeCharacter(), aki);
+    QVERIFY(chip.font().strikeOut());
+    QVERIFY(!CharacterChip(&studio, QStringLiteral("test")).isUsedHere());
+    QVERIFY(CharacterChip(&studio, QStringLiteral("other")).isUsedHere());
+    chip.setUsedHere(true);
+
+    // The menu lists the library and makes another character active.
+    emit chip.menu()->aboutToShow();
+    QAction *pickBo = nullptr;
+    for (QAction *act : chip.menu()->actions()) {
+        if (act->text() == QStringLiteral("Bo (active test)"))
+            pickBo = act;
+    }
+    QVERIFY(pickBo);
+    pickBo->trigger();
+    QCOMPARE(studio.activeCharacter(), bo);
+    QCOMPARE(chip.text(), QStringLiteral("Bo (active test)"));
+
+    // Stored in the project: reopening it restores the character.
+    studio.setActiveCharacter(aki);
+    QTest::qWait(200);
+    studio.openProject(dir.filePath(QStringLiteral("other.lumen")));
+    QTRY_VERIFY_WITH_TIMEOUT(studio.isProjectOpen() && studio.project()->path().endsWith(QStringLiteral("other.lumen")), 5000);
+    QTRY_COMPARE(studio.activeCharacter(), QString());
+    studio.openProject(dir.filePath(QStringLiteral("characters.lumen")));
+    QTRY_VERIFY_WITH_TIMEOUT(studio.isProjectOpen() && studio.project()->path().endsWith(QStringLiteral("characters.lumen")), 5000);
+    QTRY_COMPARE(studio.activeCharacter(), aki);
+
+    // The Create page makes its session's library character active when it changes.
+    CreatePage page(&studio);
+    QTRY_VERIFY(page.findChild<DirectorSession *>());
+    page.findChild<DirectorSession *>()->setLibraryCharacter(bo);
+    QCOMPARE(studio.activeCharacter(), bo);
+
+    // The assistant lists the characters and switches the active one.
+    const ai::ToolSet tools = assistantTools(&studio);
+    auto listed = tools.run(QStringLiteral("list_characters"), {});
+    QTRY_VERIFY(listed.isFinished());
+    QCOMPARE(listed.result().data.value(QStringLiteral("active")).toString(), bo);
+    bool akiHasLora = false;
+    for (const QJsonValue &v : listed.result().data.value(QStringLiteral("characters")).toArray()) {
+        if (v[QStringLiteral("id")].toString() == aki)
+            akiHasLora = v[QStringLiteral("has_lora")].toBool();
+    }
+    QVERIFY(akiHasLora);
+    auto set = tools.run(QStringLiteral("set_active_character"), {{QStringLiteral("character_id"), aki}});
+    QTRY_VERIFY(set.isFinished());
+    QCOMPARE(studio.activeCharacter(), aki);
+    auto state = tools.run(QStringLiteral("get_state"), {});
+    QTRY_VERIFY(state.isFinished());
+    QCOMPARE(state.result().data.value(QStringLiteral("active_character")).toObject().value(QStringLiteral("name")).toString(),
+             QStringLiteral("Aki (active test)"));
+    auto wrong = tools.run(QStringLiteral("set_active_character"), {{QStringLiteral("character_id"), QStringLiteral("nope")}});
+    QTRY_VERIFY(wrong.isFinished());
+    QVERIFY(!wrong.result().error.isEmpty());
+    QCOMPARE(studio.activeCharacter(), aki);
+
+    // A character removed from the library stops being active.
+    studio.characters()->remove(aki);
+    QTRY_COMPARE(studio.activeCharacter(), QString());
+    QCOMPARE(chip.text(), QStringLiteral("No character"));
 }
 
 QTEST_MAIN(TestCanvas)

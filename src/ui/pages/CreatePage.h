@@ -7,6 +7,8 @@
 #include <QPointer>
 #include <QWidget>
 
+#include <optional>
+
 class QCheckBox;
 class QComboBox;
 class QDialog;
@@ -92,6 +94,9 @@ private:
     QPushButton *m_analyze;
     QToolButton *m_lora;
     QPointer<QDialog> m_trainingSet;
+    // The session's library character as last seen: a change makes it the project's active
+    // character (the first session shown at startup leaves the restored one alone).
+    std::optional<QString> m_seenLibraryCharacter;
     ProviderCombo *m_provider;
     QSpinBox *m_variants;
     QCheckBox *m_critic;

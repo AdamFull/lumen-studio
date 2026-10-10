@@ -1296,8 +1296,21 @@ Rules per mode:
     unchanged and pass.
   - Tests: every use on a LoRA back-end, a multi-reference cloud API and one with neither; tag and
     prose prompts; a family mismatch and an unknown family; no duplicates; the metadata.
-- [ ] Active character: project setting, picker and chip widget, the Create page sets it, the
-  assistant's state and `set_active_character` tool.
+- [x] Active character:
+  - `Studio::activeCharacter()` / `setActiveCharacter()` with `activeCharacterChanged`; stored as
+    the project record `active_character`, restored when the project opens, cleared when it closes
+    or when the character leaves the library. `Studio::characterContext(id)` loads a library
+    character (sheet, references, LoRA) for requests.
+  - `CharacterChip` (`ui/widgets`): round thumbnail, name, "· LoRA"; its menu lists the library,
+    "No character" and "Use the character on this page" (remembered per page, struck through when
+    off). The pages get it in steps 3–5.
+  - The Create page makes its session's library character active when it changes (saving or
+    loading a library character, switching sessions), not when the page first shows a session at
+    startup, so the restored choice stands.
+  - Assistant: `get_state` includes `active_character`; new tools `list_characters` and
+    `set_active_character`; the system prompt says to name the character only when none is active.
+  - Test: the chip, the per-page switch, the menu, reopening the project, the Create page hook,
+    the assistant tools, and a character removed from the library.
 - [ ] Generate page and *Re-run*: the chip, the ladder, metadata; *Re-run* restores the LoRA and
   the character.
 - [ ] Editor AI panel: the chip; fill selection, variation, instruct edit and expand follow the

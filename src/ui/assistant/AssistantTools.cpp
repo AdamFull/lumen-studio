@@ -6,6 +6,7 @@
 #include "core/ImageOps.h"
 #include "core/JobQueue.h"
 #include "core/JsonUtil.h"
+#include "doc/CharacterLibrary.h"
 #include "ui/Studio.h"
 #include "ui/assistant/DirectorActions.h"
 
@@ -49,6 +50,15 @@ ai::ToolDefinition tool(const char *name, const char *description, const QJsonOb
 }
 
 // ---- async helpers ---------------------------------------------------------------------------------
+
+// A library character for the model: id, name, a short description and whether it has a LoRA.
+QJsonObject characterJson(const doc::CharacterEntry &e)
+{
+    return QJsonObject{{QStringLiteral("id"), e.id},
+                       {QStringLiteral("name"), e.name},
+                       {QStringLiteral("summary"), ai::Director::appearanceTags(e.sheet).left(300)},
+                       {QStringLiteral("has_lora"), ai::CharacterLora::fromJson(e.lora).isValid()}};
+}
 
 QFuture<ToolResult> ready(ToolResult r)
 {
@@ -150,6 +160,8 @@ QString assistantSystemPrompt()
         "- For several images of the same character (sets, Live2D/VTuber sources, turnarounds, stickers) use the director tools in "
         "order: analyze_references (with the user's reference asset ids) → plan_shots (pick the matching purpose) → optionally "
         "revise_pose → generate_shots. The user can review and edit the plan on the Create page.\n"
+        "- The project's active character (get_state) is the one the user works on; list_characters and set_active_character "
+        "switch it. Name the character in prompts only when no character is active.\n"
         "- For a single image use generate_image; pass reference_asset_ids to keep a character consistent.\n"
         "- To change an existing image use edit_image (whole image, by instruction) or inpaint_region (a rectangle given in "
         "fractions of the image size, 0-1). Results are new images; the original is kept.\n"
@@ -184,6 +196,36 @@ ai::ToolSet assistantTools(Studio *studio)
                       r.data.insert(QStringLiteral("director"), director->directorState());
                   if (ai::ImageProvider *p = s->providers()->defaultImageProvider())
                       r.data.insert(QStringLiteral("image_provider"), p->displayName());
+                  if (const auto c = s->characters()->entry(s->activeCharacter()))
+                      r.data.insert(QStringLiteral("active_character"), characterJson(*c));
+                  return ready(r);
+              });
+
+    tools.add(tool("list_characters", "Lists the characters in the character library (shared by all projects).", schema({})),
+              [s](const QJsonObject &) {
+                  if (!s)
+                      return fail(QObject::tr("Lumen is shutting down."));
+                  QJsonArray list;
+                  for (const doc::CharacterEntry &e : s->characters()->entries())
+                      list.append(characterJson(e));
+                  ToolResult r;
+                  r.data.insert(QStringLiteral("characters"), list);
+                  r.data.insert(QStringLiteral("active"), s->activeCharacter());
+                  return ready(r);
+              });
+
+    tools.add(tool("set_active_character", "Makes a library character the project's active character, which image tools then draw. "
+                                           "An empty id clears it.",
+                   schema({{QStringLiteral("character_id"), prop("string", "id from list_characters, or empty for none")}}, {QStringLiteral("character_id")})),
+              [s](const QJsonObject &args) {
+                  if (!s || !s->project())
+                      return fail(QObject::tr("No project is open."));
+                  const QString id = args.value(QStringLiteral("character_id")).toString().trimmed();
+                  if (!id.isEmpty() && !s->characters()->entry(id))
+                      return fail(QObject::tr("There is no character %1 in the library; use list_characters.").arg(id));
+                  s->setActiveCharacter(id);
+                  ToolResult r;
+                  r.data.insert(QStringLiteral("active"), id);
                   return ready(r);
               });
 

@@ -115,6 +115,7 @@ void DirectorSession::setLibraryCharacter(const QString &id)
         return;
     m_libraryCharacter = id;
     saveSoon();
+    emit characterChanged();
 }
 
 void DirectorSession::setPurpose(const QString &p)

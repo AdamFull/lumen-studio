@@ -476,6 +476,12 @@ void CreatePage::rebuildChat()
 
 void CreatePage::refreshCharacter()
 {
+    if (m_session) {
+        const QString library = m_session->libraryCharacter();
+        if (m_seenLibraryCharacter && *m_seenLibraryCharacter != library && !library.isEmpty())
+            m_studio->setActiveCharacter(library);
+        m_seenLibraryCharacter = library;
+    }
     auto *layout = static_cast<QHBoxLayout *>(m_refRow->layout());
     while (QLayoutItem *item = layout->takeAt(0)) {
         delete item->widget();
