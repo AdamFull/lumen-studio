@@ -675,6 +675,78 @@ QString applyArmPose(pose::RigParams &rig, const QString &pose)
 
 } // namespace
 
+QList<QJsonObject> Director::loraTestShots(const QJsonObject &sheet, const QString &trigger)
+{
+    struct Test
+    {
+        const char *id;
+        const char *title;
+        double yaw;
+        const char *framing;
+        const char *expression;
+        const char *tags;
+        const char *background;
+    };
+    // Different from the training recipe: dynamic poses and real backgrounds.
+    static const Test tests[] = {
+        {"t1", "Cheering, outdoors", 0, "full_body", "open_mouth", "arms up, cheering, standing", "outdoors, park, trees, blue sky"},
+        {"t2", "Three-quarter, city street", 40, "cowboy_shot", "smile", "hand on own chest, looking at viewer", "city street, buildings, daytime"},
+        {"t3", "Side view, running", 90, "full_body", "neutral", "running, motion lines", "beach, ocean, sand"},
+        {"t4", "Portrait, indoors", -30, "headshot", "smile", "looking at viewer, head tilt", "indoors, cafe, warm lighting"},
+    };
+    const QString gender = sheet.value(QStringLiteral("gender_presentation")).toString().toLower();
+    QString subject = QStringLiteral("solo");
+    if (gender.contains(QLatin1String("female")) || gender.contains(QLatin1String("girl")) || gender.contains(QLatin1String("woman")))
+        subject = QStringLiteral("1girl, solo");
+    else if (gender.contains(QLatin1String("male")) || gender.contains(QLatin1String("boy")) || gender.contains(QLatin1String("man")))
+        subject = QStringLiteral("1boy, solo");
+    QList<QJsonObject> out;
+    for (const Test &t : tests) {
+        pose::RigParams rig;
+        rig.yaw = t.yaw;
+        rig.framing = QLatin1String(t.framing);
+        rig.expression = QLatin1String(t.expression);
+        if (QLatin1String(t.id) == QLatin1String("t1")) {
+            rig.leftArm = {160, 80, 20, 0};
+            rig.rightArm = {160, 80, 20, 0};
+            rig.leftHand = rig.rightHand = QStringLiteral("open");
+        } else if (QLatin1String(t.id) == QLatin1String("t2")) {
+            rig.rightArm = {35, -40, 120, 90};
+        } else if (QLatin1String(t.id) == QLatin1String("t3")) {
+            rig.leftLeg = {45, 0, 70, 0};
+            rig.rightLeg = {30, 180, 60, 0};
+            rig.leftArm = {40, 180, 80, 0};
+            rig.rightArm = {45, 0, 90, 0};
+            rig.torsoLean = 15;
+        } else {
+            rig.headRoll = 12;
+        }
+        QStringList prompt;
+        if (!trigger.isEmpty())
+            prompt << trigger << subject;
+        else
+            prompt << subject << appearanceTags(sheet);
+        prompt << QLatin1String(t.tags) << QLatin1String(t.background);
+        out << QJsonObject{{QStringLiteral("id"), QLatin1String(t.id)},
+                           {QStringLiteral("title"), QLatin1String(t.title)},
+                           {QStringLiteral("description"), QStringLiteral("LoRA test shot")},
+                           {QStringLiteral("aspect_ratio"), QLatin1String(t.framing) == QLatin1String("headshot") ? QStringLiteral("1:1") : QStringLiteral("2:3")},
+                           {QStringLiteral("background"), QLatin1String(t.background)},
+                           {QStringLiteral("pose"), rig.toJson()},
+                           {QStringLiteral("prompt"), prompt.join(QStringLiteral(", "))},
+                           {QStringLiteral("negative_prompt"), QStringLiteral("multiple views, 2girls, 2boys, text, watermark")}};
+    }
+    return out;
+}
+
+double Director::loraTestScore(const QJsonObject &critique)
+{
+    const double overall = critique.value(QStringLiteral("overall")).toDouble(0);
+    const double identity = critique.value(QStringLiteral("identity")).toDouble(overall);
+    const double pose = critique.value(QStringLiteral("pose")).toDouble(overall);
+    return (2.0 * identity + pose) / 3.0;
+}
+
 QString Director::appearanceTags(const QJsonObject &sheet)
 {
     const QString tags = sheet.value(QStringLiteral("tags")).toString().trimmed();

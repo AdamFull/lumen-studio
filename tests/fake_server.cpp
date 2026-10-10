@@ -7,8 +7,11 @@
 //   --fake-exit-after-ms M    exit with code 3 after M ms
 //   --fake-child              start a sleeping child process and print "child <pid>"
 //   --fake-sleep              sleep forever (the child)
+//   --fake-proxy P            once ready, forward every request to 127.0.0.1:P (a MockHttpServer
+//                             in the test) and relay its answer
 // Unknown arguments (the real servers' options) are ignored.
 
+#include <cctype>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -31,12 +34,75 @@ using socket_t = int;
 #define CLOSESOCK close
 #endif
 
+namespace {
+
+// One whole HTTP request: the headers, then Content-Length bytes of body.
+std::string readRequest(socket_t c)
+{
+    std::string data;
+    char buf[65536];
+    size_t need = std::string::npos;
+    for (;;) {
+        if (need != std::string::npos && data.size() >= need)
+            return data;
+        const int n = recv(c, buf, sizeof(buf), 0);
+        if (n <= 0)
+            return data;
+        data.append(buf, size_t(n));
+        const size_t end = data.find("\r\n\r\n");
+        if (need == std::string::npos && end != std::string::npos) {
+            size_t length = 0;
+            std::string headers = data.substr(0, end);
+            for (char &ch : headers)
+                ch = char(std::tolower(static_cast<unsigned char>(ch)));
+            const size_t at = headers.find("content-length:");
+            if (at != std::string::npos)
+                length = size_t(std::strtoul(headers.c_str() + at + 15, nullptr, 10));
+            need = end + 4 + length;
+        }
+    }
+}
+
+// Sends `request` to 127.0.0.1:port with "Connection: close" and returns everything it answers.
+std::string forward(int port, std::string request)
+{
+    const size_t end = request.find("\r\n\r\n");
+    if (end != std::string::npos)
+        request.insert(end, "\r\nConnection: close");
+    socket_t s = socket(AF_INET, SOCK_STREAM, 0);
+    sockaddr_in addr = {};
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(static_cast<unsigned short>(port));
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    if (s == INVALID_SOCKET || connect(s, reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) != 0)
+        return "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+    for (size_t sent = 0; sent < request.size();) {
+        const int n = send(s, request.data() + sent, int(request.size() - sent), 0);
+        if (n <= 0)
+            break;
+        sent += size_t(n);
+    }
+    std::string answer;
+    char buf[65536];
+    for (;;) {
+        const int n = recv(s, buf, sizeof(buf), 0);
+        if (n <= 0)
+            break;
+        answer.append(buf, size_t(n));
+    }
+    CLOSESOCK(s);
+    return answer;
+}
+
+} // namespace
+
 int main(int argc, char **argv)
 {
     int port = 0;
     long readyMs = 300;
     long exitAfterMs = -1;
     bool child = false;
+    int proxyPort = 0;
     for (int i = 1; i < argc; ++i) {
         const std::string a = argv[i];
         auto next = [&](long def) { return i + 1 < argc ? std::strtol(argv[++i], nullptr, 10) : def; };
@@ -52,6 +118,8 @@ int main(int argc, char **argv)
             readyMs = next(300);
         } else if (a == "--fake-exit-after-ms") {
             exitAfterMs = next(-1);
+        } else if (a == "--fake-proxy") {
+            proxyPort = int(next(0));
         } else if (a == "--fake-child") {
             child = true;
         } else if (a == "--fake-sleep") {
@@ -105,12 +173,20 @@ int main(int argc, char **argv)
         socket_t c = accept(srv, nullptr, nullptr);
         if (c == INVALID_SOCKET)
             continue;
-        char buf[2048];
-        const int n = recv(c, buf, sizeof(buf) - 1, 0);
-        buf[n > 0 ? n : 0] = 0;
+        const std::string request = readRequest(c);
         const long elapsed = long(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count());
         const bool ready = elapsed >= readyMs;
-        const std::string request(buf);
+        if (ready && proxyPort > 0) {
+            const std::string answer = forward(proxyPort, request);
+            for (size_t sent = 0; sent < answer.size();) {
+                const int n = send(c, answer.data() + sent, int(answer.size() - sent), 0);
+                if (n <= 0)
+                    break;
+                sent += size_t(n);
+            }
+            CLOSESOCK(c);
+            continue;
+        }
         std::string body = ready ? "{\"status\":\"ok\"}" : "{\"error\":\"loading\"}";
         if (request.rfind("POST /models/unload", 0) == 0) {
             unloadAt = elapsed + 300;

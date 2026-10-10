@@ -1145,7 +1145,25 @@ A LoRA learns from 15–40 varied images of the character. They come from what L
     - 6.6 GB peak GPU memory (fp8 base not needed);
     - an 85 MB SDXL LoRA that Lumen's header reader recognises;
     - a 16-step run took 104 s including model loading and caching.
-- [ ] Evaluation grid, Critic identity scoring per epoch, recommended epoch and weight.
+- [x] Evaluation (`ui/LoraEvaluation`, Train tab → *Test the result*):
+  - Four test shots (`Director::loraTestShots`): cheering outdoors, three-quarter on a street, side
+    view running on a beach, a tilted portrait in a café. These poses, views and backgrounds are not
+    in the training recipe. LoRA candidates are prompted with the trigger word alone.
+  - The baseline is the same shots without a LoRA: appearance tags plus the reference through
+    IP-Adapter, which is what the user had before training.
+  - Stage 1: the baseline and the newest three epochs at weight 0.8. Stage 2: the best epoch at
+    0.6 and 1.0. That makes 24 images, with a fixed seed per shot so only the LoRA differs.
+  - The Critic scores every image against the references: (2 × identity + pose) / 3. On a tie the
+    earlier epoch and the lower weight win (less overtraining, more room for prompts).
+  - The candidates are copied into the Lumen-run sd.cpp server's LoRA folder (`lumen-eval/`;
+    the server rescans it per request) and removed afterwards. Images and scores are kept in
+    `run-*/eval/eval.json`.
+  - A grid of thumbnails and scores per epoch and weight, the recommendation, and *Use epoch N at
+    weight W*. Another row can be picked. The chosen epoch goes into the library as
+    `<trigger>-eNN.safetensors` with a sidecar and is attached to the character with that weight.
+  - Tests: the whole test through the Train tab against a simulated sd.cpp server (`fake_server
+    --fake-proxy` in front of a mock) and a scripted Critic: request contents, the recommendation,
+    the grid, and applying a chosen row.
 
 **AC**:
 1. From one reference image of an anime character, a user builds a 25-image dataset, trains an

@@ -7572,7 +7572,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::LoraDatasetDialog</name>
     <message>
-        <location filename="../src/ui/dialogs/LoraDatasetDialog.cpp" line="+73"/>
+        <location filename="../src/ui/dialogs/LoraDatasetDialog.cpp" line="+76"/>
         <source>LoRA training set — %1</source>
         <translation>LoRA-Trainingsset — %1</translation>
     </message>
@@ -7608,12 +7608,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+275"/>
+        <location line="+278"/>
         <source>Score with Critic</source>
         <translation>Mit Kritiker bewerten</translation>
     </message>
     <message>
-        <location line="-274"/>
+        <location line="-277"/>
         <source>A vision model compares each image with the character&apos;s references</source>
         <translation>Ein Bildverständnismodell vergleicht jedes Bild mit den Referenzen des Charakters</translation>
     </message>
@@ -7659,17 +7659,17 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+4"/>
-        <location line="+466"/>
+        <location line="+702"/>
         <source>Write captions</source>
         <translation>Beschreibungen schreiben</translation>
     </message>
     <message>
-        <location line="-465"/>
+        <location line="-701"/>
         <source>The vision model tags every kept image that has no tags yet</source>
         <translation>Das Bildverständnismodell vertaggt jedes behaltene Bild, das noch keine Tags hat</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+6"/>
         <source>Image</source>
         <translation>Bild</translation>
     </message>
@@ -7725,12 +7725,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+600"/>
+        <location line="+835"/>
         <source>Remove</source>
         <translation>Entfernen</translation>
     </message>
     <message>
-        <location line="-596"/>
+        <location line="-831"/>
         <source>Export for training…</source>
         <translation>Für das Training exportieren…</translation>
     </message>
@@ -7771,7 +7771,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Keine Beinahe-Duplikate.</translation>
     </message>
     <message>
-        <location line="+71"/>
+        <location line="+73"/>
         <source>%1/10</source>
         <translation>%1/10</translation>
     </message>
@@ -7878,17 +7878,33 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+6"/>
-        <location line="+83"/>
+        <location line="+128"/>
         <source>Start training</source>
         <translation>Training starten</translation>
     </message>
     <message>
-        <location line="-81"/>
+        <location line="-126"/>
         <source>Continue the stopped training</source>
         <translation>Gestopptes Training fortsetzen</translation>
     </message>
     <message>
-        <location line="+60"/>
+        <location line="+16"/>
+        <source>Test the result</source>
+        <translation>Ergebnis testen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The newest three epochs draw four new scenes from the trigger word alone; for comparison the same scenes are drawn without the LoRA, from the description and the reference image. The Critic scores how well each image keeps the character (0–10). Takes about 20 minutes on an 8 GB GPU.</source>
+        <translation>Die drei neuesten Epochen zeichnen vier neue Szenen allein aus dem Auslösewort; zum Vergleich werden dieselben Szenen ohne die LoRA gezeichnet, aus der Beschreibung und dem Referenzbild. Der Kritiker bewertet, wie gut jedes Bild den Charakter trifft (0–10). Dauert auf einer GPU mit 8 GB etwa 20 Minuten.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <location line="+148"/>
+        <source>Test the LoRA</source>
+        <translation>LoRA testen</translation>
+    </message>
+    <message>
+        <location line="-65"/>
         <source>Not installed (about 4 GB to download)</source>
         <translation>Nicht installiert (etwa 4 GB Download)</translation>
     </message>
@@ -7918,7 +7934,57 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Weniger als 15 Bilder: Die LoRA lernt wenig. Fügen Sie zuerst weitere hinzu.</translation>
     </message>
     <message>
-        <location line="+32"/>
+        <location line="+17"/>
+        <source>Train the LoRA first.</source>
+        <translation>Trainieren Sie zuerst die LoRA.</translation>
+    </message>
+    <message>
+        <location line="+30"/>
+        <source>Stop testing</source>
+        <translation>Test stoppen</translation>
+    </message>
+    <message>
+        <location line="+61"/>
+        <source>Mean</source>
+        <translation>Mittel</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Without LoRA</source>
+        <translation>Ohne LoRA</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Epoch %1 · %2</source>
+        <translation>Epoche %1 · %2</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>Identity %1 · pose %2 · overall %3</source>
+        <translation>Identität %1 · Pose %2 · gesamt %3</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>failed</source>
+        <translation>fehlgeschlagen</translation>
+    </message>
+    <message>
+        <location line="+31"/>
+        <source>Use epoch %1 at weight %2 (recommended)</source>
+        <translation>Epoche %1 mit Gewicht %2 verwenden (empfohlen)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Use epoch %1 at weight %2</source>
+        <translation>Epoche %1 mit Gewicht %2 verwenden</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>Epoch %1 is attached to the character at weight %2: %3</source>
+        <translation>Epoche %1 ist dem Charakter mit Gewicht %2 angehängt: %3</translation>
+    </message>
+    <message>
+        <location line="+30"/>
         <source>Preparing the images…</source>
         <translation>Die Bilder werden vorbereitet…</translation>
     </message>
@@ -7959,8 +8025,8 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         </translation>
     </message>
     <message>
-        <location line="-123"/>
-        <location line="+125"/>
+        <location line="-311"/>
+        <location line="+313"/>
         <source>Stop</source>
         <translation>Stopp</translation>
     </message>
@@ -8095,6 +8161,95 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
             <numerusform>%n Trainingsbild nach %1 exportiert.</numerusform>
             <numerusform>%n Trainingsbilder nach %1 exportiert.</numerusform>
         </translation>
+    </message>
+</context>
+<context>
+    <name>lumen::ui::LoraEvaluation</name>
+    <message>
+        <location filename="../src/ui/LoraEvaluation.cpp" line="+102"/>
+        <source>The character is not in the character library.</source>
+        <translation>Der Charakter ist nicht in der Charakterbibliothek.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>This training has no LoRA files to test yet.</source>
+        <translation>Dieses Training hat noch keine LoRA-Dateien zum Testen.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Testing needs a stable-diffusion.cpp server run by Lumen as the image generator (Settings → Local servers).</source>
+        <translation>Zum Testen wird ein von Lumen betriebener stable-diffusion.cpp-Server als Bildgenerator benötigt (Einstellungen → Lokale Server).</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>Cannot copy the LoRA into %1.</source>
+        <translation>Die LoRA kann nicht nach %1 kopiert werden.</translation>
+    </message>
+    <message>
+        <location line="+46"/>
+        <location line="+75"/>
+        <source>Testing stopped.</source>
+        <translation>Test gestoppt.</translation>
+    </message>
+    <message>
+        <location line="-66"/>
+        <source>The image generator is gone.</source>
+        <translation>Der Bildgenerator ist nicht mehr vorhanden.</translation>
+    </message>
+    <message>
+        <location line="+37"/>
+        <source>LoRA test: epoch %1, weight %2</source>
+        <translation>LoRA-Test: Epoche %1, Gewicht %2</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>LoRA test: without LoRA</source>
+        <translation>LoRA-Test: ohne LoRA</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Generating test image %1 of %2…</source>
+        <translation>Testbild %1 von %2 wird erzeugt…</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>cancelled</source>
+        <translation>abgebrochen</translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <source>The Critic compares the test images with the references (%1 left)…</source>
+        <translation>Der Kritiker vergleicht die Testbilder mit den Referenzen (noch %1)…</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>The Critic failed: %1</source>
+        <translation>Der Kritiker ist fehlgeschlagen: %1</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>No test image could be scored.</source>
+        <translation>Kein Testbild konnte bewertet werden.</translation>
+    </message>
+    <message>
+        <location line="+23"/>
+        <source>Recommended: epoch %1 at weight %2 (score %3; without the LoRA %4).</source>
+        <translation>Empfohlen: Epoche %1 mit Gewicht %2 (Wertung %3; ohne die LoRA %4).</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Recommended: epoch %1 at weight %2 (score %3).</source>
+        <translation>Empfohlen: Epoche %1 mit Gewicht %2 (Wertung %3).</translation>
+    </message>
+    <message>
+        <location line="+66"/>
+        <source>Epoch %1 of this training is missing.</source>
+        <translation>Epoche %1 dieses Trainings fehlt.</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Cannot copy the LoRA to %1.</source>
+        <translation>Die LoRA kann nicht nach %1 kopiert werden.</translation>
     </message>
 </context>
 <context>

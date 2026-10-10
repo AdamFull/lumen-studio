@@ -233,6 +233,14 @@ images of it:
    * **Stop** keeps the progress; **Continue the stopped training** carries on later.
    * When the training is done, the LoRA is in the model library and attached to the character,
      with its trigger word.
+   * **Test the LoRA** (under *Test the result*) checks which epoch works best:
+     * The newest three epochs draw four new scenes from the trigger word alone.
+     * For comparison the same scenes are drawn without the LoRA.
+     * The Critic scores each image, and the best epoch is tried at weights 0.6 and 1.0.
+     * The grid shows every image and score; double-click an image to open it.
+     * **Use epoch N at weight W** attaches the recommended epoch, or the row you select.
+     * This needs a stable-diffusion.cpp server run by Lumen and takes about 20 minutes on an
+       8 GB GPU.
 7. **Export for training…** writes the kept images at training sizes with their captions, for
    an external trainer.
 

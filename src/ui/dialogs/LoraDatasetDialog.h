@@ -31,6 +31,7 @@ class Operation;
 namespace lumen::ui {
 
 class CharacterTraining;
+class LoraEvaluation;
 class DirectorSession;
 class Studio;
 
@@ -83,6 +84,10 @@ private:
     void refreshTrainTab();
     void bindTraining(CharacterTraining *training);
     void showTrainingJob();
+    void startEvaluation();
+    void bindEvaluation(LoraEvaluation *evaluation);
+    void refreshEvaluation();
+    void applyEvaluation();
     QStringList selectedIds() const;
     QPixmap thumbnail(const QString &id);
 
@@ -122,6 +127,12 @@ private:
     QProgressBar *m_trainBar = nullptr;
     QLabel *m_trainStatus = nullptr;
     QPointer<Job> m_trainingJob;
+    QPushButton *m_evalButton = nullptr;
+    QLabel *m_evalStatus = nullptr;
+    QTableWidget *m_evalTable = nullptr;
+    QPushButton *m_applyEval = nullptr;
+    QPointer<LoraEvaluation> m_evaluation;
+    QString m_evalRun;
     QJsonObject m_sheet;
     QList<QImage> m_references;
     bool m_referencesLoaded = false;

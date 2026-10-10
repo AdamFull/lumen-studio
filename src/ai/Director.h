@@ -72,6 +72,12 @@ public:
     // stays the same. count 0 = 24; at most kMaxDatasetShots.
     static constexpr int kMaxDatasetShots = 32;
     static QJsonObject datasetPlan(const QJsonObject &sheet, int count = 0);
+    // Test shots for a trained LoRA (M13 §13.6): poses, views and backgrounds that are not in the
+    // training set. With `trigger`, the prompt names only the trigger word (the LoRA must bring the
+    // look); without, it spells out the appearance tags (the baseline with a reference image).
+    static QList<QJsonObject> loraTestShots(const QJsonObject &sheet, const QString &trigger);
+    // Score of a test image: identity counts twice as much as the pose.
+    static double loraTestScore(const QJsonObject &critique);
     // Appearance tags of a character sheet: its "tags", else built from hair, eyes and outfit.
     static QString appearanceTags(const QJsonObject &sheet);
 

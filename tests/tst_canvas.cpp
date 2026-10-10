@@ -20,6 +20,8 @@
 #include "ui/dialogs/LocalServersPage.h"
 #include "ui/dialogs/LoraDatasetDialog.h"
 #include "ui/CharacterTraining.h"
+#include "ui/LoraEvaluation.h"
+#include "runtime/Supervisor.h"
 #include "runtime/RuntimeStore.h"
 #include "core/Async.h"
 #include "ai/Types.h"
@@ -37,6 +39,7 @@
 
 #include <QComboBox>
 #include <QCheckBox>
+#include <QDirIterator>
 #include <QTableWidget>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -101,6 +104,7 @@ private slots:
     void characterLoraChecks();
     void loraTrainingSet();
     void loraTrainingRun();
+    void loraEvaluation();
 
 private:
     ToolEvent at(double x, double y, Qt::KeyboardModifiers mods = Qt::NoModifier) const
@@ -1315,7 +1319,7 @@ void TestCanvas::loraTrainingSet()
     dlg.captionAll();
     QTRY_VERIFY_WITH_TIMEOUT(!dlg.isCaptioning(), 20000);
     QCOMPARE(taggings, kept);
-    auto *table = dlg.findChild<QTableWidget *>();
+    auto *table = dlg.findChild<QTableWidget *>(QStringLiteral("captions"));
     QVERIFY(table);
     QCOMPARE(table->rowCount(), kept);
     QString firstKept;
@@ -1492,6 +1496,224 @@ void TestCanvas::loraTrainingRun()
         QTest::qWait(300);
         dlg.grab().save(shots + QStringLiteral("/lora-train.png"));
     }
+}
+
+void TestCanvas::loraEvaluation()
+{
+    Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
+    QTemporaryDir dir;
+    auto write = [&dir](const QString &rel, const QByteArray &data) {
+        const QString path = QDir::cleanPath(dir.filePath(rel));
+        QDir().mkpath(QFileInfo(path).absolutePath());
+        QFile f(path);
+        return f.open(QIODevice::WriteOnly) && f.write(data) == data.size() ? path : QString();
+    };
+    const QString checkpoint = write(QStringLiteral("models/xl.safetensors"),
+                                     fakeSafetensors({QStringLiteral("model.diffusion_model.input_blocks.0.0.weight"),
+                                                      QStringLiteral("model.diffusion_model.label_emb.0.0.weight")}));
+    const QString serverLoras = QDir::cleanPath(dir.filePath(QStringLiteral("server-loras")));
+    QDir().mkpath(serverLoras);
+
+    // A stable-diffusion.cpp server (simulated: sd.cpp and the Critic answer from the mock) that
+    // lists the LoRA files in its folder, as the real one rescans it per request.
+    MockHttpServer server;
+    QList<QJsonObject> generations;
+    server.route("GET", QStringLiteral("/sdcpp/v1/capabilities"), [&](const MockRequest &) {
+        QJsonArray loras;
+        QDirIterator it(serverLoras, {QStringLiteral("*.safetensors")}, QDir::Files, QDirIterator::Subdirectories);
+        while (it.hasNext()) {
+            const QString rel = QDir(serverLoras).relativeFilePath(it.next());
+            loras.append(QJsonObject{{QStringLiteral("name"), QFileInfo(rel).completeBaseName()}, {QStringLiteral("path"), rel}});
+        }
+        return MockResponse::json({{QStringLiteral("loras"), loras}});
+    });
+    server.route("POST", QStringLiteral("/sdcpp/v1/img_gen"), [&](const MockRequest &req) {
+        generations << req.json();
+        return MockResponse::json({{QStringLiteral("id"), QStringLiteral("job_1")}}, 202);
+    });
+    server.route("GET", QStringLiteral("/sdcpp/v1/jobs/job_1"), [&](const MockRequest &) {
+        QImage im(64, 96, QImage::Format_ARGB32);
+        im.fill(QColor::fromHsv(int(generations.size() * 15) % 360, 200, 200));
+        const QJsonArray images{QJsonObject{{QStringLiteral("index"), 0}, {QStringLiteral("b64_json"), QString::fromLatin1(img::encode(im).toBase64())}}};
+        return MockResponse::json({{QStringLiteral("status"), QStringLiteral("completed")}, {QStringLiteral("result"), QJsonObject{{QStringLiteral("images"), images}}}});
+    });
+    // Identity scores in the order the Critic sees the images: the baseline, epochs 2, 3, 4 at
+    // weight 0.8, then the best epoch (3; epoch 4 only ties) at 0.6 and 1.0.
+    const QList<int> identity{5, 5, 5, 5, 7, 7, 7, 7, 9, 9, 9, 9, 9, 9, 9, 9, 8, 8, 8, 8, 9, 9, 9, 9};
+    int critiques = 0;
+    server.route("POST", QStringLiteral("/v1/chat/completions"), [&](const MockRequest &) {
+        const QJsonObject verdict{{QStringLiteral("overall"), 9},
+                                  {QStringLiteral("identity"), identity.value(critiques++, 1)},
+                                  {QStringLiteral("pose"), 9},
+                                  {QStringLiteral("issues"), QJsonArray{QStringLiteral("hair a little darker")}},
+                                  {QStringLiteral("revised_prompt"), QStringLiteral("1girl")},
+                                  {QStringLiteral("negative_additions"), QString()}};
+        return MockResponse::json(
+            {{QStringLiteral("choices"),
+              QJsonArray{QJsonObject{{QStringLiteral("message"),
+                                      QJsonObject{{QStringLiteral("content"), QString::fromUtf8(QJsonDocument(verdict).toJson(QJsonDocument::Compact))}}},
+                                     {QStringLiteral("finish_reason"), QStringLiteral("stop")}}}}});
+    });
+    const QString exe = dir.filePath(QStringLiteral("sd/sd-server.exe"));
+    QDir().mkpath(QFileInfo(exe).absolutePath());
+    QVERIFY(QFile::copy(QStringLiteral(FAKE_SERVER_PATH), exe));
+
+    Studio studio;
+    runtime::ServerSupervisor *servers = studio.servers();
+    servers->healthIntervalMs = 100;
+    for (ai::Provider *p : studio.providers()->providers())
+        studio.providers()->removeProvider(p->instanceId());
+    runtime::InstalledRuntime rt;
+    rt.id = QStringLiteral("adopted/eval-test");
+    rt.kind = QStringLiteral("sd.cpp");
+    rt.executable = exe;
+    rt.directory = QFileInfo(exe).absolutePath();
+    studio.runtimes()->addInstalled(rt);
+    runtime::ServerProfile profile = servers->createProfile(rt.id, QStringLiteral("Images"));
+    profile.options = {{QStringLiteral("model"), QDir::toNativeSeparators(checkpoint)},
+                       {QStringLiteral("lora_dir"), QDir::toNativeSeparators(serverLoras)},
+                       {QStringLiteral("extra_args"), QStringLiteral("--fake-ready-ms 0 --fake-proxy %1").arg(server.baseUrl().port())}};
+    servers->addProfile(profile);
+    ai::Provider *sd = studio.providers()->addProvider(QStringLiteral("sdcpp"), QStringLiteral("Images"),
+                                                      {{QStringLiteral("url"), QStringLiteral("http://127.0.0.1:1")}, {QStringLiteral("managed_server"), profile.id}});
+    QVERIFY(sd);
+    QVERIFY(studio.providers()->addProvider(QStringLiteral("llamacpp"), QStringLiteral("Vision"),
+                                            {{QStringLiteral("url"), server.baseUrl().toString() + QStringLiteral("/v1")}}));
+
+    // A trained character: four epochs in its last run.
+    const QJsonObject sheet{{QStringLiteral("name"), QStringLiteral("Mira")},
+                            {QStringLiteral("gender_presentation"), QStringLiteral("female")},
+                            {QStringLiteral("tags"), QStringLiteral("red hair, red eyes, black robe")}};
+    QImage ref(64, 96, QImage::Format_ARGB32);
+    ref.fill(Qt::red);
+    auto saved = studio.characters()->save(QStringLiteral("Mira (evaluation test)"), sheet, {ref});
+    QTRY_VERIFY(saved.isFinished());
+    const QString characterId = saved.result().id;
+    QString appliedLora;
+    auto cleanup = qScopeGuard([&] {
+        servers->stop(profile.id);
+        studio.characters()->remove(characterId);
+        for (ai::Provider *p : studio.providers()->providers())
+            studio.providers()->removeProvider(p->instanceId());
+        servers->removeProfile(profile.id);
+        studio.runtimes()->remove(rt.id);
+        studio.models()->moveToTrash = [](const QString &path, QString *) { return QFile::remove(path); };
+        if (!appliedLora.isEmpty())
+            studio.models()->trash(appliedLora);
+    });
+    const QString runDir = QDir(studio.characters()->datasetDirectory(characterId)).filePath(QStringLiteral("training/run-20261010-120000"));
+    QDir().mkpath(QDir(runDir).filePath(QStringLiteral("output")));
+    {
+        QFile f(QDir(runDir).filePath(QStringLiteral("run.json")));
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write(QJsonDocument(QJsonObject{{QStringLiteral("checkpoint"), checkpoint},
+                                          {QStringLiteral("family"), QStringLiteral("SDXL")},
+                                          {QStringLiteral("epochs"), 4},
+                                          {QStringLiteral("trigger"), QStringLiteral("lmn_mira")},
+                                          {QStringLiteral("outputName"), QStringLiteral("lmn_mira")}})
+                    .toJson());
+    }
+    const QByteArray loraBytes = fakeSafetensors({QStringLiteral("lora_unet_a.lora_down.weight")}, {{QStringLiteral("ss_base_model_version"), QStringLiteral("sdxl_base_v1-0")}});
+    for (const QString &name : {QStringLiteral("lmn_mira-000001"), QStringLiteral("lmn_mira-000002"), QStringLiteral("lmn_mira-000003"), QStringLiteral("lmn_mira")}) {
+        QFile f(QDir(runDir).filePath(QStringLiteral("output/%1.safetensors").arg(name)));
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write(loraBytes);
+    }
+    const QList<QPair<int, QString>> epochs = LoraEvaluation::epochFiles(runDir);
+    QCOMPARE(epochs.size(), 4);
+    QCOMPARE(epochs.last().first, 4);
+    QCOMPARE(QFileInfo(epochs.last().second).fileName(), QStringLiteral("lmn_mira.safetensors"));
+
+    // The test shots: new scenes; with a trigger word only it names the character.
+    const QList<QJsonObject> withTrigger = ai::Director::loraTestShots(sheet, QStringLiteral("lmn_mira"));
+    const QList<QJsonObject> baseline = ai::Director::loraTestShots(sheet, QString());
+    QCOMPARE(withTrigger.size(), 4);
+    QVERIFY(withTrigger[0].value(QStringLiteral("prompt")).toString().startsWith(QStringLiteral("lmn_mira, 1girl, solo")));
+    QVERIFY(!withTrigger[0].value(QStringLiteral("prompt")).toString().contains(QStringLiteral("red hair")));
+    QVERIFY(baseline[0].value(QStringLiteral("prompt")).toString().contains(QStringLiteral("red hair")));
+    QCOMPARE(ai::Director::loraTestScore({{QStringLiteral("identity"), 9}, {QStringLiteral("pose"), 6}}), 8.0);
+
+    LoraDatasetDialog dlg(&studio, characterId, nullptr, {});
+    dlg.resize(1080, 820);
+    dlg.show();
+    dlg.findChild<QTabWidget *>()->setCurrentIndex(2);
+    QPushButton *test = nullptr;
+    for (QPushButton *b : dlg.findChildren<QPushButton *>()) {
+        if (b->text() == QLatin1String("Test the LoRA"))
+            test = b;
+    }
+    QVERIFY(test);
+    QTRY_VERIFY(test->isEnabled());
+    test->click();
+    QVERIFY(LoraEvaluation::running(characterId));
+    // The candidates are copied into the server's LoRA folder for the test.
+    QTRY_VERIFY(QFileInfo::exists(serverLoras + QStringLiteral("/lumen-eval/lmn_mira-e04.safetensors")));
+    QVERIFY(!QFileInfo::exists(serverLoras + QStringLiteral("/lumen-eval/lmn_mira-e01.safetensors")));
+    QTRY_VERIFY_WITH_TIMEOUT(!LoraEvaluation::running(characterId), 120000);
+
+    // 4 shots × (baseline + 3 epochs) + 4 shots × 2 more weights of the best epoch.
+    QCOMPARE(generations.size(), 24);
+    QCOMPARE(critiques, 24);
+    for (int i = 0; i < 4; ++i) {
+        QVERIFY(generations[i].value(QStringLiteral("lora")).toArray().isEmpty());
+        QVERIFY(generations[i].value(QStringLiteral("prompt")).toString().contains(QStringLiteral("red hair")));
+    }
+    for (int i = 4; i < 24; ++i) {
+        const QJsonArray lora = generations[i].value(QStringLiteral("lora")).toArray();
+        QCOMPARE(lora.size(), 1);
+        QVERIFY(lora[0].toObject().value(QStringLiteral("path")).toString().startsWith(QStringLiteral("lumen-eval/lmn_mira-e0")));
+        QVERIFY(generations[i].value(QStringLiteral("prompt")).toString().startsWith(QStringLiteral("lmn_mira")));
+        // The same seed per shot for every candidate.
+        QCOMPARE(generations[i].value(QStringLiteral("seed")), generations[i % 4].value(QStringLiteral("seed")));
+    }
+    QCOMPARE(generations[8].value(QStringLiteral("lora")).toArray()[0].toObject().value(QStringLiteral("path")).toString(),
+             QStringLiteral("lumen-eval/lmn_mira-e03.safetensors"));
+    QCOMPARE(generations[16].value(QStringLiteral("lora")).toArray()[0].toObject().value(QStringLiteral("multiplier")).toDouble(), 0.6);
+    QCOMPARE(generations[20].value(QStringLiteral("lora")).toArray()[0].toObject().value(QStringLiteral("multiplier")).toDouble(), 1.0);
+    QVERIFY(!QFileInfo::exists(serverLoras + QStringLiteral("/lumen-eval")));
+
+    // Epoch 3 at 0.8 wins (epoch 4 and weight 1.0 only tie with it).
+    const QJsonObject result = LoraEvaluation::saved(runDir);
+    QVERIFY(result.value(QStringLiteral("finished")).toBool());
+    QCOMPARE(result.value(QStringLiteral("bestEpoch")).toInt(), 3);
+    QCOMPARE(result.value(QStringLiteral("bestWeight")).toDouble(), 0.8);
+    QCOMPARE(result.value(QStringLiteral("cells")).toArray().size(), 24);
+    for (const QJsonValue &c : result.value(QStringLiteral("cells")).toArray())
+        QVERIFY(QFileInfo::exists(c[QStringLiteral("image")].toString()));
+    auto *table = dlg.findChild<QTableWidget *>(QStringLiteral("loraTest"));
+    QVERIFY(table);
+    QCOMPARE(table->rowCount(), 6);
+    QCOMPARE(table->verticalHeaderItem(0)->text(), QStringLiteral("Without LoRA"));
+    QCOMPARE(table->item(0, 4)->text(), QStringLiteral("6.3"));
+    QCOMPARE(table->item(2, 4)->text(), QStringLiteral("9.0"));
+
+    QPushButton *apply = nullptr;
+    for (QPushButton *b : dlg.findChildren<QPushButton *>()) {
+        if (b->text().startsWith(QLatin1String("Use epoch")))
+            apply = b;
+    }
+    QVERIFY(apply && apply->isVisible());
+    QCOMPARE(apply->text(), QStringLiteral("Use epoch 3 at weight 0.8 (recommended)"));
+    const QString shots = qEnvironmentVariable("LUMEN_SCREENSHOT_DIR");
+    if (!shots.isEmpty()) {
+        QTest::qWait(300);
+        dlg.grab().save(shots + QStringLiteral("/lora-test.png"));
+    }
+    // Another row can be chosen instead.
+    table->selectRow(4);
+    QCOMPARE(apply->text(), QStringLiteral("Use epoch 3 at weight 0.6"));
+    table->selectRow(1);
+    QCOMPARE(apply->text(), QStringLiteral("Use epoch 2 at weight 0.8"));
+    table->selectRow(2);
+    apply->click();
+    const ai::CharacterLora lora = ai::CharacterLora::fromJson(studio.characters()->entry(characterId)->lora);
+    appliedLora = lora.file;
+    QCOMPARE(QFileInfo(lora.file).fileName(), QStringLiteral("lmn_mira-e03.safetensors"));
+    QCOMPARE(lora.weight, 0.8);
+    QCOMPARE(lora.trigger, QStringLiteral("lmn_mira"));
+    QCOMPARE(lora.family, QStringLiteral("SDXL"));
+    QTRY_VERIFY(studio.models()->entry(lora.file).has_value());
+    QCOMPARE(studio.models()->entry(lora.file)->source.value(QStringLiteral("epoch")).toInt(), 3);
 }
 
 QTEST_MAIN(TestCanvas)

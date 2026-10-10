@@ -15,6 +15,7 @@
 #include "runtime/Trainer.h"
 #include "ui/CharacterTraining.h"
 #include "ui/Icons.h"
+#include "ui/LoraEvaluation.h"
 #include "ui/Studio.h"
 #include "ui/Theme.h"
 #include "ui/dialogs/CharacterLoraDialog.h"
@@ -24,6 +25,7 @@
 
 #include <QCheckBox>
 #include <QComboBox>
+#include <QDesktopServices>
 #include <QFileDialog>
 #include <QFormLayout>
 #include <QHeaderView>
@@ -40,6 +42,7 @@
 #include <QSplitter>
 #include <QTabWidget>
 #include <QTableWidget>
+#include <QUrl>
 #include <QVBoxLayout>
 
 namespace lumen::ui {
@@ -146,6 +149,7 @@ LoraDatasetDialog::LoraDatasetDialog(Studio *studio, const QString &characterId,
     crow->addWidget(m_captionButton);
     cv->addLayout(crow);
     m_captions = new QTableWidget(0, 2, captionPage);
+    m_captions->setObjectName(QStringLiteral("captions"));
     m_captions->setHorizontalHeaderLabels({tr("Image"), tr("Caption")});
     m_captions->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Fixed);
     m_captions->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
@@ -269,6 +273,8 @@ LoraDatasetDialog::LoraDatasetDialog(Studio *studio, const QString &characterId,
     refreshTrainTab();
     if (CharacterTraining *running = CharacterTraining::running(m_characterId))
         bindTraining(running);
+    if (LoraEvaluation *testing = LoraEvaluation::running(m_characterId))
+        bindEvaluation(testing);
 }
 
 LoraDatasetDialog::~LoraDatasetDialog()
@@ -413,7 +419,52 @@ QWidget *LoraDatasetDialog::buildTrainTab()
     m_trainStatus->setWordWrap(true);
     m_trainStatus->setTextFormat(Qt::RichText);
     v->addWidget(m_trainStatus);
-    v->addStretch();
+
+    // Test the result: the newest epochs against a baseline without the LoRA.
+    v->addSpacing(8);
+    v->addWidget(sectionLabel(tr("Test the result"), page));
+    v->addWidget(mutedLabel(tr("The newest three epochs draw four new scenes from the trigger word alone; for comparison the same scenes are "
+                               "drawn without the LoRA, from the description and the reference image. The Critic scores how well each "
+                               "image keeps the character (0–10). Takes about 20 minutes on an 8 GB GPU."),
+                            page));
+    auto *evalRow = new QHBoxLayout;
+    m_evalButton = new QPushButton(Icons::get(QStringLiteral("check")), tr("Test the LoRA"), page);
+    m_applyEval = new QPushButton(page);
+    Theme::setRole(m_applyEval, QStringLiteral("primary"));
+    evalRow->addWidget(m_evalButton);
+    evalRow->addWidget(m_applyEval);
+    evalRow->addStretch();
+    v->addLayout(evalRow);
+    m_evalStatus = new QLabel(page);
+    m_evalStatus->setWordWrap(true);
+    m_evalStatus->setTextFormat(Qt::RichText);
+    v->addWidget(m_evalStatus);
+    m_evalTable = new QTableWidget(page);
+    m_evalTable->setObjectName(QStringLiteral("loraTest"));
+    m_evalTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    m_evalTable->setSelectionBehavior(QAbstractItemView::SelectRows);
+    m_evalTable->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_evalTable->setIconSize(QSize(72, 72));
+    m_evalTable->verticalHeader()->setDefaultSectionSize(80);
+    m_evalTable->setMinimumHeight(140);
+    v->addWidget(m_evalTable, 1);
+
+    connect(m_evalButton, &QPushButton::clicked, this, [this] {
+        if (m_evaluation) {
+            m_evaluation->cancel();
+            return;
+        }
+        startEvaluation();
+    });
+    connect(m_applyEval, &QPushButton::clicked, this, &LoraDatasetDialog::applyEvaluation);
+    connect(m_evalTable, &QTableWidget::itemSelectionChanged, this, &LoraDatasetDialog::refreshEvaluation);
+    connect(m_evalTable, &QTableWidget::cellDoubleClicked, this, [this](int row, int column) {
+        if (QTableWidgetItem *item = m_evalTable->item(row, column)) {
+            const QString image = item->data(Qt::UserRole + 2).toString();
+            if (!image.isEmpty())
+                QDesktopServices::openUrl(QUrl::fromLocalFile(image));
+        }
+    });
 
     connect(m_installTrainer, &QPushButton::clicked, this, [this] {
         InstallRuntimeDialog dlg(m_studio, std::nullopt, QStringLiteral("kohya"), this);
@@ -485,6 +536,194 @@ void LoraDatasetDialog::refreshTrainTab()
     m_trainButton->setEnabled(running || (!trainers.isEmpty() && images > 0 && m_checkpoint->count() > 0));
     m_resumeButton->setVisible(!running && CharacterTraining::canResume(CharacterTraining::lastRun(m_dataset->directory())));
     m_resumeButton->setEnabled(!trainers.isEmpty());
+    refreshEvaluation();
+}
+
+void LoraDatasetDialog::startEvaluation()
+{
+    const QString run = CharacterTraining::lastRun(m_dataset->directory());
+    QString error;
+    LoraEvaluation *e = run.isEmpty() ? nullptr : LoraEvaluation::start(m_studio, m_characterId, run, &error);
+    if (!e) {
+        m_evalStatus->setText(QStringLiteral("<span style='color:%1'>%2</span>")
+                                  .arg(Theme::palette().danger.name(), (error.isEmpty() ? tr("Train the LoRA first.") : error).toHtmlEscaped()));
+        return;
+    }
+    bindEvaluation(e);
+}
+
+void LoraDatasetDialog::bindEvaluation(LoraEvaluation *evaluation)
+{
+    m_evaluation = evaluation;
+    m_evalRun = evaluation->runDir();
+    connect(evaluation, &LoraEvaluation::changed, this, &LoraDatasetDialog::refreshEvaluation);
+    QPointer<LoraDatasetDialog> self(this);
+    connect(evaluation, &LoraEvaluation::finished, this, [self](bool ok, const QString &message) {
+        if (!self)
+            return;
+        self->m_evaluation = nullptr;
+        self->refreshEvaluation();
+        const QColor colour = ok ? Theme::palette().success : Theme::palette().danger;
+        self->m_evalStatus->setText(QStringLiteral("<span style='color:%1'>%2</span>").arg(colour.name(), message.toHtmlEscaped()));
+    });
+    refreshEvaluation();
+}
+
+void LoraDatasetDialog::refreshEvaluation()
+{
+    if (!m_evalTable)
+        return;
+    const QString run = m_evaluation ? m_evaluation->runDir() : CharacterTraining::lastRun(m_dataset->directory());
+    const bool training = m_trainingJob && !m_trainingJob->isFinished();
+    const bool hasFiles = !run.isEmpty() && !LoraEvaluation::epochFiles(run).isEmpty();
+    m_evalButton->setText(m_evaluation ? tr("Stop testing") : tr("Test the LoRA"));
+    m_evalButton->setEnabled(m_evaluation || (hasFiles && !training));
+
+    // The cells: of the running test, else of the last saved one.
+    struct Row
+    {
+        int epoch;
+        double weight;
+    };
+    QList<LoraEvaluation::Cell> cells;
+    QList<QPair<QString, QString>> shots; // id, title
+    int bestEpoch = 0;
+    double bestWeight = 0.8;
+    bool finished = false;
+    if (m_evaluation) {
+        cells = m_evaluation->cells();
+        for (const QJsonObject &s : m_evaluation->shots())
+            shots.append({s.value(QStringLiteral("id")).toString(), s.value(QStringLiteral("title")).toString()});
+        if (!m_evaluation->isFinished())
+            m_evalStatus->setText(m_evaluation->status().toHtmlEscaped());
+    } else {
+        const QJsonObject saved = run.isEmpty() ? QJsonObject() : LoraEvaluation::saved(run);
+        for (const QJsonValue &v : saved.value(QStringLiteral("cells")).toArray()) {
+            const QJsonObject o = v.toObject();
+            LoraEvaluation::Cell c;
+            c.epoch = o.value(QStringLiteral("epoch")).toInt();
+            c.weight = o.value(QStringLiteral("weight")).toDouble();
+            c.shot = o.value(QStringLiteral("shot")).toString();
+            c.image = o.value(QStringLiteral("image")).toString();
+            c.score = o.value(QStringLiteral("score")).toDouble(-1);
+            c.critique = o.value(QStringLiteral("critique")).toObject();
+            c.error = o.value(QStringLiteral("error")).toString();
+            cells << c;
+        }
+        for (const QJsonValue &v : saved.value(QStringLiteral("shots")).toArray())
+            shots.append({v[QStringLiteral("id")].toString(), v[QStringLiteral("title")].toString()});
+        bestEpoch = saved.value(QStringLiteral("bestEpoch")).toInt();
+        bestWeight = saved.value(QStringLiteral("bestWeight")).toDouble(0.8);
+        finished = saved.value(QStringLiteral("finished")).toBool();
+        if (m_evalRun != run) {
+            m_evalRun = run;
+            m_evalStatus->setText(finished ? saved.value(QStringLiteral("status")).toString().toHtmlEscaped() : QString());
+        }
+    }
+
+    QList<Row> rows;
+    for (const LoraEvaluation::Cell &c : std::as_const(cells)) {
+        bool seen = false;
+        for (const Row &r : std::as_const(rows))
+            seen = seen || (r.epoch == c.epoch && qFuzzyCompare(r.weight + 1, c.weight + 1));
+        if (!seen)
+            rows.append({c.epoch, c.weight});
+    }
+    const int selected = m_evalTable->currentRow();
+    {
+        QSignalBlocker block(m_evalTable);
+        m_evalTable->setVisible(!rows.isEmpty());
+        m_evalTable->setColumnCount(int(shots.size()) + 1);
+        QStringList headers;
+        for (const auto &s : std::as_const(shots))
+            headers << s.second;
+        headers << tr("Mean");
+        m_evalTable->setHorizontalHeaderLabels(headers);
+        m_evalTable->setRowCount(int(rows.size()));
+        QStringList rowHeaders;
+        for (int r = 0; r < rows.size(); ++r) {
+            const Row row = rows[r];
+            rowHeaders << (row.epoch == 0 ? tr("Without LoRA") : tr("Epoch %1 · %2").arg(row.epoch).arg(row.weight));
+            double sum = 0;
+            int n = 0;
+            for (int s = 0; s < shots.size(); ++s) {
+                auto *item = new QTableWidgetItem;
+                item->setTextAlignment(Qt::AlignCenter);
+                for (const LoraEvaluation::Cell &c : std::as_const(cells)) {
+                    if (c.epoch != row.epoch || !qFuzzyCompare(c.weight + 1, row.weight + 1) || c.shot != shots[s].first)
+                        continue;
+                    if (!c.image.isEmpty()) {
+                        const QImage img(c.image);
+                        if (!img.isNull())
+                            item->setIcon(QIcon(QPixmap::fromImage(img.scaled(72, 72, Qt::KeepAspectRatio, Qt::SmoothTransformation))));
+                        item->setData(Qt::UserRole + 2, c.image);
+                    }
+                    if (c.score >= 0) {
+                        item->setText(QString::number(c.score, 'f', 1));
+                        sum += c.score;
+                        ++n;
+                        QStringList tip{tr("Identity %1 · pose %2 · overall %3")
+                                            .arg(c.critique.value(QStringLiteral("identity")).toInt())
+                                            .arg(c.critique.value(QStringLiteral("pose")).toInt())
+                                            .arg(c.critique.value(QStringLiteral("overall")).toInt())};
+                        for (const QJsonValue &i : c.critique.value(QStringLiteral("issues")).toArray())
+                            tip << QStringLiteral("• ") + i.toString();
+                        item->setToolTip(tip.join(QLatin1Char('\n')));
+                    } else if (!c.error.isEmpty()) {
+                        item->setText(tr("failed"));
+                        item->setToolTip(c.error);
+                    }
+                }
+                m_evalTable->setItem(r, s, item);
+            }
+            auto *mean = new QTableWidgetItem(n > 0 ? QString::number(sum / n, 'f', 1) : QString());
+            mean->setTextAlignment(Qt::AlignCenter);
+            QFont f = mean->font();
+            f.setBold(true);
+            mean->setFont(f);
+            if (finished && row.epoch == bestEpoch && qFuzzyCompare(row.weight + 1, bestWeight + 1))
+                mean->setForeground(Theme::palette().success);
+            m_evalTable->setItem(r, int(shots.size()), mean);
+        }
+        m_evalTable->setVerticalHeaderLabels(rowHeaders);
+        m_evalTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+        if (selected >= 0 && selected < rows.size())
+            m_evalTable->selectRow(selected);
+    }
+
+    // Apply: the selected row, else the recommendation.
+    int epoch = finished ? bestEpoch : 0;
+    double weight = bestWeight;
+    const int current = m_evalTable->currentRow();
+    if (current >= 0 && current < rows.size() && rows[current].epoch > 0 && m_evalTable->selectionModel()->hasSelection()) {
+        epoch = rows[current].epoch;
+        weight = rows[current].weight;
+    }
+    m_applyEval->setVisible(!m_evaluation && epoch > 0);
+    m_applyEval->setText(epoch == bestEpoch && qFuzzyCompare(weight + 1, bestWeight + 1)
+                             ? tr("Use epoch %1 at weight %2 (recommended)").arg(epoch).arg(weight)
+                             : tr("Use epoch %1 at weight %2").arg(epoch).arg(weight));
+    m_applyEval->setProperty("epoch", epoch);
+    m_applyEval->setProperty("weight", weight);
+}
+
+void LoraDatasetDialog::applyEvaluation()
+{
+    const int epoch = m_applyEval->property("epoch").toInt();
+    const double weight = m_applyEval->property("weight").toDouble();
+    QString error;
+    const QString file = LoraEvaluation::apply(m_studio, m_characterId, m_evalRun, epoch, weight, &error);
+    if (file.isEmpty()) {
+        m_evalStatus->setText(QStringLiteral("<span style='color:%1'>%2</span>").arg(Theme::palette().danger.name(), error.toHtmlEscaped()));
+        return;
+    }
+    m_evalStatus->setText(QStringLiteral("<span style='color:%1'>%2</span>")
+                              .arg(Theme::palette().success.name(),
+                                   tr("Epoch %1 is attached to the character at weight %2: %3")
+                                       .arg(epoch)
+                                       .arg(weight)
+                                       .arg(QDir::toNativeSeparators(file))
+                                       .toHtmlEscaped()));
 }
 
 void LoraDatasetDialog::startTraining(bool resume)
