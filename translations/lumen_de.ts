@@ -3388,6 +3388,48 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
 </context>
 <context>
+    <name>lumen::runtime::PodAgent</name>
+    <message>
+        <location filename="../src/runtime/PodAgent.cpp" line="+93"/>
+        <source>The cloud GPU&apos;s agent: %1</source>
+        <translation>Der Agent der Cloud-GPU: %1</translation>
+    </message>
+    <message>
+        <location line="+38"/>
+        <location line="+93"/>
+        <source>Lumen is shutting down.</source>
+        <translation>Lumen wird beendet.</translation>
+    </message>
+    <message>
+        <location line="-91"/>
+        <location line="+93"/>
+        <source>Cancelled.</source>
+        <translation>Abgebrochen.</translation>
+    </message>
+    <message>
+        <location line="-89"/>
+        <location line="+95"/>
+        <source>Cannot read %1.</source>
+        <translation>%1 kann nicht gelesen werden.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>The downloaded file does not match its checksum.</source>
+        <translation>Die heruntergeladene Datei stimmt nicht mit ihrer Prüfsumme überein.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <location line="+17"/>
+        <source>Cannot write %1.</source>
+        <translation>%1 kann nicht geschrieben werden.</translation>
+    </message>
+    <message>
+        <location line="-6"/>
+        <source>The cloud GPU&apos;s agent sent an empty part of %1.</source>
+        <translation>Der Agent der Cloud-GPU hat einen leeren Teil von %1 gesendet.</translation>
+    </message>
+</context>
+<context>
     <name>lumen::runtime::RunPod</name>
     <message>
         <location filename="../src/runtime/RunPod.cpp" line="+97"/>
@@ -3991,7 +4033,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::runtime::Trainer</name>
     <message>
-        <location filename="../src/runtime/Trainer.cpp" line="+118"/>
+        <location filename="../src/runtime/Trainer.cpp" line="+128"/>
         <source>Training needs an NVIDIA GPU with a current driver.</source>
         <translation>Das Training braucht eine NVIDIA-GPU mit aktuellem Treiber.</translation>
     </message>
@@ -4123,7 +4165,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::runtime::Zip</name>
     <message>
-        <location filename="../src/runtime/Zip.cpp" line="+59"/>
+        <location filename="../src/runtime/Zip.cpp" line="+60"/>
         <location line="+148"/>
         <source>Cannot open %1: %2</source>
         <translation>%1 kann nicht geöffnet werden: %2</translation>
@@ -4248,6 +4290,28 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <location line="+6"/>
         <source>Damaged archive (checksum mismatch in %1).</source>
         <translation>Beschädigtes Archiv (Prüfsummenfehler in %1).</translation>
+    </message>
+    <message>
+        <location line="+24"/>
+        <source>Too many files for a zip archive.</source>
+        <translation>Zu viele Dateien für ein Zip-Archiv.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <location line="+26"/>
+        <location line="+31"/>
+        <source>Cannot write %1.</source>
+        <translation>%1 kann nicht geschrieben werden.</translation>
+    </message>
+    <message>
+        <location line="-52"/>
+        <source>Cannot read %1.</source>
+        <translation>%1 kann nicht gelesen werden.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>The archive would be larger than 4 GB.</source>
+        <translation>Das Archiv wäre größer als 4 GB.</translation>
     </message>
 </context>
 <context>

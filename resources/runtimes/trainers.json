@@ -6,7 +6,12 @@
     "url": "https://github.com/astral-sh/uv/releases/download/0.12.18/uv-x86_64-pc-windows-msvc.zip",
     "size": 17891221,
     "sha256": "cae6a3bc25239f83dffb467a4b180508d9da23986c04639ebfa44e43e6a84bff",
-    "license": "MIT OR Apache-2.0"
+    "license": "MIT OR Apache-2.0",
+    "linux": {
+      "url": "https://github.com/astral-sh/uv/releases/download/0.12.18/uv-x86_64-unknown-linux-gnu.tar.gz",
+      "size": 19798687,
+      "sha256": "89eadd7c76fc063887959510d5ba0ab1264dfd5f1143b925ddb73021a40acf16"
+    }
   },
   "trainers": [
     {
@@ -31,7 +36,8 @@
           "minCuda": "12.8",
           "torch": "2.8.0",
           "lock": "kohya-v0.12.0-cu128.txt",
-          "downloadSize": 3700000000
+          "downloadSize": 3700000000,
+          "linuxLock": "kohya-v0.12.0-cu128-linux.txt"
         },
         {
           "id": "cu124",

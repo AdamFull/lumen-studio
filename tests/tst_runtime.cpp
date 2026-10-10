@@ -11,6 +11,7 @@
 #include "runtime/ModelFormats.h"
 #include "runtime/ModelHub.h"
 #include "runtime/ModelLibrary.h"
+#include "runtime/PodAgent.h"
 #include "runtime/RunPod.h"
 #include "runtime/RuntimeStore.h"
 #include "runtime/ServerProfile.h"
@@ -26,9 +27,13 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QNetworkAccessManager>
+#include <QProcess>
 #include <QRegularExpression>
 #include <QUrlQuery>
+#include <QScopeGuard>
 #include <QSignalSpy>
+#include <QStandardPaths>
+#include <QTcpServer>
 #include <QTemporaryDir>
 #include <QTest>
 #include <QVersionNumber>
@@ -205,6 +210,7 @@ class TestRuntime : public QObject
 private slots:
     void zipSafePaths();
     void runPodClient();
+    void podAgent();
     void zipExtract();
     void zipRejectsUnsafeArchives();
     void downloadVerifiesAndResumes();
@@ -1751,6 +1757,14 @@ void TestRuntime::trainerRecipes()
     QVERIFY(kohya->source.url.toString().contains(kohya->commit));
     QVERIFY(QRegularExpression(QStringLiteral("^[0-9a-f]{64}$")).match(kohya->source.sha256).hasMatch());
     QCOMPARE(kohya->variants.size(), 2);
+    // Cloud pods (Linux): uv's Linux build and the cu128 lock compiled for Linux, same PyTorch.
+    QVERIFY(catalog.uvLinux.url.toString().endsWith(QStringLiteral("uv-x86_64-unknown-linux-gnu.tar.gz")));
+    QVERIFY(QRegularExpression(QStringLiteral("^[0-9a-f]{64}$")).match(catalog.uvLinux.sha256).hasMatch());
+    const QByteArray linuxLock = trainerLinuxLock(*kohya->variant(QStringLiteral("cu128")));
+    QVERIFY(linuxLock.contains("torch==2.8.0+cu128 \\"));
+    QVERIFY(linuxLock.contains("triton=="));
+    QVERIFY(!linuxLock.contains("colorama=="));
+    QVERIFY(trainerLinuxLock(*kohya->variant(QStringLiteral("cu124"))).isEmpty());
     // Every locked package carries hashes, and PyTorch is the CUDA build of the variant.
     for (const TrainerVariant &v : kohya->variants) {
         const QString lock = QString::fromUtf8(trainerLock(v));
@@ -2140,7 +2154,8 @@ void TestRuntime::runPodClient()
 
     // RunPod's own messages: a validation problem, a refused key, no key.
     auto errorOf = [](auto future) {
-        QTest::qWaitFor([&] { return future.isFinished(); }, 10000);
+        if (!QTest::qWaitFor([&] { return future.isFinished(); }, 10000))
+            return QStringLiteral("timeout");
         try {
             future.waitForFinished();
         } catch (const std::exception &e) {
@@ -2158,6 +2173,238 @@ void TestRuntime::runPodClient()
     client.keyProvider = [] { return QString(); };
     QVERIFY(!client.hasKey());
     QVERIFY(errorOf(client.gpus()).contains(QStringLiteral("No RunPod API key")));
+}
+
+namespace {
+
+// A Python that runs scripts (not the Windows Store stub), or empty.
+QString findPython()
+{
+    for (const QString &name : {QStringLiteral("python3"), QStringLiteral("python")}) {
+        const QString exe = QStandardPaths::findExecutable(name);
+        if (exe.isEmpty() || exe.contains(QLatin1String("WindowsApps"), Qt::CaseInsensitive))
+            continue;
+        QProcess p;
+        p.start(exe, {QStringLiteral("--version")});
+        if (p.waitForFinished(10000) && (p.readAllStandardOutput() + p.readAllStandardError()).startsWith("Python 3."))
+            return exe;
+    }
+    return {};
+}
+
+// Waits for a future and returns its error message ("" when it succeeded).
+template<typename F>
+QString errorOf(F future)
+{
+    if (!QTest::qWaitFor([&] { return future.isFinished(); }, 30000))
+        return QStringLiteral("timeout");
+    try {
+        future.waitForFinished();
+    } catch (const std::exception &e) {
+        return QString::fromUtf8(e.what());
+    }
+    return {};
+}
+
+// Stands in for sd-scripts: checks the image folder, prints like kohya (epochs, tqdm), writes a
+// LoRA per epoch; "--sleep" waits to be cancelled.
+const char *kFakeTrainer = R"(import os, sys, time
+args = sys.argv[1:]
+out = args[args.index('--output_dir') + 1]
+img = args[args.index('--train_data_dir') + 1]
+if '--sleep' in args:
+    time.sleep(120)
+print('found %d image folder' % len(os.listdir(img)), flush=True)
+os.makedirs(out, exist_ok=True)
+for e in (1, 2):
+    print('epoch %d/2' % e, flush=True)
+    print('steps: %d%%|#####     | %d/2 [00:01<00:01,  1.00s/it, avr_loss=0.0%d]' % (e * 50, e, e), flush=True)
+    name = 'lmn-%06d.safetensors' % e if e < 2 else 'lmn.safetensors'
+    with open(os.path.join(out, name), 'wb') as f:
+        f.write(bytes([e]) * (150000 + e))
+)";
+
+} // namespace
+
+void TestRuntime::podAgent()
+{
+    const QString python = findPython();
+    if (python.isEmpty())
+        QSKIP("no Python 3 on PATH");
+    const QByteArray script = PodAgentClient::agentScript();
+    QVERIFY(script.contains("Lumen Studio's agent"));
+    QTemporaryDir dir;
+    const QString agentPath = dir.filePath(QStringLiteral("pod_agent.py"));
+    {
+        QFile f(agentPath);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write(script);
+    }
+    int port = 0;
+    {
+        QTcpServer probe;
+        QVERIFY(probe.listen(QHostAddress::LocalHost, 0));
+        port = probe.serverPort();
+    }
+    QProcess agent;
+    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+    env.insert(QStringLiteral("LUMEN_TOKEN"), QStringLiteral("tok-123"));
+    env.insert(QStringLiteral("LUMEN_PORT"), QString::number(port));
+    env.insert(QStringLiteral("LUMEN_HOST"), QStringLiteral("127.0.0.1"));
+    env.insert(QStringLiteral("LUMEN_WORK"), dir.filePath(QStringLiteral("work")));
+    agent.setProcessEnvironment(env);
+    agent.setProcessChannelMode(QProcess::MergedChannels);
+    agent.start(python, {agentPath});
+    QVERIFY(agent.waitForStarted(10000));
+    auto stop = qScopeGuard([&] {
+        if (agent.state() != QProcess::NotRunning) {
+            agent.kill();
+            agent.waitForFinished(5000);
+        }
+    });
+    net::HttpClient http;
+    const QString base = QStringLiteral("http://127.0.0.1:%1").arg(port);
+    PodAgentClient client(&http, base, QStringLiteral("tok-123"));
+    client.chunkSize = 64 * 1024;
+    PodAgentStatus st;
+    QVERIFY2(QTest::qWaitFor([&] {
+                 auto f = client.status();
+                 if (!errorOf(f).isEmpty())
+                     return false;
+                 st = f.result();
+                 return true;
+             }, 20000),
+             agent.readAll().constData());
+    QCOMPARE(st.setupState, QStringLiteral("waiting"));
+    QCOMPARE(st.trainingState, QStringLiteral("idle"));
+    // Without the pod's token nothing works.
+    PodAgentClient stranger(&http, base, QStringLiteral("guess"));
+    QVERIFY(errorOf(stranger.status()).contains(QStringLiteral("401")));
+
+    // A chunked upload (300 KB in 64 KB chunks), checked by its SHA-256.
+    QByteArray payload(300 * 1024, Qt::Uninitialized);
+    for (int i = 0; i < payload.size(); ++i)
+        payload[i] = char((i * 7919) % 251);
+    const QString payloadPath = dir.filePath(QStringLiteral("payload.bin"));
+    {
+        QFile f(payloadPath);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write(payload);
+    }
+    int chunks = 0;
+    QCOMPARE(errorOf(client.upload(QStringLiteral("payload.bin"), payloadPath, [&](qint64, qint64) { ++chunks; })), QString());
+    QCOMPARE(chunks, 5);
+    const QString sha = QString::fromLatin1(QCryptographicHash::hash(payload, QCryptographicHash::Sha256).toHex());
+    auto checked = client.check(QStringLiteral("payload.bin"), sha);
+    QCOMPARE(errorOf(checked), QString());
+    QVERIFY(checked.result());
+    auto wrong = client.check(QStringLiteral("payload.bin"), QStringLiteral("00"));
+    QCOMPARE(errorOf(wrong), QString());
+    QVERIFY(!wrong.result());
+    auto afterUpload = client.status();
+    QCOMPARE(errorOf(afterUpload), QString());
+    QCOMPARE(afterUpload.result().files.value(QStringLiteral("payload.bin")), qint64(payload.size()));
+
+    // A file fetched by the pod from a URL, checked against its SHA-256; a wrong one fails.
+    MockHttpServer web;
+    serveFile(web, QStringLiteral("/model.safetensors"), payload);
+    QCOMPARE(errorOf(client.fetch(QStringLiteral("model.safetensors"), web.baseUrl().toString() + QStringLiteral("/model.safetensors"), sha)),
+             QString());
+    QCOMPARE(errorOf(client.fetch(QStringLiteral("bad.safetensors"), web.baseUrl().toString() + QStringLiteral("/model.safetensors"),
+                                  QStringLiteral("deadbeef"))),
+             QString());
+    QVERIFY(QTest::qWaitFor([&] {
+        auto f = client.status();
+        if (!errorOf(f).isEmpty())
+            return false;
+        const QJsonObject fetch = f.result().fetch;
+        return fetch.value(QStringLiteral("model.safetensors")).toObject().value(QStringLiteral("state")).toString() == QLatin1String("done")
+               && fetch.value(QStringLiteral("bad.safetensors")).toObject().value(QStringLiteral("state")).toString() == QLatin1String("failed");
+    }, 20000));
+
+    // The training set as a zip, extracted on the pod.
+    const QString setDir = dir.filePath(QStringLiteral("set"));
+    QDir().mkpath(setDir + QStringLiteral("/10_lmn"));
+    for (const char *name : {"10_lmn/001.png", "10_lmn/001.txt"}) {
+        QFile f(setDir + QLatin1Char('/') + QLatin1String(name));
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write("x");
+    }
+    const QString zip = dir.filePath(QStringLiteral("dataset.zip"));
+    QCOMPARE(writeZip(zip, setDir), QString());
+    QList<ZipEntry> entries;
+    QCOMPARE(listZip(zip, &entries), QString());
+    QCOMPARE(entries.size(), 2);
+    QCOMPARE(errorOf(client.upload(QStringLiteral("dataset.zip"), zip)), QString());
+    QCOMPARE(errorOf(client.unzip(QStringLiteral("dataset.zip"), QStringLiteral("img"))), QString());
+
+    // Training before setup is refused; setup (skipped in tests), then the fake trainer.
+    const QString trainerPath = dir.filePath(QStringLiteral("fake_train.py"));
+    {
+        QFile f(trainerPath);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write(kFakeTrainer);
+    }
+    QCOMPARE(errorOf(client.upload(QStringLiteral("fake_train.py"), trainerPath)), QString());
+    const QStringList args{QStringLiteral("{work}/files/fake_train.py"), QStringLiteral("--output_dir"), QStringLiteral("{work}\\output"),
+                           QStringLiteral("--train_data_dir"), QStringLiteral("{work}/img")};
+    QVERIFY(errorOf(client.train(args)).contains(QStringLiteral("not set up")));
+    QCOMPARE(errorOf(client.setup({{QStringLiteral("skip"), true}})), QString());
+    QVERIFY(QTest::qWaitFor([&] {
+        auto f = client.status();
+        return errorOf(f).isEmpty() && f.result().setupState == QLatin1String("ready");
+    }, 10000));
+    QCOMPARE(errorOf(client.train(args)), QString());
+    QVERIFY(QTest::qWaitFor([&] {
+        auto f = client.status();
+        return errorOf(f).isEmpty() && f.result().trainingState == QLatin1String("done");
+    }, 30000));
+    auto logged = client.log(0);
+    QCOMPARE(errorOf(logged), QString());
+    const QString log = QString::fromUtf8(logged.result());
+    QVERIFY2(log.contains(QStringLiteral("found 1 image folder")), qPrintable(log));
+    QVERIFY(log.contains(QStringLiteral("epoch 2/2")));
+    QVERIFY(log.contains(QStringLiteral("avr_loss=0.02")));
+    auto tail = client.log(logged.result().size());
+    QCOMPARE(errorOf(tail), QString());
+    QVERIFY(tail.result().isEmpty());
+
+    // The epochs come back in chunks, checked by their SHA-256.
+    auto outputs = client.outputs();
+    QCOMPARE(errorOf(outputs), QString());
+    QCOMPARE(outputs.result().size(), 2);
+    for (const PodOutput &o : outputs.result()) {
+        const QString local = dir.filePath(QStringLiteral("down/") + QFileInfo(o.path).fileName());
+        QCOMPARE(errorOf(client.download(o, local)), QString());
+        QFile f(local);
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        const QByteArray got = f.readAll();
+        QCOMPARE(qint64(got.size()), o.size);
+        QCOMPARE(QString::fromLatin1(QCryptographicHash::hash(got, QCryptographicHash::Sha256).toHex()), o.sha256);
+    }
+    PodOutput tampered = outputs.result().first();
+    tampered.sha256 = QStringLiteral("00");
+    QVERIFY(errorOf(client.download(tampered, dir.filePath(QStringLiteral("down/bad.safetensors")))).contains(QStringLiteral("checksum")));
+    QVERIFY(!QFileInfo::exists(dir.filePath(QStringLiteral("down/bad.safetensors"))));
+    // Paths outside the work folder are refused.
+    PodOutput escape{QStringLiteral("../pod_agent.py"), 10, QString()};
+    QVERIFY(!errorOf(client.download(escape, dir.filePath(QStringLiteral("down/x")))).isEmpty());
+
+    // A running training can be stopped.
+    QCOMPARE(errorOf(client.train(args + QStringList{QStringLiteral("--sleep")})), QString());
+    QVERIFY(QTest::qWaitFor([&] {
+        auto f = client.status();
+        return errorOf(f).isEmpty() && f.result().trainingState == QLatin1String("running");
+    }, 10000));
+    QCOMPARE(errorOf(client.cancelTraining()), QString());
+    QVERIFY(QTest::qWaitFor([&] {
+        auto f = client.status();
+        return errorOf(f).isEmpty() && f.result().trainingState == QLatin1String("cancelled");
+    }, 10000));
+
+    // Shutdown ends the agent.
+    QCOMPARE(errorOf(client.shutdown()), QString());
+    QVERIFY(agent.waitForFinished(10000));
 }
 
 QTEST_MAIN(TestRuntime)

@@ -4,6 +4,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QDirIterator>
 #include <QSet>
 
 #include <zlib.h>
@@ -315,6 +316,86 @@ QString extractZip(const QString &zipPath, const QString &destDir, const std::fu
     }
     if (progress)
         progress(total, total);
+    return {};
+}
+
+QString writeZip(const QString &zipPath, const QString &sourceDir)
+{
+    auto le16 = [](QByteArray &b, quint16 v) {
+        b.append(char(v & 0xff));
+        b.append(char(v >> 8));
+    };
+    auto le32 = [&le16](QByteArray &b, quint32 v) {
+        le16(b, quint16(v & 0xffff));
+        le16(b, quint16(v >> 16));
+    };
+    QStringList files;
+    QDirIterator it(sourceDir, QDir::Files, QDirIterator::Subdirectories);
+    while (it.hasNext())
+        files << QDir(sourceDir).relativeFilePath(it.next());
+    files.sort();
+    if (files.size() > 65535)
+        return QCoreApplication::translate("lumen::runtime::Zip", "Too many files for a zip archive.");
+    QFile out(zipPath);
+    if (!out.open(QIODevice::WriteOnly))
+        return QCoreApplication::translate("lumen::runtime::Zip", "Cannot write %1.").arg(QDir::toNativeSeparators(zipPath));
+    QByteArray central;
+    for (const QString &rel : std::as_const(files)) {
+        QFile in(QDir(sourceDir).filePath(rel));
+        if (!in.open(QIODevice::ReadOnly))
+            return QCoreApplication::translate("lumen::runtime::Zip", "Cannot read %1.").arg(QDir::toNativeSeparators(in.fileName()));
+        const QByteArray data = in.readAll();
+        const quint64 offset = quint64(out.pos());
+        if (offset + quint64(data.size()) > 0xFFFFFFF0ULL)
+            return QCoreApplication::translate("lumen::runtime::Zip", "The archive would be larger than 4 GB.");
+        const quint32 crc = quint32(crc32(crc32(0L, Z_NULL, 0), reinterpret_cast<const Bytef *>(data.constData()), uInt(data.size())));
+        const QByteArray name = rel.toUtf8();
+        QByteArray local;
+        le32(local, 0x04034b50);
+        le16(local, 20);          // version needed
+        le16(local, 0x0800);      // UTF-8 names
+        le16(local, 0);           // stored
+        le16(local, 0);           // time
+        le16(local, 0x21);        // date: 1980-01-01
+        le32(local, crc);
+        le32(local, quint32(data.size()));
+        le32(local, quint32(data.size()));
+        le16(local, quint16(name.size()));
+        le16(local, 0);
+        local += name;
+        if (out.write(local) != local.size() || out.write(data) != data.size())
+            return QCoreApplication::translate("lumen::runtime::Zip", "Cannot write %1.").arg(QDir::toNativeSeparators(zipPath));
+        le32(central, 0x02014b50);
+        le16(central, 20);        // version made by
+        le16(central, 20);
+        le16(central, 0x0800);
+        le16(central, 0);
+        le16(central, 0);
+        le16(central, 0x21);
+        le32(central, crc);
+        le32(central, quint32(data.size()));
+        le32(central, quint32(data.size()));
+        le16(central, quint16(name.size()));
+        le16(central, 0);         // extra
+        le16(central, 0);         // comment
+        le16(central, 0);         // disk
+        le16(central, 0);         // internal attributes
+        le32(central, 0);         // external attributes
+        le32(central, quint32(offset));
+        central += name;
+    }
+    const quint64 centralOffset = quint64(out.pos());
+    QByteArray end;
+    le32(end, 0x06054b50);
+    le16(end, 0);
+    le16(end, 0);
+    le16(end, quint16(files.size()));
+    le16(end, quint16(files.size()));
+    le32(end, quint32(central.size()));
+    le32(end, quint32(centralOffset));
+    le16(end, 0);
+    if (out.write(central) != central.size() || out.write(end) != end.size())
+        return QCoreApplication::translate("lumen::runtime::Zip", "Cannot write %1.").arg(QDir::toNativeSeparators(zipPath));
     return {};
 }
 

@@ -35,4 +35,9 @@ QString safeEntryPath(const QString &name);
 QString extractZip(const QString &zipPath, const QString &destDir,
                    const std::function<bool(qint64 done, qint64 total)> &progress = {});
 
+// Writes a zip of the files below `sourceDir` (relative names, '/' separated), stored without
+// compression (images are compressed already). No Zip64: at most 4 GB and 65535 entries.
+// Returns an error message, or "" on success. Safe to call from a worker thread.
+QString writeZip(const QString &zipPath, const QString &sourceDir);
+
 } // namespace lumen::runtime

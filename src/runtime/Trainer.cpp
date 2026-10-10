@@ -65,6 +65,7 @@ TrainerCatalog TrainerCatalog::fromJson(const QByteArray &json)
     const QJsonObject uv = root.value(QStringLiteral("uv")).toObject();
     c.uvVersion = uv.value(QStringLiteral("version")).toString();
     c.uv = pinned(uv);
+    c.uvLinux = pinned(uv.value(QStringLiteral("linux")).toObject());
     for (const QJsonValue &v : root.value(QStringLiteral("trainers")).toArray()) {
         const QJsonObject o = v.toObject();
         TrainerRecipe r;
@@ -87,6 +88,7 @@ TrainerCatalog TrainerCatalog::fromJson(const QByteArray &json)
             tv.minCuda = vo.value(QStringLiteral("minCuda")).toString();
             tv.torch = vo.value(QStringLiteral("torch")).toString();
             tv.lock = vo.value(QStringLiteral("lock")).toString();
+            tv.linuxLock = vo.value(QStringLiteral("linuxLock")).toString();
             tv.downloadSize = qint64(vo.value(QStringLiteral("downloadSize")).toDouble());
             r.variants << tv;
         }
@@ -108,6 +110,14 @@ const TrainerCatalog &TrainerCatalog::instance()
 QByteArray trainerLock(const TrainerVariant &variant)
 {
     QFile f(QStringLiteral(":/runtimes/trainers/") + variant.lock);
+    return f.open(QIODevice::ReadOnly) ? f.readAll() : QByteArray();
+}
+
+QByteArray trainerLinuxLock(const TrainerVariant &variant)
+{
+    if (variant.linuxLock.isEmpty())
+        return {};
+    QFile f(QStringLiteral(":/runtimes/trainers/") + variant.linuxLock);
     return f.open(QIODevice::ReadOnly) ? f.readAll() : QByteArray();
 }
 

@@ -30,6 +30,7 @@ struct TrainerVariant
     QString minCuda;     // lowest CUDA version the driver must support
     QString torch;       // PyTorch version the lock installs
     QString lock;        // lock file name next to trainers.json
+    QString linuxLock;   // the same pins for Linux x86_64 (cloud GPU pods, M15); empty = none
     qint64 downloadSize = 0; // estimate of what uv downloads
 };
 
@@ -54,6 +55,7 @@ struct TrainerCatalog
 {
     QString uvVersion;
     PinnedDownload uv;
+    PinnedDownload uvLinux; // uv for Linux x86_64 (cloud GPU pods)
     QList<TrainerRecipe> trainers;
 
     const TrainerRecipe *trainer(const QString &id) const;
@@ -63,6 +65,8 @@ struct TrainerCatalog
 
 // The requirements lock of a variant (bundled resource); empty when missing.
 QByteArray trainerLock(const TrainerVariant &variant);
+// The Linux lock of a variant (cloud GPU pods); empty when it has none.
+QByteArray trainerLinuxLock(const TrainerVariant &variant);
 // The variant for this computer: the newest CUDA build the NVIDIA driver supports; empty without
 // a suitable NVIDIA GPU (*why says why).
 QString recommendedTrainerVariant(const TrainerRecipe &recipe, const HardwareInfo &hw, QString *why = nullptr);

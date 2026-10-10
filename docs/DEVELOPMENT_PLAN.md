@@ -1502,8 +1502,26 @@ Every request carries a random token generated for this pod (passed in the pod's
   - Tests: the client against a mock API (body of a new pod, statuses, listing by prefix,
     terminate twice, a validation problem, a refused key, no key); the settings page's GPU list,
     preferred GPU, cloud switch and error.
-- [ ] Pod agent: the script and Lumen's protocol client (status, chunked upload and download,
-  model from URL, train, log). Tests run the agent locally with Python and a fake trainer.
+- [x] Pod agent (`resources/runtimes/cloud/pod_agent.py`, standard library) and its client
+  (`runtime/PodAgent`):
+  - The agent's setup mirrors the local install: uv 0.12.18 for Linux (release SHA-256 pinned in
+    `trainers.json`), sd-scripts at the pinned commit (archive SHA-256), CPython 3.10.21 through
+    uv, then `uv pip install --require-hashes` of a Linux lock. The lock
+    (`kohya-v0.12.0-cu128-linux.txt`, 82 packages) was compiled from sd-scripts' requirements
+    plus torch 2.8.0 / torchvision 0.23.0 cu128: the same versions as the Windows lock, plus the
+    Linux NVIDIA wheels and triton. A check imports torch and the trainer's library and needs the
+    GPU.
+  - Requests carry the pod's token (constant-time compare). Uploads are offset-checked chunks
+    (a 409 tells the size the agent has, so a repeated chunk is harmless); downloads are
+    chunks verified by SHA-256 at the end; paths cannot leave the work folder; zips are checked
+    for unsafe names. `{work}` in the trainer's arguments is replaced (and Windows separators
+    turned around), so Lumen builds them with `trainingArguments`.
+  - The agent exits after an idle hour or eight hours in any case.
+  - `writeZip` (stored entries) packs the training set.
+  - Tests start the real agent with the local Python (skipped without one): token refused,
+    chunked upload with SHA-256, fetch from a URL with a good and a bad checksum, zip and unzip,
+    training refused before setup, the fake trainer's log and two epochs downloaded and verified,
+    a tampered checksum, a path outside the work folder, cancel, shutdown; and the Linux recipe.
 - [ ] Cloud training job: the orchestration, cancel, failure handling, always terminating the pod;
   leftover pods at start. Tests with the mock RunPod API and the local agent.
 - [ ] Train tab and costs: *Where*, GPU choice, estimate, confirmation; the result goes into the

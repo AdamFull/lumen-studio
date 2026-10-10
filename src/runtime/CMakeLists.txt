@@ -9,6 +9,7 @@ add_library(lumen_runtime STATIC
     ModelFormats.h ModelFormats.cpp
     ModelLibrary.h ModelLibrary.cpp
     ModelHub.h ModelHub.cpp
+    PodAgent.h PodAgent.cpp
     RunPod.h RunPod.cpp
     Trainer.h Trainer.cpp
     LoraTraining.h LoraTraining.cpp
@@ -20,6 +21,8 @@ qt_add_resources(lumen_runtime runtime_catalog
           "${PROJECT_SOURCE_DIR}/resources/runtimes/trainers.json"
           "${PROJECT_SOURCE_DIR}/resources/runtimes/trainers/kohya-v0.12.0-cu128.txt"
           "${PROJECT_SOURCE_DIR}/resources/runtimes/trainers/kohya-v0.12.0-cu124.txt"
+          "${PROJECT_SOURCE_DIR}/resources/runtimes/trainers/kohya-v0.12.0-cu128-linux.txt"
+          "${PROJECT_SOURCE_DIR}/resources/runtimes/cloud/pod_agent.py"
 )
 qt_add_resources(lumen_runtime model_starters
     PREFIX "/models"
