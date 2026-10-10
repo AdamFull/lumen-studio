@@ -2254,6 +2254,214 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
 </context>
 <context>
+    <name>lumen::ai::SdCppProvider</name>
+    <message>
+        <location filename="../src/ai/providers/SdCppProvider.cpp" line="+49"/>
+        <source>Local stable-diffusion.cpp server. Lumen can download and start it for you (Settings → Local servers). Runs SD 1.5, SDXL (Illustrious, Pony…), FLUX and more without Python; pose control and character references need a ControlNet and an IP-Adapter loaded with the server.</source>
+        <translation>Lokaler stable-diffusion.cpp-Server. Lumen kann ihn für Sie herunterladen und starten (Einstellungen → Lokale Server). Führt SD 1.5, SDXL (Illustrious, Pony…), FLUX und mehr ohne Python aus; Posensteuerung und Figurenreferenzen brauchen ein ControlNet und einen IP-Adapter, die mit dem Server geladen werden.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Server URL</source>
+        <translation>Server-URL</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Address of sd-server.</source>
+        <translation>Adresse von sd-server.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Sampler</source>
+        <translation>Sampler</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Empty = the server&apos;s default (e.g. euler_a).</source>
+        <translation>Leer = Standard des Servers (z. B. euler_a).</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Scheduler</source>
+        <translation>Scheduler</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Empty = the server&apos;s default.</source>
+        <translation>Leer = Standard des Servers.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Native resolution</source>
+        <translation>Native Auflösung</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Working resolution of the loaded model. &apos;auto&apos; assumes 1024 (SDXL) unless the model name says 1.5.</source>
+        <translation>Arbeitsauflösung des geladenen Modells. „auto“ nimmt 1024 (SDXL) an, außer der Modellname nennt 1.5.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Server has a ControlNet (pose control)</source>
+        <translation>Server hat ein ControlNet (Posensteuerung)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The server was started with --control-net. Set automatically for servers Lumen runs.</source>
+        <translation>Der Server wurde mit --control-net gestartet. Wird für von Lumen gestartete Server automatisch gesetzt.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Server has an IP-Adapter (character references)</source>
+        <translation>Server hat einen IP-Adapter (Figurenreferenzen)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The server was started with --ip-adapter and --clip_vision. Set automatically for servers Lumen runs.</source>
+        <translation>Der Server wurde mit --ip-adapter und --clip_vision gestartet. Wird für von Lumen gestartete Server automatisch gesetzt.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Server has an upscaler</source>
+        <translation>Server hat einen Hochskalierer</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The server was started with --upscale-model. Set automatically for servers Lumen runs.</source>
+        <translation>Der Server wurde mit --upscale-model gestartet. Wird für von Lumen gestartete Server automatisch gesetzt.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>VAE tiling</source>
+        <translation>VAE-Kacheln</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Encodes and decodes images in tiles. Needed on 8 GB GPUs for SDXL with a ControlNet; slightly slower.</source>
+        <translation>Kodiert und dekodiert Bilder in Kacheln. Auf 8-GB-GPUs für SDXL mit ControlNet nötig; etwas langsamer.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>IP-Adapter weight with pose control</source>
+        <translation>IP-Adapter-Gewicht mit Posensteuerung</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The IP-Adapter also copies the reference&apos;s pose. With a pose map its weight is limited to this value.</source>
+        <translation>Der IP-Adapter übernimmt auch die Pose der Referenz. Mit einer Posenkarte wird sein Gewicht auf diesen Wert begrenzt.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Live preview</source>
+        <translation>Live-Vorschau</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>How previews are made while sampling: &apos;proj&apos; is fast and rough, &apos;tae&apos;/&apos;vae&apos; need the matching model.</source>
+        <translation>Wie Vorschauen beim Sampling entstehen: „proj“ ist schnell und grob, „tae“/„vae“ brauchen das passende Modell.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Timeout (minutes)</source>
+        <translation>Zeitlimit (Minuten)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Parallel jobs</source>
+        <translation>Parallele Aufträge</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>The server runs one generation at a time.</source>
+        <translation>Der Server führt jeweils eine Generierung aus.</translation>
+    </message>
+    <message>
+        <location line="+28"/>
+        <source>Connected</source>
+        <translation>Verbunden</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Connected - model: %1</source>
+        <translation>Verbunden – Modell: %1</translation>
+    </message>
+    <message>
+        <location line="+116"/>
+        <source>stable-diffusion.cpp does not do instruction edits with this model; use inpainting or img2img.</source>
+        <translation>stable-diffusion.cpp kann mit diesem Modell keine Anweisungsbearbeitung; verwenden Sie Inpainting oder img2img.</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>Sending…</source>
+        <translation>Wird gesendet…</translation>
+    </message>
+    <message>
+        <location line="+20"/>
+        <source>The server&apos;s queue is full; try again when the running jobs are done.</source>
+        <translation>Die Warteschlange des Servers ist voll; versuchen Sie es erneut, wenn die laufenden Aufträge fertig sind.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>The server did not return a job id.</source>
+        <translation>Der Server hat keine Auftrags-ID zurückgegeben.</translation>
+    </message>
+    <message>
+        <location line="+27"/>
+        <source>The generation did not finish within the timeout.</source>
+        <translation>Die Generierung wurde nicht innerhalb des Zeitlimits fertig.</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>The server no longer knows this job (it was restarted?).</source>
+        <translation>Der Server kennt diesen Auftrag nicht mehr (wurde er neu gestartet?).</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Queued (position %1)</source>
+        <translation>In Warteschlange (Position %1)</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Queued</source>
+        <translation>In Warteschlange</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Image %1 of %2 · step %3 / %4</source>
+        <translation>Bild %1 von %2 · Schritt %3 / %4</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Step %1 / %2</source>
+        <translation>Schritt %1 / %2</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Generating…</source>
+        <translation>Wird generiert…</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Decoding…</source>
+        <translation>Wird dekodiert…</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>The server returned no images.</source>
+        <translation>Der Server hat keine Bilder zurückgegeben.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>The generation failed.</source>
+        <translation>Die Generierung ist fehlgeschlagen.</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>stable-diffusion.cpp offers no %1.</source>
+        <translation>stable-diffusion.cpp bietet kein %1.</translation>
+    </message>
+</context>
+<context>
     <name>lumen::ai::SdWebUiProvider</name>
     <message>
         <location filename="../src/ai/providers/SdWebUiProvider.cpp" line="-349"/>
@@ -2965,12 +3173,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+3"/>
-        <location line="+65"/>
+        <location line="+70"/>
         <source>Flash attention</source>
         <translation>Flash Attention</translation>
     </message>
     <message>
-        <location line="-62"/>
+        <location line="-67"/>
         <source>Unload when idle (s)</source>
         <translation>Im Leerlauf entladen (s)</translation>
     </message>
@@ -3001,18 +3209,18 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+5"/>
-        <location line="+67"/>
+        <location line="+72"/>
         <source>CPU threads</source>
         <translation>CPU-Threads</translation>
     </message>
     <message>
-        <location line="-67"/>
-        <location line="+67"/>
+        <location line="-72"/>
+        <location line="+72"/>
         <source>0 = automatic</source>
         <translation>0 = automatisch</translation>
     </message>
     <message>
-        <location line="-63"/>
+        <location line="-68"/>
         <source>Reasoning budget</source>
         <translation>Reasoning-Budget</translation>
     </message>
@@ -3098,6 +3306,16 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+3"/>
+        <source>Weight precision</source>
+        <translation>Gewichtsgenauigkeit</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Converts the weights when loading. q8_0 halves an SDXL model with no visible change, so the model and a ControlNet fit in 8 GB and run faster; &apos;file&apos; keeps what the file stores.</source>
+        <translation>Wandelt die Gewichte beim Laden um. q8_0 halbiert ein SDXL-Modell ohne sichtbaren Unterschied, sodass Modell und ControlNet in 8 GB passen und schneller laufen; „file“ behält das Format der Datei.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
         <source>Keep weights in RAM</source>
         <translation>Gewichte im RAM halten</translation>
     </message>
@@ -3187,7 +3405,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Der IP-Adapter benötigt einen CLIP-Vision-Encoder.</translation>
     </message>
     <message>
-        <location line="+26"/>
+        <location line="+29"/>
         <source>Lumen cannot start %1 servers.</source>
         <translation>Lumen kann keine %1-Server starten.</translation>
     </message>
@@ -3382,12 +3600,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     <message>
         <location line="+4"/>
         <location line="+22"/>
-        <location line="+16"/>
+        <location line="+17"/>
         <source>Cannot write %1: %2</source>
         <translation>%1 kann nicht geschrieben werden: %2</translation>
     </message>
     <message>
-        <location line="-28"/>
+        <location line="-29"/>
         <source>Cannot initialise decompression.</source>
         <translation>Die Dekompression kann nicht initialisiert werden.</translation>
     </message>
@@ -3397,17 +3615,17 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Beschädigtes Archiv (unerwartetes Ende in %1).</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+17"/>
         <source>Damaged archive (cannot decompress %1).</source>
         <translation>Beschädigtes Archiv (%1 kann nicht dekomprimiert werden).</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+16"/>
         <source>Damaged archive (truncated data in %1).</source>
         <translation>Beschädigtes Archiv (abgeschnittene Daten in %1).</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+7"/>
         <source>Damaged archive (%1 is larger than declared).</source>
         <translation>Beschädigtes Archiv (%1 ist größer als angegeben).</translation>
     </message>
@@ -6619,7 +6837,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::OnboardingDialog</name>
     <message>
-        <location filename="../src/ui/dialogs/SettingsDialog.cpp" line="+652"/>
+        <location filename="../src/ui/dialogs/SettingsDialog.cpp" line="+653"/>
         <source>Welcome to Lumen Studio</source>
         <translation>Willkommen bei Lumen Studio</translation>
     </message>
@@ -8393,7 +8611,7 @@ oder aus der Bibliothek ziehen</translation>
 <context>
     <name>lumen::ui::ProviderForm</name>
     <message>
-        <location filename="../src/ui/dialogs/SettingsDialog.cpp" line="-668"/>
+        <location filename="../src/ui/dialogs/SettingsDialog.cpp" line="-669"/>
         <source>Documentation</source>
         <translation>Dokumentation</translation>
     </message>
@@ -8601,7 +8819,7 @@ oder aus der Bibliothek ziehen</translation>
 <context>
     <name>lumen::ui::ServerLogDialog</name>
     <message>
-        <location filename="../src/ui/dialogs/LocalServersPage.cpp" line="+452"/>
+        <location filename="../src/ui/dialogs/LocalServersPage.cpp" line="+453"/>
         <source>Server log — %1</source>
         <translation>Serverprotokoll – %1</translation>
     </message>
@@ -8639,7 +8857,7 @@ oder aus der Bibliothek ziehen</translation>
 <context>
     <name>lumen::ui::ServerProfileDialog</name>
     <message>
-        <location line="-306"/>
+        <location line="-307"/>
         <source>New server</source>
         <translation>Neuer Server</translation>
     </message>
@@ -8734,7 +8952,7 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Alle Dateien (*)</translation>
     </message>
     <message>
-        <location line="+74"/>
+        <location line="+75"/>
         <source>Lumen has no provider for %1 yet.</source>
         <translation>Lumen hat noch keinen Anbieter für %1.</translation>
     </message>
@@ -8818,7 +9036,7 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Anbieter</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>Models &amp; roles</source>
         <translation>Modelle &amp; Rollen</translation>
     </message>
@@ -9131,7 +9349,7 @@ oder aus der Bibliothek ziehen</translation>
 <context>
     <name>lumen::ui::Studio</name>
     <message>
-        <location filename="../src/ui/Studio.cpp" line="+102"/>
+        <location filename="../src/ui/Studio.cpp" line="+117"/>
         <source>Could not open project %1: %2</source>
         <translation>Projekt %1 konnte nicht geöffnet werden: %2</translation>
     </message>

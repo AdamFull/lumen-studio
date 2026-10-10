@@ -74,6 +74,21 @@ servers**.
    generation or a Critic review. The job shows "Starting …" meanwhile. Servers stop when Lumen
    closes, or after the idle time you set.
 
+**Image generation with stable-diffusion.cpp.** Choose a checkpoint (an SDXL model such as
+WAI-Illustrious or Animagine). For pose control add an OpenPose ControlNet (e.g. xinsir
+`controlnet-openpose-sdxl-1.0`). For character references add the IP-Adapter
+`ip-adapter_sdxl_vit-h.safetensors` and its image encoder `CLIP-ViT-H-14-laion2B-s32B-b79K`
+(both from `h94/IP-Adapter` on Hugging Face). The defaults suit an 8 GB GPU:
+* *Weight precision q8_0* halves the model with no visible change, so the model and the ControlNet
+  fit in VRAM.
+* *Keep weights in RAM* frees the GPU between images, so the language model can use it.
+
+On an RTX 4060 laptop a 832×1216 image takes about 30–40 s, and 75–80 s with pose control and a
+reference. A strong IP-Adapter also copies the reference's pose, so next to a pose map its weight
+is limited to 0.3 (provider setting *IP-Adapter weight with pose control*). An image that is
+already generating cannot be stopped by the server: cancelling ends the job in Lumen at once, and
+the server finishes that image in the background.
+
 The server button in the status bar shows what runs and offers start, stop, restart and the
 server's log. **Check for updates** downloads newer releases. Servers switch to them at their next
 start, and the previous version stays installed, so you can switch back in the server's settings.
@@ -242,7 +257,9 @@ LumenStudio [--project file.lumen] [--page editor|generate|create|poses|parts|li
 | What | Installed | Portable |
 |---|---|---|
 | Settings, provider configuration, logs, character library | `%LOCALAPPDATA%\Lumen\Lumen Studio` | `userdata\` |
-| Server programs downloaded by Lumen, server settings | `…\Lumen Studiountimes`, `servers.json` | `userdatauntimes` |
+| Server programs downloaded by Lumen, server settings | `…\Lumen Studio
+untimes`, `servers.json` | `userdata
+untimes` |
 | Server logs | `…\Lumen Studio\logs\servers` | `userdata\logs\servers` |
 | Cache (thumbnails) | `%LOCALAPPDATA%\Lumen\Lumen Studio\cache` | `userdata\cache` |
 | Projects | `Documents\Lumen Studio` | `userdata\projects` |

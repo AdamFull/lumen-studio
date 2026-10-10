@@ -516,9 +516,24 @@ tests showed that our plain ComfyUI setup cannot do this. The cost is the restar
 change. ControlNet, IP-Adapter, LoRA directory and upscaler are also start-up flags, so the set of
 features a server offers depends on how it was started (§12.4).
 
-Not yet verified, so spike first (phase B): an SDXL OpenPose ControlNet (xinsir) loads and steers
-the pose. The code has an SDXL ControlNet path (`control.hpp`), but the docs show only SD 1.5
-examples. Also measure quality and speed against ComfyUI on the 8 GB test laptop.
+Verified in the phase B spike (RTX 4060 Laptop, 8 GB; release `master-951-f89d9b1`, CUDA 12):
+the xinsir SDXL OpenPose ControlNet steers the pose, and the SDXL ViT-H IP-Adapter carries a
+character's look over from a reference.
+
+| 832×1216, 28 steps, euler_a | f16 (weights streamed) | `--type q8_0` | q8_0 + `--offload-to-cpu` |
+|---|---|---|---|
+| text to image | 42 s | 32 s | 42 s |
+| + OpenPose ControlNet | 90 s | 65 s | — |
+| + ControlNet + IP-Adapter | 132 s | 76–81 s | 76 s |
+| VRAM between images | 5.5 GB | 5.5 GB | 0.24 GB |
+
+Findings:
+* q8_0 images are practically identical to f16.
+* Without VAE tiling, encoding the control image at full size runs out of memory on 8 GB.
+* The plain IP-Adapter also copies the reference's pose: at weight 0.45 or more it overrides the
+  pose map. Around 0.25–0.3 both work together.
+* A job that is already generating cannot be cancelled (`cancel_generating: false`); queued jobs
+  can.
 
 #### 12.2 Concepts
 
@@ -734,19 +749,29 @@ Phase A — foundations
     request and answers in 8.3 s including the start; it stops in 0.8 s and frees the VRAM.
 
 Phase B — stable-diffusion.cpp
-- [ ] Spike on the 8 GB test laptop:
-  - SDXL Illustrious checkpoint + xinsir OpenPose ControlNet + IP-Adapter SDXL;
-  - 1024², with time and VRAM compared against ComfyUI;
-  - inpaint quality;
-  - restart cost of a model switch;
-  - `--offload-to-cpu` against stop/start for GPU sharing.
-- [ ] `SdCppProvider` on `/sdcpp/v1`:
-  - capabilities discovery, `img_gen` + job polling with previews, cancel, `/upscale`;
-  - capabilities derived from the launch profile; model-set restarts with job grouping;
-  - works unmanaged too (URL only);
-  - mock-server contract tests; `tst_live` with `LUMEN_LIVE_SDCPP`.
-- [ ] GPU arbiter policy for sd-server + llama.cpp behind `releaseGpu()`; the reference scenario
-  with the Critic on one GPU.
+- [x] Spike on the 8 GB test laptop (results in §12.1): WAI-Illustrious + xinsir OpenPose
+  ControlNet + IP-Adapter SDXL ViT-H.
+  - Measured: q8_0 against f16 and offload, VRAM, VAE tiling, and the IP-Adapter weight against
+    the pose.
+  - The server answers its health check about 3 s after start; models load lazily on the first
+    request, so restarting for a model switch costs little more than that first load.
+  - Still open: inpaint quality, and a side-by-side timing with ComfyUI.
+- [x] `SdCppProvider` on `/sdcpp/v1`:
+  - capabilities discovery, `img_gen` + job polling with queue position, per-pass progress and
+    previews, cancel, `/upscale`;
+  - ControlNet / IP-Adapter / upscaler flags follow the server's launch options;
+  - the IP-Adapter weight is capped next to a pose map; works unmanaged too (URL only);
+  - mock-server contract tests; `tst_live` `managedSdServer` (Lumen installs, starts and uses
+    sd-server: 92 s for the first pose + reference shot including the start, 82 s for the next).
+  - Model switching stays manual (edit the server's model; Lumen restarts it). Grouping queued jobs
+    by model set waits until a model browser offers several models per server.
+- [x] GPU sharing: sd.cpp profiles default to q8_0 + `--offload-to-cpu` (0.24 GB VRAM between
+  images), and llama.cpp sleeps after 30 s idle, so `releaseGpu()` needs no stop/start.
+  - The reference scenario with both servers run by Lumen (Qwen3-VL-8B + WAI-Illustrious with
+    ControlNet and IP-Adapter, Critic on) passed: 5.0 min, Critic scores 8 and 6.
+  - Peak VRAM 7.9 GB: the first image starts while llama.cpp has not yet unloaded, and sd.cpp
+    streams weights until it does. An explicit "unload now" needs llama.cpp's router mode
+    (phase C).
 
 Phase C — llama.cpp management
 - [ ] llama-server profiles. Done: model + mmproj, context, `-ngl`, KV type, FA, `--jinja`,

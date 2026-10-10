@@ -77,6 +77,7 @@ private slots:
     void managedLlamaServer();
     void installRuntime();
     void managedSdServer();
+    void managedStudioScenario();
 
 private:
     net::HttpClient m_http;
@@ -622,6 +623,127 @@ void TestLive::managedSdServer()
 
     servers.stop(profile.id);
     QTRY_COMPARE_WITH_TIMEOUT(servers.state(profile.id), runtime::ServerState::Stopped, 30000);
+}
+
+// The reference scenario with both servers run by Lumen: LUMEN_LIVE_LLAMA_SERVER/_MODEL/_MMPROJ for the
+// language model, LUMEN_LIVE_SD_* for sd.cpp, LUMEN_LIVE_REFERENCE. Servers start on first use
+// through the providers' gates and share the GPU (llama.cpp sleeps when idle, sd.cpp keeps its
+// weights in RAM between images).
+void TestLive::managedStudioScenario()
+{
+    const QString llamaExe = qEnvironmentVariable("LUMEN_LIVE_LLAMA_SERVER");
+    const QString llamaModel = qEnvironmentVariable("LUMEN_LIVE_LLAMA_MODEL");
+    const QString sdRoot = qEnvironmentVariable("LUMEN_LIVE_SD_RUNTIMES");
+    const QString sdModel = qEnvironmentVariable("LUMEN_LIVE_SD_MODEL");
+    if (llamaExe.isEmpty() || llamaModel.isEmpty() || sdRoot.isEmpty() || sdModel.isEmpty() || referencePath().isEmpty())
+        QSKIP("LUMEN_LIVE_LLAMA_*, LUMEN_LIVE_SD_* and LUMEN_LIVE_REFERENCE are needed");
+    Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
+    Settings::instance().setValue(QStringLiteral("director/critic"), true);
+    Settings::instance().setValue(QStringLiteral("director/criticThreshold"), 6);
+    Settings::instance().setValue(QStringLiteral("director/criticRetries"), 1);
+    QTemporaryDir dir;
+    ui::Studio studio;
+    for (Provider *p : studio.providers()->providers())
+        studio.providers()->removeProvider(p->instanceId());
+    for (const runtime::ServerProfile &p : studio.servers()->profiles())
+        studio.servers()->removeProfile(p.id);
+    // Runtimes: a temporary list with the installed sd.cpp and the existing llama.cpp.
+    studio.runtimes()->setRoot(dir.filePath(QStringLiteral("runtimes")));
+    studio.runtimes()->load();
+    {
+        JobQueue jobs;
+        runtime::RuntimeStore real(&m_http, &jobs);
+        real.setRoot(sdRoot);
+        real.load();
+        const auto sd = real.latestManaged(QStringLiteral("sd.cpp"));
+        QVERIFY(sd);
+        studio.runtimes()->addInstalled(*sd);
+    }
+    QFuture<runtime::InstalledRuntime> llamaRt = studio.runtimes()->adopt(llamaExe);
+    QTRY_VERIFY_WITH_TIMEOUT(llamaRt.isFinished(), 30000);
+    runtime::ServerSupervisor *servers = studio.servers();
+
+    runtime::ServerProfile llm = servers->createProfile(llamaRt.result().id, QStringLiteral("Qwen3-VL"));
+    llm.options.insert(QStringLiteral("model"), llamaModel);
+    if (!qEnvironmentVariable("LUMEN_LIVE_LLAMA_MMPROJ").isEmpty())
+        llm.options.insert(QStringLiteral("mmproj"), qEnvironmentVariable("LUMEN_LIVE_LLAMA_MMPROJ"));
+    llm.startupTimeoutSec = 300;
+    servers->addProfile(llm);
+    runtime::ServerProfile image = servers->createProfile(studio.runtimes()->latestManaged(QStringLiteral("sd.cpp"))->id, QStringLiteral("SDXL"));
+    image.options.insert(QStringLiteral("model"), sdModel);
+    for (const auto &[key, env] : {std::pair{QStringLiteral("control_net"), "LUMEN_LIVE_SD_CONTROLNET"},
+                                   std::pair{QStringLiteral("ip_adapter"), "LUMEN_LIVE_SD_IPADAPTER"},
+                                   std::pair{QStringLiteral("clip_vision"), "LUMEN_LIVE_SD_CLIPVISION"}}) {
+        if (!qEnvironmentVariable(env).isEmpty())
+            image.options.insert(key, qEnvironmentVariable(env));
+    }
+    image.startupTimeoutSec = 300;
+    servers->addProfile(image);
+
+    Provider *sdProvider = studio.providers()->addProvider(QStringLiteral("sdcpp"), QStringLiteral("SDXL"),
+                                                           {{QStringLiteral("managed_server"), image.id}});
+    Provider *llmProvider = studio.providers()->addProvider(QStringLiteral("llamacpp"), QStringLiteral("Qwen3-VL"),
+                                                            {{QStringLiteral("managed_server"), llm.id}, {QStringLiteral("timeout_s"), 900}});
+    QVERIFY(sdProvider && llmProvider);
+    QVERIFY(sdProvider->gate() && llmProvider->gate());
+    QVERIFY(sdProvider->setting(QStringLiteral("control_net")).toBool());
+    studio.providers()->setDefaultImageProvider(sdProvider->instanceId());
+    QCOMPARE(servers->state(llm.id), runtime::ServerState::Stopped);
+    QCOMPARE(servers->state(image.id), runtime::ServerState::Stopped);
+
+    studio.openProject(dir.filePath(QStringLiteral("live.lumen")));
+    QTRY_VERIFY_WITH_TIMEOUT(studio.isProjectOpen(), 10000);
+    auto imported = studio.project()->importFile(referencePath(), doc::AssetKind::Reference);
+    QTRY_VERIFY_WITH_TIMEOUT(imported.isFinished(), 10000);
+    const QString refId = imported.result().id;
+    ui::CreatePage create(&studio);
+    for (QSpinBox *spin : create.findChildren<QSpinBox *>()) {
+        if (spin->suffix().contains(QLatin1String("per shot")))
+            spin->setValue(1);
+    }
+    ui::AssistantPanel panel(&studio);
+    QSignalSpy finished(&panel, &ui::AssistantPanel::runFinished);
+    QElapsedTimer t;
+    t.start();
+    panel.send(QStringLiteral("This is my character: reference image %1. Analyse it, then plan two source images for a Live2D avatar "
+                              "(purpose live2d, 2 shots) and generate them.")
+                   .arg(refId));
+    QTRY_VERIFY_WITH_TIMEOUT(finished.size() == 1, 3000000);
+    qInfo() << "managed scenario:" << t.elapsed() << "ms";
+    for (const ChatMessage &m : panel.history()) {
+        if (m.role == ChatRole::Assistant && !m.toolCalls.isEmpty())
+            for (const ToolCall &c : m.toolCalls)
+                qInfo().noquote() << "  tool:" << c.name << QString::fromUtf8(QJsonDocument(c.arguments).toJson(QJsonDocument::Compact)).left(200);
+        if (m.role == ChatRole::Tool)
+            qInfo().noquote() << "  result:" << m.text.left(300);
+    }
+    qInfo().noquote() << "  reply:" << panel.lastReply();
+    const QJsonObject state = studio.directorActions()->directorState();
+    int images = 0;
+    for (const QJsonValue &v : state.value(QStringLiteral("shots")).toArray()) {
+        const QJsonObject shot = v.toObject();
+        qInfo().noquote() << "  shot" << shot.value(QStringLiteral("id")).toString() << "best critic"
+                          << shot.value(QStringLiteral("best_critic_score")).toInt(-1) << "results"
+                          << shot.value(QStringLiteral("results")).toArray().size();
+        for (const QJsonValue &id : shot.value(QStringLiteral("results")).toArray()) {
+            auto img = studio.project()->loadImage(id.toString());
+            QTRY_VERIFY_WITH_TIMEOUT(img.isFinished(), 10000);
+            save(img.result(), QStringLiteral("managed_%1.png").arg(++images));
+        }
+    }
+    const QStringList llmLog = servers->log(llm.id);
+    const QStringList sdLog = servers->log(image.id);
+    qInfo() << "  llama log lines" << llmLog.size() << "sd log lines" << sdLog.size();
+    QVERIFY(!state.value(QStringLiteral("character")).toObject().isEmpty());
+    QVERIFY(images >= 2);
+    Settings::instance().setValue(QStringLiteral("director/critic"), false);
+    for (Provider *p : studio.providers()->providers())
+        studio.providers()->removeProvider(p->instanceId());
+    servers->stopAll();
+    QTRY_VERIFY_WITH_TIMEOUT(servers->state(llm.id) == runtime::ServerState::Stopped
+                                 && servers->state(image.id) == runtime::ServerState::Stopped, 30000);
+    servers->removeProfile(llm.id);
+    servers->removeProfile(image.id);
 }
 
 QTEST_MAIN(TestLive)
