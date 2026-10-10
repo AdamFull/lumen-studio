@@ -372,6 +372,18 @@ void TestDoc::characterLibrary()
     QCOMPARE(refs2.result().size(), 1);
     QCOMPARE(QDir(dir.filePath(QStringLiteral("characters/") + e.id)).entryList({QStringLiteral("ref_*.png")}).size(), 1);
 
+    // A LoRA attached to the character survives a save without one; an explicit empty one detaches it.
+    const QJsonObject lora{{QStringLiteral("file"), QStringLiteral("C:/loras/mira.safetensors")}, {QStringLiteral("trigger"), QStringLiteral("lmn_mira")}};
+    QVERIFY(library.setLora(e.id, lora));
+    QCOMPARE(library.entry(e.id)->lora, lora);
+    auto again = library.save(QStringLiteral("Mira"), sheet, {solid(QSize(16, 16), Qt::green)}, QString(), e.id);
+    QTRY_VERIFY(again.isFinished());
+    QCOMPARE(again.result().lora, lora);
+    QCOMPARE(library.entry(e.id)->lora, lora);
+    auto cleared = library.save(QStringLiteral("Mira"), sheet, {solid(QSize(16, 16), Qt::green)}, QString(), e.id, QJsonObject());
+    QTRY_VERIFY(cleared.isFinished());
+    QVERIFY(library.entry(e.id)->lora.isEmpty());
+
     // A second library on the same folder (another project / session) sees the character.
     CharacterLibrary other(dir.filePath(QStringLiteral("characters")));
     QCOMPARE(other.entries().size(), 1);

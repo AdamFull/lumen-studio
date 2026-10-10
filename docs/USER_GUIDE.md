@@ -173,6 +173,26 @@ character sheet and its reference images outside the project. **Library → Load
 library…** brings them into any other project: the references are added to the project and to the
 session, and the sheet is set. Saving under an existing name updates that character.
 
+### Character LoRA: the same look in every image
+
+A LoRA is a small add-on to an image model (tens of MB) trained on one character. With it, the
+face, hair, eyes, outfit and colours stay the same while pose, framing and background change.
+
+* **Attach:** Create page → Character → **LoRA…**. Pick a LoRA from the model library (Settings →
+  Models; *Download…* finds LoRAs on Civitai and Hugging Face) or browse to a file.
+* **Trigger word:** Lumen fills it in from the file or its Civitai page; it goes first in every
+  shot's prompt.
+* **Weight:** 0.6–1.0 usually works. Lower it when images look stiff or copy the training
+  pictures.
+* **Where it works:** stable-diffusion.cpp, ComfyUI and WebUI / Forge use LoRAs; cloud image APIs
+  do not.
+* **Warnings:** the Character card warns when the LoRA is made for another model family (an SD 1.5
+  LoRA does not work with an SDXL model). It also warns when the server cannot find the file. For
+  a server Lumen runs, *Use the LoRA's folder* fixes that.
+* **Saving:** the LoRA is saved with the character in the character library.
+
+Training LoRAs inside Lumen comes next (development plan, M13).
+
 ### Critic
 
 With **Critic** turned on, a vision model reviews every generated shot. It compares the result with

@@ -74,6 +74,9 @@ public:
     static ImageRequest buildShotRequest(const QJsonObject &shot, const QList<ReferenceImage> &references,
                                          const pose::Pose &pose, const PromptStyle &style, const ImageCapabilities &caps);
     static QSize sizeForAspect(const QString &aspect, qint64 pixels, int multiple);
+    // Adds a character's LoRA and puts its trigger word first in the prompt. Returns false (and
+    // leaves the request alone) when the provider cannot use LoRAs.
+    static bool applyCharacterLora(ImageRequest &request, const CharacterLora &lora, const ImageCapabilities &caps);
     // Pose for a shot (rig parameters → keypoints) on a canvas of the given size.
     static pose::Pose poseForShot(const QJsonObject &shot, const QSize &canvas);
 

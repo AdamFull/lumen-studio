@@ -11,12 +11,14 @@
 #include "ui/Icons.h"
 #include "ui/Studio.h"
 #include "ui/Theme.h"
+#include "ui/dialogs/CharacterLoraDialog.h"
 #include "ui/director/ShotCard.h"
 #include "ui/widgets/Controls.h"
 #include "ui/widgets/ProviderCombo.h"
 #include "ui/widgets/ReferenceStrip.h"
 #include "ui/widgets/ThumbnailCache.h"
 
+#include <QFileInfo>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QInputDialog>
@@ -140,7 +142,11 @@ CreatePage::CreatePage(Studio *studio, QWidget *parent)
     libraryMenu->addAction(Icons::get(QStringLiteral("download")), tr("Save character to library…"), this, &CreatePage::saveCharacterToLibrary);
     libraryMenu->addAction(Icons::get(QStringLiteral("upload")), tr("Load character from library…"), this, &CreatePage::loadCharacterFromLibrary);
     libraryButton->setMenu(libraryMenu);
+    m_lora = new QPushButton(Icons::get(QStringLiteral("star")), tr("LoRA…"), charCard);
+    m_lora->setToolTip(tr("Attach a LoRA trained on this character, so it looks the same in every image"));
+    connect(m_lora, &QPushButton::clicked, this, &CreatePage::editCharacterLora);
     charHead->addWidget(libraryButton);
+    charHead->addWidget(m_lora);
     charHead->addWidget(editSheet);
     charHead->addWidget(m_analyze);
     ch->addLayout(charHead);
@@ -164,6 +170,7 @@ CreatePage::CreatePage(Studio *studio, QWidget *parent)
     genBar->addWidget(new QLabel(tr("Generator"), board));
     m_provider = new ProviderCombo(studio->providers(), ai::ProviderKind::Image, board);
     genBar->addWidget(m_provider);
+    connect(m_provider, &ProviderCombo::providerChanged, this, &CreatePage::refreshCharacter); // LoRA support differs
     m_variants = new QSpinBox(board);
     m_variants->setRange(1, 8);
     m_variants->setValue(2);
@@ -490,6 +497,31 @@ void CreatePage::refreshCharacter()
                                              palette.join(QStringLiteral(", ")).toHtmlEscaped()));
     }
     m_analyze->setText(c.isEmpty() ? tr("Analyze references") : tr("Re-analyze"));
+
+    // The character's LoRA, and whether the selected generator can use it.
+    const ai::CharacterLora lora = ai::CharacterLora::fromJson(m_session->characterLora());
+    m_lora->setText(lora.isValid() ? tr("LoRA ✓") : tr("LoRA…"));
+    if (lora.isValid()) {
+        QString line = QStringLiteral("<br><b>%1</b> %2 · %3 · %4")
+                           .arg(tr("LoRA:"), QFileInfo(lora.file).completeBaseName().toHtmlEscaped(),
+                                lora.trigger.isEmpty() ? tr("no trigger word") : lora.trigger.toHtmlEscaped(),
+                                tr("weight %1").arg(lora.weight, 0, 'g', 3));
+        const LoraCheck check = checkCharacterLora(m_studio, m_provider->imageProvider(), lora);
+        if (!check.problem.isEmpty())
+            line += QStringLiteral("<br><span style='color:%1'>%2</span>").arg(Theme::palette().warning.name(), check.problem.toHtmlEscaped());
+        m_characterSummary->setText(m_characterSummary->text() + line);
+    }
+}
+
+void CreatePage::editCharacterLora()
+{
+    if (!m_session)
+        newSession();
+    CharacterLoraDialog dlg(m_studio, m_provider->imageProvider(), ai::CharacterLora::fromJson(m_session->characterLora()), this);
+    if (dlg.exec() != QDialog::Accepted)
+        return;
+    m_session->setCharacterLora(dlg.detached() ? QJsonObject() : dlg.lora().toJson());
+    refreshCharacter();
 }
 
 void CreatePage::rebuildShots()
@@ -730,6 +762,7 @@ void CreatePage::generateShot(const QString &shotId, int attempt, const QJsonObj
     const QJsonObject shotJson = shotOverride.isEmpty() ? shot->shot : shotOverride;
     const ShotState shotCopy = *shot;
     const int variants = m_variants->value();
+    const ai::CharacterLora lora = ai::CharacterLora::fromJson(m_session->characterLora());
     const QString providerId = provider->instanceId();
     const QString sessionId = m_session->id();
     if (ShotCard *card = m_cards.value(shotId))
@@ -737,7 +770,7 @@ void CreatePage::generateShot(const QString &shotId, int attempt, const QJsonObj
     m_running[shotId]++;
     QPointer<CreatePage> self(this);
     QPointer<DirectorSession> session = m_session;
-    loadReferenceImages([self, session, shotId, shotJson, shotCopy, caps, style, variants, providerId, sessionId, attempt](QList<QImage> images) {
+    loadReferenceImages([self, session, shotId, shotJson, shotCopy, caps, style, variants, providerId, sessionId, attempt, lora](QList<QImage> images) {
         if (!self || !session)
             return;
         QList<ai::ReferenceImage> refs;
@@ -754,6 +787,7 @@ void CreatePage::generateShot(const QString &shotId, int attempt, const QJsonObj
         spec.providerId = providerId;
         spec.request = ai::Director::buildShotRequest(shotJson, refs, pose, style, caps);
         spec.request.batchCount = variants;
+        ai::Director::applyCharacterLora(spec.request, lora, caps);
         if (shotJson.value(QStringLiteral("background")).toString().contains(QLatin1String("transparent"), Qt::CaseInsensitive))
             spec.request.transparentBackground = caps.transparentBackground;
         spec.title = QObject::tr("Shot: %1").arg(shotJson.value(QStringLiteral("title")).toString());
@@ -1143,11 +1177,12 @@ void CreatePage::saveCharacterToLibrary()
         return;
     QPointer<CreatePage> self(this);
     const QJsonObject sheet = m_session->character();
-    loadReferenceImages([self, name, sheet, existing](QList<QImage> images) {
+    const QJsonObject lora = m_session->characterLora();
+    loadReferenceImages([self, name, sheet, existing, lora](QList<QImage> images) {
         if (!self)
             return;
         self->m_studio->characters()
-            ->save(name, sheet, images, QString(), existing)
+            ->save(name, sheet, images, QString(), existing, lora)
             .then(self, [self](doc::CharacterEntry e) {
                 self->m_studio->notify(tr("Saved \"%1\" with %n reference(s) to the character library.", nullptr, e.referenceCount).arg(e.name),
                                        QStringLiteral("success"));
@@ -1225,6 +1260,7 @@ void CreatePage::loadCharacterFromLibrary()
         if (!self || !session || !projectGuard)
             return;
         session->setCharacter(e.sheet);
+        session->setCharacterLora(e.lora);
         if (images.isEmpty()) {
             self->m_studio->notify(tr("Loaded \"%1\".").arg(e.name), QStringLiteral("success"));
             return;

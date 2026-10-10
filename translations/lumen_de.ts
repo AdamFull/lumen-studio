@@ -220,7 +220,7 @@
         <translation>Der Teile-Server hat keine Ebenen zurückgegeben</translation>
     </message>
     <message>
-        <location filename="../src/ai/providers/SdWebUiProvider.cpp" line="+409"/>
+        <location filename="../src/ai/providers/SdWebUiProvider.cpp" line="+446"/>
         <source>Step %1 / %2</source>
         <translation>Schritt %1 / %2</translation>
     </message>
@@ -683,7 +683,7 @@
         <translation>Physikeinstellung %1 benötigt mindestens zwei Eckpunkte.</translation>
     </message>
     <message>
-        <location filename="../src/ui/pages/CreatePage.cpp" line="+625"/>
+        <location filename="../src/ui/pages/CreatePage.cpp" line="+657"/>
         <source>**Character sheet:** %1 — %2</source>
         <translation>**Charakterblatt:** %1 — %2</translation>
     </message>
@@ -710,7 +710,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Planung fehlgeschlagen: %1</translation>
     </message>
     <message>
-        <location line="+59"/>
+        <location line="+61"/>
         <source>Shot: %1</source>
         <translation>Aufnahme: %1</translation>
     </message>
@@ -1181,7 +1181,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ai::ComfyUiProvider</name>
     <message>
-        <location filename="../src/ai/providers/ComfyUiProvider.cpp" line="+112"/>
+        <location filename="../src/ai/providers/ComfyUiProvider.cpp" line="+114"/>
         <source>Local ComfyUI server. Uses a built-in SD/SDXL graph (checkpoint, ControlNet OpenPose, IP-Adapter references, inpainting) or your own exported workflows such as FLUX Kontext or Qwen-Image-Edit.</source>
         <translation>Lokaler ComfyUI-Server. Verwendet einen integrierten SD/SDXL-Graphen (Checkpoint, ControlNet OpenPose, IP-Adapter-Referenzen, Inpainting) oder Ihre eigenen exportierten Workflows wie FLUX Kontext oder Qwen-Image-Edit.</translation>
     </message>
@@ -1291,7 +1291,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Verbunden – ComfyUI %1 %2</translation>
     </message>
     <message>
-        <location line="+177"/>
+        <location line="+182"/>
         <source>Select a checkpoint for ComfyUI in Settings → Providers.</source>
         <translation>Wählen Sie unter Einstellungen → Anbieter einen Checkpoint für ComfyUI aus.</translation>
     </message>
@@ -1361,7 +1361,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Hochladen eines Bildes zu ComfyUI fehlgeschlagen: %1</translation>
     </message>
     <message>
-        <location line="+181"/>
+        <location line="+272"/>
         <source>No upscale model found in ComfyUI&apos;s models/upscale_models folder.</source>
         <translation>Kein Hochskalierungsmodell im Ordner models/upscale_models von ComfyUI gefunden.</translation>
     </message>
@@ -2387,7 +2387,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Verbunden – Modell: %1</translation>
     </message>
     <message>
-        <location line="+116"/>
+        <location line="+133"/>
         <source>stable-diffusion.cpp does not do instruction edits with this model; use inpainting or img2img.</source>
         <translation>stable-diffusion.cpp kann mit diesem Modell keine Anweisungsbearbeitung; verwenden Sie Inpainting oder img2img.</translation>
     </message>
@@ -2397,7 +2397,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Wird gesendet…</translation>
     </message>
     <message>
-        <location line="+20"/>
+        <location line="+29"/>
         <source>The server&apos;s queue is full; try again when the running jobs are done.</source>
         <translation>Die Warteschlange des Servers ist voll; versuchen Sie es erneut, wenn die laufenden Aufträge fertig sind.</translation>
     </message>
@@ -2465,7 +2465,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ai::SdWebUiProvider</name>
     <message>
-        <location filename="../src/ai/providers/SdWebUiProvider.cpp" line="-349"/>
+        <location filename="../src/ai/providers/SdWebUiProvider.cpp" line="-385"/>
         <source>Local AUTOMATIC1111, Forge or reForge server started with --api. Pose control and character references use the ControlNet extension (built into Forge) with OpenPose and IP-Adapter models.</source>
         <translation>Lokaler AUTOMATIC1111-, Forge- oder reForge-Server, gestartet mit --api. Posensteuerung und Charakterreferenzen nutzen die ControlNet-Erweiterung (in Forge integriert) mit OpenPose- und IP-Adapter-Modellen.</translation>
     </message>
@@ -2595,7 +2595,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Verbunden – aktueller Checkpoint: %1</translation>
     </message>
     <message>
-        <location line="+183"/>
+        <location line="+188"/>
         <source>Pose control needs an OpenPose ControlNet model, but none was found on the server. Install one (e.g. controlnet-openpose-sdxl or xinsir union) or pick it in the provider settings.</source>
         <translation>Die Posensteuerung benötigt ein OpenPose-ControlNet-Modell, auf dem Server wurde jedoch keines gefunden. Installieren Sie eines (z. B. controlnet-openpose-sdxl oder xinsir union) oder wählen Sie es in den Anbietereinstellungen aus.</translation>
     </message>
@@ -2605,7 +2605,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Stable Diffusion WebUI unterstützt keine Bearbeitung per Anweisung; verwenden Sie Inpainting oder img2img.</translation>
     </message>
     <message>
-        <location line="+168"/>
+        <location line="+199"/>
         <source>Stable Diffusion WebUI cannot segment character parts.</source>
         <translation>Stable Diffusion WebUI kann keine Charakterteile segmentieren.</translation>
     </message>
@@ -2689,6 +2689,14 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <location line="+34"/>
         <source>The language model did not produce a valid answer: %1</source>
         <translation>Das Sprachmodell hat keine gültige Antwort geliefert: %1</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::ai::Types</name>
+    <message>
+        <location filename="../src/ai/Types.cpp" line="+120"/>
+        <source>The server has no LoRA &quot;%1&quot;. Put the file into the server&apos;s LoRA folder.</source>
+        <translation>Der Server hat keine LoRA „%1“. Legen Sie die Datei in den LoRA-Ordner des Servers.</translation>
     </message>
 </context>
 <context>
@@ -4512,6 +4520,124 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
 </context>
 <context>
+    <name>lumen::ui::CharacterLoraDialog</name>
+    <message>
+        <location filename="../src/ui/dialogs/CharacterLoraDialog.cpp" line="+113"/>
+        <source>%1 cannot use LoRAs; only the references keep the character.</source>
+        <translation>%1 kann keine LoRAs verwenden; nur die Referenzen halten den Charakter.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>The LoRA file is missing: %1</source>
+        <translation>Die LoRA-Datei fehlt: %1</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>The LoRA is for %1 models, but %2 uses a %3 model; it will not work there.</source>
+        <translation>Die LoRA ist für %1-Modelle, aber %2 verwendet ein %3-Modell; dort funktioniert sie nicht.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>The server %1 has no LoRA folder yet.</source>
+        <translation>Der Server %1 hat noch keinen LoRA-Ordner.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The LoRA is not in the LoRA folder of %1 (%2).</source>
+        <translation>Die LoRA liegt nicht im LoRA-Ordner von %1 (%2).</translation>
+    </message>
+    <message>
+        <location line="+27"/>
+        <source>Character LoRA</source>
+        <translation>Charakter-LoRA</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>A LoRA trained on this character keeps its face, hair, outfit and colours the same in every image. Its trigger word goes first in every prompt.</source>
+        <translation>Eine auf diesen Charakter trainierte LoRA hält Gesicht, Haare, Kleidung und Farben in jedem Bild gleich. Ihr Auslösewort steht am Anfang jedes Prompts.</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>Browse…</source>
+        <translation>Durchsuchen…</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>LoRA file</source>
+        <translation>LoRA-Datei</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>e.g. lmn_akane</source>
+        <translation>z. B. lmn_akane</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Trigger word</source>
+        <translation>Auslösewort</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>How strongly the LoRA applies; 0.6–1.0 usually works. Lower it when images look stiff or copy the training pictures.</source>
+        <translation>Wie stark die LoRA wirkt; 0,6–1,0 funktioniert meist. Senken Sie den Wert, wenn Bilder steif wirken oder die Trainingsbilder kopieren.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Weight</source>
+        <translation>Gewichtung</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Made for</source>
+        <translation>Gemacht für</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Save</source>
+        <translation>Speichern</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Attach</source>
+        <translation>Anhängen</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Detach</source>
+        <translation>Lösen</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Choose a LoRA</source>
+        <translation>LoRA wählen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>LoRA files (*.safetensors)</source>
+        <translation>LoRA-Dateien (*.safetensors)</translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <source>No LoRAs in the model library yet. Download one under Settings → Models, or browse to a file.</source>
+        <translation>Noch keine LoRAs in der Modellbibliothek. Laden Sie eine unter Einstellungen → Modelle herunter oder wählen Sie eine Datei.</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>unknown model family</source>
+        <translation>unbekannte Modellfamilie</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Works with %1.</source>
+        <translation>Funktioniert mit %1.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Use the LoRA&apos;s folder</source>
+        <translation>Den Ordner der LoRA verwenden</translation>
+    </message>
+</context>
+<context>
     <name>lumen::ui::ColorSwatch</name>
     <message>
         <location filename="../src/ui/widgets/Controls.cpp" line="+97"/>
@@ -4571,7 +4697,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::CreatePage</name>
     <message>
-        <location filename="../src/ui/pages/CreatePage.cpp" line="-696"/>
+        <location filename="../src/ui/pages/CreatePage.cpp" line="-728"/>
         <source>Director</source>
         <translation>Regie</translation>
     </message>
@@ -4582,12 +4708,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+270"/>
+        <location line="+275"/>
         <source>New session</source>
         <translation>Neue Sitzung</translation>
     </message>
     <message>
-        <location line="-246"/>
+        <location line="-251"/>
         <source>Describe what you need, e.g. &quot;3 images of my character for a Live2D avatar: neutral front A-pose, eyes closed and mouth open variants&quot;. Attach reference images above. Enter sends, Shift+Enter = new line.</source>
         <translation>Beschreiben Sie, was Sie benötigen, z. B. „3 Bilder meines Charakters für einen Live2D-Avatar: neutrale A-Pose von vorn, Varianten mit geschlossenen Augen und offenem Mund“. Hängen Sie oben Referenzbilder an. Eingabe sendet, Umschalt+Eingabe = neue Zeile.</translation>
     </message>
@@ -4613,29 +4739,29 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+416"/>
+        <location line="+446"/>
         <source>Send</source>
         <translation>Senden</translation>
     </message>
     <message>
-        <location line="-398"/>
-        <location line="+1004"/>
+        <location line="-428"/>
+        <location line="+1036"/>
         <source>Character</source>
         <translation>Charakter</translation>
     </message>
     <message>
-        <location line="-1000"/>
+        <location line="-1032"/>
         <source>Edit sheet</source>
         <translation>Steckbrief bearbeiten</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+360"/>
+        <location line="+365"/>
         <source>Analyze references</source>
         <translation>Referenzen analysieren</translation>
     </message>
     <message>
-        <location line="-357"/>
+        <location line="-362"/>
         <source>Library</source>
         <translation>Bibliothek</translation>
     </message>
@@ -4655,18 +4781,29 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Figur aus der Bibliothek laden…</translation>
     </message>
     <message>
-        <location line="+20"/>
-        <location line="+345"/>
+        <location line="+2"/>
+        <location line="+358"/>
+        <source>LoRA…</source>
+        <translation>LoRA…</translation>
+    </message>
+    <message>
+        <location line="-357"/>
+        <source>Attach a LoRA trained on this character, so it looks the same in every image</source>
+        <translation>Eine auf diesen Charakter trainierte LoRA anhängen, damit er in jedem Bild gleich aussieht</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <location line="+371"/>
         <source>Shot plan</source>
         <translation>Aufnahmeplan</translation>
     </message>
     <message>
-        <location line="-342"/>
+        <location line="-368"/>
         <source>Generator</source>
         <translation>Generator</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+7"/>
         <source> per shot</source>
         <translation> pro Aufnahme</translation>
     </message>
@@ -4770,7 +4907,27 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Erneut analysieren</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+4"/>
+        <source>LoRA ✓</source>
+        <translation>LoRA ✓</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>LoRA:</source>
+        <translation>LoRA:</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>no trigger word</source>
+        <translation>kein Auslösewort</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>weight %1</source>
+        <translation>Gewichtung %1</translation>
+    </message>
+    <message>
+        <location line="+39"/>
         <source>Generating…</source>
         <translation>Wird generiert…</translation>
     </message>
@@ -4818,12 +4975,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Fügen Sie zuerst unter Einstellungen → Anbieter einen Bildanbieter hinzu.</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+12"/>
         <source>Preparing…</source>
         <translation>Wird vorbereitet…</translation>
     </message>
     <message>
-        <location line="+61"/>
+        <location line="+62"/>
         <source>Waiting for the other shots before the Critic reviews…</source>
         <translation>Wartet auf die anderen Aufnahmen, bevor der Kritiker prüft…</translation>
     </message>
@@ -4918,7 +5075,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Die gespeicherte Figur „%1“ ersetzen?</translation>
     </message>
     <message numerus="yes">
-        <location line="+10"/>
+        <location line="+11"/>
         <source>Saved &quot;%1&quot; with %n reference(s) to the character library.</source>
         <translation>
             <numerusform>„%1“ mit %n Referenz in der Figurenbibliothek gespeichert.</numerusform>
@@ -4965,7 +5122,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Die Bibliothek ist leer. Speichern Sie zuerst eine Figur aus einem beliebigen Projekt.</translation>
     </message>
     <message>
-        <location line="+18"/>
+        <location line="+19"/>
         <source>Loaded &quot;%1&quot;.</source>
         <translation>„%1“ geladen.</translation>
     </message>
@@ -5254,7 +5411,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::DirectorSession</name>
     <message>
-        <location filename="../src/ui/director/DirectorSession.cpp" line="+245"/>
+        <location filename="../src/ui/director/DirectorSession.cpp" line="+258"/>
         <source>Untitled session</source>
         <translation>Unbenannte Sitzung</translation>
     </message>
@@ -6809,7 +6966,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Lokale Bilder</translation>
     </message>
     <message>
-        <location line="+19"/>
+        <location line="+22"/>
         <source>Everything was already set up.</source>
         <translation>Es war bereits alles eingerichtet.</translation>
     </message>
@@ -6822,7 +6979,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::LocalSetupDialog</name>
     <message>
-        <location line="-253"/>
+        <location line="-256"/>
         <source>Compact — for GPUs under 8 GB and computers without one</source>
         <translation>Kompakt — für GPUs unter 8 GB und Computer ohne GPU</translation>
     </message>
@@ -6837,7 +6994,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Groß — für GPUs mit 12 GB oder mehr</translation>
     </message>
     <message>
-        <location line="+259"/>
+        <location line="+262"/>
         <location line="+11"/>
         <source>Set up local AI</source>
         <translation>Lokale KI einrichten</translation>

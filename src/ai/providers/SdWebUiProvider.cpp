@@ -6,6 +6,7 @@
 #include "core/JsonUtil.h"
 #include "core/Log.h"
 
+#include <QDir>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QPointer>
@@ -248,6 +249,7 @@ ImageCapabilities SdWebUiProvider::capabilities() const
     c.poseControl = true;
     c.negativePrompt = c.seed = c.steps = c.cfg = c.samplers = true;
     c.batch = true;
+    c.loras = true;
     c.sizeMultiple = 8;
     c.nativePixels = nativePixels();
     c.maxPixels = 2048 * 2048;
@@ -256,7 +258,11 @@ ImageCapabilities SdWebUiProvider::capabilities() const
 
 QJsonObject SdWebUiProvider::buildPayload(const ImageRequest &r, const QStringList &cnModels) const
 {
-    QJsonObject p{{QStringLiteral("prompt"), r.prompt},
+    // WebUI applies LoRAs named in the prompt.
+    QString prompt = r.prompt;
+    for (const LoraRef &l : r.loras)
+        prompt += QStringLiteral(" <lora:%1:%2>").arg(l.resolved.isEmpty() ? l.name : l.resolved).arg(l.weight, 0, 'g', 3);
+    QJsonObject p{{QStringLiteral("prompt"), prompt},
                   {QStringLiteral("negative_prompt"), r.negativePrompt},
                   {QStringLiteral("seed"), double(r.seed)},
                   {QStringLiteral("steps"), r.steps},
@@ -366,10 +372,41 @@ ImageOperation *SdWebUiProvider::generate(const ImageRequest &r)
     const int expected = std::max(1, r.batchCount);
     const int timeoutMin = std::max(1, setting(QStringLiteral("timeout_min")).toInt());
 
-    models
-        .then(op, [self, op, r, path, expected, timeoutMin](QStringList cnModels) {
+    // LoRAs: the server's list gives the names it knows them by.
+    QFuture<ImageRequest> prepared = QtFuture::makeReadyValueFuture(r);
+    if (!r.loras.isEmpty()) {
+        net::CallOptions lo;
+        lo.timeoutMs = 15000;
+        lo.maxRetries = 0;
+        prepared = futureFromCall<QList<ServerLora>>(http()->get(request(QStringLiteral("/sdapi/v1/loras")), lo), [](net::HttpCall *call) {
+                       QList<ServerLora> out;
+                       for (const QJsonValue &v : QJsonDocument::fromJson(call->body()).array()) {
+                           const QJsonObject o = v.toObject();
+                           out.append({o.value(QStringLiteral("name")).toString(), o.value(QStringLiteral("path")).toString()});
+                       }
+                       return out;
+                   }).then([r](const QList<ServerLora> &available) {
+            ImageRequest req = r;
+            QString error;
+            if (!resolveLoras(req.loras, available, &error))
+                throw ProviderError(error);
+            for (LoraRef &l : req.loras) {
+                for (const ServerLora &s : available) {
+                    if (QDir::fromNativeSeparators(s.path) == l.resolved)
+                        l.resolved = s.name;
+                }
+            }
+            return req;
+        });
+    }
+    prepared
+        .then(op, [models](const ImageRequest &req) mutable { return models.then([req](const QStringList &cn) { return std::make_pair(req, cn); }); })
+        .unwrap()
+        .then(op, [self, op, path, expected, timeoutMin](const std::pair<ImageRequest, QStringList> &input) {
             if (!self)
                 return;
+            const ImageRequest r = input.first;
+            const QStringList cnModels = input.second;
             net::CallOptions opts;
             opts.timeoutMs = timeoutMin * 60 * 1000;
             opts.maxRetries = 0; // generation is not idempotent

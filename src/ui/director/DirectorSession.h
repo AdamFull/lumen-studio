@@ -62,6 +62,9 @@ public:
 
     const QJsonObject &character() const { return m_character; }
     void setCharacter(const QJsonObject &sheet);
+    // The character's LoRA ({file, trigger, weight, family}); empty when it has none.
+    const QJsonObject &characterLora() const { return m_lora; }
+    void setCharacterLora(const QJsonObject &lora);
 
     QString purpose() const { return m_purpose; }
     void setPurpose(const QString &p);
@@ -94,6 +97,7 @@ private:
     QList<ChatEntry> m_messages;
     QStringList m_references;
     QJsonObject m_character;
+    QJsonObject m_lora;
     QString m_purpose = QStringLiteral("general");
     QJsonObject m_plan;
     QList<ShotState> m_shots;

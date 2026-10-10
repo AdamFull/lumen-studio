@@ -7,6 +7,8 @@
 #include "core/Log.h"
 #include "core/Paths.h"
 
+#include <QSet>
+#include <QFileInfo>
 #include <QDir>
 #include <QElapsedTimer>
 #include <QPromise>
@@ -325,6 +327,10 @@ ImageCapabilities ComfyTemplate::capabilities() const
     c.samplers = bindings.contains(QStringLiteral("sampler"));
     c.batch = bindings.contains(QStringLiteral("batch"));
     c.transparentBackground = isLayerDiffuse();
+    for (const QJsonValue &node : workflow) {
+        if (node.toObject().value(QStringLiteral("class_type")).toString() == QLatin1String("CheckpointLoaderSimple"))
+            c.loras = true;
+    }
     return c;
 }
 
@@ -376,6 +382,7 @@ ImageCapabilities ComfyUiProvider::capabilities() const
     c.textToImage = c.imageToImage = c.inpaint = true;
     c.edit = false;
     c.poseControl = true;
+    c.loras = true;
     c.maxReferences = text(QStringLiteral("ipadapter_preset")) == QLatin1String("none") ? 0 : 4;
     const int native = setting(QStringLiteral("native_resolution")).toInt();
     c.nativePixels = qint64(native > 0 ? native : 1024) * (native > 0 ? native : 1024);
@@ -914,9 +921,101 @@ void ComfyUiProvider::freeVramSoon()
     m_freeTimer->start();
 }
 
+QJsonObject ComfyUiProvider::insertLoras(QJsonObject graph, const QList<LoraRef> &loras)
+{
+    if (loras.isEmpty())
+        return graph;
+    int next = 1;
+    for (auto it = graph.begin(); it != graph.end(); ++it)
+        next = std::max(next, it.key().toInt() + 1);
+    QStringList loaders;
+    for (auto it = graph.begin(); it != graph.end(); ++it) {
+        if (it.value().toObject().value(QStringLiteral("class_type")).toString() == QLatin1String("CheckpointLoaderSimple"))
+            loaders << it.key();
+    }
+    for (const QString &loader : std::as_const(loaders)) {
+        QJsonArray model = ComfyGraph::link(loader, 0);
+        QJsonArray clip = ComfyGraph::link(loader, 1);
+        QSet<QString> chain;
+        for (const LoraRef &l : loras) {
+            QString id = QString::number(next++);
+            while (graph.contains(id))
+                id = QString::number(next++);
+            graph.insert(id, QJsonObject{{QStringLiteral("class_type"), QStringLiteral("LoraLoader")},
+                                         {QStringLiteral("inputs"), QJsonObject{{QStringLiteral("model"), model},
+                                                                                {QStringLiteral("clip"), clip},
+                                                                                {QStringLiteral("lora_name"), l.resolved.isEmpty() ? l.name : l.resolved},
+                                                                                {QStringLiteral("strength_model"), l.weight},
+                                                                                {QStringLiteral("strength_clip"), l.weight}}},
+                                         {QStringLiteral("_meta"), QJsonObject{{QStringLiteral("title"), QStringLiteral("LoRA %1").arg(l.name)}}}});
+            chain << id;
+            model = ComfyGraph::link(id, 0);
+            clip = ComfyGraph::link(id, 1);
+        }
+        // Everything that used the checkpoint's model or CLIP now uses the end of the chain.
+        for (auto it = graph.begin(); it != graph.end(); ++it) {
+            if (chain.contains(it.key()))
+                continue;
+            QJsonObject node = it.value().toObject();
+            QJsonObject inputs = node.value(QStringLiteral("inputs")).toObject();
+            bool changed = false;
+            for (auto in = inputs.begin(); in != inputs.end(); ++in) {
+                const QJsonArray link = in.value().toArray();
+                if (link.size() != 2 || link.at(0).toString() != loader)
+                    continue;
+                if (link.at(1).toInt() == 0) {
+                    in.value() = model;
+                    changed = true;
+                } else if (link.at(1).toInt() == 1) {
+                    in.value() = clip;
+                    changed = true;
+                }
+            }
+            if (changed) {
+                node.insert(QStringLiteral("inputs"), inputs);
+                it.value() = node;
+            }
+        }
+    }
+    return graph;
+}
+
 ImageOperation *ComfyUiProvider::generateImpl(const ImageRequest &r)
 {
     auto *op = new ImageOperation(this);
+    if (r.loras.isEmpty()) {
+        generateInto(op, r);
+        return op;
+    }
+    // LoRA names as ComfyUI lists them (relative to its loras folder).
+    QPointer<ComfyUiProvider> self(this);
+    nodeOptions(QStringLiteral("LoraLoader"), QStringLiteral("lora_name"))
+        .then(op, [self, op, r](const QStringList &names) {
+            if (!self)
+                return;
+            QList<ServerLora> available;
+            for (const QString &n : names)
+                available.append({QFileInfo(n).completeBaseName(), QDir::fromNativeSeparators(n)});
+            ImageRequest req = r;
+            QString error;
+            if (!resolveLoras(req.loras, available, &error)) {
+                op->fail(error);
+                return;
+            }
+            for (LoraRef &l : req.loras) {
+                for (const QString &n : names) {
+                    if (QDir::fromNativeSeparators(n) == l.resolved)
+                        l.resolved = n;
+                }
+            }
+            self->generateInto(op, req);
+        })
+        .onFailed(op, [op](const std::exception &e) { op->fail(describeException(e)); });
+    return op;
+}
+
+void ComfyUiProvider::generateInto(ImageOperation *op, const ImageRequest &r)
+{
     QList<QPair<QString, QImage>> uploads;
     if (r.mode != GenMode::TextToImage && !r.initImage.isNull())
         uploads.append({QStringLiteral("init"), img::flatten(r.initImage, Qt::white)});
@@ -937,8 +1036,8 @@ ImageOperation *ComfyUiProvider::generateImpl(const ImageRequest &r)
         // Per-request templates (LayerDiffuse) use the provider's checkpoint unless the request names one.
         if (req.model.isEmpty() && r.extras.contains(QLatin1String(kTemplateExtra)))
             req.model = text(QStringLiteral("model"));
-        runGraph(op, [t, req](const UploadedImages &images) { return applyTemplate(t, req, images); }, uploads);
-        return op;
+        runGraph(op, [t, req](const UploadedImages &images) { return insertLoras(applyTemplate(t, req, images), req.loras); }, uploads);
+        return;
     }
     // The built-in graph needs to know which optional components are installed.
     const bool wantsPose = std::any_of(r.controls.begin(), r.controls.end(), [](const ControlInput &c) { return c.type == ControlType::OpenPose; });
@@ -967,12 +1066,11 @@ ImageOperation *ComfyUiProvider::generateImpl(const ImageRequest &r)
                 self->runGraph(op, [s, req, hasIp](const UploadedImages &images) {
                     if (!s)
                         throw ProviderError(QStringLiteral("provider removed"));
-                    return s->buildStandardGraph(req, images, hasIp);
+                    return insertLoras(s->buildStandardGraph(req, images, hasIp), req.loras);
                 }, uploads);
             }).onFailed(op, [op](const std::exception &e) { op->fail(describeException(e)); });
         })
         .onFailed(op, [op](const std::exception &e) { op->fail(describeException(e)); });
-    return op;
 }
 
 bool ComfyUiProvider::supportsUtility(Utility u) const

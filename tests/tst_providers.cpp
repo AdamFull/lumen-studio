@@ -1,7 +1,9 @@
 #include "MockHttpServer.h"
 
 #include "ai/ProviderRegistry.h"
+#include "ai/Director.h"
 #include "ai/ProviderUtil.h"
+#include "ai/providers/ComfyUiProvider.h"
 #include "ai/providers/OpenAiChatProvider.h"
 #include "ai/providers/SdCppProvider.h"
 #include "ai/providers/SdWebUiProvider.h"
@@ -10,6 +12,7 @@
 
 #include <QBuffer>
 #include <QJsonArray>
+#include <QJsonDocument>
 #include <QSignalSpy>
 #include <QtTest>
 
@@ -40,6 +43,7 @@ private slots:
     void registryPersistsRoles();
     void sdcppGenerateWithPoseAndReference();
     void sdcppFailureCancelAndUpscale();
+    void lorasAcrossProviders();
 
 private:
     net::HttpClient m_http;
@@ -535,6 +539,145 @@ void TestProviders::sdcppFailureCancelAndUpscale()
     // The model's own 4x is brought to the requested 2x.
     QCOMPARE(op->result().images.first().image.size(), QSize(200, 120));
     delete op;
+}
+
+void TestProviders::lorasAcrossProviders()
+{
+    // Matching: by the server's relative path (a suffix of the file), else by name.
+    {
+        QList<LoraRef> loras(2);
+        loras[0].file = QStringLiteral("C:/Lumen/models/loras/chars/akane_v2.safetensors");
+        loras[0].name = QStringLiteral("akane_v2");
+        loras[1].name = QStringLiteral("watercolor");
+        const QList<ServerLora> available{{QStringLiteral("akane_v2"), QStringLiteral("old/akane_v2.safetensors")},
+                                          {QStringLiteral("akane_v2"), QStringLiteral("chars/akane_v2.safetensors")},
+                                          {QStringLiteral("Watercolor"), QStringLiteral("styles/Watercolor.safetensors")}};
+        QString error;
+        QVERIFY(resolveLoras(loras, available, &error));
+        QCOMPARE(loras[0].resolved, QStringLiteral("chars/akane_v2.safetensors"));
+        QCOMPARE(loras[1].resolved, QStringLiteral("styles/Watercolor.safetensors"));
+        QList<LoraRef> missing(1);
+        missing[0].name = QStringLiteral("nobody");
+        QVERIFY(!resolveLoras(missing, available, &error));
+        QVERIFY(error.contains(QStringLiteral("nobody")));
+    }
+
+    // A character's LoRA: trigger word first, once; skipped for providers without LoRAs.
+    {
+        CharacterLora c;
+        c.file = QStringLiteral("C:/loras/akane_v2.safetensors");
+        c.trigger = QStringLiteral("lmn_akane");
+        c.weight = 0.75;
+        ImageRequest r;
+        r.prompt = QStringLiteral("1girl, running, park");
+        ImageCapabilities caps;
+        QVERIFY(!Director::applyCharacterLora(r, c, caps));
+        QVERIFY(r.loras.isEmpty());
+        caps.loras = true;
+        QVERIFY(Director::applyCharacterLora(r, c, caps));
+        QVERIFY(Director::applyCharacterLora(r, c, caps));
+        QCOMPARE(r.prompt, QStringLiteral("lmn_akane, 1girl, running, park"));
+        QCOMPARE(r.loras.size(), 1);
+        QCOMPARE(r.loras[0].name, QStringLiteral("akane_v2"));
+        QCOMPARE(r.loras[0].weight, 0.75);
+        QCOMPARE(CharacterLora::fromJson(c.toJson()).trigger, c.trigger);
+        QCOMPARE(r.describe().value(QStringLiteral("loras")).toArray().size(), 1);
+    }
+
+    // sd.cpp: the server's LoRA list resolves the path sent in `lora`.
+    {
+        MockHttpServer server;
+        QJsonObject submitted;
+        server.route("GET", QStringLiteral("/sdcpp/v1/capabilities"), [](const MockRequest &) {
+            return MockResponse::json({{QStringLiteral("loras"), QJsonArray{QJsonObject{{QStringLiteral("name"), QStringLiteral("akane_v2")},
+                                                                                        {QStringLiteral("path"), QStringLiteral("chars/akane_v2.safetensors")}}}}});
+        });
+        server.route("POST", QStringLiteral("/sdcpp/v1/img_gen"), [&](const MockRequest &req) {
+            submitted = req.json();
+            return MockResponse::json({{QStringLiteral("id"), QStringLiteral("job_1")}}, 202);
+        });
+        server.route("GET", QStringLiteral("/sdcpp/v1/jobs/job_1"), [](const MockRequest &) {
+            const QJsonArray images{QJsonObject{{QStringLiteral("index"), 0}, {QStringLiteral("b64_json"), pngBase64(QSize(64, 64), Qt::red)}}};
+            return MockResponse::json({{QStringLiteral("status"), QStringLiteral("completed")},
+                                       {QStringLiteral("result"), QJsonObject{{QStringLiteral("images"), images}}}});
+        });
+        SdCppProvider sd(SdCppProvider::describe(), QStringLiteral("sd"), &m_http, nullptr);
+        sd.pollIntervalMs = 20;
+        sd.configure({{QStringLiteral("url"), server.baseUrl().toString()}});
+        QVERIFY(sd.capabilities().loras);
+        ImageRequest r;
+        r.prompt = QStringLiteral("lmn_akane, 1girl");
+        r.size = QSize(64, 64);
+        LoraRef l;
+        l.file = QStringLiteral("D:/models/loras/chars/akane_v2.safetensors");
+        l.name = QStringLiteral("akane_v2");
+        l.weight = 0.7;
+        r.loras << l;
+        ImageOperation *op = sd.generate(r);
+        QTRY_VERIFY_WITH_TIMEOUT(op->isFinished(), 10000);
+        QVERIFY2(op->state() == Operation::State::Succeeded, qPrintable(op->errorString()));
+        const QJsonArray sent = submitted.value(QStringLiteral("lora")).toArray();
+        QCOMPARE(sent.size(), 1);
+        QCOMPARE(sent[0].toObject().value(QStringLiteral("path")).toString(), QStringLiteral("chars/akane_v2.safetensors"));
+        QCOMPARE(sent[0].toObject().value(QStringLiteral("multiplier")).toDouble(), 0.7);
+        // A LoRA the server does not have: a clear error, nothing submitted.
+        submitted = {};
+        r.loras[0].file.clear();
+        r.loras[0].name = QStringLiteral("unknown_lora");
+        op = sd.generate(r);
+        QTRY_VERIFY_WITH_TIMEOUT(op->isFinished(), 10000);
+        QCOMPARE(op->state(), Operation::State::Failed);
+        QVERIFY(op->errorString().contains(QStringLiteral("unknown_lora")));
+        QVERIFY(submitted.isEmpty());
+    }
+
+    // WebUI: LoRAs go into the prompt by the server's name for them.
+    {
+        SdWebUiProvider webui(SdWebUiProvider::describe(), QStringLiteral("w"), &m_http, nullptr);
+        ImageRequest r;
+        r.prompt = QStringLiteral("lmn_akane, 1girl");
+        LoraRef l;
+        l.name = QStringLiteral("akane_v2");
+        l.resolved = QStringLiteral("akane v2");
+        l.weight = 0.8;
+        r.loras << l;
+        QVERIFY(webui.capabilities().loras);
+        QCOMPARE(webui.buildPayload(r, {}).value(QStringLiteral("prompt")).toString(), QStringLiteral("lmn_akane, 1girl <lora:akane v2:0.8>"));
+    }
+
+    // ComfyUI: a LoraLoader chain between the checkpoint and its model / CLIP users; the VAE stays.
+    {
+        const QJsonObject graph = QJsonDocument::fromJson(R"({
+            "4": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "animagine.safetensors"}},
+            "6": {"class_type": "CLIPTextEncode", "inputs": {"text": "a", "clip": ["4", 1]}},
+            "7": {"class_type": "CLIPTextEncode", "inputs": {"text": "b", "clip": ["4", 1]}},
+            "3": {"class_type": "KSampler", "inputs": {"model": ["4", 0], "positive": ["6", 0], "negative": ["7", 0]}},
+            "8": {"class_type": "VAEDecode", "inputs": {"samples": ["3", 0], "vae": ["4", 2]}}
+        })").object();
+        QList<LoraRef> loras(2);
+        loras[0].name = QStringLiteral("akane_v2");
+        loras[0].resolved = QStringLiteral("chars\\akane_v2.safetensors");
+        loras[0].weight = 0.7;
+        loras[1].name = QStringLiteral("style");
+        loras[1].weight = 0.4;
+        const QJsonObject out = ComfyUiProvider::insertLoras(graph, loras);
+        QCOMPARE(out.size(), graph.size() + 2);
+        const QJsonObject first = out.value(QStringLiteral("9")).toObject();
+        const QJsonObject second = out.value(QStringLiteral("10")).toObject();
+        QCOMPARE(first.value(QStringLiteral("class_type")).toString(), QStringLiteral("LoraLoader"));
+        QCOMPARE(first.value(QStringLiteral("inputs")).toObject().value(QStringLiteral("model")).toArray(), (QJsonArray{QStringLiteral("4"), 0}));
+        QCOMPARE(first.value(QStringLiteral("inputs")).toObject().value(QStringLiteral("lora_name")).toString(), QStringLiteral("chars\\akane_v2.safetensors"));
+        QCOMPARE(second.value(QStringLiteral("inputs")).toObject().value(QStringLiteral("clip")).toArray(), (QJsonArray{QStringLiteral("9"), 1}));
+        QCOMPARE(second.value(QStringLiteral("inputs")).toObject().value(QStringLiteral("lora_name")).toString(), QStringLiteral("style"));
+        auto input = [&out](const char *node, const char *name) {
+            return out.value(QLatin1String(node)).toObject().value(QStringLiteral("inputs")).toObject().value(QLatin1String(name)).toArray();
+        };
+        QCOMPARE(input("3", "model"), (QJsonArray{QStringLiteral("10"), 0}));
+        QCOMPARE(input("6", "clip"), (QJsonArray{QStringLiteral("10"), 1}));
+        QCOMPARE(input("7", "clip"), (QJsonArray{QStringLiteral("10"), 1}));
+        QCOMPARE(input("8", "vae"), (QJsonArray{QStringLiteral("4"), 2}));
+        QCOMPARE(ComfyUiProvider::insertLoras(graph, {}), graph);
+    }
 }
 
 QTEST_MAIN(TestProviders)

@@ -16,6 +16,7 @@
 #include "ui/pages/CreatePage.h"
 #include "pose/Rig.h"
 #include "MockHttpServer.h"
+#include "ui/dialogs/CharacterLoraDialog.h"
 #include "ui/dialogs/LocalServersPage.h"
 #include "ui/dialogs/LocalSetupDialog.h"
 #include "ui/dialogs/ModelHubDialog.h"
@@ -29,6 +30,7 @@
 
 #include <QComboBox>
 #include <QJsonArray>
+#include <QJsonDocument>
 #include <QTabWidget>
 #include <QTreeWidget>
 #include <QAction>
@@ -87,6 +89,7 @@ private slots:
     void assistantRunsReferenceScenario();
     void localServersWiring();
     void localSetupWizard();
+    void characterLoraChecks();
 
 private:
     ToolEvent at(double x, double y, Qt::KeyboardModifiers mods = Qt::NoModifier) const
@@ -1038,6 +1041,113 @@ void TestCanvas::localSetupWizard()
     }
 
     dlg.close();
+}
+
+namespace {
+
+// A safetensors header without weights (enough for Lumen's header inspection).
+QByteArray fakeSafetensors(const QStringList &tensors, const QJsonObject &meta = {})
+{
+    QJsonObject header;
+    for (const QString &t : tensors)
+        header.insert(t, QJsonObject{{QStringLiteral("dtype"), QStringLiteral("F16")}, {QStringLiteral("shape"), QJsonArray{8, 8}},
+                                     {QStringLiteral("data_offsets"), QJsonArray{0, 0}}});
+    if (!meta.isEmpty())
+        header.insert(QStringLiteral("__metadata__"), meta);
+    const QByteArray json = QJsonDocument(header).toJson(QJsonDocument::Compact);
+    QByteArray out;
+    for (int i = 0; i < 8; ++i)
+        out.append(char((quint64(json.size()) >> (8 * i)) & 0xFF));
+    return out + json + QByteArray(2 * 1024 * 1024, '\0'); // the library skips files under 1 MB
+}
+
+} // namespace
+
+void TestCanvas::characterLoraChecks()
+{
+    Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
+    QTemporaryDir dir;
+    auto write = [&dir](const QString &rel, const QByteArray &data) {
+        const QString path = dir.filePath(rel);
+        QDir().mkpath(QFileInfo(path).absolutePath());
+        QFile f(path);
+        return f.open(QIODevice::WriteOnly) && f.write(data) == data.size() ? QDir::cleanPath(path) : QString();
+    };
+    const QString checkpoint = write(QStringLiteral("models/checkpoints/xl.safetensors"),
+                                     fakeSafetensors({QStringLiteral("model.diffusion_model.input_blocks.0.0.weight"),
+                                                      QStringLiteral("model.diffusion_model.label_emb.0.0.weight"),
+                                                      QStringLiteral("conditioner.embedders.1.model.ln_final.weight")}));
+    const QString xlLora = write(QStringLiteral("models/loras/mira_xl.safetensors"),
+                                 fakeSafetensors({QStringLiteral("lora_unet_a.lora_down.weight")},
+                                                 {{QStringLiteral("ss_base_model_version"), QStringLiteral("sdxl_base_v1-0")},
+                                                  {QStringLiteral("modelspec.trigger_phrase"), QStringLiteral("lmn_mira")}}));
+    const QString sd15Lora = write(QStringLiteral("models/old/mira_15.safetensors"),
+                                   fakeSafetensors({QStringLiteral("lora_unet_a.lora_down.weight")}, {{QStringLiteral("ss_base_model_version"), QStringLiteral("sd_v1")}}));
+    QVERIFY(!checkpoint.isEmpty() && !xlLora.isEmpty() && !sd15Lora.isEmpty());
+
+    Studio studio;
+    runtime::ServerSupervisor *servers = studio.servers();
+    runtime::InstalledRuntime rt;
+    rt.id = QStringLiteral("adopted/lora-test");
+    rt.kind = QStringLiteral("sd.cpp");
+    rt.executable = dir.filePath(QStringLiteral("sd-server.exe"));
+    rt.directory = dir.path();
+    studio.runtimes()->addInstalled(rt);
+    runtime::ServerProfile profile = servers->createProfile(rt.id, QStringLiteral("Images"));
+    profile.options = {{QStringLiteral("model"), QDir::toNativeSeparators(checkpoint)}};
+    servers->addProfile(profile);
+    ai::Provider *sd = studio.providers()->addProvider(QStringLiteral("sdcpp"), QStringLiteral("Images"),
+                                                      {{QStringLiteral("url"), QStringLiteral("http://127.0.0.1:1")}, {QStringLiteral("managed_server"), profile.id}});
+    ai::Provider *cloud = studio.providers()->addProvider(QStringLiteral("openai_image"), QStringLiteral("Cloud"), {});
+    QVERIFY(sd && cloud);
+    auto cleanup = qScopeGuard([&] {
+        studio.providers()->removeProvider(sd->instanceId());
+        studio.providers()->removeProvider(cloud->instanceId());
+        servers->removeProfile(profile.id);
+        studio.runtimes()->remove(rt.id);
+        studio.models()->removeRoot(QDir::cleanPath(dir.filePath(QStringLiteral("models"))));
+    });
+    QSignalSpy scanned(studio.models(), &runtime::ModelLibrary::scanFinished);
+    QVERIFY(studio.models()->addRoot(dir.filePath(QStringLiteral("models"))));
+    QTRY_VERIFY_WITH_TIMEOUT(scanned.size() >= 1 && !studio.models()->isScanning(), 20000);
+
+    auto *image = qobject_cast<ai::ImageProvider *>(sd);
+    QCOMPARE(checkpointFamily(&studio, image), QStringLiteral("SDXL"));
+    QCOMPARE(modelFamily(&studio, xlLora), QStringLiteral("SDXL"));
+    QCOMPARE(suggestedTrigger(&studio, xlLora), QStringLiteral("lmn_mira"));
+
+    ai::CharacterLora lora;
+    lora.file = xlLora;
+    lora.trigger = QStringLiteral("lmn_mira");
+    // The server has no LoRA folder yet: fixable in one click.
+    LoraCheck check = checkCharacterLora(&studio, image, lora);
+    QVERIFY(check.fixableFolder);
+    QVERIFY(useLoraFolder(&studio, image, xlLora));
+    QCOMPARE(QDir::fromNativeSeparators(servers->profile(profile.id)->options.value(QStringLiteral("lora_dir")).toString()), QFileInfo(xlLora).absolutePath());
+    QVERIFY2(checkCharacterLora(&studio, image, lora).problem.isEmpty(), qPrintable(checkCharacterLora(&studio, image, lora).problem));
+    // An SD 1.5 LoRA does not fit an SDXL checkpoint.
+    ai::CharacterLora old = lora;
+    old.file = sd15Lora;
+    check = checkCharacterLora(&studio, image, old);
+    QVERIFY(check.problem.contains(QStringLiteral("SD 1.5")));
+    QVERIFY(!check.fixableFolder);
+    // Cloud image APIs cannot load local LoRAs.
+    QVERIFY(checkCharacterLora(&studio, qobject_cast<ai::ImageProvider *>(cloud), lora).problem.contains(QStringLiteral("cannot use LoRAs")));
+
+    // The dialog lists library LoRAs and fills in the trigger word.
+    CharacterLoraDialog dlg(&studio, image, {}, nullptr);
+    auto *files = dlg.findChild<QComboBox *>();
+    QVERIFY(files);
+    QVERIFY(files->findData(QDir::toNativeSeparators(xlLora)) >= 0 && files->findData(QDir::toNativeSeparators(sd15Lora)) >= 0);
+    files->setCurrentIndex(files->findData(QDir::toNativeSeparators(xlLora)));
+    QCOMPARE(dlg.lora().trigger, QStringLiteral("lmn_mira"));
+    QCOMPARE(dlg.lora().family, QStringLiteral("SDXL"));
+    const QString shots = qEnvironmentVariable("LUMEN_SCREENSHOT_DIR");
+    if (!shots.isEmpty()) {
+        dlg.show();
+        QTest::qWait(200);
+        dlg.grab().save(shots + QStringLiteral("/character-lora.png"));
+    }
 }
 
 QTEST_MAIN(TestCanvas)

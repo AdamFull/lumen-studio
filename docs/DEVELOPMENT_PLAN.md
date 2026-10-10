@@ -1011,8 +1011,29 @@ A LoRA learns from 15–40 varied images of the character. They come from what L
 
 #### 13.7 Implementation steps
 
-- [ ] LoRA use: `ImageRequest.loras`, the sd.cpp / ComfyUI / WebUI mappings, LoRA lists from the
-  servers, the character ↔ LoRA link, automatic trigger word, base-family check.
+- [x] LoRA use:
+  - `ImageRequest.loras` (`LoraRef`: name, file, weight) and `ImageCapabilities.loras`.
+  - Each provider asks its server for its LoRA list first and matches by path (the server's
+    relative path is a suffix of the file) or by name. A missing LoRA fails at once with a clear
+    message, before anything is generated.
+    - sd.cpp: `/sdcpp/v1/capabilities` → `lora: [{path, multiplier}]`.
+    - ComfyUI: `/object_info/LoraLoader` → a LoraLoader chain behind every checkpoint loader. The
+      loader's model and CLIP users are rewired, so user templates get LoRAs too.
+    - WebUI / Forge: `/sdapi/v1/loras` → `<lora:name:weight>` in the prompt.
+  - Character ↔ LoRA (`CharacterLora`: file, trigger word, weight, family):
+    - kept in the character library (`character.json`) and the Director session; a re-save keeps
+      the LoRA;
+    - Create page → Character → **LoRA…**: the library's LoRAs or any file, the trigger word
+      (from the file's metadata, Civitai or the download notes), weight;
+    - checks: the provider cannot use LoRAs, the file is missing, another base family than the
+      provider's checkpoint (from the headers), or the Lumen-run sd.cpp server's LoRA folder does
+      not hold the file (one click points it there and restarts the server);
+    - every shot gets the LoRA and the trigger word first.
+  - The setup wizard points the image server at the library's `loras` folder.
+  - Measured (RTX 4060 8 GB, WAI-Illustrious, q8_0 + offload, 1024², 20 steps, the same seed):
+    33.4 s without and 35.8 s with `pixel-art-xl`. All 2,166 LoRA tensors were applied at
+    runtime in 0.5 s, and the style change is obvious.
+  - ComfyUI and WebUI are covered by unit tests, not live yet.
 - [ ] Dataset builder: "LoRA dataset" purpose profile, generation with pose + IP-Adapter, curation
   grid with Critic scores, de-duplication, crop / bucket export.
 - [ ] Captioning with the vision model, identity-tag pruning, caption table editor.

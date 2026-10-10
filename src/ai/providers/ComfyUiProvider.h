@@ -92,12 +92,16 @@ public:
     };
     QJsonObject buildStandardGraph(const ImageRequest &request, const UploadedImages &images, bool hasIpAdapter) const;
     static QJsonObject applyTemplate(const ComfyTemplate &tpl, const ImageRequest &request, const UploadedImages &images);
+    // Chains a LoraLoader per LoRA after every checkpoint loader and moves the loader's model and
+    // CLIP consumers behind the chain (works for templates too).
+    static QJsonObject insertLoras(QJsonObject graph, const QList<LoraRef> &loras);
 
 protected:
     void onConfigured() override;
 
 private:
     ImageOperation *generateImpl(const ImageRequest &request);
+    void generateInto(ImageOperation *op, const ImageRequest &request);
     ImageOperation *runUtilityImpl(Utility utility, const QImage &image, const QJsonObject &params);
     // "Free VRAM when idle": counts running operations and asks ComfyUI to unload its models a few
     // seconds after the last one, so a local LLM can use the GPU.

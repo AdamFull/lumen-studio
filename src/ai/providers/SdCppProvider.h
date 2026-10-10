@@ -32,6 +32,8 @@ public:
 
     // Exposed for tests: the img_gen request body (encodes images; call from a worker thread).
     QJsonObject buildPayload(const ImageRequest &request) const;
+    // The LoRAs a server lists in its capabilities.
+    static QList<ServerLora> serverLoras(const QJsonObject &capabilities);
 
     int pollIntervalMs = 500;
 

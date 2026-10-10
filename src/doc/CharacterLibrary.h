@@ -23,6 +23,7 @@ struct CharacterEntry
     QDateTime modified;
     int referenceCount = 0;
     QImage thumbnail;
+    QJsonObject lora;   // the character's LoRA: {file, trigger, weight, family} (ai::CharacterLora)
 };
 
 // Characters shared by all projects, one folder per character under <app data>/characters:
@@ -39,11 +40,15 @@ public:
     // Entries sorted by most recently modified first (reads the folder).
     QList<CharacterEntry> entries() const;
     std::optional<CharacterEntry> entry(const QString &id) const;
-    // Saves a new character, or replaces `existingId`. Resolves with the stored entry.
+    // Saves a new character, or replaces `existingId`. Resolves with the stored entry. Without
+    // `lora`, a replaced character keeps its LoRA.
     QFuture<CharacterEntry> save(const QString &name, const QJsonObject &sheet, const QList<QImage> &references,
-                                 const QString &notes = QString(), const QString &existingId = QString());
+                                 const QString &notes = QString(), const QString &existingId = QString(),
+                                 const std::optional<QJsonObject> &lora = std::nullopt);
     QFuture<QList<QImage>> loadReferences(const QString &id) const;
     bool rename(const QString &id, const QString &name);
+    // Attaches a LoRA to the character (an empty object detaches it).
+    bool setLora(const QString &id, const QJsonObject &lora);
     bool remove(const QString &id);
 
 signals:

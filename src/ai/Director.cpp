@@ -480,6 +480,22 @@ pose::Pose Director::poseForShot(const QJsonObject &shot, const QSize &canvas)
     return pose::solvePose({rig}, canvas);
 }
 
+bool Director::applyCharacterLora(ImageRequest &r, const CharacterLora &lora, const ImageCapabilities &caps)
+{
+    if (!lora.isValid() || !caps.loras)
+        return false;
+    const LoraRef ref = lora.ref();
+    for (const LoraRef &existing : std::as_const(r.loras)) {
+        if (existing.name.compare(ref.name, Qt::CaseInsensitive) == 0)
+            return true;
+    }
+    r.loras.append(ref);
+    const QString trigger = lora.trigger.trimmed();
+    if (!trigger.isEmpty() && !r.prompt.contains(trigger, Qt::CaseInsensitive))
+        r.prompt = r.prompt.trimmed().isEmpty() ? trigger : trigger + QStringLiteral(", ") + r.prompt.trimmed();
+    return true;
+}
+
 ImageRequest Director::buildShotRequest(const QJsonObject &shot, const QList<ReferenceImage> &references, const pose::Pose &pose,
                                         const PromptStyle &style, const ImageCapabilities &caps)
 {

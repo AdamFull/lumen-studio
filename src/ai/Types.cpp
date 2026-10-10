@@ -1,5 +1,8 @@
 #include "ai/Types.h"
 
+#include <QCoreApplication>
+#include <QDir>
+#include <QFileInfo>
 #include <QJsonArray>
 
 namespace lumen::ai {
@@ -72,6 +75,84 @@ QString utilityName(Utility u)
     return {};
 }
 
+QJsonObject LoraRef::toJson() const
+{
+    QJsonObject o{{QStringLiteral("name"), name}, {QStringLiteral("weight"), weight}};
+    if (!file.isEmpty())
+        o.insert(QStringLiteral("file"), file);
+    return o;
+}
+
+LoraRef LoraRef::fromJson(const QJsonObject &o)
+{
+    LoraRef l;
+    l.name = o.value(QStringLiteral("name")).toString();
+    l.file = o.value(QStringLiteral("file")).toString();
+    l.weight = o.value(QStringLiteral("weight")).toDouble(0.8);
+    if (l.name.isEmpty() && !l.file.isEmpty())
+        l.name = QFileInfo(l.file).completeBaseName();
+    return l;
+}
+
+bool resolveLoras(QList<LoraRef> &loras, const QList<ServerLora> &available, QString *error)
+{
+    for (LoraRef &l : loras) {
+        const QString file = QDir::fromNativeSeparators(l.file);
+        const QString stem = l.name.isEmpty() ? QFileInfo(file).completeBaseName() : l.name;
+        const ServerLora *best = nullptr;
+        for (const ServerLora &s : available) {
+            const QString path = QDir::fromNativeSeparators(s.path);
+            if (!file.isEmpty() && !path.isEmpty() && (file.compare(path, Qt::CaseInsensitive) == 0 || file.endsWith(QLatin1Char('/') + path, Qt::CaseInsensitive))
+                && (!best || path.size() > best->path.size()))
+                best = &s;
+        }
+        if (!best) {
+            for (const ServerLora &s : available) {
+                const QString name = s.name.isEmpty() ? QFileInfo(s.path).completeBaseName() : s.name;
+                if (name.compare(stem, Qt::CaseInsensitive) == 0) {
+                    best = &s;
+                    break;
+                }
+            }
+        }
+        if (!best) {
+            if (error)
+                *error = QCoreApplication::translate("lumen::ai::Types", "The server has no LoRA \"%1\". Put the file into the server's LoRA folder.")
+                             .arg(stem);
+            return false;
+        }
+        l.resolved = best->path.isEmpty() ? best->name : QDir::fromNativeSeparators(best->path);
+    }
+    return true;
+}
+
+LoraRef CharacterLora::ref() const
+{
+    LoraRef l;
+    l.file = file;
+    l.name = QFileInfo(file).completeBaseName();
+    l.weight = weight;
+    return l;
+}
+
+QJsonObject CharacterLora::toJson() const
+{
+    return QJsonObject{{QStringLiteral("file"), file},
+                       {QStringLiteral("trigger"), trigger},
+                       {QStringLiteral("weight"), weight},
+                       {QStringLiteral("family"), family}};
+}
+
+CharacterLora CharacterLora::fromJson(const QJsonObject &o)
+{
+    CharacterLora c;
+    c.file = o.value(QStringLiteral("file")).toString();
+    c.trigger = o.value(QStringLiteral("trigger")).toString();
+    c.weight = o.value(QStringLiteral("weight")).toDouble(0.8);
+    c.family = o.value(QStringLiteral("family")).toString();
+    return c;
+}
+
 QJsonObject ImageRequest::describe() const
 {
     QJsonObject o{{QStringLiteral("mode"), genModeName(mode)},
@@ -106,6 +187,12 @@ QJsonObject ImageRequest::describe() const
         for (const ControlInput &c : controls)
             ctl.append(QJsonObject{{QStringLiteral("type"), controlTypeName(c.type)}, {QStringLiteral("weight"), c.weight}});
         o.insert(QStringLiteral("controls"), ctl);
+    }
+    if (!loras.isEmpty()) {
+        QJsonArray list;
+        for (const LoraRef &l : loras)
+            list.append(l.toJson());
+        o.insert(QStringLiteral("loras"), list);
     }
     if (!extras.isEmpty())
         o.insert(QStringLiteral("extras"), extras);

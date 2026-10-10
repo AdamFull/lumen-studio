@@ -146,6 +146,7 @@ ImageCapabilities SdCppProvider::capabilities() const
     c.maxReferences = setting(QStringLiteral("ip_adapter")).toBool() ? 1 : 0;
     c.negativePrompt = c.seed = c.steps = c.cfg = c.samplers = true;
     c.batch = true;
+    c.loras = true;
     c.sizeMultiple = 64;
     const QString res = text(QStringLiteral("native_resolution"));
     c.nativePixels = res != QLatin1String(kAuto) && res.toInt() > 0 ? qint64(res.toInt()) * res.toInt() : 1024 * 1024;
@@ -212,7 +213,23 @@ QJsonObject SdCppProvider::buildPayload(const ImageRequest &r) const
         const double limit = cap.isValid() ? cap.toDouble() : 0.3;
         p.insert(QStringLiteral("ip_adapter_strength"), posed ? std::min(ref->weight, limit) : ref->weight);
     }
+    if (!r.loras.isEmpty()) {
+        QJsonArray loras;
+        for (const LoraRef &l : r.loras)
+            loras.append(QJsonObject{{QStringLiteral("path"), l.resolved.isEmpty() ? l.name : l.resolved}, {QStringLiteral("multiplier"), l.weight}});
+        p.insert(QStringLiteral("lora"), loras);
+    }
     return json::merge(p, r.extras);
+}
+
+QList<ServerLora> SdCppProvider::serverLoras(const QJsonObject &capabilities)
+{
+    QList<ServerLora> out;
+    for (const QJsonValue &v : capabilities.value(QStringLiteral("loras")).toArray()) {
+        const QJsonObject o = v.toObject();
+        out.append({o.value(QStringLiteral("name")).toString(), o.value(QStringLiteral("path")).toString()});
+    }
+    return out;
 }
 
 ImageOperation *SdCppProvider::generate(const ImageRequest &r)
@@ -241,10 +258,19 @@ ImageOperation *SdCppProvider::generate(const ImageRequest &r)
         QObject::connect(call, &net::HttpCall::finished, op, [op] { op->reportCancelled(); });
     });
     op->reportProgress(-1, tr("Sending…"));
-    async::run([self, r]() -> QByteArray {
+    // LoRAs come from the server's LoRA folder, which it lists in its capabilities.
+    QFuture<ImageRequest> prepared = r.loras.isEmpty() ? QtFuture::makeReadyValueFuture(r)
+                                                       : serverCapabilities().then([r](const QJsonObject &caps) {
+                                                             ImageRequest req = r;
+                                                             QString error;
+                                                             if (!resolveLoras(req.loras, serverLoras(caps), &error))
+                                                                 throw ProviderError(error);
+                                                             return req;
+                                                         });
+    prepared.then(QtFuture::Launch::Async, [self](const ImageRequest &req) -> QByteArray {
         if (!self)
             throw ProviderError(QStringLiteral("provider removed"));
-        return json::compact(self->buildPayload(r));
+        return json::compact(self->buildPayload(req));
     }).then(op, [self, op, r, cancelled, jobId](const QByteArray &body) {
         if (!self || op->isFinished())
             return;

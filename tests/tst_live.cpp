@@ -83,6 +83,7 @@ private slots:
     void managedSdUpscale();
     void managedComfyUi();
     void hubDownload();
+    void managedSdLora();
 
 private:
     net::HttpClient m_http;
@@ -917,6 +918,99 @@ void TestLive::hubDownload()
     QCOMPARE(entry->info.kind, runtime::ModelKind::Upscaler);
     QCOMPARE(entry->sha256, up->sha256);
     qInfo() << "downloaded" << entry->path << entry->size << "bytes in" << t.elapsed() << "ms";
+}
+
+// LUMEN_LIVE_SD_LORA=<file.safetensors> (with LUMEN_LIVE_SD_RUNTIMES / _MODEL): the same seed with and
+// without the LoRA through a Lumen-run sd-server whose LoRA folder holds the file, and a request
+// for a LoRA the server does not have.
+void TestLive::managedSdLora()
+{
+    const QString root = qEnvironmentVariable("LUMEN_LIVE_SD_RUNTIMES");
+    const QString model = qEnvironmentVariable("LUMEN_LIVE_SD_MODEL");
+    const QString loraFile = qEnvironmentVariable("LUMEN_LIVE_SD_LORA");
+    if (root.isEmpty() || model.isEmpty() || loraFile.isEmpty())
+        QSKIP("LUMEN_LIVE_SD_RUNTIMES, LUMEN_LIVE_SD_MODEL and LUMEN_LIVE_SD_LORA are needed");
+    QTemporaryDir tmp;
+    JobQueue jobs;
+    runtime::RuntimeStore store(&m_http, &jobs);
+    store.setRoot(root);
+    store.load();
+    const auto rt = store.latestManaged(QStringLiteral("sd.cpp"));
+    QVERIFY(rt);
+    runtime::ServerSupervisor servers(&store, &m_http);
+    servers.setConfigPath(tmp.filePath(QStringLiteral("servers.json")));
+    servers.setLogDir(tmp.filePath(QStringLiteral("logs")));
+    runtime::ServerProfile profile = servers.createProfile(rt->id, QStringLiteral("Live sd.cpp LoRA"));
+    profile.options = runtime::presetOptions(QStringLiteral("sd.cpp"), runtime::VramTier::Small);
+    profile.options.insert(QStringLiteral("model"), model);
+    profile.options.insert(QStringLiteral("lora_dir"), QFileInfo(loraFile).absolutePath());
+    profile.startupTimeoutSec = 300;
+    servers.addProfile(profile);
+    qInfo().noquote() << "command:" << servers.launchFor(profile.id).commandLine();
+    SdCppProvider sd(SdCppProvider::describe(), QStringLiteral("live-sd"), &m_http, nullptr);
+    sd.configure({{QStringLiteral("url"), runtime::providerUrl(rt->kind, profile.port)}});
+    sd.setGate(std::make_shared<SupervisorGate>(&servers, profile.id));
+
+    ImageRequest r;
+    r.prompt = QStringLiteral("1girl, solo, red hair, black robe, upper body, smile, simple background, masterpiece, best quality");
+    r.negativePrompt = QStringLiteral("lowres, bad anatomy, worst quality");
+    r.size = QSize(1024, 1024);
+    r.seed = 11;
+    r.steps = 20;
+    r.cfg = 6.0;
+    r.sampler = QStringLiteral("euler_a");
+    auto run = [&](const ImageRequest &req, const QString &name) {
+        QElapsedTimer t;
+        t.start();
+        ImageOperation *op = gatedGenerate(&sd, req);
+        op->setAutoDelete(false);
+        if (!QTest::qWaitFor([op] { return op->isFinished(); }, 900000))
+            return std::make_pair(QImage(), QStringLiteral("timeout"));
+        const QString error = op->state() == Operation::State::Succeeded ? QString() : op->errorString();
+        const QImage image = op->result().images.value(0).image;
+        qInfo() << name << "after" << t.elapsed() << "ms" << error;
+        if (!image.isNull())
+            save(image, name);
+        delete op;
+        return std::make_pair(image, error);
+    };
+    const auto plain = run(r, QStringLiteral("sdcpp_lora_off.png"));
+    QVERIFY2(plain.second.isEmpty(), qPrintable(plain.second));
+
+    CharacterLora lora;
+    lora.file = loraFile;
+    lora.trigger = qEnvironmentVariable("LUMEN_LIVE_SD_LORA_TRIGGER", QStringLiteral("pixel art"));
+    lora.weight = 1.0;
+    ImageRequest withLora = r;
+    QVERIFY(Director::applyCharacterLora(withLora, lora, sd.capabilities()));
+    const auto styled = run(withLora, QStringLiteral("sdcpp_lora_on.png"));
+    QVERIFY2(styled.second.isEmpty(), qPrintable(styled.second));
+    // The same seed renders a clearly different image with the LoRA.
+    const QImage a = plain.first.convertToFormat(QImage::Format_RGB32).scaled(128, 128);
+    const QImage b = styled.first.convertToFormat(QImage::Format_RGB32).scaled(128, 128);
+    double diff = 0;
+    for (int y = 0; y < 128; ++y) {
+        for (int x = 0; x < 128; ++x) {
+            const QRgb p = a.pixel(x, y), q = b.pixel(x, y);
+            diff += std::abs(qRed(p) - qRed(q)) + std::abs(qGreen(p) - qGreen(q)) + std::abs(qBlue(p) - qBlue(q));
+        }
+    }
+    diff /= 128.0 * 128 * 3;
+    qInfo() << "mean pixel difference with the LoRA:" << diff;
+    QVERIFY(diff > 8.0);
+    const QStringList log = servers.log(profile.id);
+    qInfo().noquote() << "server log (LoRA lines):" << log.filter(QStringLiteral("lora"), Qt::CaseInsensitive).mid(0, 6).join(QLatin1Char('\n'));
+
+    // A LoRA that is not in the server's folder fails before anything is generated.
+    ImageRequest missing = r;
+    LoraRef ghost;
+    ghost.name = QStringLiteral("no_such_lora");
+    missing.loras << ghost;
+    const auto failed = run(missing, QStringLiteral("sdcpp_lora_missing.png"));
+    QVERIFY(failed.second.contains(QStringLiteral("no_such_lora")));
+
+    servers.stop(profile.id);
+    QTRY_COMPARE_WITH_TIMEOUT(servers.state(profile.id), runtime::ServerState::Stopped, 30000);
 }
 
 QTEST_MAIN(TestLive)

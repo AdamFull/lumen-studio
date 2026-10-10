@@ -100,6 +100,15 @@ void DirectorSession::setCharacter(const QJsonObject &sheet)
     emit characterChanged();
 }
 
+void DirectorSession::setCharacterLora(const QJsonObject &lora)
+{
+    if (lora == m_lora)
+        return;
+    m_lora = lora;
+    saveSoon();
+    emit characterChanged();
+}
+
 void DirectorSession::setPurpose(const QString &p)
 {
     m_purpose = p;
@@ -171,14 +180,17 @@ QJsonObject DirectorSession::toJson() const
             o.insert(QStringLiteral("critiques"), s.critiques);
         shots.append(o);
     }
-    return QJsonObject{{QStringLiteral("title"), m_title},
-                       {QStringLiteral("messages"), messages},
-                       {QStringLiteral("references"), json::toArray(m_references)},
-                       {QStringLiteral("character"), m_character},
-                       {QStringLiteral("purpose"), m_purpose},
-                       {QStringLiteral("plan"), m_plan},
-                       {QStringLiteral("shot_states"), shots},
-                       {QStringLiteral("created"), m_created.toString(Qt::ISODate)}};
+    QJsonObject o{{QStringLiteral("title"), m_title},
+                  {QStringLiteral("messages"), messages},
+                  {QStringLiteral("references"), json::toArray(m_references)},
+                  {QStringLiteral("character"), m_character},
+                  {QStringLiteral("purpose"), m_purpose},
+                  {QStringLiteral("plan"), m_plan},
+                  {QStringLiteral("shot_states"), shots},
+                  {QStringLiteral("created"), m_created.toString(Qt::ISODate)}};
+    if (!m_lora.isEmpty())
+        o.insert(QStringLiteral("character_lora"), m_lora);
+    return o;
 }
 
 void DirectorSession::fromJson(const QString &id, const QJsonObject &o)
@@ -197,6 +209,7 @@ void DirectorSession::fromJson(const QString &id, const QJsonObject &o)
     }
     m_references = json::toStringList(o.value(QStringLiteral("references")).toArray());
     m_character = o.value(QStringLiteral("character")).toObject();
+    m_lora = o.value(QStringLiteral("character_lora")).toObject();
     m_purpose = o.value(QStringLiteral("purpose")).toString(QStringLiteral("general"));
     m_created = QDateTime::fromString(o.value(QStringLiteral("created")).toString(), Qt::ISODate);
     m_shots.clear();

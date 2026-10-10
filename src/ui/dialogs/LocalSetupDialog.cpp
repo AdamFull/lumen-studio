@@ -300,6 +300,9 @@ void LocalSetup::configure()
                 if (!path.isEmpty())
                     p.options.insert(QLatin1String(role), QDir::toNativeSeparators(path));
             }
+            // Character LoRAs (downloaded or trained) land in the library's LoRA folder.
+            p.options.insert(QStringLiteral("lora_dir"),
+                             QDir::toNativeSeparators(QDir(m_studio->models()->defaultFolder()).filePath(runtime::ModelLibrary::subfolderFor(runtime::ModelKind::Lora))));
             const QString upscaler = m_paths.value(QStringLiteral("upscaler"));
             if (!upscaler.isEmpty())
                 p.options.insert(QStringLiteral("upscalers_dir"), QDir::toNativeSeparators(QFileInfo(upscaler).absolutePath()));

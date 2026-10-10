@@ -85,18 +85,20 @@ std::optional<CharacterEntry> CharacterLibrary::entry(const QString &id) const
     e.modified = QDateTime::fromString(json.value(QStringLiteral("modified")).toString(), Qt::ISODateWithMs);
     e.referenceCount = json.value(QStringLiteral("references")).toInt();
     e.thumbnail = QImage(folder(id) + QStringLiteral("/thumb.png"));
+    e.lora = json.value(QStringLiteral("lora")).toObject();
     return e;
 }
 
 QFuture<CharacterEntry> CharacterLibrary::save(const QString &name, const QJsonObject &sheet, const QList<QImage> &references,
-                                               const QString &notes, const QString &existingId)
+                                               const QString &notes, const QString &existingId, const std::optional<QJsonObject> &loraIn)
 {
     const QString id = existingId.isEmpty() ? QUuid::createUuid().toString(QUuid::Id128).left(16) : existingId;
     const QString dir = folder(id);
     const std::optional<CharacterEntry> previous = existingId.isEmpty() ? std::nullopt : entry(existingId);
     const QDateTime now = QDateTime::currentDateTime();
     const QDateTime created = previous ? previous->created : now;
-    return async::run([dir, id, name, sheet, references, notes, now, created] {
+    const QJsonObject lora = loraIn ? *loraIn : (previous ? previous->lora : QJsonObject());
+    return async::run([dir, id, name, sheet, references, notes, now, created, lora] {
                QDir().mkpath(dir);
                // Replace the reference set.
                for (const QString &old : QDir(dir).entryList({QStringLiteral("ref_*.png")}, QDir::Files))
@@ -118,13 +120,15 @@ QFuture<CharacterEntry> CharacterLibrary::save(const QString &name, const QJsonO
                    thumb = img::thumbnail(references.first(), kThumbSide);
                if (!thumb.isNull())
                    thumb.save(dir + QStringLiteral("/thumb.png"));
-               const QJsonObject json{{QStringLiteral("id"), id},
-                                      {QStringLiteral("name"), name},
-                                      {QStringLiteral("sheet"), sheet},
-                                      {QStringLiteral("notes"), notes},
-                                      {QStringLiteral("references"), n},
-                                      {QStringLiteral("created"), created.toString(Qt::ISODateWithMs)},
-                                      {QStringLiteral("modified"), now.toString(Qt::ISODateWithMs)}};
+               QJsonObject json{{QStringLiteral("id"), id},
+                                {QStringLiteral("name"), name},
+                                {QStringLiteral("sheet"), sheet},
+                                {QStringLiteral("notes"), notes},
+                                {QStringLiteral("references"), n},
+                                {QStringLiteral("created"), created.toString(Qt::ISODateWithMs)},
+                                {QStringLiteral("modified"), now.toString(Qt::ISODateWithMs)}};
+               if (!lora.isEmpty())
+                   json.insert(QStringLiteral("lora"), lora);
                if (!writeJson(dir + QStringLiteral("/character.json"), json))
                    throw std::runtime_error("cannot write character.json");
                CharacterEntry e;
@@ -136,6 +140,7 @@ QFuture<CharacterEntry> CharacterLibrary::save(const QString &name, const QJsonO
                e.modified = now;
                e.referenceCount = n;
                e.thumbnail = thumb;
+               e.lora = lora;
                return e;
            })
         .then(this, [this](CharacterEntry e) {
@@ -169,6 +174,23 @@ bool CharacterLibrary::rename(const QString &id, const QString &name)
     if (json.isEmpty() || name.trimmed().isEmpty())
         return false;
     json.insert(QStringLiteral("name"), name.trimmed());
+    json.insert(QStringLiteral("modified"), QDateTime::currentDateTime().toString(Qt::ISODateWithMs));
+    if (!writeJson(path, json))
+        return false;
+    emit changed();
+    return true;
+}
+
+bool CharacterLibrary::setLora(const QString &id, const QJsonObject &lora)
+{
+    const QString path = folder(id) + QStringLiteral("/character.json");
+    QJsonObject json = readJson(path);
+    if (json.isEmpty())
+        return false;
+    if (lora.isEmpty())
+        json.remove(QStringLiteral("lora"));
+    else
+        json.insert(QStringLiteral("lora"), lora);
     json.insert(QStringLiteral("modified"), QDateTime::currentDateTime().toString(Qt::ISODateWithMs));
     if (!writeJson(path, json))
         return false;

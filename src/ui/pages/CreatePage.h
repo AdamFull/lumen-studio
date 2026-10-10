@@ -53,6 +53,7 @@ private:
     // Critic: reviews new results of a shot and retries it while the best score is below the threshold.
     void critique(const QString &shotId, const QStringList &assetIds, int attempt, const QJsonObject &shotUsed);
     void saveCharacterToLibrary();
+    void editCharacterLora();
     void loadCharacterFromLibrary();
     void generateAll();
     void newSession();
@@ -83,6 +84,7 @@ private:
     QVBoxLayout *m_refThumbs;
     QWidget *m_refRow;
     QPushButton *m_analyze;
+    QPushButton *m_lora;
     ProviderCombo *m_provider;
     QSpinBox *m_variants;
     QCheckBox *m_critic;

@@ -56,6 +56,45 @@ struct ControlInput
     double end = 1.0;
 };
 
+// A LoRA applied to a generation. Servers load LoRAs from their own LoRA folder; the provider
+// finds the file there by its path or name (resolveLoras) and fills in `resolved`.
+struct LoraRef
+{
+    QString name;           // file name without extension ("akane_v2")
+    QString file;           // full path on this computer, when known
+    double weight = 0.8;
+    QString resolved;       // what the server calls it (relative path or name); set by the provider
+
+    QJsonObject toJson() const;
+    static LoraRef fromJson(const QJsonObject &o);
+};
+
+// A LoRA a server offers: its name (file stem) and path relative to the server's LoRA folder.
+struct ServerLora
+{
+    QString name;
+    QString path;
+};
+// Finds each requested LoRA among the server's: by the file's path (the server's relative path is
+// a suffix of it), else by name. Fills `resolved` with the server's path; returns false and sets
+// *error when one is missing.
+bool resolveLoras(QList<LoraRef> &loras, const QList<ServerLora> &available, QString *error);
+
+// A character's LoRA (M13): the file, the trigger word that calls the character up, the weight
+// that works best and the base model family it was trained for ("SDXL", "Illustrious", …).
+struct CharacterLora
+{
+    QString file;
+    QString trigger;
+    double weight = 0.8;
+    QString family;
+
+    bool isValid() const { return !file.isEmpty(); }
+    LoraRef ref() const;
+    QJsonObject toJson() const;
+    static CharacterLora fromJson(const QJsonObject &o);
+};
+
 struct ImageRequest
 {
     GenMode mode = GenMode::TextToImage;
@@ -77,6 +116,7 @@ struct ImageRequest
 
     QList<ReferenceImage> references;
     QList<ControlInput> controls;
+    QList<LoraRef> loras;
 
     bool transparentBackground = false;
     QString quality;        // provider-specific quality tier (e.g. OpenAI "high")
@@ -117,6 +157,7 @@ struct ImageCapabilities
     bool batch = true;
     bool transparentBackground = false;
     bool qualityTiers = false;
+    bool loras = false;            // LoRA files from the server's LoRA folder
     int sizeMultiple = 8;
     QList<QSize> fixedSizes;       // when non-empty only these sizes are accepted
     QStringList aspectRatios;      // providers that take aspect ratio instead of size
