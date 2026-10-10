@@ -66,15 +66,13 @@ QString modelFamily(Studio *studio, const QString &file)
     return QFileInfo::exists(file) ? runtime::inspectModel(file).family : QString();
 }
 
-QString checkpointFamily(Studio *studio, ai::ImageProvider *provider)
+QString checkpointFile(Studio *studio, ai::ImageProvider *provider)
 {
     if (!provider)
         return {};
     if (const auto p = managedSdServer(studio, provider)) {
         const QString model = p->option(QStringLiteral("model"), QStringLiteral("sd.cpp")).toString();
-        if (!model.isEmpty())
-            return modelFamily(studio, model);
-        return modelFamily(studio, p->option(QStringLiteral("diffusion_model"), QStringLiteral("sd.cpp")).toString());
+        return QDir::fromNativeSeparators(model.isEmpty() ? p->option(QStringLiteral("diffusion_model"), QStringLiteral("sd.cpp")).toString() : model);
     }
     // Other servers name their checkpoint; look for a file of that name in the library.
     const QString name = QFileInfo(QDir::fromNativeSeparators(provider->text(QStringLiteral("model")))).fileName();
@@ -82,9 +80,14 @@ QString checkpointFamily(Studio *studio, ai::ImageProvider *provider)
         return {};
     for (const runtime::ModelEntry &e : studio->models()->entries()) {
         if (QFileInfo(e.path).fileName().compare(name, Qt::CaseInsensitive) == 0)
-            return e.info.family;
+            return e.path;
     }
     return {};
+}
+
+QString checkpointFamily(Studio *studio, ai::ImageProvider *provider)
+{
+    return modelFamily(studio, checkpointFile(studio, provider));
 }
 
 QString suggestedTrigger(Studio *studio, const QString &file)

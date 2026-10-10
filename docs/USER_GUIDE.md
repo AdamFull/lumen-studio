@@ -221,10 +221,20 @@ images of it:
    * Click a caption to edit it. The common-tags line shows what the captions say most often;
      *Remove tag from all…* drops a tag that belongs to the character (for example boots it
      always wears).
-6. **Export for training…** writes the kept images at training sizes with their captions, for
-   example for an external trainer.
-
-Training the LoRA inside Lumen comes next (development plan, M13).
+6. **Train** tab:
+   * Choose the base model: the one you generate with, which is preselected. The LoRA works with
+     that model and others of its family.
+   * The settings for your GPU are preselected.
+   * Choose the number of epochs; 10 is a good start.
+   * **Start training** shows the number of steps and the estimated time. On an 8 GB GPU 25 images
+     take about two hours.
+   * While training runs, the local servers are stopped (they need the same GPU) and start again
+     afterwards.
+   * **Stop** keeps the progress; **Continue the stopped training** carries on later.
+   * When the training is done, the LoRA is in the model library and attached to the character,
+     with its trigger word.
+7. **Export for training…** writes the kept images at training sizes with their captions, for
+   an external trainer.
 
 ### Critic
 

@@ -23,6 +23,8 @@
 #include "pose/Rig.h"
 #include "runtime/ModelHub.h"
 #include "runtime/ModelLibrary.h"
+#include "runtime/LoraTraining.h"
+#include "runtime/ModelFormats.h"
 #include "runtime/RuntimeStore.h"
 #include "runtime/ServerProfile.h"
 #include "runtime/Supervisor.h"
@@ -37,10 +39,12 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QPainter>
+#include <QProcess>
 #include <QRegularExpression>
 #include <QSignalSpy>
 #include <QSpinBox>
 #include <QTemporaryDir>
+#include <QTimer>
 #include <QtTest>
 
 using namespace lumen;
@@ -93,6 +97,7 @@ private slots:
     void managedDatasetShots();
     void managedCaptions();
     void installTrainer();
+    void trainLora();
 
 private:
     net::HttpClient m_http;
@@ -1212,6 +1217,98 @@ void TestLive::installTrainer()
         bytes += it.fileInfo().size();
     }
     qInfo().noquote() << "installed in" << t.elapsed() / 1000 << "s:" << rt->versionInfo << "·" << runtime::formatBytes(bytes) << "on disk";
+}
+
+// LUMEN_LIVE_TRAIN_IMAGES=<folder with dataset_ds*.png> with LUMEN_LIVE_SD_MODEL (SDXL checkpoint) and an
+// installed trainer in LUMEN_LIVE_SD_RUNTIMES: trains a LoRA for LUMEN_LIVE_TRAIN_EPOCHS (1) epochs with
+// LUMEN_LIVE_TRAIN_REPEATS (2) repeats and reports speed and peak GPU memory (nvidia-smi).
+// LUMEN_LIVE_TRAIN_WORK keeps the run folder.
+void TestLive::trainLora()
+{
+    const QString images = qEnvironmentVariable("LUMEN_LIVE_TRAIN_IMAGES");
+    const QString model = qEnvironmentVariable("LUMEN_LIVE_SD_MODEL");
+    const QString root = qEnvironmentVariable("LUMEN_LIVE_SD_RUNTIMES");
+    if (images.isEmpty() || model.isEmpty() || root.isEmpty())
+        QSKIP("LUMEN_LIVE_TRAIN_IMAGES, LUMEN_LIVE_SD_MODEL and LUMEN_LIVE_SD_RUNTIMES are needed");
+    const int epochs = std::max(1, qEnvironmentVariableIntValue("LUMEN_LIVE_TRAIN_EPOCHS"));
+    const int repeats = std::max(1, qEnvironmentVariable("LUMEN_LIVE_TRAIN_REPEATS", QStringLiteral("2")).toInt());
+    QTemporaryDir tmp;
+    const QString work = qEnvironmentVariable("LUMEN_LIVE_TRAIN_WORK", tmp.path());
+    JobQueue jobs;
+    runtime::RuntimeStore store(&m_http, &jobs);
+    store.setRoot(root);
+    store.load();
+    const QList<runtime::InstalledRuntime> trainers = store.runtimes(QStringLiteral("kohya"));
+    QVERIFY2(!trainers.isEmpty(), "no trainer installed");
+
+    // Training folder: "<repeats>_<trigger>" with the images and a caption each.
+    const QString trigger = QStringLiteral("lmn_live");
+    const QString folder = QDir(work).filePath(QStringLiteral("img/%1_%2").arg(repeats).arg(trigger));
+    QDir(folder).removeRecursively();
+    QDir().mkpath(folder);
+    int n = 0;
+    const QStringList files = QDir(images).entryList({QStringLiteral("dataset_ds*.png")}, QDir::Files, QDir::Name)
+                                  .filter(QRegularExpression(QStringLiteral("ds\\d+\\.png$")));
+    for (const QString &f : files) {
+        const QString base = QDir(folder).filePath(QStringLiteral("%1").arg(++n, 3, 10, QLatin1Char('0')));
+        QVERIFY(QFile::copy(QDir(images).filePath(f), base + QStringLiteral(".png")));
+        QFile caption(base + QStringLiteral(".txt"));
+        QVERIFY(caption.open(QIODevice::WriteOnly));
+        caption.write("lmn_live, 1girl, solo, simple background");
+    }
+    QVERIFY(n > 0);
+
+    runtime::TrainingOptions o;
+    o.runtimeId = trainers.first().id;
+    o.checkpoint = model;
+    o.family = QStringLiteral("SDXL");
+    o.imagesDir = QDir(work).filePath(QStringLiteral("img"));
+    o.workDir = work;
+    o.outputName = trigger;
+    o.trigger = trigger;
+    o.epochs = epochs;
+    o.tier = runtime::VramTier::Small;
+    o.title = QStringLiteral("Lumen live test");
+    qInfo().noquote() << "args:" << runtime::trainingArguments(o, trainers.first()).join(QLatin1Char(' '));
+
+    // Peak GPU memory while the trainer runs.
+    int peakMiB = 0;
+    QTimer sampler;
+    sampler.setInterval(3000);
+    connect(&sampler, &QTimer::timeout, this, [&peakMiB] {
+        QProcess smi;
+        smi.start(QStringLiteral("nvidia-smi"), {QStringLiteral("--query-gpu=memory.used"), QStringLiteral("--format=csv,noheader,nounits")});
+        if (smi.waitForFinished(3000))
+            peakMiB = std::max(peakMiB, QString::fromLatin1(smi.readAllStandardOutput()).trimmed().toInt());
+    });
+    sampler.start();
+    QElapsedTimer t;
+    t.start();
+    Job *job = runtime::startTraining(&store, nullptr, &jobs, o);
+    QString lastPhase;
+    connect(job, &Job::progressChanged, this, [&lastPhase](double, const QString &status) {
+        const QString phase = status.section(QStringLiteral(" · "), 0, 0);
+        if (phase != lastPhase)
+            qInfo().noquote() << "  " << status;
+        lastPhase = phase;
+    });
+    QTRY_VERIFY_WITH_TIMEOUT(job->isFinished(), 4 * 3600 * 1000);
+    sampler.stop();
+    if (job->state() != Job::State::Succeeded) {
+        QFile log(QDir(work).filePath(QStringLiteral("train.log")));
+        if (log.open(QIODevice::ReadOnly))
+            qInfo().noquote() << QString::fromUtf8(log.readAll()).right(4000);
+    }
+    QVERIFY2(job->state() == Job::State::Succeeded, qPrintable(job->errorString()));
+    const QVariantMap result = job->result().toMap();
+    qInfo().noquote() << n << "images x" << repeats << "repeats x" << epochs << "epochs in" << t.elapsed() / 1000 << "s;"
+                      << job->metadata().value(QStringLiteral("secondsPerStep")).toDouble() << "s/step; loss"
+                      << job->metadata().value(QStringLiteral("loss")).toDouble() << "; peak GPU memory" << peakMiB << "MiB";
+    qInfo().noquote() << "files:" << result.value(QStringLiteral("files")).toStringList().join(QStringLiteral(", "));
+    const runtime::ModelInfo info = runtime::inspectModel(result.value(QStringLiteral("final")).toString());
+    QCOMPARE(info.kind, runtime::ModelKind::Lora);
+    QCOMPARE(info.family, QStringLiteral("SDXL"));
+    qInfo() << "LoRA:" << QFileInfo(result.value(QStringLiteral("final")).toString()).size() / 1e6 << "MB";
 }
 
 QTEST_MAIN(TestLive)

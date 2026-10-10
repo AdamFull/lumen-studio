@@ -19,6 +19,10 @@
 #include "ui/dialogs/CharacterLoraDialog.h"
 #include "ui/dialogs/LocalServersPage.h"
 #include "ui/dialogs/LoraDatasetDialog.h"
+#include "ui/CharacterTraining.h"
+#include "runtime/RuntimeStore.h"
+#include "core/Async.h"
+#include "ai/Types.h"
 #include "doc/CharacterLibrary.h"
 #include "doc/LoraDataset.h"
 #include "ui/dialogs/LocalSetupDialog.h"
@@ -96,6 +100,7 @@ private slots:
     void localSetupWizard();
     void characterLoraChecks();
     void loraTrainingSet();
+    void loraTrainingRun();
 
 private:
     ToolEvent at(double x, double y, Qt::KeyboardModifiers mods = Qt::NoModifier) const
@@ -1363,6 +1368,130 @@ void TestCanvas::loraTrainingSet()
     reloaded.load();
     QCOMPARE(reloaded.items().size(), 3);
     QCOMPARE(reloaded.settings().trigger, QStringLiteral("mira_v2"));
+}
+
+void TestCanvas::loraTrainingRun()
+{
+    Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
+    QTemporaryDir dir;
+    auto write = [&dir](const QString &rel, const QByteArray &data) {
+        const QString path = QDir::cleanPath(dir.filePath(rel));
+        QDir().mkpath(QFileInfo(path).absolutePath());
+        QFile f(path);
+        return f.open(QIODevice::WriteOnly) && f.write(data) == data.size() ? path : QString();
+    };
+    const QString checkpoint = write(QStringLiteral("models/checkpoints/xl.safetensors"),
+                                     fakeSafetensors({QStringLiteral("model.diffusion_model.input_blocks.0.0.weight"),
+                                                      QStringLiteral("model.diffusion_model.label_emb.0.0.weight"),
+                                                      QStringLiteral("conditioner.embedders.1.model.ln_final.weight")}));
+    QVERIFY(!write(QStringLiteral("kohya/sd-scripts/sdxl_train_network.py"), "#").isEmpty());
+    QVERIFY(!write(QStringLiteral("kohya/venv/Scripts/python.exe"), "MZ").isEmpty());
+
+    Studio studio;
+    QFuture<runtime::InstalledRuntime> adopted = studio.runtimes()->adopt(dir.filePath(QStringLiteral("kohya")));
+    QTRY_VERIFY(adopted.isFinished());
+    const QString trainerId = adopted.result().id;
+    QSignalSpy scanned(studio.models(), &runtime::ModelLibrary::scanFinished);
+    QVERIFY(studio.models()->addRoot(dir.filePath(QStringLiteral("models"))));
+    QTRY_VERIFY_WITH_TIMEOUT(scanned.size() >= 1 && !studio.models()->isScanning(), 20000);
+
+    // A library character with a small training set.
+    const QJsonObject sheet{{QStringLiteral("name"), QStringLiteral("Mira")}, {QStringLiteral("tags"), QStringLiteral("red hair")}};
+    QImage ref(64, 96, QImage::Format_ARGB32);
+    ref.fill(Qt::red);
+    auto saved = studio.characters()->save(QStringLiteral("Mira (training test)"), sheet, {ref});
+    QTRY_VERIFY(saved.isFinished());
+    const QString characterId = saved.result().id;
+    QString trainedLora;
+    auto cleanup = qScopeGuard([&] {
+        studio.characters()->remove(characterId);
+        studio.runtimes()->remove(trainerId);
+        studio.models()->moveToTrash = [](const QString &path, QString *) { return QFile::remove(path); };
+        if (!trainedLora.isEmpty())
+            studio.models()->trash(trainedLora);
+        studio.models()->removeRoot(QDir::cleanPath(dir.filePath(QStringLiteral("models"))));
+    });
+    {
+        doc::LoraDataset ds(studio.characters()->datasetDirectory(characterId));
+        ds.load();
+        for (int i = 0; i < 3; ++i) {
+            QImage img(512, 768, QImage::Format_ARGB32);
+            img.fill(QColor(200, 40 * i, 40));
+            auto added = ds.add(img, {{QStringLiteral("file"), QStringLiteral("x")}});
+            QTRY_VERIFY(added.isFinished());
+            ds.setCaption(added.result().id, QStringLiteral("lmn_mira, 1girl, smile"), false);
+        }
+        ds.setSettings({QStringLiteral("lmn_mira"), true});
+    }
+
+    // The trainer is simulated: it checks the folder it gets and writes a LoRA per epoch.
+    QStringList trainerArgs;
+    QString imagesFolder;
+    studio.runtimes()->processRunner = [&](const QString &, const QStringList &args, const QProcessEnvironment &, const QString &,
+                                           std::function<void(const QString &)> line, const async::CancelToken &) {
+        trainerArgs = args;
+        const QString out = args.value(args.indexOf(QStringLiteral("--output_dir")) + 1);
+        const QString name = args.value(args.indexOf(QStringLiteral("--output_name")) + 1);
+        const QString images = args.value(args.indexOf(QStringLiteral("--train_data_dir")) + 1);
+        const QStringList folders = QDir(images).entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+        imagesFolder = folders.value(0);
+        const QByteArray lora = fakeSafetensors({QStringLiteral("lora_unet_a.lora_down.weight")},
+                                                {{QStringLiteral("ss_base_model_version"), QStringLiteral("sdxl_base_v1-0")}});
+        for (const QString &f : {name + QStringLiteral("-000001.safetensors"), name + QStringLiteral(".safetensors")}) {
+            QFile file(QDir(out).filePath(f));
+            if (file.open(QIODevice::WriteOnly))
+                file.write(lora);
+        }
+        line(QStringLiteral("epoch 1/1"));
+        line(QStringLiteral("steps: 100%|##########| 75/75 [00:03<00:00,  3.10s/it, avr_loss=0.0850]"));
+        line(QStringLiteral("saving checkpoint: %1").arg(QDir(out).filePath(name + QStringLiteral(".safetensors"))));
+        runtime::ProcessResult r;
+        r.started = true;
+        r.exitCode = 0;
+        return QtFuture::makeReadyValueFuture(r);
+    };
+
+    LoraDatasetDialog dlg(&studio, characterId, nullptr, {});
+    dlg.resize(1080, 720);
+    dlg.show();
+    dlg.findChild<QTabWidget *>()->setCurrentIndex(2);
+    QComboBox *base = nullptr;
+    for (QComboBox *c : dlg.findChildren<QComboBox *>()) {
+        if (c->findData(checkpoint) >= 0)
+            base = c;
+    }
+    QVERIFY(base);
+    base->setCurrentIndex(base->findData(checkpoint));
+    QPushButton *start = nullptr;
+    for (QPushButton *b : dlg.findChildren<QPushButton *>()) {
+        if (b->text() == QLatin1String("Start training"))
+            start = b;
+    }
+    QVERIFY(start);
+    QTRY_VERIFY(start->isEnabled());
+    start->click();
+    QTRY_VERIFY_WITH_TIMEOUT(!studio.characters()->entry(characterId)->lora.isEmpty(), 20000);
+    QVERIFY(!CharacterTraining::running(characterId));
+
+    // 3 kept images × 40 repeats (the most) in "<repeats>_<trigger>", the chosen base model, one epoch file each.
+    QCOMPARE(imagesFolder, QStringLiteral("40_lmn_mira"));
+    QCOMPARE(QDir::fromNativeSeparators(trainerArgs.value(trainerArgs.indexOf(QStringLiteral("--pretrained_model_name_or_path")) + 1)), checkpoint);
+    const ai::CharacterLora lora = ai::CharacterLora::fromJson(studio.characters()->entry(characterId)->lora);
+    trainedLora = lora.file;
+    QCOMPARE(lora.trigger, QStringLiteral("lmn_mira"));
+    QCOMPARE(lora.family, QStringLiteral("SDXL"));
+    QCOMPARE(QFileInfo(lora.file).fileName().left(8), QStringLiteral("lmn_mira"));
+    QCOMPARE(QFileInfo(lora.file).absolutePath(), QDir(studio.models()->defaultFolder()).filePath(QStringLiteral("loras")));
+    QTRY_VERIFY(studio.models()->entry(lora.file).has_value());
+    const auto entry = studio.models()->entry(lora.file);
+    QCOMPARE(entry->info.kind, runtime::ModelKind::Lora);
+    QCOMPARE(entry->source.value(QStringLiteral("source")).toString(), QStringLiteral("training"));
+    QCOMPARE(entry->info.triggerWords, QStringList{QStringLiteral("lmn_mira")});
+    const QString shots = qEnvironmentVariable("LUMEN_SCREENSHOT_DIR");
+    if (!shots.isEmpty()) {
+        QTest::qWait(300);
+        dlg.grab().save(shots + QStringLiteral("/lora-train.png"));
+    }
 }
 
 QTEST_MAIN(TestCanvas)

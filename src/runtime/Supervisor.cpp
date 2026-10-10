@@ -301,8 +301,37 @@ void ServerSupervisor::settleWaiters(Server *s, const QString &error)
     }
 }
 
+QStringList ServerSupervisor::reserveGpu(const QString &reason)
+{
+    QStringList running;
+    for (const ServerProfile &p : std::as_const(m_profiles)) {
+        const ServerState st = state(p.id);
+        if (st == ServerState::Ready || st == ServerState::Starting) {
+            running << p.id;
+            stop(p.id);
+        }
+    }
+    m_gpuReservation = reason.isEmpty() ? QStringLiteral("reserved") : reason;
+    emit gpuReservationChanged();
+    return running;
+}
+
+void ServerSupervisor::releaseGpu(const QStringList &restart)
+{
+    if (m_gpuReservation.isEmpty())
+        return;
+    m_gpuReservation.clear();
+    emit gpuReservationChanged();
+    for (const QString &id : restart) {
+        if (profile(id))
+            start(id);
+    }
+}
+
 QFuture<QString> ServerSupervisor::start(const QString &id)
 {
+    if (!m_gpuReservation.isEmpty())
+        return QtFuture::makeReadyValueFuture(m_gpuReservation);
     Server *s = server(id);
     if (s->state == ServerState::Ready)
         return QtFuture::makeReadyValueFuture(QString());

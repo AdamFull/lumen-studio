@@ -2,18 +2,28 @@
 
 #include "ai/Director.h"
 #include "ai/LoraCaptions.h"
+#include "ai/ProviderRegistry.h"
 #include "ai/StructuredChat.h"
 #include "core/Async.h"
 #include "core/Error.h"
+#include "core/Job.h"
 #include "doc/CharacterLibrary.h"
 #include "doc/Project.h"
+#include "runtime/LoraTraining.h"
+#include "runtime/ModelLibrary.h"
+#include "runtime/RuntimeStore.h"
+#include "runtime/Trainer.h"
+#include "ui/CharacterTraining.h"
 #include "ui/Icons.h"
 #include "ui/Studio.h"
 #include "ui/Theme.h"
+#include "ui/dialogs/CharacterLoraDialog.h"
+#include "ui/dialogs/LocalServersPage.h"
 #include "ui/director/DirectorSession.h"
 #include "ui/widgets/Controls.h"
 
 #include <QCheckBox>
+#include <QComboBox>
 #include <QFileDialog>
 #include <QFormLayout>
 #include <QHeaderView>
@@ -24,6 +34,7 @@
 #include <QListWidget>
 #include <QMessageBox>
 #include <QPainter>
+#include <QProgressBar>
 #include <QPushButton>
 #include <QSpinBox>
 #include <QSplitter>
@@ -160,6 +171,7 @@ LoraDatasetDialog::LoraDatasetDialog(Studio *studio, const QString &characterId,
     edits->addWidget(rebuild);
     cv->addLayout(edits);
     m_tabs->addTab(captionPage, tr("Captions"));
+    m_tabs->addTab(buildTrainTab(), tr("Train"));
     v->addWidget(m_tabs, 1);
 
     connect(m_captionButton, &QPushButton::clicked, this, [this] {
@@ -254,6 +266,9 @@ LoraDatasetDialog::LoraDatasetDialog(Studio *studio, const QString &characterId,
         m_outfit->setChecked(settings.outfitIsIdentity);
     }
     reloadCaptions();
+    refreshTrainTab();
+    if (CharacterTraining *running = CharacterTraining::running(m_characterId))
+        bindTraining(running);
 }
 
 LoraDatasetDialog::~LoraDatasetDialog()
@@ -348,6 +363,198 @@ void LoraDatasetDialog::reload()
     m_score->setText(isScoring() ? tr("Stop scoring") : tr("Score with Critic"));
     showCurrent();
     reloadCaptions();
+}
+
+QWidget *LoraDatasetDialog::buildTrainTab()
+{
+    auto *page = new QWidget(m_tabs);
+    auto *v = new QVBoxLayout(page);
+    v->addWidget(mutedLabel(tr("Lumen trains the LoRA with kohya sd-scripts on this computer. The GPU is used for the whole time: "
+                               "the servers stop and start again afterwards. On an 8 GB GPU a set of 25 images takes about two hours."),
+                            page));
+    auto *form = new QFormLayout;
+    form->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    auto *trainerRow = new QHBoxLayout;
+    m_trainer = new QLabel(page);
+    m_installTrainer = new QPushButton(Icons::get(QStringLiteral("download")), tr("Install the trainer…"), page);
+    trainerRow->addWidget(m_trainer, 1);
+    trainerRow->addWidget(m_installTrainer);
+    form->addRow(tr("Trainer"), trainerRow);
+    m_checkpoint = new QComboBox(page);
+    m_checkpoint->setToolTip(tr("The LoRA works with this model and others of its family; use the model you generate with"));
+    form->addRow(tr("Base model"), m_checkpoint);
+    m_preset = new QComboBox(page);
+    m_preset->addItem(tr("8 GB GPU: U-Net only, rank 16"), int(runtime::VramTier::Small));
+    m_preset->addItem(tr("12 GB GPU: U-Net only, rank 32, batch 2"), int(runtime::VramTier::Medium));
+    m_preset->addItem(tr("16 GB GPU or more: with text encoders, rank 32, batch 2"), int(runtime::VramTier::Large));
+    form->addRow(tr("Settings"), m_preset);
+    m_epochs = new QSpinBox(page);
+    m_epochs->setRange(1, 40);
+    m_epochs->setValue(10);
+    m_epochs->setToolTip(tr("Each epoch goes through all images; a LoRA file is saved after every epoch"));
+    form->addRow(tr("Epochs"), m_epochs);
+    v->addLayout(form);
+    m_trainSummary = mutedLabel(QString(), page);
+    m_trainSummary->setTextFormat(Qt::RichText);
+    v->addWidget(m_trainSummary);
+    auto *row = new QHBoxLayout;
+    m_trainButton = new QPushButton(Icons::get(QStringLiteral("play")), tr("Start training"), page);
+    Theme::setRole(m_trainButton, QStringLiteral("primary"));
+    m_resumeButton = new QPushButton(Icons::get(QStringLiteral("refresh")), tr("Continue the stopped training"), page);
+    row->addWidget(m_trainButton);
+    row->addWidget(m_resumeButton);
+    row->addStretch();
+    v->addLayout(row);
+    m_trainBar = new QProgressBar(page);
+    m_trainBar->setRange(0, 1000);
+    m_trainBar->setVisible(false);
+    v->addWidget(m_trainBar);
+    m_trainStatus = new QLabel(page);
+    m_trainStatus->setWordWrap(true);
+    m_trainStatus->setTextFormat(Qt::RichText);
+    v->addWidget(m_trainStatus);
+    v->addStretch();
+
+    connect(m_installTrainer, &QPushButton::clicked, this, [this] {
+        InstallRuntimeDialog dlg(m_studio, std::nullopt, QStringLiteral("kohya"), this);
+        dlg.exec();
+    });
+    connect(m_studio->runtimes(), &runtime::RuntimeStore::changed, this, &LoraDatasetDialog::refreshTrainTab);
+    connect(m_preset, &QComboBox::currentIndexChanged, this, &LoraDatasetDialog::refreshTrainTab);
+    connect(m_epochs, &QSpinBox::valueChanged, this, &LoraDatasetDialog::refreshTrainTab);
+    connect(m_checkpoint, &QComboBox::currentIndexChanged, this, &LoraDatasetDialog::refreshTrainTab);
+    connect(m_trainButton, &QPushButton::clicked, this, [this] {
+        if (m_trainingJob && !m_trainingJob->isFinished()) {
+            m_trainingJob->cancel();
+            return;
+        }
+        startTraining(false);
+    });
+    connect(m_resumeButton, &QPushButton::clicked, this, [this] { startTraining(true); });
+
+    // The base model: what the default image generator uses, else the library's checkpoints.
+    const QString current = checkpointFile(m_studio, m_studio->providers()->defaultImageProvider());
+    for (const runtime::ModelEntry &e : m_studio->models()->entries(runtime::ModelKind::Checkpoint)) {
+        if (e.info.family != QLatin1String("SDXL") && e.info.family != QLatin1String("SD 1.5"))
+            continue;
+        QString label = e.name() + QStringLiteral("  —  ") + e.info.family;
+        if (!e.info.variant.isEmpty())
+            label += QStringLiteral(" · ") + e.info.variant;
+        m_checkpoint->addItem(label, e.path);
+        m_checkpoint->setItemData(m_checkpoint->count() - 1, QDir::toNativeSeparators(e.path), Qt::ToolTipRole);
+    }
+    if (!current.isEmpty() && m_checkpoint->findData(current) < 0 && QFileInfo::exists(current))
+        m_checkpoint->insertItem(0, QFileInfo(current).completeBaseName(), current);
+    m_checkpoint->setCurrentIndex(std::max(0, m_checkpoint->findData(current)));
+    QPointer<LoraDatasetDialog> self(this);
+    runtime::probeHardware().then(this, [self](const runtime::HardwareInfo &hw) {
+        if (!self)
+            return;
+        self->m_preset->setCurrentIndex(std::max(0, self->m_preset->findData(int(runtime::vramTierFor(hw.maxVram())))));
+    });
+    return page;
+}
+
+void LoraDatasetDialog::refreshTrainTab()
+{
+    if (!m_trainer)
+        return;
+    const QList<runtime::InstalledRuntime> trainers = m_studio->runtimes()->runtimes(QStringLiteral("kohya"));
+    m_trainer->setText(trainers.isEmpty() ? tr("Not installed (about 4 GB to download)") : trainers.last().versionInfo);
+    m_installTrainer->setVisible(trainers.isEmpty());
+    const int images = m_dataset->keptCount();
+    const int repeats = runtime::repeatsFor(images);
+    const runtime::TrainingPreset preset = runtime::trainingPreset(runtime::VramTier(m_preset->currentData().toInt()));
+    const int steps = runtime::totalSteps(images, repeats, m_epochs->value(), preset.batch);
+    // Measured on an 8 GB RTX 4060 (3.1 s per step); larger presets are estimates.
+    const double secondsPerStep = m_preset->currentData().toInt() == int(runtime::VramTier::Small) ? 3.1 : 2.4;
+    const int minutes = int(steps * secondsPerStep / 60.0) + 2;
+    QString summary = tr("%1 images × %2 repeats × %3 epochs = <b>%4 steps</b>, about %5.")
+                          .arg(images)
+                          .arg(repeats)
+                          .arg(m_epochs->value())
+                          .arg(steps)
+                          .arg(minutes >= 90 ? tr("%1 h %2 min").arg(minutes / 60).arg(minutes % 60) : tr("%1 min").arg(minutes));
+    summary += QStringLiteral(" ") + tr("Trigger word: <b>%1</b>.").arg(m_dataset->settings().trigger.toHtmlEscaped());
+    if (images < 15)
+        summary += QStringLiteral("<br><span style='color:%1'>%2</span>")
+                       .arg(Theme::palette().warning.name(), tr("Fewer than 15 images: the LoRA will learn little. Add more first.").toHtmlEscaped());
+    m_trainSummary->setText(summary);
+    const bool running = m_trainingJob && !m_trainingJob->isFinished();
+    m_trainButton->setText(running ? tr("Stop") : tr("Start training"));
+    m_trainButton->setEnabled(running || (!trainers.isEmpty() && images > 0 && m_checkpoint->count() > 0));
+    m_resumeButton->setVisible(!running && CharacterTraining::canResume(CharacterTraining::lastRun(m_dataset->directory())));
+    m_resumeButton->setEnabled(!trainers.isEmpty());
+}
+
+void LoraDatasetDialog::startTraining(bool resume)
+{
+    const QList<runtime::InstalledRuntime> trainers = m_studio->runtimes()->runtimes(QStringLiteral("kohya"));
+    if (trainers.isEmpty())
+        return;
+    CharacterTraining::Settings s;
+    s.characterId = m_characterId;
+    s.runtimeId = trainers.last().id;
+    s.checkpoint = m_checkpoint->currentData().toString();
+    s.tier = runtime::VramTier(m_preset->currentData().toInt());
+    s.epochs = m_epochs->value();
+    s.resume = resume;
+    QString error;
+    CharacterTraining *t = CharacterTraining::start(m_studio, s, &error);
+    if (!t) {
+        m_trainStatus->setText(QStringLiteral("<span style='color:%1'>%2</span>").arg(Theme::palette().danger.name(), error.toHtmlEscaped()));
+        return;
+    }
+    bindTraining(t);
+}
+
+void LoraDatasetDialog::bindTraining(CharacterTraining *training)
+{
+    m_trainStatus->setText(tr("Preparing the images…"));
+    m_trainBar->setVisible(true);
+    m_trainBar->setValue(0);
+    QPointer<LoraDatasetDialog> self(this);
+    auto attach = [self](Job *job) {
+        if (!self)
+            return;
+        self->m_trainingJob = job;
+        connect(job, &Job::progressChanged, self, &LoraDatasetDialog::showTrainingJob);
+        connect(job, &Job::stateChanged, self, &LoraDatasetDialog::showTrainingJob);
+        self->showTrainingJob();
+        self->refreshTrainTab();
+    };
+    if (training->job())
+        attach(training->job());
+    connect(training, &CharacterTraining::started, this, attach);
+    connect(training, &CharacterTraining::finished, this, [self](bool ok, const QString &message, const QString &lora) {
+        if (!self)
+            return;
+        self->m_trainBar->setVisible(ok);
+        if (ok)
+            self->m_trainBar->setValue(1000);
+        const QColor colour = ok ? Theme::palette().success : Theme::palette().danger;
+        QString text = QStringLiteral("<span style='color:%1'>%2</span>").arg(colour.name(), message.toHtmlEscaped());
+        if (ok)
+            text += QStringLiteral("<br>") + tr("File: %1").arg(QDir::toNativeSeparators(lora).toHtmlEscaped());
+        self->m_trainStatus->setText(text);
+        self->refreshTrainTab();
+    });
+}
+
+void LoraDatasetDialog::showTrainingJob()
+{
+    if (!m_trainingJob)
+        return;
+    const double p = m_trainingJob->progress();
+    if (p < 0) {
+        m_trainBar->setRange(0, 0);
+    } else {
+        m_trainBar->setRange(0, 1000);
+        m_trainBar->setValue(int(p * 1000));
+    }
+    if (!m_trainingJob->isFinished())
+        m_trainStatus->setText(m_trainingJob->statusText().toHtmlEscaped());
+    refreshTrainTab();
 }
 
 void LoraDatasetDialog::reloadCaptions()

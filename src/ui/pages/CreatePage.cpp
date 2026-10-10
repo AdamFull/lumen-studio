@@ -179,6 +179,13 @@ CreatePage::CreatePage(Studio *studio, QWidget *parent)
     m_provider = new ProviderCombo(studio->providers(), ai::ProviderKind::Image, board);
     genBar->addWidget(m_provider);
     connect(m_provider, &ProviderCombo::providerChanged, this, &CreatePage::refreshCharacter); // LoRA support differs
+    // A LoRA attached to the session's library character (after training) reaches the session.
+    connect(studio->characters(), &doc::CharacterLibrary::changed, this, [this] {
+        if (!m_session || m_session->libraryCharacter().isEmpty())
+            return;
+        if (const auto e = m_studio->characters()->entry(m_session->libraryCharacter()); e && !e->lora.isEmpty() && e->lora != m_session->characterLora())
+            m_session->setCharacterLora(e->lora);
+    });
     m_variants = new QSpinBox(board);
     m_variants->setRange(1, 8);
     m_variants->setValue(2);

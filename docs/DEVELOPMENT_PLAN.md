@@ -1111,8 +1111,40 @@ A LoRA learns from 15–40 varied images of the character. They come from what L
   - Commands go through `RuntimeStore::processRunner`, which tests replace with a simulation.
   - Measured (RTX 4060, 8 GB; driver CUDA 13.3): the real install took 370 s and needs 7.4 GB
     on disk. PyTorch 2.8.0+cu128 sees the GPU.
-- [ ] Training job: config generation, supervised run with progress, samples, cancel / resume,
-  GPU takeover, 8 / 12 / 16 GB presets measured on real hardware.
+- [x] Training job (`runtime/LoraTraining`, `ui/CharacterTraining`):
+  - `trainingArguments` builds the `sdxl_train_network.py` (or SD 1.5 `train_network.py`) command
+    line, with no TOML file. Presets:
+    - 8 GB: U-Net only, rank 16 / alpha 8, cached text-encoder outputs, Adafactor;
+    - 12 GB: rank 32, batch 2;
+    - 16 GB+: text encoders too, AdamW8bit, batch 2.
+    All use bf16 / full_bf16, gradient checkpointing, SDPA, cached latents, 1024 buckets and a
+    state per epoch (the last one kept).
+  - Cached text-encoder outputs need fixed captions: the trainer refuses `--shuffle_caption` then,
+    so captions are only shuffled (trigger kept first) when the text encoders train.
+  - Repeats: images × repeats ≈ 200 steps per epoch (25 images → 8).
+  - The job reserves the GPU (`ServerSupervisor::reserveGpu`): running servers stop, start()
+    answers why, and servers that run all the time come back afterwards.
+  - Progress comes from tqdm (step, epoch, loss, time left, s/step) and a known out-of-memory
+    message. The trainer's own error line goes into the failure message. A `train.log` is kept per
+    run. Cancel keeps the state for *Continue the stopped training*.
+  - CharacterTraining runs under the Studio, so a training finishes after its window closes:
+    1. it exports the kept images to `training/run-<time>/img/<repeats>_<trigger>`;
+    2. it trains;
+    3. it copies the LoRA into the library's `loras` folder with a sidecar (source "training",
+       trigger, base model, epochs, images);
+    4. it attaches the LoRA to the character, and an open Create session follows.
+  - Training set → **Train** tab:
+    - trainer (or *Install the trainer…*), base model (the image generator's model by default),
+      preset by GPU size, epochs;
+    - steps and an estimated time; a warning under 15 images;
+    - start, stop, continue; progress and the result.
+  - Tests: arguments per preset and family, progress parsing, outputs and state, GPU
+    reservation; the Train tab end to end with a simulated trainer.
+  - Measured (RTX 4060 8 GB, WAI-Illustrious, 8-GB preset):
+    - 3.1 s per step at 1024²;
+    - 6.6 GB peak GPU memory (fp8 base not needed);
+    - an 85 MB SDXL LoRA that Lumen's header reader recognises;
+    - a 16-step run took 104 s including model loading and caching.
 - [ ] Evaluation grid, Critic identity scoring per epoch, recommended epoch and weight.
 
 **AC**:

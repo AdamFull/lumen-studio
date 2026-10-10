@@ -7,6 +7,7 @@
 #include "runtime/Catalog.h"
 #include "runtime/Download.h"
 #include "runtime/Hardware.h"
+#include "runtime/LoraTraining.h"
 #include "runtime/ModelFormats.h"
 #include "runtime/ModelHub.h"
 #include "runtime/ModelLibrary.h"
@@ -227,6 +228,7 @@ private slots:
     void trainerRecipes();
     void trainerAdopt();
     void trainerInstall();
+    void loraTraining();
 
 private:
     QTemporaryDir m_tmp;
@@ -1904,6 +1906,103 @@ void TestRuntime::trainerInstall()
     // Removing the runtime deletes its folder.
     QVERIFY(store.remove(QStringLiteral("kohya/v0.12.0-cu128")));
     QVERIFY(!QFileInfo::exists(rt->directory));
+}
+
+void TestRuntime::loraTraining()
+{
+    QCOMPARE(repeatsFor(25), 8);
+    QCOMPARE(repeatsFor(8), 25);
+    QCOMPARE(repeatsFor(400), 1);
+    QCOMPARE(totalSteps(25, 8, 10), 2000);
+    QCOMPARE(totalSteps(25, 8, 10, 2), 1000);
+
+    InstalledRuntime trainer;
+    trainer.kind = QStringLiteral("kohya");
+    trainer.directory = QStringLiteral("C:/rt/kohya/v0.12.0-cu128");
+    trainer.settings.insert(QStringLiteral("scripts"), QStringLiteral("C:/rt/kohya/v0.12.0-cu128/sd-scripts"));
+    TrainingOptions o;
+    o.checkpoint = QStringLiteral("C:/models/wai.safetensors");
+    o.family = QStringLiteral("SDXL");
+    o.imagesDir = QStringLiteral("C:/run/img");
+    o.workDir = QStringLiteral("C:/run");
+    o.outputName = QStringLiteral("lmn_mira");
+    o.trigger = QStringLiteral("lmn_mira");
+    o.epochs = 10;
+    o.tier = VramTier::Small;
+    QStringList a = trainingArguments(o, trainer);
+    auto value = [&a](const char *option) { return a.value(a.indexOf(QLatin1String(option)) + 1); };
+    QVERIFY(a.first().endsWith(QStringLiteral("sdxl_train_network.py")));
+    QCOMPARE(value("--pretrained_model_name_or_path"), QDir::toNativeSeparators(o.checkpoint));
+    QCOMPARE(value("--network_dim"), QStringLiteral("16"));
+    QCOMPARE(value("--optimizer_type"), QStringLiteral("Adafactor"));
+    QCOMPARE(value("--resolution"), QStringLiteral("1024,1024"));
+    QCOMPARE(value("--max_train_epochs"), QStringLiteral("10"));
+    for (const char *flag : {"--network_train_unet_only", "--cache_text_encoder_outputs", "--gradient_checkpointing", "--cache_latents",
+                             "--full_bf16", "--save_state", "--sdpa"})
+        QVERIFY2(a.contains(QLatin1String(flag)), flag);
+    // Cached text-encoder outputs need fixed captions (the trainer refuses shuffling then).
+    QVERIFY(!a.contains(QStringLiteral("--shuffle_caption")));
+    QVERIFY(!a.contains(QStringLiteral("--resume")));
+    o.tier = VramTier::Large;
+    o.resumeState = QStringLiteral("C:/run/output/lmn_mira-000004-state");
+    a = trainingArguments(o, trainer);
+    QVERIFY(!a.contains(QStringLiteral("--network_train_unet_only")));
+    QVERIFY(a.contains(QStringLiteral("--shuffle_caption")));
+    QCOMPARE(value("--optimizer_type"), QStringLiteral("AdamW8bit"));
+    QCOMPARE(value("--train_batch_size"), QStringLiteral("2"));
+    QCOMPARE(value("--resume"), QDir::toNativeSeparators(o.resumeState));
+    o.family = QStringLiteral("SD 1.5");
+    a = trainingArguments(o, trainer);
+    QVERIFY(a.first().endsWith(QStringLiteral("train_network.py")) && !a.first().endsWith(QStringLiteral("sdxl_train_network.py")));
+    QCOMPARE(value("--resolution"), QStringLiteral("512,512"));
+
+    // The trainer's output (tqdm with carriage returns arrives line by line).
+    TrainingProgress p;
+    QVERIFY(parseTrainingLine(QStringLiteral("caching latents..."), &p));
+    QCOMPARE(p.phase, QStringLiteral("caching"));
+    QVERIFY(parseTrainingLine(QStringLiteral("epoch 3/10"), &p));
+    QCOMPARE(p.epoch, 3);
+    QCOMPARE(p.epochs, 10);
+    QVERIFY(parseTrainingLine(QStringLiteral("steps:  12%|█▏        | 240/2000 [12:20<1:30:28,  3.08s/it, avr_loss=0.0912]"), &p));
+    QCOMPARE(p.step, 240);
+    QCOMPARE(p.totalSteps, 2000);
+    QCOMPARE(p.remaining, QStringLiteral("1:30:28"));
+    QCOMPARE(p.secondsPerStep, 3.08);
+    QCOMPARE(p.loss, 0.0912);
+    QVERIFY(parseTrainingLine(QStringLiteral("steps:  50%|█████     | 8/16 [00:20<00:20,  2.50it/s]"), &p));
+    QCOMPARE(p.secondsPerStep, 0.4);
+    QVERIFY(parseTrainingLine(QStringLiteral("saving checkpoint: C:\\run\\output\\lmn_mira-000003.safetensors"), &p));
+    QCOMPARE(p.savedFile, QStringLiteral("C:\\run\\output\\lmn_mira-000003.safetensors"));
+    QVERIFY(parseTrainingLine(QStringLiteral("torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 20.00 MiB"), &p));
+    QVERIFY(p.error.contains(QStringLiteral("memory")));
+    QVERIFY(!parseTrainingLine(QStringLiteral("INFO     loading model"), &p));
+
+    // Outputs: one file per epoch plus the final one; the newest state for resuming.
+    QTemporaryDir dir;
+    for (const char *f : {"output/lmn_mira-000001.safetensors", "output/lmn_mira-000002.safetensors", "output/lmn_mira.safetensors",
+                          "output/other.safetensors", "output/lmn_mira-000001-state/x", "output/lmn_mira-000002-state/x"})
+        QVERIFY(writeFile(dir.filePath(QLatin1String(f)), "x"));
+    const QStringList files = trainingOutputs(dir.path(), QStringLiteral("lmn_mira"));
+    QCOMPARE(files.size(), 3);
+    QVERIFY(files.last().endsWith(QStringLiteral("/lmn_mira.safetensors")));
+    QVERIFY(latestTrainingState(dir.path()).endsWith(QStringLiteral("lmn_mira-000002-state")));
+
+    // While training holds the GPU, servers do not start and say why.
+    net::HttpClient http;
+    JobQueue jobs;
+    RuntimeStore store(&http, &jobs);
+    store.setRoot(dir.filePath(QStringLiteral("runtimes")));
+    ServerSupervisor servers(&store, &http);
+    servers.setConfigPath(dir.filePath(QStringLiteral("servers.json")));
+    QSignalSpy reservation(&servers, &ServerSupervisor::gpuReservationChanged);
+    QVERIFY(servers.reserveGpu(QStringLiteral("training")).isEmpty());
+    QCOMPARE(servers.gpuReservation(), QStringLiteral("training"));
+    QFuture<QString> refused = servers.start(QStringLiteral("anything"));
+    QVERIFY(refused.isFinished());
+    QCOMPARE(refused.result(), QStringLiteral("training"));
+    servers.releaseGpu();
+    QVERIFY(servers.gpuReservation().isEmpty());
+    QCOMPARE(reservation.size(), 2);
 }
 
 void TestRuntime::inspectRealModels()

@@ -10,6 +10,7 @@ add_library(lumen_runtime STATIC
     ModelLibrary.h ModelLibrary.cpp
     ModelHub.h ModelHub.cpp
     Trainer.h Trainer.cpp
+    LoraTraining.h LoraTraining.cpp
 )
 qt_add_resources(lumen_runtime runtime_catalog
     PREFIX "/runtimes"

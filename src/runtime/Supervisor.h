@@ -76,6 +76,13 @@ public:
     void startAutoStartServers();
     void stopAll();
 
+    // The GPU belongs to something else (LoRA training): running servers stop, and start()
+    // answers with `reason` until releaseGpu(). Returns the servers that were running.
+    QStringList reserveGpu(const QString &reason);
+    // Ends the reservation and starts `restart` again (servers that run all the time).
+    void releaseGpu(const QStringList &restart = {});
+    QString gpuReservation() const { return m_gpuReservation; }
+
     ServerState state(const QString &id) const;
     QString statusText(const QString &id) const;
     QString lastError(const QString &id) const;
@@ -92,6 +99,7 @@ signals:
     void profilesChanged();
     void stateChanged(const QString &id);
     void logAppended(const QString &id, const QString &line);
+    void gpuReservationChanged();
 
 private:
     struct Server
@@ -136,6 +144,7 @@ private:
     QString m_logDir;
     QList<ServerProfile> m_profiles;
     QHash<QString, Server *> m_servers;
+    QString m_gpuReservation;
 };
 
 } // namespace lumen::runtime

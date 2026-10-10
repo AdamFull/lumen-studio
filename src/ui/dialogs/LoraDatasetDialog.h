@@ -10,13 +10,19 @@
 #include <functional>
 
 class QCheckBox;
+class QComboBox;
 class QLabel;
 class QLineEdit;
 class QListWidget;
+class QProgressBar;
 class QPushButton;
 class QSpinBox;
 class QTabWidget;
 class QTableWidget;
+
+namespace lumen {
+class Job;
+}
 
 namespace lumen::ai {
 class Operation;
@@ -24,6 +30,7 @@ class Operation;
 
 namespace lumen::ui {
 
+class CharacterTraining;
 class DirectorSession;
 class Studio;
 
@@ -55,6 +62,8 @@ public:
     void rebuildCaptions(const QString &previousTrigger = QString());
     // Identity score of a critique for training images: the lower of overall and identity.
     static int datasetScore(const QJsonObject &critique);
+    // Starts (or continues) training this character's LoRA with the Train tab's settings.
+    void startTraining(bool resume = false);
 
 private:
     void reload();
@@ -70,6 +79,10 @@ private:
     void askReplace();
     void askAddTag();
     void askRemoveTag();
+    QWidget *buildTrainTab();
+    void refreshTrainTab();
+    void bindTraining(CharacterTraining *training);
+    void showTrainingJob();
     QStringList selectedIds() const;
     QPixmap thumbnail(const QString &id);
 
@@ -98,6 +111,17 @@ private:
     bool m_captioning = false;
     QPointer<ai::Operation> m_tagging;
     bool m_fillingCaptions = false;
+    QLabel *m_trainer = nullptr;
+    QPushButton *m_installTrainer = nullptr;
+    QComboBox *m_checkpoint = nullptr;
+    QComboBox *m_preset = nullptr;
+    QSpinBox *m_epochs = nullptr;
+    QLabel *m_trainSummary = nullptr;
+    QPushButton *m_trainButton = nullptr;
+    QPushButton *m_resumeButton = nullptr;
+    QProgressBar *m_trainBar = nullptr;
+    QLabel *m_trainStatus = nullptr;
+    QPointer<Job> m_trainingJob;
     QJsonObject m_sheet;
     QList<QImage> m_references;
     bool m_referencesLoaded = false;

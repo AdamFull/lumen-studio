@@ -693,7 +693,7 @@
         <translation>Physikeinstellung %1 benötigt mindestens zwei Eckpunkte.</translation>
     </message>
     <message>
-        <location filename="../src/ui/pages/CreatePage.cpp" line="+706"/>
+        <location filename="../src/ui/pages/CreatePage.cpp" line="+713"/>
         <source>**Character sheet:** %1 — %2</source>
         <translation>**Charakterblatt:** %1 — %2</translation>
     </message>
@@ -3052,6 +3052,91 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
 </context>
 <context>
+    <name>lumen::runtime::LoraTraining</name>
+    <message>
+        <location filename="../src/runtime/LoraTraining.cpp" line="+172"/>
+        <source>The GPU ran out of memory. Close other programs that use the GPU, or choose a smaller preset.</source>
+        <translation>Der GPU ist der Speicher ausgegangen. Schließen Sie andere Programme, die die GPU nutzen, oder wählen Sie kleinere Einstellungen.</translation>
+    </message>
+    <message>
+        <location line="+53"/>
+        <source>The LoRA trainer is not installed. Install it under Settings → Local servers → Download…</source>
+        <translation>Der LoRA-Trainer ist nicht installiert. Installieren Sie ihn unter Einstellungen → Lokale Server → Herunterladen…</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The base model %1 is missing.</source>
+        <translation>Das Basismodell %1 fehlt.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Stopping the servers to free the GPU…</source>
+        <translation>Die Server werden gestoppt, um die GPU freizugeben…</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>A LoRA is being trained on the GPU; servers start again when it is done.</source>
+        <translation>Auf der GPU wird eine LoRA trainiert; die Server starten wieder, wenn das Training fertig ist.</translation>
+    </message>
+    <message>
+        <location line="+39"/>
+        <source>Starting the trainer…</source>
+        <translation>Der Trainer wird gestartet…</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>Preparing the images…</source>
+        <translation>Die Bilder werden vorbereitet…</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Epoch %1 of %2 · step %3 of %4</source>
+        <translation>Epoche %1 von %2 · Schritt %3 von %4</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Step %1 of %2</source>
+        <translation>Schritt %1 von %2</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source> · loss %1</source>
+        <translation> · Loss %1</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source> · %1 left</source>
+        <translation> · noch %1</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>Cannot start the trainer: %1</source>
+        <translation>Der Trainer kann nicht gestartet werden: %1</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>The trainer stopped with exit code %1:
+%2</source>
+        <translation>Der Trainer wurde mit Exit-Code %1 beendet:
+%2</translation>
+    </message>
+    <message>
+        <location line="+60"/>
+        <source>Train LoRA %1</source>
+        <translation>LoRA %1 trainieren</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Continue training LoRA %1</source>
+        <translation>Training der LoRA %1 fortsetzen</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Shutting down.</source>
+        <translation>Wird beendet.</translation>
+    </message>
+</context>
+<context>
     <name>lumen::runtime::ModelFormats</name>
     <message>
         <location filename="../src/runtime/ModelFormats.cpp" line="+32"/>
@@ -3777,17 +3862,17 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+46"/>
-        <location line="+134"/>
+        <location line="+163"/>
         <source>Unknown server.</source>
         <translation>Unbekannter Server.</translation>
     </message>
     <message>
-        <location line="-128"/>
+        <location line="-157"/>
         <source>The runtime of %1 is no longer installed.</source>
         <translation>Das Programm von %1 ist nicht mehr installiert.</translation>
     </message>
     <message>
-        <location line="+132"/>
+        <location line="+161"/>
         <source>%1 is missing. Reinstall the runtime.</source>
         <translation>%1 fehlt. Installieren Sie das Programm neu.</translation>
     </message>
@@ -4675,7 +4760,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::CharacterLoraDialog</name>
     <message>
-        <location filename="../src/ui/dialogs/CharacterLoraDialog.cpp" line="+113"/>
+        <location filename="../src/ui/dialogs/CharacterLoraDialog.cpp" line="+116"/>
         <source>%1 cannot use LoRAs; only the references keep the character.</source>
         <translation>%1 kann keine LoRAs verwenden; nur die Referenzen halten den Charakter.</translation>
     </message>
@@ -4791,6 +4876,64 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
 </context>
 <context>
+    <name>lumen::ui::CharacterTraining</name>
+    <message>
+        <location filename="../src/ui/CharacterTraining.cpp" line="+56"/>
+        <source>This character&apos;s LoRA is already being trained.</source>
+        <translation>Die LoRA dieses Charakters wird bereits trainiert.</translation>
+    </message>
+    <message>
+        <location line="+50"/>
+        <source>The character is not in the character library.</source>
+        <translation>Der Charakter ist nicht in der Charakterbibliothek.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Keep some images in the training set first.</source>
+        <translation>Behalten Sie zuerst einige Bilder im Trainingsset.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Set a trigger word in the training set&apos;s Captions tab first.</source>
+        <translation>Legen Sie zuerst im Reiter Beschreibungen des Trainingssets ein Auslösewort fest.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The LoRA trainer is not installed.</source>
+        <translation>Der LoRA-Trainer ist nicht installiert.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Training works with SDXL (Illustrious, Pony, …) and SD 1.5 models; %1 is %2.</source>
+        <translation>Training funktioniert mit SDXL- (Illustrious, Pony, …) und SD-1.5-Modellen; %1 ist %2.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>There is no stopped training to continue.</source>
+        <translation>Es gibt kein gestopptes Training zum Fortsetzen.</translation>
+    </message>
+    <message>
+        <location line="+42"/>
+        <source>No images to train on.</source>
+        <translation>Keine Bilder zum Trainieren.</translation>
+    </message>
+    <message>
+        <location line="+33"/>
+        <source>Training stopped. It can continue from the last finished epoch.</source>
+        <translation>Training gestoppt. Es kann ab der letzten abgeschlossenen Epoche fortgesetzt werden.</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Cannot copy the LoRA to %1.</source>
+        <translation>Die LoRA kann nicht nach %1 kopiert werden.</translation>
+    </message>
+    <message>
+        <location line="+24"/>
+        <source>The LoRA of %1 is trained and attached to the character (trigger word: %2).</source>
+        <translation>Die LoRA von %1 ist trainiert und dem Charakter angehängt (Auslösewort: %2).</translation>
+    </message>
+</context>
+<context>
     <name>lumen::ui::ColorSwatch</name>
     <message>
         <location filename="../src/ui/widgets/Controls.cpp" line="+97"/>
@@ -4850,7 +4993,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::CreatePage</name>
     <message>
-        <location filename="../src/ui/pages/CreatePage.cpp" line="-792"/>
+        <location filename="../src/ui/pages/CreatePage.cpp" line="-799"/>
         <source>Director</source>
         <translation>Regie</translation>
     </message>
@@ -4861,12 +5004,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+282"/>
+        <location line="+289"/>
         <source>New session</source>
         <translation>Neue Sitzung</translation>
     </message>
     <message>
-        <location line="-258"/>
+        <location line="-265"/>
         <source>Describe what you need, e.g. &quot;3 images of my character for a Live2D avatar: neutral front A-pose, eyes closed and mouth open variants&quot;. Attach reference images above. Enter sends, Shift+Enter = new line.</source>
         <translation>Beschreiben Sie, was Sie benötigen, z. B. „3 Bilder meines Charakters für einen Live2D-Avatar: neutrale A-Pose von vorn, Varianten mit geschlossenen Augen und offenem Mund“. Hängen Sie oben Referenzbilder an. Eingabe sendet, Umschalt+Eingabe = neue Zeile.</translation>
     </message>
@@ -4892,29 +5035,29 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+494"/>
+        <location line="+501"/>
         <source>Send</source>
         <translation>Senden</translation>
     </message>
     <message>
-        <location line="-476"/>
-        <location line="+1100"/>
+        <location line="-483"/>
+        <location line="+1107"/>
         <source>Character</source>
         <translation>Charakter</translation>
     </message>
     <message>
-        <location line="-1096"/>
+        <location line="-1103"/>
         <source>Edit sheet</source>
         <translation>Steckbrief bearbeiten</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+372"/>
+        <location line="+379"/>
         <source>Analyze references</source>
         <translation>Referenzen analysieren</translation>
     </message>
     <message>
-        <location line="-369"/>
+        <location line="-376"/>
         <source>Library</source>
         <translation>Bibliothek</translation>
     </message>
@@ -4935,12 +5078,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+4"/>
-        <location line="+363"/>
+        <location line="+370"/>
         <source>LoRA</source>
         <translation>LoRA</translation>
     </message>
     <message>
-        <location line="-360"/>
+        <location line="-367"/>
         <source>A LoRA keeps the character looking the same in every image</source>
         <translation>Eine LoRA hält das Aussehen des Charakters in jedem Bild gleich</translation>
     </message>
@@ -4956,17 +5099,17 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+21"/>
-        <location line="+412"/>
+        <location line="+419"/>
         <source>Shot plan</source>
         <translation>Aufnahmeplan</translation>
     </message>
     <message>
-        <location line="-409"/>
+        <location line="-416"/>
         <source>Generator</source>
         <translation>Generator</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+14"/>
         <source> per shot</source>
         <translation> pro Aufnahme</translation>
     </message>
@@ -7429,7 +7572,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::LoraDatasetDialog</name>
     <message>
-        <location filename="../src/ui/dialogs/LoraDatasetDialog.cpp" line="+62"/>
+        <location filename="../src/ui/dialogs/LoraDatasetDialog.cpp" line="+73"/>
         <source>LoRA training set — %1</source>
         <translation>LoRA-Trainingsset — %1</translation>
     </message>
@@ -7465,12 +7608,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+271"/>
+        <location line="+275"/>
         <source>Score with Critic</source>
         <translation>Mit Kritiker bewerten</translation>
     </message>
     <message>
-        <location line="-270"/>
+        <location line="-274"/>
         <source>A vision model compares each image with the character&apos;s references</source>
         <translation>Ein Bildverständnismodell vergleicht jedes Bild mit den Referenzen des Charakters</translation>
     </message>
@@ -7516,12 +7659,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+4"/>
-        <location line="+270"/>
+        <location line="+466"/>
         <source>Write captions</source>
         <translation>Beschreibungen schreiben</translation>
     </message>
     <message>
-        <location line="-269"/>
+        <location line="-465"/>
         <source>The vision model tags every kept image that has no tags yet</source>
         <translation>Das Bildverständnismodell vertaggt jedes behaltene Bild, das noch keine Tags hat</translation>
     </message>
@@ -7566,6 +7709,11 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Beschreibungen</translation>
     </message>
     <message>
+        <location line="+1"/>
+        <source>Train</source>
+        <translation>Trainieren</translation>
+    </message>
+    <message>
         <location line="+28"/>
         <source>Keep</source>
         <translation>Behalten</translation>
@@ -7577,12 +7725,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+405"/>
+        <location line="+600"/>
         <source>Remove</source>
         <translation>Entfernen</translation>
     </message>
     <message>
-        <location line="-401"/>
+        <location line="-596"/>
         <source>Export for training…</source>
         <translation>Für das Training exportieren…</translation>
     </message>
@@ -7623,7 +7771,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Keine Beinahe-Duplikate.</translation>
     </message>
     <message>
-        <location line="+68"/>
+        <location line="+71"/>
         <source>%1/10</source>
         <translation>%1/10</translation>
     </message>
@@ -7674,7 +7822,113 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Bewertung stoppen</translation>
     </message>
     <message>
-        <location line="+30"/>
+        <location line="+9"/>
+        <source>Lumen trains the LoRA with kohya sd-scripts on this computer. The GPU is used for the whole time: the servers stop and start again afterwards. On an 8 GB GPU a set of 25 images takes about two hours.</source>
+        <translation>Lumen trainiert die LoRA mit kohya sd-scripts auf diesem Computer. Die GPU ist die ganze Zeit belegt: Die Server stoppen und starten danach wieder. Auf einer GPU mit 8 GB dauert ein Set mit 25 Bildern etwa zwei Stunden.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Install the trainer…</source>
+        <translation>Trainer installieren…</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Trainer</source>
+        <translation>Trainer</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The LoRA works with this model and others of its family; use the model you generate with</source>
+        <translation>Die LoRA funktioniert mit diesem Modell und anderen seiner Familie; verwenden Sie das Modell, mit dem Sie erzeugen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Base model</source>
+        <translation>Basismodell</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>8 GB GPU: U-Net only, rank 16</source>
+        <translation>GPU mit 8 GB: nur U-Net, Rang 16</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>12 GB GPU: U-Net only, rank 32, batch 2</source>
+        <translation>GPU mit 12 GB: nur U-Net, Rang 32, Batch 2</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>16 GB GPU or more: with text encoders, rank 32, batch 2</source>
+        <translation>GPU mit 16 GB oder mehr: mit Text-Encodern, Rang 32, Batch 2</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Settings</source>
+        <translation>Einstellungen</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Each epoch goes through all images; a LoRA file is saved after every epoch</source>
+        <translation>Jede Epoche geht alle Bilder durch; nach jeder Epoche wird eine LoRA-Datei gespeichert</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Epochs</source>
+        <translation>Epochen</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <location line="+83"/>
+        <source>Start training</source>
+        <translation>Training starten</translation>
+    </message>
+    <message>
+        <location line="-81"/>
+        <source>Continue the stopped training</source>
+        <translation>Gestopptes Training fortsetzen</translation>
+    </message>
+    <message>
+        <location line="+60"/>
+        <source>Not installed (about 4 GB to download)</source>
+        <translation>Nicht installiert (etwa 4 GB Download)</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>%1 images × %2 repeats × %3 epochs = &lt;b&gt;%4 steps&lt;/b&gt;, about %5.</source>
+        <translation>%1 Bilder × %2 Wiederholungen × %3 Epochen = &lt;b&gt;%4 Schritte&lt;/b&gt;, etwa %5.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>%1 h %2 min</source>
+        <translation>%1 h %2 min</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>%1 min</source>
+        <translation>%1 min</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Trigger word: &lt;b&gt;%1&lt;/b&gt;.</source>
+        <translation>Auslösewort: &lt;b&gt;%1&lt;/b&gt;.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Fewer than 15 images: the LoRA will learn little. Add more first.</source>
+        <translation>Weniger als 15 Bilder: Die LoRA lernt wenig. Fügen Sie zuerst weitere hinzu.</translation>
+    </message>
+    <message>
+        <location line="+32"/>
+        <source>Preparing the images…</source>
+        <translation>Die Bilder werden vorbereitet…</translation>
+    </message>
+    <message>
+        <location line="+25"/>
+        <source>File: %1</source>
+        <translation>Datei: %1</translation>
+    </message>
+    <message>
+        <location line="+47"/>
         <source>Not tagged yet</source>
         <translation>Noch nicht vertaggt</translation>
     </message>
@@ -7705,7 +7959,8 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         </translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-123"/>
+        <location line="+125"/>
         <source>Stop</source>
         <translation>Stopp</translation>
     </message>

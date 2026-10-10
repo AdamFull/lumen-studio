@@ -30,6 +30,9 @@ LoraCheck checkCharacterLora(Studio *studio, ai::ImageProvider *provider, const 
 bool useLoraFolder(Studio *studio, ai::ImageProvider *provider, const QString &loraFile);
 // Base model family of a model file ("SDXL", "SD 1.5", …), from the library or its header.
 QString modelFamily(Studio *studio, const QString &file);
+// The checkpoint file an image provider generates with (a Lumen-run server's model, or a library file
+// with the name another server reports); empty when unknown.
+QString checkpointFile(Studio *studio, ai::ImageProvider *provider);
 // Family of the checkpoint an image provider generates with; empty when unknown.
 QString checkpointFamily(Studio *studio, ai::ImageProvider *provider);
 // The trigger word a LoRA was trained with (its metadata, Civitai or the download's notes).
