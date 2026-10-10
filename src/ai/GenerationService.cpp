@@ -10,6 +10,7 @@
 #include <QJsonArray>
 #include <QPainter>
 #include <QPointer>
+#include <QRegularExpression>
 
 #include <cmath>
 
@@ -162,6 +163,28 @@ ImageProvider *GenerationService::providerForUtility(Utility utility, const QStr
     return nullptr;
 }
 
+QString GenerationService::safeNegativeTerms()
+{
+    return QStringLiteral("nsfw, nude, nudity, explicit, cleavage, underwear, lingerie");
+}
+
+QString GenerationService::withSafeNegative(const QString &negative)
+{
+    QStringList parts;
+    const QString trimmed = negative.trimmed();
+    if (!trimmed.isEmpty())
+        parts << trimmed;
+    for (const QString &term : safeNegativeTerms().split(QStringLiteral(", "))) {
+        static const QRegularExpression separators(QStringLiteral("[,\\n]"));
+        bool present = false;
+        for (const QString &t : trimmed.split(separators))
+            present = present || t.trimmed().compare(term, Qt::CaseInsensitive) == 0;
+        if (!present)
+            parts << term;
+    }
+    return parts.join(QStringLiteral(", "));
+}
+
 Job *GenerationService::submit(const GenerationSpec &specIn)
 {
     ImageProvider *provider = specIn.providerId.isEmpty() ? m_registry->defaultImageProvider() : m_registry->imageProvider(specIn.providerId);
@@ -210,6 +233,8 @@ void GenerationService::execute(Job *job, const GenerationSpec &specIn, OutputHa
     GenerationSpec spec = specIn;
     spec.providerId = provider->instanceId();
     const ImageCapabilities caps = provider->capabilitiesFor(specIn.request);
+    if (m_safeContent && caps.negativePrompt)
+        spec.request.negativePrompt = withSafeNegative(spec.request.negativePrompt);
     job->setProgress(-1.0, tr("Preparing..."));
 
     auto launch = [job, providerGuard, spec, onOutput](ImageRequest request, std::optional<RegionPlan> plan) {

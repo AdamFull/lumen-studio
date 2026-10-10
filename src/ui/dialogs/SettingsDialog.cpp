@@ -5,6 +5,7 @@
 #include "ui/dialogs/ShortcutsPage.h"
 
 #include "ai/Gate.h"
+#include "ai/GenerationService.h"
 #include "ai/ProviderRegistry.h"
 #include "core/Async.h"
 #include "core/Error.h"
@@ -646,6 +647,13 @@ QWidget *SettingsDialog::buildGeneralTab()
     gpu->setChecked(s.value(QStringLiteral("perf/gpuCanvas"), true).toBool());
     connect(gpu, &QCheckBox::toggled, this, [](bool v) { Settings::instance().setValue(QStringLiteral("perf/gpuCanvas"), v); });
     form->addRow(QString(), gpu);
+    auto *safe = new QCheckBox(tr("Safe for work: keep nudity and explicit content out of generated images"), w);
+    safe->setToolTip(tr("Adds \"%1\" to the negative prompt of every image request where the model takes one. "
+                        "Also in the status bar (shield).")
+                         .arg(ai::GenerationService::safeNegativeTerms()));
+    safe->setChecked(s.value(QStringLiteral("generation/safeContent"), false).toBool());
+    connect(safe, &QCheckBox::toggled, this, [](bool v) { Settings::instance().setValue(QStringLiteral("generation/safeContent"), v); });
+    form->addRow(QString(), safe);
     return w;
 }
 

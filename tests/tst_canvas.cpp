@@ -122,6 +122,7 @@ private slots:
     void partsPageCharacter();
     void expressionCheck();
     void assistantCharacter();
+    void safeContent();
 
 private:
     ToolEvent at(double x, double y, Qt::KeyboardModifiers mods = Qt::NoModifier) const
@@ -2387,6 +2388,66 @@ void TestCanvas::assistantCharacter()
     auto none = run("generate_image", {{QStringLiteral("prompt"), QStringLiteral("a lighthouse")}});
     QTRY_VERIFY_WITH_TIMEOUT(none.isFinished(), 10000);
     QCOMPARE(promptOf(4), QStringLiteral("a lighthouse"));
+}
+
+void TestCanvas::safeContent()
+{
+    // The terms join the user's negative prompt once, whatever its case and separators.
+    QCOMPARE(ai::GenerationService::withSafeNegative(QString()), ai::GenerationService::safeNegativeTerms());
+    QCOMPARE(ai::GenerationService::withSafeNegative(QStringLiteral("lowres, NSFW, bad hands")),
+             QStringLiteral("lowres, NSFW, bad hands, nude, nudity, explicit, cleavage, underwear, lingerie"));
+    const QString twice = ai::GenerationService::withSafeNegative(ai::GenerationService::withSafeNegative(QStringLiteral("blurry")));
+    QCOMPARE(twice.count(QStringLiteral("nsfw")), 1);
+
+    Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
+    Settings::instance().setValue(QStringLiteral("generation/safeContent"), false);
+    MockHttpServer server;
+    QList<QJsonObject> generations;
+    server.route("GET", QStringLiteral("/sdcpp/v1/capabilities"), [](const MockRequest &) { return MockResponse::json({}); });
+    server.route("POST", QStringLiteral("/sdcpp/v1/img_gen"), [&](const MockRequest &req) {
+        generations << req.json();
+        return MockResponse::json({{QStringLiteral("id"), QStringLiteral("job_1")}}, 202);
+    });
+    server.route("GET", QStringLiteral("/sdcpp/v1/jobs/job_1"), [](const MockRequest &) {
+        QImage im(64, 64, QImage::Format_ARGB32);
+        im.fill(Qt::darkCyan);
+        const QJsonArray images{QJsonObject{{QStringLiteral("index"), 0}, {QStringLiteral("b64_json"), QString::fromLatin1(img::encode(im).toBase64())}}};
+        return MockResponse::json({{QStringLiteral("status"), QStringLiteral("completed")}, {QStringLiteral("result"), QJsonObject{{QStringLiteral("images"), images}}}});
+    });
+    QTemporaryDir dir;
+    Studio studio;
+    for (ai::Provider *p : studio.providers()->providers())
+        studio.providers()->removeProvider(p->instanceId());
+    QVERIFY(studio.providers()->addProvider(QStringLiteral("sdcpp"), QStringLiteral("SD"), {{QStringLiteral("url"), server.baseUrl().toString()}}));
+    auto cleanup = qScopeGuard([&] {
+        Settings::instance().setValue(QStringLiteral("generation/safeContent"), false);
+        for (ai::Provider *p : studio.providers()->providers())
+            studio.providers()->removeProvider(p->instanceId());
+    });
+    auto generate = [&]() -> QString {
+        ai::GenerationSpec spec;
+        spec.request.prompt = QStringLiteral("1girl, beach");
+        spec.request.negativePrompt = QStringLiteral("lowres");
+        spec.request.size = QSize(64, 64);
+        spec.saveAssets = false;
+        Job *job = studio.generation()->submit(spec);
+        if (!QTest::qWaitFor([job] { return job->isFinished(); }, 10000))
+            return QStringLiteral("timeout");
+        return generations.last().value(QStringLiteral("negative_prompt")).toString();
+    };
+    QCOMPARE(generate(), QStringLiteral("lowres"));
+
+    // The status bar button and the setting follow each other.
+    MainWindow window(&studio);
+    auto *shield = window.findChild<QToolButton *>(QStringLiteral("safeContent"));
+    QVERIFY(shield && !shield->isChecked());
+    shield->click();
+    QVERIFY(Settings::instance().value(QStringLiteral("generation/safeContent")).toBool());
+    QVERIFY(studio.generation()->safeContent());
+    QCOMPARE(generate(), QStringLiteral("lowres, ") + ai::GenerationService::safeNegativeTerms());
+    Settings::instance().setValue(QStringLiteral("generation/safeContent"), false);
+    QVERIFY(!shield->isChecked());
+    QCOMPARE(generate(), QStringLiteral("lowres"));
 }
 
 QTEST_MAIN(TestCanvas)

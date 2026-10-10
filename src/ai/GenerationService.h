@@ -96,6 +96,14 @@ public:
 
     static GenerationOutput outputOf(const Job *job);
 
+    // "Safe for work": every request to a provider that takes a negative prompt gets
+    // safeNegativeTerms() added to it. Off by default; the Studio follows the setting.
+    void setSafeContent(bool on) { m_safeContent = on; }
+    bool safeContent() const { return m_safeContent; }
+    static QString safeNegativeTerms();
+    // `negative` with the safe terms it does not have yet.
+    static QString withSafeNegative(const QString &negative);
+
 signals:
     void generationFinished(lumen::Job *job);
 
@@ -106,6 +114,7 @@ private:
 
     ProviderRegistry *m_registry;
     JobQueue *m_queue;
+    bool m_safeContent = false;
     QPointer<doc::Project> m_project;
 };
 

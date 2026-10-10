@@ -1403,8 +1403,9 @@ Rules per mode:
   - Found on the way: `promptStyleFor` treated stable-diffusion.cpp as a cloud model, so anime
     checkpoints on the default local back-end got prose prompts without quality tags; fixed.
   - Seen in the images: WAI-Illustrious sexualises some results unprompted (open cloak, swimwear),
-    with and without the LoRA. The anime default negative has no "nsfw"; an open product
-    decision.
+    with and without the LoRA. Decided: no "nsfw" in the default negative, but a "Safe for work"
+    switch (status bar shield and Settings → General, off by default) that
+    `GenerationService::execute` applies to every request whose provider takes a negative prompt.
   - Not measured live: the assistant drawing the character (AC 4) and the cloud fallback (AC 5);
     covered by the mock tests.
 

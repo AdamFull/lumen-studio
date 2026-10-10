@@ -33,6 +33,7 @@
 #include <QStackedWidget>
 #include <QStatusBar>
 #include <QTimer>
+#include <QSignalBlocker>
 #include <QToolButton>
 #include <QVBoxLayout>
 
@@ -71,6 +72,26 @@ MainWindow::MainWindow(Studio *studio, QWidget *parent)
     m_jobLabel = new QLabel(this);
     m_jobLabel->setProperty("role", QStringLiteral("muted"));
     statusBar()->addWidget(m_projectLabel);
+    // "Safe for work" in one click (also in Settings → General).
+    auto *safe = new QToolButton(this);
+    safe->setObjectName(QStringLiteral("safeContent"));
+    safe->setCheckable(true);
+    safe->setAutoRaise(true);
+    safe->setIcon(Icons::get(QStringLiteral("shield")));
+    auto syncSafe = [safe] {
+        const bool on = Settings::instance().value(QStringLiteral("generation/safeContent"), false).toBool();
+        QSignalBlocker block(safe);
+        safe->setChecked(on);
+        safe->setToolTip(on ? tr("Safe for work is on: nudity and explicit content are kept out of generated images. Click to turn it off.")
+                            : tr("Safe for work is off. Click to keep nudity and explicit content out of generated images."));
+    };
+    syncSafe();
+    connect(safe, &QToolButton::toggled, this, [](bool on) { Settings::instance().setValue(QStringLiteral("generation/safeContent"), on); });
+    connect(&Settings::instance(), &Settings::changed, safe, [syncSafe](const QString &key) {
+        if (key == QLatin1String("generation/safeContent"))
+            syncSafe();
+    });
+    statusBar()->addPermanentWidget(safe);
     statusBar()->addPermanentWidget(new ServerStatusButton(studio, [this] { openSettings(QStringLiteral("servers")); }, this));
     statusBar()->addPermanentWidget(m_jobLabel);
     statusBar()->setSizeGripEnabled(false);

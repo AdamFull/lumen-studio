@@ -174,6 +174,12 @@ The left bar switches pages (`Alt+1` … `Alt+6`).
 
 `Ctrl+Return` starts the generation on the Create and Generate pages.
 
+**Safe for work.** Some anime models draw nudity or underwear unasked. The shield in the status bar
+(also Settings → General) adds "nsfw, nude, nudity, explicit, cleavage, underwear, lingerie" to the
+negative prompt of every image request: Generate, Create, the editor, Parts, the assistant and
+the LoRA test. It is off by default and works where the model takes a negative prompt; cloud
+APIs filter on their own.
+
 ### Reusing characters across projects
 
 In the **Character** card of the Create page, **Library → Save character to library…** keeps the

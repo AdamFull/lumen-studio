@@ -84,7 +84,7 @@
         <translation>20–32 abwechslungsreiche Bilder eines Charakters, um seine LoRA zu trainieren.</translation>
     </message>
     <message>
-        <location filename="../src/ai/GenerationService.cpp" line="+286"/>
+        <location filename="../src/ai/GenerationService.cpp" line="+311"/>
         <source>The selection is empty - paint a mask or make a selection first.</source>
         <translation>Die Auswahl ist leer – malen Sie zuerst eine Maske oder erstellen Sie eine Auswahl.</translation>
     </message>
@@ -1055,7 +1055,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="-305"/>
-        <location filename="../src/ui/Studio.cpp" line="+93"/>
+        <location filename="../src/ui/Studio.cpp" line="+96"/>
         <location line="+17"/>
         <source>Lumen is shutting down.</source>
         <translation>Lumen wird beendet.</translation>
@@ -1758,7 +1758,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ai::GenerationService</name>
     <message>
-        <location filename="../src/ai/GenerationService.cpp" line="-164"/>
+        <location filename="../src/ai/GenerationService.cpp" line="-166"/>
         <source>Image generation</source>
         <translation>Bildgenerierung</translation>
     </message>
@@ -1773,7 +1773,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Kein Bildanbieter konfiguriert. Fügen Sie unter Einstellungen → Anbieter einen hinzu.</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+9"/>
         <source>Preparing...</source>
         <translation>Wird vorbereitet...</translation>
     </message>
@@ -8408,7 +8408,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::MainWindow</name>
     <message>
-        <location filename="../src/ui/MainWindow.cpp" line="+131"/>
+        <location filename="../src/ui/MainWindow.cpp" line="+152"/>
         <source>Create</source>
         <translation>Erstellen</translation>
     </message>
@@ -8507,7 +8507,17 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Allgemein</translation>
     </message>
     <message>
-        <location line="-48"/>
+        <location line="-150"/>
+        <source>Safe for work is on: nudity and explicit content are kept out of generated images. Click to turn it off.</source>
+        <translation>Jugendfrei ist an: Nacktheit und explizite Inhalte werden aus erzeugten Bildern herausgehalten. Klicken zum Ausschalten.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Safe for work is off. Click to keep nudity and explicit content out of generated images.</source>
+        <translation>Jugendfrei ist aus. Klicken, um Nacktheit und explizite Inhalte aus erzeugten Bildern herauszuhalten.</translation>
+    </message>
+    <message>
+        <location line="+101"/>
         <location line="+1"/>
         <location line="+6"/>
         <source>Assistant</source>
@@ -9436,7 +9446,7 @@ Trotzdem herunterladen?</translation>
 <context>
     <name>lumen::ui::OnboardingDialog</name>
     <message>
-        <location filename="../src/ui/dialogs/SettingsDialog.cpp" line="+658"/>
+        <location filename="../src/ui/dialogs/SettingsDialog.cpp" line="+666"/>
         <source>Welcome to Lumen Studio</source>
         <translation>Willkommen bei Lumen Studio</translation>
     </message>
@@ -11246,7 +11256,7 @@ oder aus der Bibliothek ziehen</translation>
 <context>
     <name>lumen::ui::ProviderForm</name>
     <message>
-        <location filename="../src/ui/dialogs/SettingsDialog.cpp" line="-680"/>
+        <location filename="../src/ui/dialogs/SettingsDialog.cpp" line="-687"/>
         <source>Documentation</source>
         <translation>Dokumentation</translation>
     </message>
@@ -11907,6 +11917,16 @@ oder aus der Bibliothek ziehen</translation>
         <source>Use the GPU for the canvas (restart)</source>
         <translation>GPU für die Arbeitsfläche verwenden (Neustart)</translation>
     </message>
+    <message>
+        <location line="+4"/>
+        <source>Safe for work: keep nudity and explicit content out of generated images</source>
+        <translation>Jugendfrei: Nacktheit und explizite Inhalte aus erzeugten Bildern heraushalten</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Adds &quot;%1&quot; to the negative prompt of every image request where the model takes one. Also in the status bar (shield).</source>
+        <translation>Fügt „%1“ dem Negativ-Prompt jeder Bildanfrage hinzu, wenn das Modell einen annimmt. Auch in der Statusleiste (Schild).</translation>
+    </message>
 </context>
 <context>
     <name>lumen::ui::ShortcutsPage</name>
@@ -12061,7 +12081,7 @@ oder aus der Bibliothek ziehen</translation>
 <context>
     <name>lumen::ui::Studio</name>
     <message>
-        <location filename="../src/ui/Studio.cpp" line="+126"/>
+        <location filename="../src/ui/Studio.cpp" line="+131"/>
         <source>Could not open project %1: %2</source>
         <translation>Projekt %1 konnte nicht geöffnet werden: %2</translation>
     </message>

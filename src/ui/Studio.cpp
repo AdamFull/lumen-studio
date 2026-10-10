@@ -68,9 +68,12 @@ Studio::Studio(QObject *parent)
         if (!m_activeCharacter.isEmpty() && !m_characters.entry(m_activeCharacter))
             setActiveCharacter(QString());
     });
+    m_generation.setSafeContent(Settings::instance().value(QStringLiteral("generation/safeContent"), false).toBool());
     connect(&Settings::instance(), &Settings::changed, this, [this](const QString &key) {
         if (key == QLatin1String("doc/autosaveSec"))
             m_autosave.setInterval(std::max(10, Settings::instance().autosaveIntervalSec()) * 1000);
+        if (key == QLatin1String("generation/safeContent"))
+            m_generation.setSafeContent(Settings::instance().value(key, false).toBool());
     });
 }
 
