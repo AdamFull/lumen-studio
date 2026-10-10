@@ -335,5 +335,10 @@
         <source>Exported %n training image(s) to %1.</source>
         <translation><numerusform>Exported %n training image to %1.</numerusform><numerusform>Exported %n training images to %1.</numerusform></translation>
     </message>
+    <message numerus="yes">
+        <location filename="../src/ui/dialogs/LoraDatasetDialog.cpp" line="+1" />
+        <source>%n earlier training(s), %1</source>
+        <translation><numerusform>%n earlier training, %1</numerusform><numerusform>%n earlier trainings, %1</numerusform></translation>
+    </message>
 </context>
 </TS>

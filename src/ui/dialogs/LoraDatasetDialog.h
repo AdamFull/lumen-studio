@@ -88,6 +88,8 @@ private:
     void bindEvaluation(LoraEvaluation *evaluation);
     void refreshEvaluation();
     void applyEvaluation();
+    void refreshEarlierRuns();
+    void removeEarlierRuns();
     QStringList selectedIds() const;
     QPixmap thumbnail(const QString &id);
 
@@ -127,6 +129,8 @@ private:
     QProgressBar *m_trainBar = nullptr;
     QLabel *m_trainStatus = nullptr;
     QPointer<Job> m_trainingJob;
+    QLabel *m_earlierRuns = nullptr;
+    QPushButton *m_removeRuns = nullptr;
     QPushButton *m_evalButton = nullptr;
     QLabel *m_evalStatus = nullptr;
     QTableWidget *m_evalTable = nullptr;

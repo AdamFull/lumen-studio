@@ -232,7 +232,10 @@ images of it:
      afterwards.
    * **Stop** keeps the progress; **Continue the stopped training** carries on later.
    * When the training is done, the LoRA is in the model library and attached to the character,
-     with its trigger word.
+     with its trigger word. Lumen then deletes what only a stopped training needs (the trainer's
+     saved state and the exported images, about 100 MB each); the epoch files stay for testing.
+   * **Remove earlier trainings…** deletes the files of older trainings of the character (epochs,
+     test images, logs). The LoRAs in the model library and the newest training stay.
    * **Test the LoRA** (under *Test the result*) checks which epoch works best:
      * The newest three epochs draw four new scenes with the LoRA.
      * For comparison the same scenes are drawn without it, with the reference image instead.

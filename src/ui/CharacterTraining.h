@@ -38,6 +38,15 @@ public:
     // The newest run folder of a training set and whether it stopped before the end (resumable).
     static QString lastRun(const QString &datasetDir);
     static bool canResume(const QString &runDir);
+    // Run folders of a training set, oldest first.
+    static QStringList runs(const QString &datasetDir);
+    // After a finished training: removes what only a continued training needs (the trainer's
+    // states and the exported images). Keeps the epoch files, the test results, run.json and the log.
+    static void tidyRun(const QString &runDir);
+    // Removes every run but the newest; returns the bytes freed. The LoRAs the character uses are
+    // copies in the model library, so they stay.
+    static qint64 removeEarlierRuns(const QString &datasetDir);
+    static qint64 folderSize(const QString &path);
 
     QString characterId() const { return m_settings.characterId; }
     QString runDir() const { return m_runDir; }

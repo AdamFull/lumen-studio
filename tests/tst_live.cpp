@@ -30,11 +30,16 @@
 #include "runtime/ServerProfile.h"
 #include "runtime/Supervisor.h"
 #include "runtime/Trainer.h"
+#include "doc/LoraDataset.h"
+#include "ui/CharacterTraining.h"
 #include "ui/LoraEvaluation.h"
+#include "ui/director/DirectorSession.h"
+#include "ui/dialogs/LoraDatasetDialog.h"
 #include "ui/Studio.h"
 #include "ui/assistant/AssistantPanel.h"
 #include "ui/pages/CreatePage.h"
 
+#include <QAction>
 #include <QDir>
 #include <QDirIterator>
 #include <QElapsedTimer>
@@ -42,6 +47,7 @@
 #include <QJsonDocument>
 #include <QPainter>
 #include <QProcess>
+#include <QPushButton>
 #include <QRegularExpression>
 #include <QScopeGuard>
 #include <QSignalSpy>
@@ -102,6 +108,7 @@ private slots:
     void installTrainer();
     void trainLora();
     void evaluateLora();
+    void characterLoraEndToEnd();
 
 private:
     net::HttpClient m_http;
@@ -1476,6 +1483,279 @@ void TestLive::evaluateLora()
     }
     const int best = result.value(QStringLiteral("bestEpoch")).toInt();
     QVERIFY(best > 0);
+}
+
+// LUMEN_LIVE_FULL_LORA=<shots> with LUMEN_LIVE_LLAMA_*, LUMEN_LIVE_SD_*, LUMEN_LIVE_REFERENCE and an
+// installed trainer in LUMEN_LIVE_SD_RUNTIMES: M13's acceptance run through the UI, with both servers
+// run by Lumen. Create → Training set → plan and generate the shots → Critic scores → captions →
+// Train tab (LUMEN_LIVE_FULL_EPOCHS, default 10) → Test the LoRA → attach the recommended epoch.
+void TestLive::characterLoraEndToEnd()
+{
+    const int shotCount = qEnvironmentVariableIntValue("LUMEN_LIVE_FULL_LORA");
+    const int epochs = qEnvironmentVariableIntValue("LUMEN_LIVE_FULL_EPOCHS") > 0 ? qEnvironmentVariableIntValue("LUMEN_LIVE_FULL_EPOCHS") : 10;
+    const QString llamaExe = qEnvironmentVariable("LUMEN_LIVE_LLAMA_SERVER");
+    const QString llamaModel = qEnvironmentVariable("LUMEN_LIVE_LLAMA_MODEL");
+    const QString sdRoot = qEnvironmentVariable("LUMEN_LIVE_SD_RUNTIMES");
+    const QString sdModel = qEnvironmentVariable("LUMEN_LIVE_SD_MODEL");
+    if (shotCount <= 0 || llamaExe.isEmpty() || llamaModel.isEmpty() || sdRoot.isEmpty() || sdModel.isEmpty() || referencePath().isEmpty())
+        QSKIP("LUMEN_LIVE_FULL_LORA, LUMEN_LIVE_LLAMA_*, LUMEN_LIVE_SD_* and LUMEN_LIVE_REFERENCE are needed");
+    Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
+    Settings::instance().setValue(QStringLiteral("director/critic"), false);
+    QTemporaryDir dir;
+    ui::Studio studio;
+    for (Provider *p : studio.providers()->providers())
+        studio.providers()->removeProvider(p->instanceId());
+    for (const runtime::ServerProfile &p : studio.servers()->profiles())
+        studio.servers()->removeProfile(p.id);
+    studio.runtimes()->setRoot(dir.filePath(QStringLiteral("runtimes")));
+    studio.runtimes()->load();
+    {
+        JobQueue jobs;
+        runtime::RuntimeStore real(&m_http, &jobs);
+        real.setRoot(sdRoot);
+        real.load();
+        const auto sd = real.latestManaged(QStringLiteral("sd.cpp"));
+        QVERIFY(sd);
+        studio.runtimes()->addInstalled(*sd);
+        const QList<runtime::InstalledRuntime> trainers = real.runtimes(QStringLiteral("kohya"));
+        QVERIFY2(!trainers.isEmpty(), "no trainer installed");
+        studio.runtimes()->addInstalled(trainers.last());
+    }
+    QFuture<runtime::InstalledRuntime> llamaRt = studio.runtimes()->adopt(llamaExe);
+    QTRY_VERIFY_WITH_TIMEOUT(llamaRt.isFinished(), 30000);
+    runtime::ServerSupervisor *servers = studio.servers();
+    runtime::ServerProfile llm = servers->createProfile(llamaRt.result().id, QStringLiteral("Qwen3-VL"));
+    llm.options.insert(QStringLiteral("model"), llamaModel);
+    if (!qEnvironmentVariable("LUMEN_LIVE_LLAMA_MMPROJ").isEmpty())
+        llm.options.insert(QStringLiteral("mmproj"), qEnvironmentVariable("LUMEN_LIVE_LLAMA_MMPROJ"));
+    llm.startupTimeoutSec = 300;
+    servers->addProfile(llm);
+    runtime::ServerProfile image = servers->createProfile(studio.runtimes()->latestManaged(QStringLiteral("sd.cpp"))->id, QStringLiteral("SDXL"));
+    image.options.insert(QStringLiteral("model"), sdModel);
+    for (const auto &[key, env] : {std::pair{QStringLiteral("control_net"), "LUMEN_LIVE_SD_CONTROLNET"},
+                                   std::pair{QStringLiteral("ip_adapter"), "LUMEN_LIVE_SD_IPADAPTER"},
+                                   std::pair{QStringLiteral("clip_vision"), "LUMEN_LIVE_SD_CLIPVISION"}}) {
+        if (!qEnvironmentVariable(env).isEmpty())
+            image.options.insert(key, qEnvironmentVariable(env));
+    }
+    image.startupTimeoutSec = 300;
+    servers->addProfile(image);
+    Provider *sdProvider = studio.providers()->addProvider(QStringLiteral("sdcpp"), QStringLiteral("SDXL"), {{QStringLiteral("managed_server"), image.id}});
+    Provider *llmProvider = studio.providers()->addProvider(QStringLiteral("llamacpp"), QStringLiteral("Qwen3-VL"),
+                                                            {{QStringLiteral("managed_server"), llm.id}, {QStringLiteral("timeout_s"), 900}});
+    QVERIFY(sdProvider && llmProvider);
+    studio.providers()->setDefaultImageProvider(sdProvider->instanceId());
+    QString visionName;
+    for (const runtime::LlamaModel &m : runtime::llamaModels(*servers->profile(llm.id))) {
+        if (m.vision() && visionName.isEmpty())
+            visionName = m.name;
+    }
+    for (LlmRole role : allLlmRoles())
+        studio.providers()->setRole(role, {llmProvider->instanceId(), visionName});
+
+    // The character: one reference image and its sheet, saved to the character library.
+    studio.openProject(dir.filePath(QStringLiteral("lora.lumen")));
+    QTRY_VERIFY_WITH_TIMEOUT(studio.isProjectOpen(), 10000);
+    auto imported = studio.project()->importFile(referencePath(), doc::AssetKind::Reference);
+    QTRY_VERIFY_WITH_TIMEOUT(imported.isFinished(), 10000);
+    const QJsonObject sheet{{QStringLiteral("name"), QStringLiteral("Akane")},
+                            {QStringLiteral("gender_presentation"), QStringLiteral("female")},
+                            {QStringLiteral("tags"), qEnvironmentVariable("LUMEN_LIVE_DATASET_TAGS",
+                                                                          QStringLiteral("long red hair, yellow eyes, black hooded cloak, black choker"))}};
+    auto saved = studio.characters()->save(QStringLiteral("Akane (M13 acceptance)"), sheet, {QImage(referencePath())});
+    QTRY_VERIFY_WITH_TIMEOUT(saved.isFinished(), 10000);
+    const QString characterId = saved.result().id;
+    auto cleanup = qScopeGuard([&] {
+        Settings::instance().setValue(QStringLiteral("director/critic"), false);
+        for (Provider *p : studio.providers()->providers())
+            studio.providers()->removeProvider(p->instanceId());
+        servers->stopAll();
+    });
+    ui::CreatePage create(&studio);
+    QTRY_VERIFY(create.findChild<ui::DirectorSession *>());
+    ui::DirectorSession *session = create.findChild<ui::DirectorSession *>();
+    session->addReferences({imported.result().id});
+    session->setCharacter(sheet);
+    session->setLibraryCharacter(characterId);
+    for (QSpinBox *spin : create.findChildren<QSpinBox *>()) {
+        if (spin->suffix().contains(QLatin1String("per shot")))
+            spin->setValue(1);
+        if (spin->prefix().startsWith(QLatin1String("Shots")))
+            spin->setValue(shotCount);
+    }
+    QAction *trainingSet = nullptr;
+    for (QAction *a : create.findChildren<QAction *>()) {
+        if (a->text() == QStringLiteral("Training set…"))
+            trainingSet = a;
+    }
+    QVERIFY(trainingSet);
+    trainingSet->trigger();
+    QTRY_VERIFY(create.findChild<ui::LoraDatasetDialog *>());
+    ui::LoraDatasetDialog *dlg = create.findChild<ui::LoraDatasetDialog *>();
+    auto button = [dlg](const QString &text) -> QPushButton * {
+        for (QPushButton *b : dlg->findChildren<QPushButton *>()) {
+            if (b->text() == text)
+                return b;
+        }
+        return nullptr;
+    };
+    QElapsedTimer total;
+    total.start();
+    auto stamp = [&total](const QString &what) { qInfo().noquote() << QStringLiteral("[%1 min]").arg(total.elapsed() / 60000.0, 0, 'f', 1) << what; };
+
+    // 1. Plan and generate the training shots.
+    QVERIFY(button(QStringLiteral("Plan training shots")));
+    button(QStringLiteral("Plan training shots"))->click();
+    QTRY_COMPARE_WITH_TIMEOUT(int(session->shots().size()), shotCount, 10000);
+    // As "Generate all" does, through the director actions (they report when every shot settled).
+    QStringList ids;
+    for (const ui::ShotState &s : session->shots())
+        ids << s.id();
+    bool generated = false;
+    QString generationErrors;
+    create.generateShots(ids, [&](const QStringList &, const QString &error) {
+        generationErrors = error;
+        generated = true;
+    });
+    QTRY_VERIFY_WITH_TIMEOUT(generated, 4 * 3600 * 1000);
+    int failed = 0;
+    for (const ui::ShotState &s : session->shots())
+        failed += s.results.isEmpty() ? 1 : 0;
+    if (!generationErrors.isEmpty())
+        qInfo().noquote() << "   errors:" << generationErrors.left(1000);
+    stamp(QStringLiteral("%1 shots generated, %2 failed").arg(shotCount).arg(failed));
+
+    // 2. Into the training set; the Critic scores; near-duplicates out; captions.
+    int added = -1;
+    dlg->addSessionResults([&](int n) { added = n; });
+    QTRY_VERIFY_WITH_TIMEOUT(added >= 0, 120000);
+    dlg->scoreAll();
+    QTRY_VERIFY_WITH_TIMEOUT(!dlg->isScoring(), 3600 * 1000);
+    doc::LoraDataset *ds = dlg->dataset();
+    const int duplicates = ds->markDuplicates();
+    QList<QImage> kept;
+    QStringList scores;
+    for (const doc::DatasetItem &i : ds->items()) {
+        scores << QStringLiteral("%1%2").arg(i.score).arg(i.kept ? QString() : QStringLiteral("✗"));
+        if (i.kept)
+            kept << QImage(ds->imagePath(i.id));
+    }
+    stamp(QStringLiteral("%1 added, %2 kept, %3 near-duplicates; scores %4").arg(added).arg(ds->keptCount()).arg(duplicates).arg(scores.join(QLatin1Char(' '))));
+    dlg->captionAll();
+    QTRY_VERIFY_WITH_TIMEOUT(!dlg->isCaptioning(), 3600 * 1000);
+    for (const doc::DatasetItem &i : ds->items()) {
+        if (i.kept)
+            qInfo().noquote() << "   " << i.caption;
+    }
+    stamp(QStringLiteral("captions done; trigger %1").arg(ds->settings().trigger));
+    {
+        const int columns = 6;
+        QImage contact(columns * 200, ((int(kept.size()) + columns - 1) / columns) * 200, QImage::Format_RGB32);
+        contact.fill(Qt::white);
+        QPainter p(&contact);
+        for (int i = 0; i < kept.size(); ++i) {
+            const QImage tile = kept[i].scaled(200, 200, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+            p.drawImage((i % columns) * 200 + (200 - tile.width()) / 2, (i / columns) * 200 + (200 - tile.height()) / 2, tile);
+        }
+        p.end();
+        save(contact, QStringLiteral("full_dataset.png"));
+    }
+
+    // 3. Train tab: the generator's model and the GPU's preset are preselected.
+    QSpinBox *epochSpin = nullptr;
+    for (QSpinBox *s : dlg->findChildren<QSpinBox *>()) {
+        if (s->toolTip().startsWith(QLatin1String("Each epoch")))
+            epochSpin = s;
+    }
+    QVERIFY(epochSpin);
+    epochSpin->setValue(epochs);
+    QPushButton *start = button(QStringLiteral("Start training"));
+    QVERIFY(start);
+    QTRY_VERIFY_WITH_TIMEOUT(start->isEnabled(), 30000);
+    const QStringList running = [&] {
+        QStringList ids;
+        for (const QString &id : {llm.id, image.id}) {
+            if (servers->state(id) != runtime::ServerState::Stopped)
+                ids << id;
+        }
+        return ids;
+    }();
+    stamp(QStringLiteral("training starts; servers running before: %1").arg(running.size()));
+    start->click();
+    QTRY_VERIFY_WITH_TIMEOUT(!servers->gpuReservation().isEmpty(), 60000);
+    QTRY_VERIFY_WITH_TIMEOUT(servers->state(llm.id) == runtime::ServerState::Stopped && servers->state(image.id) == runtime::ServerState::Stopped, 120000);
+    // A request while training gets the reason instead of starting a server.
+    QFuture<QString> refused = servers->start(image.id);
+    QTRY_VERIFY(refused.isFinished());
+    QVERIFY(!refused.result().isEmpty());
+    qInfo().noquote() << "   while training:" << refused.result();
+    QTRY_VERIFY_WITH_TIMEOUT(!ui::CharacterTraining::running(characterId), 8 * 3600 * 1000);
+    const ai::CharacterLora trained = ai::CharacterLora::fromJson(studio.characters()->entry(characterId)->lora);
+    QVERIFY2(trained.isValid(), "training failed");
+    QVERIFY(servers->gpuReservation().isEmpty());
+    stamp(QStringLiteral("trained: %1 (%2 MB), trigger %3; GPU released")
+              .arg(QDir::toNativeSeparators(trained.file))
+              .arg(QFileInfo(trained.file).size() / 1e6, 0, 'f', 1)
+              .arg(trained.trigger));
+    QFile log(QDir(ui::CharacterTraining::lastRun(ds->directory())).filePath(QStringLiteral("train.log")));
+    if (log.open(QIODevice::ReadOnly)) {
+        const QStringList lines = QString::fromUtf8(log.readAll()).split(QLatin1Char('\n'));
+        for (const QString &l : lines) {
+            if (l.contains(QLatin1String("avr_loss")) && l.contains(QLatin1String("100%")))
+                qInfo().noquote() << "   " << l.trimmed().right(120);
+        }
+    }
+
+    // 4. Test the LoRA: the servers start again on demand.
+    QPushButton *test = button(QStringLiteral("Test the LoRA"));
+    QVERIFY(test);
+    QTRY_VERIFY(test->isEnabled());
+    test->click();
+    QVERIFY(ui::LoraEvaluation::running(characterId));
+    QTRY_VERIFY_WITH_TIMEOUT(!ui::LoraEvaluation::running(characterId), 4 * 3600 * 1000);
+    const QString runDir = ui::CharacterTraining::lastRun(ds->directory());
+    const QJsonObject result = ui::LoraEvaluation::saved(runDir);
+    stamp(result.value(QStringLiteral("status")).toString());
+    QVERIFY(result.value(QStringLiteral("finished")).toBool());
+    QMap<QPair<int, double>, QList<QJsonObject>> cells;
+    QList<QPair<int, double>> order;
+    for (const QJsonValue &v : result.value(QStringLiteral("cells")).toArray()) {
+        const QPair<int, double> key{v[QStringLiteral("epoch")].toInt(), v[QStringLiteral("weight")].toDouble()};
+        if (!order.contains(key))
+            order << key;
+        cells[key] << v.toObject();
+    }
+    QImage grid(4 * 256, int(order.size()) * 256, QImage::Format_RGB32);
+    grid.fill(Qt::white);
+    QPainter p(&grid);
+    for (int row = 0; row < order.size(); ++row) {
+        double score = 0;
+        double identity = 0;
+        for (const QJsonObject &c : cells[order[row]]) {
+            score += c.value(QStringLiteral("score")).toDouble();
+            identity += c.value(QStringLiteral("critique")).toObject().value(QStringLiteral("identity")).toDouble();
+            const int column = c.value(QStringLiteral("shot")).toString().mid(1).toInt() - 1;
+            const QImage tile = QImage(c.value(QStringLiteral("image")).toString()).scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+            p.drawImage(column * 256 + (256 - tile.width()) / 2, row * 256 + (256 - tile.height()) / 2, tile);
+        }
+        const int n = int(cells[order[row]].size());
+        qInfo().noquote() << "   " << (order[row].first == 0 ? QStringLiteral("without LoRA") : QStringLiteral("epoch %1 at %2").arg(order[row].first).arg(order[row].second))
+                          << "score" << QString::number(score / n, 'f', 2) << "identity" << QString::number(identity / n, 'f', 2);
+    }
+    p.end();
+    save(grid, QStringLiteral("full_evaluation.png"));
+
+    // 5. Attach the recommended epoch.
+    QPushButton *apply = nullptr;
+    for (QPushButton *b : dlg->findChildren<QPushButton *>()) {
+        if (b->text().endsWith(QLatin1String("(recommended)")))
+            apply = b;
+    }
+    QVERIFY(apply);
+    apply->click();
+    const ai::CharacterLora chosen = ai::CharacterLora::fromJson(studio.characters()->entry(characterId)->lora);
+    QTRY_COMPARE(ai::CharacterLora::fromJson(session->characterLora()).file, chosen.file);
+    stamp(QStringLiteral("attached %1 at %2").arg(QFileInfo(chosen.file).fileName()).arg(chosen.weight));
 }
 
 QTEST_MAIN(TestLive)

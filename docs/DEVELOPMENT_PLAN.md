@@ -1138,8 +1138,12 @@ A LoRA learns from 15–40 varied images of the character. They come from what L
       preset by GPU size, epochs;
     - steps and an estimated time; a warning under 15 images;
     - start, stop, continue; progress and the result.
+  - Disk: a finished run keeps its epoch files, test results, run.json and log; the trainer's
+    states (93 MB each for an SDXL rank-16 LoRA, two per run) and the exported images are deleted.
+    *Remove earlier trainings…* deletes every run but the newest (the library keeps its copies).
   - Tests: arguments per preset and family, progress parsing, outputs and state, GPU
-    reservation; the Train tab end to end with a simulated trainer.
+    reservation; the Train tab end to end with a simulated trainer, the tidy-up and removing
+    earlier runs.
   - Measured (RTX 4060 8 GB, WAI-Illustrious, 8-GB preset):
     - 3.1 s per step at 1024²;
     - 6.6 GB peak GPU memory (fp8 base not needed);

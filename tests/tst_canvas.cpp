@@ -51,9 +51,11 @@
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QListWidget>
+#include <QMessageBox>
 #include <QSpinBox>
 #include <QScopeGuard>
 #include <QTemporaryDir>
+#include <QTimer>
 #include <QToolButton>
 #include <QtTest>
 
@@ -1441,7 +1443,9 @@ void TestCanvas::loraTrainingRun()
         imagesFolder = folders.value(0);
         const QByteArray lora = fakeSafetensors({QStringLiteral("lora_unet_a.lora_down.weight")},
                                                 {{QStringLiteral("ss_base_model_version"), QStringLiteral("sdxl_base_v1-0")}});
-        for (const QString &f : {name + QStringLiteral("-000001.safetensors"), name + QStringLiteral(".safetensors")}) {
+        for (const QString &f : {name + QStringLiteral("-000001.safetensors"), name + QStringLiteral(".safetensors"),
+                                 name + QStringLiteral("-000001-state/optimizer.bin")}) {
+            QDir().mkpath(QFileInfo(QDir(out).filePath(f)).absolutePath());
             QFile file(QDir(out).filePath(f));
             if (file.open(QIODevice::WriteOnly))
                 file.write(lora);
@@ -1454,6 +1458,16 @@ void TestCanvas::loraTrainingRun()
         r.exitCode = 0;
         return QtFuture::makeReadyValueFuture(r);
     };
+
+    // An earlier training of this character.
+    const QString datasetDir = studio.characters()->datasetDirectory(characterId);
+    {
+        const QString old = QDir(datasetDir).filePath(QStringLiteral("training/run-20200101-000000/output/lmn_mira.safetensors"));
+        QDir().mkpath(QFileInfo(old).absolutePath());
+        QFile f(old);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write(QByteArray(2048, 'x'));
+    }
 
     LoraDatasetDialog dlg(&studio, characterId, nullptr, {});
     dlg.resize(1080, 720);
@@ -1487,6 +1501,29 @@ void TestCanvas::loraTrainingRun()
     QCOMPARE(QFileInfo(lora.file).fileName().left(8), QStringLiteral("lmn_mira"));
     QCOMPARE(QFileInfo(lora.file).absolutePath(), QDir(studio.models()->defaultFolder()).filePath(QStringLiteral("loras")));
     QTRY_VERIFY(studio.models()->entry(lora.file).has_value());
+    // The finished run keeps its epochs but not the trainer's state or the exported images.
+    const QString run = CharacterTraining::lastRun(datasetDir);
+    QCOMPARE(CharacterTraining::runs(datasetDir).size(), 2);
+    QVERIFY(QFileInfo::exists(run + QStringLiteral("/output/lmn_mira-000001.safetensors")));
+    QVERIFY(!QFileInfo::exists(run + QStringLiteral("/output/lmn_mira-000001-state")));
+    QVERIFY(!QFileInfo::exists(run + QStringLiteral("/img")));
+    QVERIFY(QFileInfo::exists(run + QStringLiteral("/run.json")));
+    // The earlier run can be removed (after a confirmation); the newest stays.
+    QPushButton *removeRuns = nullptr;
+    for (QPushButton *b : dlg.findChildren<QPushButton *>()) {
+        if (b->text() == QStringLiteral("Remove earlier trainings…"))
+            removeRuns = b;
+    }
+    QVERIFY(removeRuns);
+    QTRY_VERIFY(removeRuns->isVisible());
+    QTimer::singleShot(200, [] {
+        if (auto *box = qobject_cast<QMessageBox *>(QApplication::activeModalWidget()))
+            box->button(QMessageBox::Yes)->click();
+    });
+    removeRuns->click();
+    QCOMPARE(CharacterTraining::runs(datasetDir), QStringList{run});
+    QVERIFY(!removeRuns->isVisible());
+    QVERIFY(QFileInfo::exists(lora.file));
     const auto entry = studio.models()->entry(lora.file);
     QCOMPARE(entry->info.kind, runtime::ModelKind::Lora);
     QCOMPARE(entry->source.value(QStringLiteral("source")).toString(), QStringLiteral("training"));

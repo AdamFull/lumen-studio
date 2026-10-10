@@ -4878,12 +4878,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::CharacterTraining</name>
     <message>
-        <location filename="../src/ui/CharacterTraining.cpp" line="+56"/>
+        <location filename="../src/ui/CharacterTraining.cpp" line="+57"/>
         <source>This character&apos;s LoRA is already being trained.</source>
         <translation>Die LoRA dieses Charakters wird bereits trainiert.</translation>
     </message>
     <message>
-        <location line="+50"/>
+        <location line="+94"/>
         <source>The character is not in the character library.</source>
         <translation>Der Charakter ist nicht in der Charakterbibliothek.</translation>
     </message>
@@ -4928,7 +4928,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Die LoRA kann nicht nach %1 kopiert werden.</translation>
     </message>
     <message>
-        <location line="+24"/>
+        <location line="+25"/>
         <source>The LoRA of %1 is trained and attached to the character (trigger word: %2).</source>
         <translation>Die LoRA von %1 ist trainiert und dem Charakter angehängt (Auslösewort: %2).</translation>
     </message>
@@ -7572,7 +7572,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::LoraDatasetDialog</name>
     <message>
-        <location filename="../src/ui/dialogs/LoraDatasetDialog.cpp" line="+76"/>
+        <location filename="../src/ui/dialogs/LoraDatasetDialog.cpp" line="+77"/>
         <source>LoRA training set — %1</source>
         <translation>LoRA-Trainingsset — %1</translation>
     </message>
@@ -7608,12 +7608,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+278"/>
+        <location line="+279"/>
         <source>Score with Critic</source>
         <translation>Mit Kritiker bewerten</translation>
     </message>
     <message>
-        <location line="-277"/>
+        <location line="-278"/>
         <source>A vision model compares each image with the character&apos;s references</source>
         <translation>Ein Bildverständnismodell vergleicht jedes Bild mit den Referenzen des Charakters</translation>
     </message>
@@ -7659,12 +7659,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+4"/>
-        <location line="+702"/>
+        <location line="+742"/>
         <source>Write captions</source>
         <translation>Beschreibungen schreiben</translation>
     </message>
     <message>
-        <location line="-701"/>
+        <location line="-741"/>
         <source>The vision model tags every kept image that has no tags yet</source>
         <translation>Das Bildverständnismodell vertaggt jedes behaltene Bild, das noch keine Tags hat</translation>
     </message>
@@ -7725,12 +7725,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+835"/>
+        <location line="+875"/>
         <source>Remove</source>
         <translation>Entfernen</translation>
     </message>
     <message>
-        <location line="-831"/>
+        <location line="-871"/>
         <source>Export for training…</source>
         <translation>Für das Training exportieren…</translation>
     </message>
@@ -7771,7 +7771,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Keine Beinahe-Duplikate.</translation>
     </message>
     <message>
-        <location line="+73"/>
+        <location line="+74"/>
         <source>%1/10</source>
         <translation>%1/10</translation>
     </message>
@@ -7878,28 +7878,38 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+6"/>
-        <location line="+128"/>
+        <location line="+137"/>
         <source>Start training</source>
         <translation>Training starten</translation>
     </message>
     <message>
-        <location line="-126"/>
+        <location line="-135"/>
         <source>Continue the stopped training</source>
         <translation>Gestopptes Training fortsetzen</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+15"/>
+        <source>Remove earlier trainings…</source>
+        <translation>Frühere Trainings entfernen…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Removes the files of earlier trainings of this character. LoRAs in the model library stay.</source>
+        <translation>Entfernt die Dateien früherer Trainings dieses Charakters. LoRAs in der Modellbibliothek bleiben erhalten.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
         <source>Test the result</source>
         <translation>Ergebnis testen</translation>
     </message>
     <message>
         <location line="+6"/>
-        <location line="+148"/>
+        <location line="+177"/>
         <source>Test the LoRA</source>
         <translation>LoRA testen</translation>
     </message>
     <message>
-        <location line="-65"/>
+        <location line="-94"/>
         <source>Not installed (about 4 GB to download)</source>
         <translation>Nicht installiert (etwa 4 GB Download)</translation>
     </message>
@@ -7928,8 +7938,31 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <source>Fewer than 15 images: the LoRA will learn little. Add more first.</source>
         <translation>Weniger als 15 Bilder: Die LoRA lernt wenig. Fügen Sie zuerst weitere hinzu.</translation>
     </message>
+    <message numerus="yes">
+        <location line="+20"/>
+        <source>%n earlier training(s), %1</source>
+        <translation>
+            <numerusform>%n früheres Training, %1</numerusform>
+            <numerusform>%n frühere Trainings, %1</numerusform>
+        </translation>
+    </message>
     <message>
-        <location line="+17"/>
+        <location line="+9"/>
+        <source>Remove earlier trainings</source>
+        <translation>Frühere Trainings entfernen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Remove the files of the earlier trainings (epochs, test images, logs)? The LoRAs in the model library and the newest training stay.</source>
+        <translation>Die Dateien der früheren Trainings entfernen (Epochen, Testbilder, Protokolle)? Die LoRAs in der Modellbibliothek und das neueste Training bleiben erhalten.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Earlier trainings removed: %1 freed.</source>
+        <translation>Frühere Trainings entfernt: %1 freigegeben.</translation>
+    </message>
+    <message>
+        <location line="+11"/>
         <source>Train the LoRA first.</source>
         <translation>Trainieren Sie zuerst die LoRA.</translation>
     </message>
@@ -7989,7 +8022,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Datei: %1</translation>
     </message>
     <message>
-        <location line="+47"/>
+        <location line="+48"/>
         <source>Not tagged yet</source>
         <translation>Noch nicht vertaggt</translation>
     </message>
@@ -8020,18 +8053,18 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         </translation>
     </message>
     <message>
-        <location line="-311"/>
-        <location line="+313"/>
+        <location line="-341"/>
+        <location line="+343"/>
         <source>Stop</source>
         <translation>Stopp</translation>
     </message>
     <message>
-        <location line="-422"/>
+        <location line="-452"/>
         <source>The newest three epochs draw four new scenes with the LoRA; for comparison the same scenes are drawn without it, with the reference image through IP-Adapter. The Critic scores how well each image keeps the character (0–10). Takes about 45 minutes on an 8 GB GPU.</source>
         <translation>Die drei neuesten Epochen zeichnen vier neue Szenen mit der LoRA; zum Vergleich werden dieselben Szenen ohne sie gezeichnet, mit dem Referenzbild über IP-Adapter. Der Kritiker bewertet, wie gut jedes Bild den Charakter trifft (0–10). Dauert auf einer GPU mit 8 GB etwa 45 Minuten.</translation>
     </message>
     <message>
-        <location line="+469"/>
+        <location line="+499"/>
         <source>Every kept image is tagged; the captions were rebuilt.</source>
         <translation>Jedes behaltene Bild ist vertaggt; die Beschreibungen wurden neu erstellt.</translation>
     </message>

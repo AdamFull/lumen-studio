@@ -34,6 +34,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QListWidget>
+#include <QLocale>
 #include <QMessageBox>
 #include <QPainter>
 #include <QProgressBar>
@@ -271,6 +272,7 @@ LoraDatasetDialog::LoraDatasetDialog(Studio *studio, const QString &characterId,
     }
     reloadCaptions();
     refreshTrainTab();
+    refreshEarlierRuns();
     if (CharacterTraining *running = CharacterTraining::running(m_characterId))
         bindTraining(running);
     if (LoraEvaluation *testing = LoraEvaluation::running(m_characterId))
@@ -419,6 +421,15 @@ QWidget *LoraDatasetDialog::buildTrainTab()
     m_trainStatus->setWordWrap(true);
     m_trainStatus->setTextFormat(Qt::RichText);
     v->addWidget(m_trainStatus);
+    auto *runsRow = new QHBoxLayout;
+    m_earlierRuns = mutedLabel(QString(), page);
+    m_removeRuns = new QPushButton(Icons::get(QStringLiteral("trash")), tr("Remove earlier trainings…"), page);
+    m_removeRuns->setToolTip(tr("Removes the files of earlier trainings of this character. LoRAs in the model library stay."));
+    runsRow->addWidget(m_earlierRuns);
+    runsRow->addWidget(m_removeRuns);
+    runsRow->addStretch();
+    v->addLayout(runsRow);
+    connect(m_removeRuns, &QPushButton::clicked, this, &LoraDatasetDialog::removeEarlierRuns);
 
     // Test the result: the newest epochs against a baseline without the LoRA.
     v->addSpacing(8);
@@ -537,6 +548,35 @@ void LoraDatasetDialog::refreshTrainTab()
     m_resumeButton->setVisible(!running && CharacterTraining::canResume(CharacterTraining::lastRun(m_dataset->directory())));
     m_resumeButton->setEnabled(!trainers.isEmpty());
     refreshEvaluation();
+}
+
+void LoraDatasetDialog::refreshEarlierRuns()
+{
+    if (!m_earlierRuns)
+        return;
+    QStringList runs = CharacterTraining::runs(m_dataset->directory());
+    if (!runs.isEmpty())
+        runs.removeLast();
+    qint64 bytes = 0;
+    for (const QString &run : std::as_const(runs))
+        bytes += CharacterTraining::folderSize(run);
+    m_earlierRuns->setText(tr("%n earlier training(s), %1", nullptr, int(runs.size())).arg(QLocale().formattedDataSize(bytes)));
+    m_earlierRuns->setVisible(!runs.isEmpty());
+    m_removeRuns->setVisible(!runs.isEmpty());
+}
+
+void LoraDatasetDialog::removeEarlierRuns()
+{
+    const bool busy = (m_trainingJob && !m_trainingJob->isFinished()) || m_evaluation;
+    if (busy
+        || QMessageBox::question(this, tr("Remove earlier trainings"),
+                                 tr("Remove the files of the earlier trainings (epochs, test images, logs)? The LoRAs in the model "
+                                    "library and the newest training stay."))
+               != QMessageBox::Yes)
+        return;
+    const qint64 freed = CharacterTraining::removeEarlierRuns(m_dataset->directory());
+    m_studio->notify(tr("Earlier trainings removed: %1 freed.").arg(QLocale().formattedDataSize(freed)), QStringLiteral("success"));
+    refreshEarlierRuns();
 }
 
 void LoraDatasetDialog::startEvaluation()
@@ -777,6 +817,7 @@ void LoraDatasetDialog::bindTraining(CharacterTraining *training)
             text += QStringLiteral("<br>") + tr("File: %1").arg(QDir::toNativeSeparators(lora).toHtmlEscaped());
         self->m_trainStatus->setText(text);
         self->refreshTrainTab();
+        self->refreshEarlierRuns();
     });
 }
 

@@ -17,6 +17,7 @@
 #include <QHash>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QDirIterator>
 #include <QSaveFile>
 
 namespace lumen::ui {
@@ -75,6 +76,50 @@ QString CharacterTraining::lastRun(const QString &datasetDir)
     const QDir runs(QDir(datasetDir).filePath(QStringLiteral("training")));
     const QStringList names = runs.entryList({QStringLiteral("run-*")}, QDir::Dirs, QDir::Name);
     return names.isEmpty() ? QString() : QDir::cleanPath(runs.filePath(names.last()));
+}
+
+QStringList CharacterTraining::runs(const QString &datasetDir)
+{
+    const QDir dir(QDir(datasetDir).filePath(QStringLiteral("training")));
+    QStringList out;
+    for (const QString &name : dir.entryList({QStringLiteral("run-*")}, QDir::Dirs, QDir::Name))
+        out << QDir::cleanPath(dir.filePath(name));
+    return out;
+}
+
+void CharacterTraining::tidyRun(const QString &runDir)
+{
+    if (runDir.isEmpty())
+        return;
+    const QDir output(QDir(runDir).filePath(QStringLiteral("output")));
+    for (const QString &state : output.entryList({QStringLiteral("*-state")}, QDir::Dirs))
+        QDir(output.filePath(state)).removeRecursively();
+    QDir(QDir(runDir).filePath(QStringLiteral("img"))).removeRecursively();
+}
+
+qint64 CharacterTraining::removeEarlierRuns(const QString &datasetDir)
+{
+    QStringList all = runs(datasetDir);
+    if (!all.isEmpty())
+        all.removeLast();
+    qint64 freed = 0;
+    for (const QString &run : std::as_const(all)) {
+        const qint64 size = folderSize(run);
+        if (QDir(run).removeRecursively())
+            freed += size;
+    }
+    return freed;
+}
+
+qint64 CharacterTraining::folderSize(const QString &path)
+{
+    qint64 total = 0;
+    QDirIterator it(path, QDir::Files | QDir::Hidden, QDirIterator::Subdirectories);
+    while (it.hasNext()) {
+        it.next();
+        total += it.fileInfo().size();
+    }
+    return total;
 }
 
 bool CharacterTraining::canResume(const QString &runDir)
@@ -235,6 +280,7 @@ void CharacterTraining::done(Job *job)
     lora.family = m_family;
     m_studio->characters()->setLora(m_settings.characterId, lora.toJson());
     runningTrainings().remove(m_settings.characterId);
+    tidyRun(m_runDir);
     const QString message = tr("The LoRA of %1 is trained and attached to the character (trigger word: %2).").arg(m_name, m_trigger);
     m_studio->notify(message, QStringLiteral("success"));
     emit finished(true, message, target);
