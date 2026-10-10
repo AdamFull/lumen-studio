@@ -1322,8 +1322,15 @@ Rules per mode:
     gone. An image drawn without a character switches it off on this page, so the re-run matches.
   - Test: a mock sd.cpp server gets the trigger first, the description and the LoRA at the
     character's weight; the metadata; the per-page switch; *Re-run* both ways.
-- [ ] Editor AI panel: the chip; fill selection, variation, instruct edit and expand follow the
-  mode rules; "remove" stays character-free.
+- [x] Editor AI panel:
+  - The chip sits in the prompt header ("editor" switch).
+  - `AiPanel::withCharacter` loads the character and applies it before the composite is taken.
+    Uses: fill selection and a variation of a selection → `Region`; a variation of the whole
+    image → `Full`; instruct edit → `Edit`; expand → `Region`. The edit's metadata records the
+    character.
+  - The selection bar's *Remove* calls `runFromCanvas(…, false)` and never gets the character.
+  - Test against a mock sd.cpp server: fill selection (trigger and LoRA, no tags), remove (none),
+    whole-image variation (LoRA and tags), expand (LoRA, no tags), switched off (none), metadata.
 - [ ] Parts page: the character from the source asset or the active one; part completion and
   expression variants with the LoRA; LoRA binding in the LayerDiffuse template; the face-crop
   identity check of expression variants.

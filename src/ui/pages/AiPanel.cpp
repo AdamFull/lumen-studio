@@ -9,6 +9,8 @@
 #include "ui/Shortcuts.h"
 #include "ui/Studio.h"
 #include "ui/Theme.h"
+#include "ui/dialogs/CharacterLoraDialog.h"
+#include "ui/widgets/CharacterChip.h"
 #include "ui/widgets/Controls.h"
 #include "ui/widgets/JobCard.h"
 #include "ui/widgets/ProviderCombo.h"
@@ -18,6 +20,7 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QGridLayout>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QPainter>
 #include <QPushButton>
@@ -97,7 +100,12 @@ AiPanel::AiPanel(Studio *studio, QWidget *parent)
     auto *pv = new QVBoxLayout(m_promptBox);
     pv->setContentsMargins(0, 0, 0, 0);
     pv->setSpacing(6);
-    pv->addWidget(sectionLabel(tr("Prompt")));
+    auto *promptHead = new QHBoxLayout;
+    promptHead->addWidget(sectionLabel(tr("Prompt")));
+    promptHead->addStretch();
+    m_character = new CharacterChip(studio, QStringLiteral("editor"), m_promptBox);
+    promptHead->addWidget(m_character);
+    pv->addLayout(promptHead);
     m_prompt = new AutoTextEdit(m_promptBox, 3, 8);
     m_prompt->setPlaceholderText(tr("Describe what should appear…"));
     pv->addWidget(m_prompt);
@@ -213,11 +221,39 @@ void AiPanel::setMode(Mode mode)
     updateUi();
 }
 
-void AiPanel::runFromCanvas(Mode mode, const QString &prompt)
+void AiPanel::runFromCanvas(Mode mode, const QString &prompt, bool withCharacter)
 {
     setMode(mode);
     m_prompt->setPlainText(prompt);
+    m_skipCharacter = !withCharacter;
     run();
+    m_skipCharacter = false;
+}
+
+void AiPanel::withCharacter(ai::ImageRequest request, ai::CharacterUse use, std::function<void(ai::ImageRequest, QJsonObject)> then)
+{
+    const QString id = m_skipCharacter ? QString() : m_character->characterId();
+    ai::ImageProvider *provider = m_provider->imageProvider();
+    if (id.isEmpty() || !provider)
+        return then(std::move(request), {});
+    const ai::ImageCapabilities caps = provider->capabilities();
+    const ai::PromptStyle style = ai::promptStyleFor(provider);
+    const QString family = checkpointFamily(m_studio, provider);
+    const QString providerName = provider->displayName();
+    QPointer<AiPanel> self(this);
+    m_studio->characterContext(id).then(this, [self, request, use, caps, style, family, providerName, then](const ai::CharacterContext &c) mutable {
+        if (!self)
+            return;
+        if (c.isEmpty())
+            return then(std::move(request), {});
+        const ai::CharacterApplied applied = ai::applyCharacter(request, c, caps, use, style, family);
+        const QString note = applied.fallbackNote(c, providerName);
+        if (!note.isEmpty() && !self->m_notes.contains(note)) {
+            self->m_notes.insert(note);
+            self->m_studio->notify(note);
+        }
+        then(std::move(request), applied.any() ? applied.toJson(c) : QJsonObject());
+    });
 }
 
 QString AiPanel::prompt() const
@@ -398,7 +434,6 @@ void AiPanel::run()
             m_studio->notify(tr("Describe the change you want."), QStringLiteral("warning"));
             return;
         }
-        ai::ImageRequest req = baseRequest();
         const QImage selection = hasSel ? doc->selection() : QImage();
         const Mode mode = m_mode;
         const int padding = int(m_padding->value());
@@ -406,33 +441,39 @@ void AiPanel::run()
         const bool colorMatch = m_colorMatch->isChecked();
         ai::ImageProvider *provider = m_provider->imageProvider();
         const ai::ImageCapabilities caps = provider ? provider->capabilities() : ai::ImageCapabilities();
-        submitWithComposite([=, this](QImage composite) {
-            if (!doc)
-                return;
-            ai::GenerationSpec spec;
-            spec.providerId = providerId;
-            spec.request = req;
-            spec.title = title;
-            spec.assetKind = doc::AssetKind::Edit;
-            spec.meta = QJsonObject{{QStringLiteral("document"), doc->id()}, {QStringLiteral("action"), static_cast<int>(mode)}};
-            if (!selection.isNull()) {
-                spec.region = ai::RegionInput{composite, selection, padding, 6, feather, colorMatch};
-            } else {
-                // Whole image: img2img / instruction edit at the model's working resolution.
-                const QSize workSize = caps.fixedSizes.isEmpty()
-                                           ? img::fitToPixelBudget(composite.size(), std::min(caps.nativePixels, caps.maxPixels), caps.sizeMultiple)
-                                           : composite.size();
-                spec.request.mode = mode == Mode::Edit && caps.edit ? ai::GenMode::Edit : ai::GenMode::ImageToImage;
-                spec.request.initImage = img::normalized(img::scaled(img::flatten(composite, Qt::white), workSize, true));
-                spec.request.size = workSize;
-            }
-            Job *job = gen->submit(spec);
-            const QString name = mode == Mode::Edit ? tr("Edit: %1").arg(prompt.left(32)) : (prompt.isEmpty() ? tr("AI variation") : prompt.left(40));
-            trackJob(job, [this, name](doc::Document *d, const ai::GenerationOutput &out) {
-                QJsonObject meta{{QStringLiteral("generated"), true}};
-                if (!out.assets.isEmpty())
-                    meta.insert(QStringLiteral("asset"), out.assets.first().id);
-                addResultLayers(d, out.images, name, meta);
+        // A region gets the character's LoRA (or reference) only; the prompt describes the region.
+        const ai::CharacterUse use = mode == Mode::Edit ? ai::CharacterUse::Edit : hasSel ? ai::CharacterUse::Region : ai::CharacterUse::Full;
+        withCharacter(baseRequest(), use, [=, this](const ai::ImageRequest &req, const QJsonObject &character) {
+            submitWithComposite([=, this](QImage composite) {
+                if (!doc)
+                    return;
+                ai::GenerationSpec spec;
+                spec.providerId = providerId;
+                spec.request = req;
+                spec.title = title;
+                spec.assetKind = doc::AssetKind::Edit;
+                spec.meta = QJsonObject{{QStringLiteral("document"), doc->id()}, {QStringLiteral("action"), static_cast<int>(mode)}};
+                if (!character.isEmpty())
+                    spec.meta.insert(QStringLiteral("character"), character);
+                if (!selection.isNull()) {
+                    spec.region = ai::RegionInput{composite, selection, padding, 6, feather, colorMatch};
+                } else {
+                    // Whole image: img2img / instruction edit at the model's working resolution.
+                    const QSize workSize = caps.fixedSizes.isEmpty()
+                                               ? img::fitToPixelBudget(composite.size(), std::min(caps.nativePixels, caps.maxPixels), caps.sizeMultiple)
+                                               : composite.size();
+                    spec.request.mode = mode == Mode::Edit && caps.edit ? ai::GenMode::Edit : ai::GenMode::ImageToImage;
+                    spec.request.initImage = img::normalized(img::scaled(img::flatten(composite, Qt::white), workSize, true));
+                    spec.request.size = workSize;
+                }
+                Job *job = gen->submit(spec);
+                const QString name = mode == Mode::Edit ? tr("Edit: %1").arg(prompt.left(32)) : (prompt.isEmpty() ? tr("AI variation") : prompt.left(40));
+                trackJob(job, [this, name](doc::Document *d, const ai::GenerationOutput &out) {
+                    QJsonObject meta{{QStringLiteral("generated"), true}};
+                    if (!out.assets.isEmpty())
+                        meta.insert(QStringLiteral("asset"), out.assets.first().id);
+                    addResultLayers(d, out.images, name, meta);
+                });
             });
         });
         break;
@@ -464,21 +505,25 @@ void AiPanel::run()
                                          m_expandRight->isChecked() ? -overlap : 0, m_expandBottom->isChecked() ? -overlap : 0),
                        Qt::black);
         }
-        ai::ImageRequest req = baseRequest();
-        req.denoise = 1.0;
+        ai::ImageRequest base = baseRequest();
+        base.denoise = 1.0;
         const int feather = int(m_feather->value());
         const bool colorMatch = m_colorMatch->isChecked();
-        submitWithComposite([=, this](QImage composite) {
-            if (!doc)
-                return;
-            ai::GenerationSpec spec;
-            spec.providerId = providerId;
-            spec.request = req;
-            spec.title = tr("Expand: %1").arg(title);
-            spec.assetKind = doc::AssetKind::Edit;
-            spec.region = ai::RegionInput{composite, mask, 64, 4, feather, colorMatch};
-            Job *job = gen->submit(spec);
-            trackJob(job, [this](doc::Document *d, const ai::GenerationOutput &out) { addResultLayers(d, out.images, tr("Expansion"), {}); });
+        withCharacter(base, ai::CharacterUse::Region, [=, this](const ai::ImageRequest &req, const QJsonObject &character) {
+            submitWithComposite([=, this](QImage composite) {
+                if (!doc)
+                    return;
+                ai::GenerationSpec spec;
+                spec.providerId = providerId;
+                spec.request = req;
+                spec.title = tr("Expand: %1").arg(title);
+                spec.assetKind = doc::AssetKind::Edit;
+                spec.region = ai::RegionInput{composite, mask, 64, 4, feather, colorMatch};
+                if (!character.isEmpty())
+                    spec.meta.insert(QStringLiteral("character"), character);
+                Job *job = gen->submit(spec);
+                trackJob(job, [this](doc::Document *d, const ai::GenerationOutput &out) { addResultLayers(d, out.images, tr("Expansion"), {}); });
+            });
         });
         break;
     }

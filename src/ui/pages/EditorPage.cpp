@@ -217,7 +217,7 @@ EditorPage::EditorPage(Studio *studio, QWidget *parent)
         m_ai->runFromCanvas(AiPanel::Mode::Inpaint, prompt);
     });
     connect(m_contextBar, &ContextBar::removeRequested, this, [this] {
-        m_ai->runFromCanvas(AiPanel::Mode::Inpaint, QStringLiteral("empty background, seamless continuation of the surroundings"));
+        m_ai->runFromCanvas(AiPanel::Mode::Inpaint, QStringLiteral("empty background, seamless continuation of the surroundings"), false);
     });
     connect(m_contextBar, &ContextBar::moreRequested, this, [this] { m_side->setCurrentWidget(m_ai); });
     connect(m_ai, &AiPanel::runningJobsChanged, m_contextBar, &ContextBar::setRunning);

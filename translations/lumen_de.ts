@@ -4230,7 +4230,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::AiPanel</name>
     <message>
-        <location filename="../src/ui/pages/AiPanel.cpp" line="+48"/>
+        <location filename="../src/ui/pages/AiPanel.cpp" line="+51"/>
         <source>Provider</source>
         <translation>Anbieter</translation>
     </message>
@@ -4281,12 +4281,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+210"/>
+        <location line="+243"/>
         <source>Upscale</source>
         <translation>Hochskalieren</translation>
     </message>
     <message>
-        <location line="-210"/>
+        <location line="-243"/>
         <source>Increase resolution with an AI upscaler (opens a new document).</source>
         <translation>Auflösung mit einem KI-Upscaler erhöhen (öffnet ein neues Dokument).</translation>
     </message>
@@ -4302,29 +4302,29 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+210"/>
-        <location line="+240"/>
+        <location line="+243"/>
+        <location line="+249"/>
         <source>Detect pose</source>
         <translation>Pose erkennen</translation>
     </message>
     <message>
-        <location line="-450"/>
+        <location line="-492"/>
         <source>Extract an editable OpenPose skeleton from the image.</source>
         <translation>Ein bearbeitbares OpenPose-Skelett aus dem Bild extrahieren.</translation>
     </message>
     <message>
-        <location line="+33"/>
+        <location line="+34"/>
         <source>Prompt</source>
         <translation>Prompt</translation>
     </message>
     <message>
-        <location line="+2"/>
-        <location line="+140"/>
+        <location line="+6"/>
+        <location line="+168"/>
         <source>Describe what should appear…</source>
         <translation>Beschreiben Sie, was erscheinen soll…</translation>
     </message>
     <message>
-        <location line="-137"/>
+        <location line="-165"/>
         <source>Negative prompt (optional)</source>
         <translation>Negativer Prompt (optional)</translation>
     </message>
@@ -4405,12 +4405,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+4"/>
-        <location line="+104"/>
+        <location line="+132"/>
         <source>Generate</source>
         <translation>Generieren</translation>
     </message>
     <message>
-        <location line="-101"/>
+        <location line="-129"/>
         <source>Editor</source>
         <translation>Editor</translation>
     </message>
@@ -4420,7 +4420,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>KI-Aktion ausführen</translation>
     </message>
     <message>
-        <location line="+63"/>
+        <location line="+91"/>
         <source>Describe the change, e.g. &apos;turn the jacket red&apos;</source>
         <translation>Beschreiben Sie die Änderung, z. B. &apos;färbe die Jacke rot&apos;</translation>
     </message>
@@ -4451,19 +4451,19 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+12"/>
-        <location line="+223"/>
+        <location line="+232"/>
         <location line="+4"/>
         <source>Remove background</source>
         <translation>Hintergrund entfernen</translation>
     </message>
     <message>
-        <location line="-225"/>
-        <location line="+178"/>
+        <location line="-234"/>
+        <location line="+183"/>
         <source>Expand canvas</source>
         <translation>Arbeitsfläche erweitern</translation>
     </message>
     <message>
-        <location line="-133"/>
+        <location line="-138"/>
         <source>AI result: %1</source>
         <translation>KI-Ergebnis: %1</translation>
     </message>
@@ -4493,7 +4493,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Beschreiben Sie die gewünschte Änderung.</translation>
     </message>
     <message>
-        <location line="+32"/>
+        <location line="+36"/>
         <source>Edit: %1</source>
         <translation>Bearbeitung: %1</translation>
     </message>
@@ -4503,22 +4503,22 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>KI-Variation</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+24"/>
         <source>Choose at least one direction.</source>
         <translation>Wählen Sie mindestens eine Richtung.</translation>
     </message>
     <message>
-        <location line="+24"/>
+        <location line="+25"/>
         <source>Expand: %1</source>
         <translation>Erweitern: %1</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+6"/>
         <source>Expansion</source>
         <translation>Erweiterung</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+9"/>
         <source>Upscale %1×</source>
         <translation>%1× hochskalieren</translation>
     </message>

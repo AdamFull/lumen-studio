@@ -15,6 +15,7 @@
 #include "ui/director/ShotCard.h"
 #include "ui/pages/CreatePage.h"
 #include "ui/pages/GeneratePage.h"
+#include "ui/pages/AiPanel.h"
 #include "pose/Rig.h"
 #include "MockHttpServer.h"
 #include "ui/dialogs/CharacterLoraDialog.h"
@@ -114,6 +115,7 @@ private slots:
     void loraEvaluation();
     void activeCharacter();
     void generatePageCharacter();
+    void editorCharacter();
 
 private:
     ToolEvent at(double x, double y, Qt::KeyboardModifiers mods = Qt::NoModifier) const
@@ -2002,6 +2004,111 @@ void TestCanvas::generatePageCharacter()
     QCOMPARE(prompt->toPlainText(), QStringLiteral("a quiet street"));
     QVERIFY(!chip->isUsedHere());
     QCOMPARE(studio.activeCharacter(), aki);
+}
+
+void TestCanvas::editorCharacter()
+{
+    Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
+    MockHttpServer server;
+    QList<QJsonObject> generations;
+    server.route("GET", QStringLiteral("/sdcpp/v1/capabilities"), [](const MockRequest &) {
+        return MockResponse::json({{QStringLiteral("loras"), QJsonArray{QJsonObject{{QStringLiteral("name"), QStringLiteral("lmn_aki")},
+                                                                                    {QStringLiteral("path"), QStringLiteral("lmn_aki.safetensors")}}}}});
+    });
+    server.route("POST", QStringLiteral("/sdcpp/v1/img_gen"), [&](const MockRequest &req) {
+        generations << req.json();
+        return MockResponse::json({{QStringLiteral("id"), QStringLiteral("job_1")}}, 202);
+    });
+    server.route("GET", QStringLiteral("/sdcpp/v1/jobs/job_1"), [](const MockRequest &) {
+        QImage im(128, 128, QImage::Format_ARGB32);
+        im.fill(Qt::darkCyan);
+        const QJsonArray images{QJsonObject{{QStringLiteral("index"), 0}, {QStringLiteral("b64_json"), QString::fromLatin1(img::encode(im).toBase64())}}};
+        return MockResponse::json({{QStringLiteral("status"), QStringLiteral("completed")}, {QStringLiteral("result"), QJsonObject{{QStringLiteral("images"), images}}}});
+    });
+    QTemporaryDir dir;
+    Studio studio;
+    for (ai::Provider *p : studio.providers()->providers())
+        studio.providers()->removeProvider(p->instanceId());
+    QVERIFY(studio.providers()->addProvider(QStringLiteral("sdcpp"), QStringLiteral("SD"), {{QStringLiteral("url"), server.baseUrl().toString()}}));
+    studio.openProject(dir.filePath(QStringLiteral("editor.lumen")));
+    QTRY_VERIFY_WITH_TIMEOUT(studio.isProjectOpen(), 5000);
+    QImage ref(64, 96, QImage::Format_ARGB32);
+    ref.fill(Qt::red);
+    auto saved = studio.characters()->save(QStringLiteral("Aki (editor test)"), {{QStringLiteral("tags"), QStringLiteral("red hair, green eyes")}}, {ref},
+                                           QString(), QString(),
+                                           QJsonObject{{QStringLiteral("file"), dir.filePath(QStringLiteral("lmn_aki.safetensors"))},
+                                                       {QStringLiteral("trigger"), QStringLiteral("lmn_aki")},
+                                                       {QStringLiteral("weight"), 0.7}});
+    QTRY_VERIFY(saved.isFinished());
+    const QString aki = saved.result().id;
+    auto cleanup = qScopeGuard([&] {
+        Settings::instance().setValue(QStringLiteral("character/use/editor"), true);
+        studio.characters()->remove(aki);
+        for (ai::Provider *p : studio.providers()->providers())
+            studio.providers()->removeProvider(p->instanceId());
+    });
+    studio.setActiveCharacter(aki);
+
+    AiPanel panel(&studio);
+    auto *chip = panel.findChild<CharacterChip *>();
+    QVERIFY(chip);
+    chip->setUsedHere(true);
+    doc::Document *doc = studio.newDocument(QSize(128, 128), QStringLiteral("Editor character test"));
+    panel.setDocument(doc);
+    QImage mask = img::createMask(doc->size(), 0);
+    {
+        QPainter p(&mask);
+        p.fillRect(QRect(32, 32, 64, 64), Qt::white);
+    }
+    auto loraOf = [](const QJsonObject &g) { return g.value(QStringLiteral("lora")).toArray(); };
+    auto promptOf = [](const QJsonObject &g) { return g.value(QStringLiteral("prompt")).toString(); };
+
+    // Fill selection: the LoRA and its trigger, but not the hair and eye tags (they would repaint
+    // the region).
+    doc->setSelectionRaw(mask);
+    QVERIFY(doc->hasSelection());
+    panel.runFromCanvas(AiPanel::Mode::Inpaint, QStringLiteral("a hand holding a cup"));
+    QTRY_COMPARE_WITH_TIMEOUT(generations.size(), 1, 10000);
+    QVERIFY2(promptOf(generations[0]).startsWith(QStringLiteral("lmn_aki, ")), qPrintable(promptOf(generations[0])));
+    QVERIFY(promptOf(generations[0]).contains(QStringLiteral("a hand holding a cup")));
+    QVERIFY(!promptOf(generations[0]).contains(QStringLiteral("red hair")));
+    QCOMPARE(loraOf(generations[0]).size(), 1);
+    QCOMPARE(loraOf(generations[0])[0][QStringLiteral("multiplier")].toDouble(), 0.7);
+
+    // Removing an object never draws the character.
+    panel.runFromCanvas(AiPanel::Mode::Inpaint, QStringLiteral("empty background, seamless continuation of the surroundings"), false);
+    QTRY_COMPARE_WITH_TIMEOUT(generations.size(), 2, 10000);
+    QVERIFY(!promptOf(generations[1]).contains(QStringLiteral("lmn_aki")));
+    QVERIFY(loraOf(generations[1]).isEmpty());
+
+    // A variation of the whole image: the LoRA and the description.
+    doc->setSelectionRaw(QImage());
+    QVERIFY(!doc->hasSelection());
+    panel.runFromCanvas(AiPanel::Mode::Variation, QStringLiteral("evening light"));
+    QTRY_COMPARE_WITH_TIMEOUT(generations.size(), 3, 10000);
+    QVERIFY(promptOf(generations[2]).startsWith(QStringLiteral("lmn_aki, ")));
+    QVERIFY(promptOf(generations[2]).contains(QStringLiteral("red hair, green eyes")));
+    QCOMPARE(loraOf(generations[2]).size(), 1);
+
+    // Expanding the canvas: a region, so the LoRA without the tags.
+    panel.runFromCanvas(AiPanel::Mode::Expand, QStringLiteral("forest"));
+    QTRY_COMPARE_WITH_TIMEOUT(generations.size(), 4, 10000);
+    QVERIFY(promptOf(generations[3]).startsWith(QStringLiteral("lmn_aki, ")));
+    QVERIFY(!promptOf(generations[3]).contains(QStringLiteral("red hair")));
+    QCOMPARE(loraOf(generations[3]).size(), 1);
+
+    // Switched off in the editor: nothing of the character.
+    chip->setUsedHere(false);
+    doc->setSelectionRaw(img::createMask(doc->size(), 255));
+    panel.runFromCanvas(AiPanel::Mode::Inpaint, QStringLiteral("a hat"));
+    QTRY_COMPARE_WITH_TIMEOUT(generations.size(), 5, 10000);
+    QVERIFY(!promptOf(generations[4]).contains(QStringLiteral("lmn_aki")));
+    QVERIFY(loraOf(generations[4]).isEmpty());
+    // The edits record the character they used.
+    bool recorded = false;
+    for (const doc::AssetInfo &a : studio.project()->assets())
+        recorded = recorded || a.metadata.value(QStringLiteral("character")).toObject().value(QStringLiteral("character")).toString() == aki;
+    QVERIFY(recorded);
 }
 
 QTEST_MAIN(TestCanvas)

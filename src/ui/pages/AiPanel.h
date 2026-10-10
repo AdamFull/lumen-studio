@@ -1,9 +1,11 @@
 #pragma once
 
+#include "ai/CharacterContext.h"
 #include "ai/GenerationService.h"
 #include "doc/Document.h"
 
 #include <QPointer>
+#include <QSet>
 #include <QWidget>
 
 class QButtonGroup;
@@ -18,6 +20,7 @@ class QVBoxLayout;
 namespace lumen::ui {
 
 class AutoTextEdit;
+class CharacterChip;
 class ProviderCombo;
 class ReferenceStrip;
 class SliderField;
@@ -35,7 +38,8 @@ public:
     void setDocument(doc::Document *doc);
     void setMode(Mode mode);
     // Runs an action with this prompt (the contextual canvas toolbar); the panel's other options apply.
-    void runFromCanvas(Mode mode, const QString &prompt);
+    // `withCharacter` false keeps the project's character out (removing an object).
+    void runFromCanvas(Mode mode, const QString &prompt, bool withCharacter = true);
     QString prompt() const;
     int runningJobs() const { return m_running; }
 
@@ -46,6 +50,9 @@ private:
     void run();
     void updateUi();
     void submitWithComposite(std::function<void(QImage composite)> fn);
+    // Adds the page's character (if any) to the request for this use, then continues with the
+    // request and the metadata of what went in (empty without a character).
+    void withCharacter(ai::ImageRequest request, ai::CharacterUse use, std::function<void(ai::ImageRequest, QJsonObject)> then);
     void trackJob(Job *job, std::function<void(doc::Document *, const ai::GenerationOutput &)> apply);
     void addResultLayers(doc::Document *doc, const QList<QImage> &images, const QString &name, const QJsonObject &meta);
     ai::ImageRequest baseRequest() const;
@@ -76,6 +83,9 @@ private:
     QVBoxLayout *m_jobs;
     QLabel *m_capsWarning;
     int m_running = 0;
+    CharacterChip *m_character;
+    QSet<QString> m_notes;
+    bool m_skipCharacter = false;
 };
 
 } // namespace lumen::ui
