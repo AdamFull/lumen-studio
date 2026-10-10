@@ -1388,9 +1388,25 @@ Rules per mode:
   - Test against a mock sd.cpp server: generate (LoRA and description, metadata, the result's
     `character`), `character: false`, inpaint (LoRA, no appearance words), edit (description, no
     LoRA), and no active character.
-- [ ] Live measurements (RTX 4060 8 GB, the M13 character): identity checklist scores with and
-  without the character on 8 Generate-page prompts, 4 editor fixes (hand, face, sleeve, hair) and
-  the 5 expression variants.
+- [x] Live measurements (`TestLive::characterEverywhere`, RTX 4060 8 GB, WAI-Illustrious, the M13
+  character "Akane" with its epoch-9 LoRA at 0.8; 57 min):
+  - Generate page, 8 prompts that never name the character, same seeds: checklist identity 10.0
+    on all 8 with the character, 0.41 on average without (AC 1).
+  - Editor, *Fill selection* on hand, face, sleeve and hair: no new difference with the character;
+    without it the face fix changed the eye colour (and tinted the hair orange, which the checklist
+    did not catch) (AC 2).
+  - Expression variants: not conclusive. The test placed the eye and mouth regions from the pose
+    rig the portrait was generated with; the drawn face sits elsewhere, so the repaint mostly
+    missed the eyes (expression scores 3–6 with and without). Needs real part masks
+    (segmentation or painted) to measure; the requests carrying the LoRA are covered by the
+    contract tests.
+  - Found on the way: `promptStyleFor` treated stable-diffusion.cpp as a cloud model, so anime
+    checkpoints on the default local back-end got prose prompts without quality tags; fixed.
+  - Seen in the images: WAI-Illustrious sexualises some results unprompted (open cloak, swimwear),
+    with and without the LoRA. The anime default negative has no "nsfw"; an open product
+    decision.
+  - Not measured live: the assistant drawing the character (AC 4) and the cloud fallback (AC 5);
+    covered by the mock tests.
 
 **AC**:
 1. With a trained character active, a Generate-page prompt that never names the character ("reading
