@@ -8319,7 +8319,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::LoraEvaluation</name>
     <message>
-        <location filename="../src/ui/LoraEvaluation.cpp" line="+102"/>
+        <location filename="../src/ui/LoraEvaluation.cpp" line="+103"/>
         <source>The character is not in the character library.</source>
         <translation>Der Charakter ist nicht in der Charakterbibliothek.</translation>
     </message>
@@ -8340,12 +8340,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+46"/>
-        <location line="+75"/>
+        <location line="+81"/>
         <source>Testing stopped.</source>
         <translation>Test gestoppt.</translation>
     </message>
     <message>
-        <location line="-66"/>
+        <location line="-72"/>
         <source>The image generator is gone.</source>
         <translation>Der Bildgenerator ist nicht mehr vorhanden.</translation>
     </message>
@@ -8370,12 +8370,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>abgebrochen</translation>
     </message>
     <message>
-        <location line="+22"/>
+        <location line="+28"/>
         <source>The Critic compares the test images with the references (%1 left)…</source>
         <translation>Der Kritiker vergleicht die Testbilder mit den Referenzen (noch %1)…</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+27"/>
         <source>The Critic failed: %1</source>
         <translation>Der Kritiker ist fehlgeschlagen: %1</translation>
     </message>
@@ -8395,7 +8395,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Empfohlen: Epoche %1 mit Gewicht %2 (Wertung %3).</translation>
     </message>
     <message>
-        <location line="+66"/>
+        <location line="+67"/>
         <source>Epoch %1 of this training is missing.</source>
         <translation>Epoche %1 dieses Trainings fehlt.</translation>
     </message>

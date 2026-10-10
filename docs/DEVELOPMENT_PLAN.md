@@ -1170,6 +1170,26 @@ A LoRA learns from 15–40 varied images of the character. They come from what L
       across scenes; the baseline added cat ears, pom-poms and an orange tint in one shot.
     - The margin is small: four shots, one Critic pass, and scores near the top of the scale. A
       25-image set and a stricter Critic prompt are needed to settle AC 2.
+  - Acceptance run through the UI (`TestLive::characterLoraEndToEnd`, October 2026, RTX 4060 8 GB):
+    - Create → Training set → *Plan training shots* (30) → generate: 42 min, none failed. The
+      Critic kept 29 (scores 5–10), no near-duplicates; captions in 3.5 min.
+    - Train tab, 10 epochs: 29 images × 7 repeats = 2,030 steps in 122 min (3.55 s per step while
+      other work used the CPU). During training both servers were stopped and a start request was
+      refused with the reason; afterwards the reservation was released and the test step started
+      them again on demand.
+    - Two bugs found and fixed on the way: the Train tab did not follow images added after the
+      dialog opened ("Start training" stayed disabled), and refreshing it decoded the test grid's
+      images on the GUI thread every progress tick.
+    - Test step with the identity checklist: every scored image, with and without the LoRA, had
+      identity 10 (all five features "match"). Scores differed only by the pose: baseline 8.83,
+      epochs 8 / 9 / 10 at 0.8: 8.67 / 8.83 / 8.83. In the grid the LoRA rows are visibly more
+      consistent (the baseline added pom-poms and an orange tint to the hair), which a checklist of
+      listed features does not see.
+    - One image generation was lost by the server and one Critic call failed (HTTP 500 from
+      llama-server's router) while the two servers took turns on the GPU. The test then stopped
+      but was saved as finished, with a recommendation from stage 1 only. Fixed: a failed
+      generation or check is retried once and otherwise left unscored, and only a complete test
+      is saved as finished.
   - Stage 1: the baseline and the newest three epochs at weight 0.8. Stage 2: the best epoch at
     0.6 and 1.0. That makes 24 images, with a fixed seed per shot so only the LoRA differs.
   - The Critic scores every image against the references: (2 × identity + pose) / 3. On a tie the

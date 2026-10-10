@@ -1588,7 +1588,14 @@ void TestCanvas::loraEvaluation()
         generations << req.json();
         return MockResponse::json({{QStringLiteral("id"), QStringLiteral("job_1")}}, 202);
     });
+    // The sixth image fails once (the server lost the job); the test generates it again.
+    int failedGeneration = -1;
     server.route("GET", QStringLiteral("/sdcpp/v1/jobs/job_1"), [&](const MockRequest &) {
+        if (failedGeneration < 0 && generations.size() == 6) {
+            failedGeneration = 5;
+            return MockResponse::json({{QStringLiteral("status"), QStringLiteral("failed")},
+                                       {QStringLiteral("error"), QJsonObject{{QStringLiteral("message"), QStringLiteral("job lost")}}}});
+        }
         QImage im(64, 96, QImage::Format_ARGB32);
         im.fill(QColor::fromHsv(int(generations.size() * 15) % 360, 200, 200));
         const QJsonArray images{QJsonObject{{QStringLiteral("index"), 0}, {QStringLiteral("b64_json"), QString::fromLatin1(img::encode(im).toBase64())}}};
@@ -1603,8 +1610,12 @@ void TestCanvas::loraEvaluation()
             checklists << QLatin1String(rows);
     }
     int critiques = 0;
+    int criticCalls = 0;
     QJsonObject checklistRequest;
     server.route("POST", QStringLiteral("/v1/chat/completions"), [&](const MockRequest &req) {
+        // The tenth check fails once (the language server was reloading); the test asks again.
+        if (++criticCalls == 10)
+            return MockResponse::json({{QStringLiteral("error"), QStringLiteral("proxy error")}}, 500);
         checklistRequest = req.json();
         const QString marks = checklists.value(critiques++, QStringLiteral("dddd"));
         QJsonObject features;
@@ -1718,9 +1729,14 @@ void TestCanvas::loraEvaluation()
     QVERIFY(!QFileInfo::exists(serverLoras + QStringLiteral("/lumen-eval/lmn_mira-e01.safetensors")));
     QTRY_VERIFY_WITH_TIMEOUT(!LoraEvaluation::running(characterId), 120000);
 
-    // 4 shots × (baseline + 3 epochs) + 4 shots × 2 more weights of the best epoch.
-    QCOMPARE(generations.size(), 24);
+    // 4 shots × (baseline + 3 epochs) + 4 shots × 2 more weights of the best epoch, plus the one
+    // generation and the one check that were repeated.
+    QCOMPARE(generations.size(), 25);
+    QCOMPARE(failedGeneration, 5);
+    QCOMPARE(generations[5], generations[6]);
+    generations.removeAt(5);
     QCOMPARE(critiques, 24);
+    QCOMPARE(criticCalls, 25);
     for (int i = 0; i < 4; ++i) {
         QVERIFY(generations[i].value(QStringLiteral("lora")).toArray().isEmpty());
         QVERIFY(generations[i].value(QStringLiteral("prompt")).toString().contains(QStringLiteral("red hair")));
@@ -1787,6 +1803,16 @@ void TestCanvas::loraEvaluation()
     QCOMPARE(lora.family, QStringLiteral("SDXL"));
     QTRY_VERIFY(studio.models()->entry(lora.file).has_value());
     QCOMPARE(studio.models()->entry(lora.file)->source.value(QStringLiteral("epoch")).toInt(), 3);
+
+    // A stopped test is not "finished": no recommendation to apply.
+    table->clearSelection();
+    QTRY_VERIFY(test->isEnabled());
+    test->click();
+    QVERIFY(LoraEvaluation::running(characterId));
+    test->click(); // "Stop testing"
+    QTRY_VERIFY_WITH_TIMEOUT(!LoraEvaluation::running(characterId), 30000);
+    QVERIFY(!LoraEvaluation::saved(runDir).value(QStringLiteral("finished")).toBool());
+    QTRY_VERIFY(!apply->isVisible());
 }
 
 void TestCanvas::activeCharacter()

@@ -4,6 +4,7 @@
 #include <QJsonObject>
 #include <QList>
 #include <QObject>
+#include <QHash>
 #include <QPointer>
 
 namespace lumen {
@@ -96,6 +97,8 @@ private:
     double m_bestWeight = 0.8;
     bool m_finished = false;
     bool m_cancelled = false;
+    bool m_complete = false;               // finished with a recommendation (not stopped or failed)
+    QHash<int, int> m_retries;             // cell → retries of its generation and of its check
     QString m_status;
     QPointer<Job> m_job;
     QPointer<ai::Operation> m_critique;

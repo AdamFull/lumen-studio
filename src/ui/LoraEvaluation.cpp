@@ -21,6 +21,7 @@
 #include <QJsonDocument>
 #include <QRegularExpression>
 #include <QSaveFile>
+#include <QTimer>
 
 namespace lumen::ui {
 
@@ -240,6 +241,12 @@ void LoraEvaluation::generateNext()
             c.error = job->state() == Job::State::Cancelled ? tr("cancelled") : job->errorString();
             if (job->state() == Job::State::Failed && c.error.contains(QLatin1String("LoRA")))
                 return self->finish(false, c.error);
+            // Once more: the image server can drop a job while the servers take turns on one GPU.
+            if (job->state() == Job::State::Failed && self->m_retries.value(index) < 1) {
+                self->m_retries[index]++;
+                c.error.clear();
+                self->m_pending.prepend(index);
+            }
         }
         emit self->changed();
         self->generateNext();
@@ -275,7 +282,18 @@ void LoraEvaluation::critiqueNext()
             self->m_cells[index].critique = critique;
             self->m_cells[index].score = ai::Director::loraTestScore(critique);
         } else if (op->state() == ai::Operation::State::Failed) {
-            return self->finish(false, tr("The Critic failed: %1").arg(op->errorString()));
+            // Once more after a pause (the language server may be reloading its model); then the
+            // image stays unscored and the test goes on.
+            if (self->m_retries.value(-1 - index) < 1) {
+                self->m_retries[-1 - index]++;
+                self->m_toCritique.prepend(index);
+                QTimer::singleShot(5000, self, [self] {
+                    if (self)
+                        self->critiqueNext();
+                });
+                return;
+            }
+            self->m_cells[index].error = tr("The Critic failed: %1").arg(op->errorString());
         }
         self->save();
         emit self->changed();
@@ -332,6 +350,7 @@ void LoraEvaluation::finish(bool ok, const QString &message)
     if (m_finished)
         return;
     m_finished = true;
+    m_complete = ok;
     m_status = message;
     save();
     QDir(QDir(m_loraDir).filePath(QStringLiteral("lumen-eval"))).removeRecursively();
@@ -371,7 +390,7 @@ void LoraEvaluation::save() const
                                           {QStringLiteral("shots"), shots},
                                           {QStringLiteral("bestEpoch"), m_bestEpoch},
                                           {QStringLiteral("bestWeight"), m_bestWeight},
-                                          {QStringLiteral("finished"), m_finished},
+                                          {QStringLiteral("finished"), m_finished && m_complete},
                                           {QStringLiteral("status"), m_status},
                                           {QStringLiteral("time"), QDateTime::currentDateTime().toString(Qt::ISODate)}})
                     .toJson());

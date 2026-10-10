@@ -15,10 +15,16 @@
 #include "ai/providers/ComfyUiProvider.h"
 #include "ai/providers/OpenAiChatProvider.h"
 #include "ai/providers/SdCppProvider.h"
+#include "core/Async.h"
+#include "core/ImageOps.h"
 #include "core/Job.h"
 #include "core/JobQueue.h"
 #include "core/Settings.h"
 #include "doc/CharacterLibrary.h"
+#include "doc/Document.h"
+#include "doc/Layer.h"
+#include "doc/LoraDataset.h"
+#include "doc/Parts.h"
 #include "doc/Project.h"
 #include "net/HttpClient.h"
 #include "pose/Rig.h"
@@ -30,16 +36,21 @@
 #include "runtime/ServerProfile.h"
 #include "runtime/Supervisor.h"
 #include "runtime/Trainer.h"
-#include "doc/LoraDataset.h"
 #include "ui/CharacterTraining.h"
 #include "ui/LoraEvaluation.h"
 #include "ui/director/DirectorSession.h"
+#include "ui/pages/AiPanel.h"
+#include "ui/pages/GeneratePage.h"
+#include "ui/parts/ExpressionCheck.h"
+#include "ui/widgets/CharacterChip.h"
+#include "ui/widgets/Controls.h"
 #include "ui/dialogs/LoraDatasetDialog.h"
 #include "ui/Studio.h"
 #include "ui/assistant/AssistantPanel.h"
 #include "ui/pages/CreatePage.h"
 
 #include <QAction>
+#include <QCheckBox>
 #include <QDir>
 #include <QDirIterator>
 #include <QElapsedTimer>
@@ -109,6 +120,7 @@ private slots:
     void trainLora();
     void evaluateLora();
     void characterLoraEndToEnd();
+    void characterEverywhere();
 
 private:
     net::HttpClient m_http;
@@ -1771,6 +1783,309 @@ void TestLive::characterLoraEndToEnd()
     const ai::CharacterLora chosen = ai::CharacterLora::fromJson(studio.characters()->entry(characterId)->lora);
     QTRY_COMPARE(ai::CharacterLora::fromJson(session->characterLora()).file, chosen.file);
     stamp(QStringLiteral("attached %1 at %2").arg(QFileInfo(chosen.file).fileName()).arg(chosen.weight));
+}
+
+// LUMEN_LIVE_EVERYWHERE=<library character with a trained LoRA and a LoRA test run> with
+// LUMEN_LIVE_LLAMA_*, LUMEN_LIVE_SD_* (M14 step 7): the character on the Generate page (8 prompts that
+// never name it, with and without the character, same seeds), 4 fixes with Fill selection in the
+// editor and the 5 expression variants, each scored by the identity checklist.
+void TestLive::characterEverywhere()
+{
+    const QString characterId = qEnvironmentVariable("LUMEN_LIVE_EVERYWHERE");
+    const QString llamaExe = qEnvironmentVariable("LUMEN_LIVE_LLAMA_SERVER");
+    const QString llamaModel = qEnvironmentVariable("LUMEN_LIVE_LLAMA_MODEL");
+    const QString sdRoot = qEnvironmentVariable("LUMEN_LIVE_SD_RUNTIMES");
+    const QString sdModel = qEnvironmentVariable("LUMEN_LIVE_SD_MODEL");
+    if (characterId.isEmpty() || llamaExe.isEmpty() || llamaModel.isEmpty() || sdRoot.isEmpty() || sdModel.isEmpty())
+        QSKIP("LUMEN_LIVE_EVERYWHERE, LUMEN_LIVE_LLAMA_* and LUMEN_LIVE_SD_* are needed");
+    Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
+    QTemporaryDir dir;
+    ui::Studio studio;
+    const auto entry = studio.characters()->entry(characterId);
+    QVERIFY2(entry, "no such library character");
+    const ai::CharacterLora lora = ai::CharacterLora::fromJson(entry->lora);
+    QVERIFY2(lora.isValid(), "the character has no LoRA");
+    qInfo().noquote() << "character" << entry->name << "LoRA" << QFileInfo(lora.file).fileName() << "weight" << lora.weight;
+    for (Provider *p : studio.providers()->providers())
+        studio.providers()->removeProvider(p->instanceId());
+    for (const runtime::ServerProfile &p : studio.servers()->profiles())
+        studio.servers()->removeProfile(p.id);
+    studio.runtimes()->setRoot(dir.filePath(QStringLiteral("runtimes")));
+    studio.runtimes()->load();
+    {
+        JobQueue jobs;
+        runtime::RuntimeStore real(&m_http, &jobs);
+        real.setRoot(sdRoot);
+        real.load();
+        const auto sd = real.latestManaged(QStringLiteral("sd.cpp"));
+        QVERIFY(sd);
+        studio.runtimes()->addInstalled(*sd);
+    }
+    QFuture<runtime::InstalledRuntime> llamaRt = studio.runtimes()->adopt(llamaExe);
+    QTRY_VERIFY_WITH_TIMEOUT(llamaRt.isFinished(), 30000);
+    runtime::ServerSupervisor *servers = studio.servers();
+    runtime::ServerProfile llm = servers->createProfile(llamaRt.result().id, QStringLiteral("Qwen3-VL"));
+    llm.options.insert(QStringLiteral("model"), llamaModel);
+    if (!qEnvironmentVariable("LUMEN_LIVE_LLAMA_MMPROJ").isEmpty())
+        llm.options.insert(QStringLiteral("mmproj"), qEnvironmentVariable("LUMEN_LIVE_LLAMA_MMPROJ"));
+    llm.startupTimeoutSec = 300;
+    servers->addProfile(llm);
+    runtime::ServerProfile image = servers->createProfile(studio.runtimes()->latestManaged(QStringLiteral("sd.cpp"))->id, QStringLiteral("SDXL"));
+    image.options.insert(QStringLiteral("model"), sdModel);
+    image.options.insert(QStringLiteral("lora_dir"), QDir::toNativeSeparators(QFileInfo(lora.file).absolutePath()));
+    image.startupTimeoutSec = 300;
+    servers->addProfile(image);
+    Provider *sdProvider = studio.providers()->addProvider(QStringLiteral("sdcpp"), QStringLiteral("SDXL"), {{QStringLiteral("managed_server"), image.id}});
+    Provider *llmProvider = studio.providers()->addProvider(QStringLiteral("llamacpp"), QStringLiteral("Qwen3-VL"),
+                                                            {{QStringLiteral("managed_server"), llm.id}, {QStringLiteral("timeout_s"), 900}});
+    QVERIFY(sdProvider && llmProvider);
+    studio.providers()->setDefaultImageProvider(sdProvider->instanceId());
+    QString visionName;
+    for (const runtime::LlamaModel &m : runtime::llamaModels(*servers->profile(llm.id))) {
+        if (m.vision() && visionName.isEmpty())
+            visionName = m.name;
+    }
+    for (LlmRole role : allLlmRoles())
+        studio.providers()->setRole(role, {llmProvider->instanceId(), visionName});
+    studio.openProject(dir.filePath(QStringLiteral("everywhere.lumen")));
+    QTRY_VERIFY_WITH_TIMEOUT(studio.isProjectOpen(), 10000);
+    auto cleanup = qScopeGuard([&] {
+        for (Provider *p : studio.providers()->providers())
+            studio.providers()->removeProvider(p->instanceId());
+        servers->stopAll();
+    });
+    studio.setActiveCharacter(characterId);
+    auto contextFuture = studio.characterContext(characterId);
+    QTRY_VERIFY(contextFuture.isFinished());
+    const ai::CharacterContext character = contextFuture.result();
+    const QStringList checklist = Director::identityChecklist(character.sheet);
+    qInfo().noquote() << "checklist:" << checklist.join(QStringLiteral(" | "));
+
+    // The identity checklist of an image against the character's references.
+    struct Score
+    {
+        double identity = -1;
+        int pose = 0;
+        QStringList different;
+    };
+    auto score = [&](const QImage &img, const QString &description, const QList<QImage> &refs) {
+        const QJsonObject shot{{QStringLiteral("title"), QStringLiteral("check")}, {QStringLiteral("description"), description}};
+        StructuredChatOperation *op = studio.director()->checkIdentity(img, shot, character.sheet, refs);
+        op->setAutoDelete(false);
+        Score s;
+        if (!QTest::qWaitFor([op] { return op->isFinished(); }, 900000) || op->state() != Operation::State::Succeeded) {
+            qInfo().noquote() << "   check failed:" << op->errorString();
+            delete op;
+            return s;
+        }
+        s.identity = Director::checklistIdentity(op->result());
+        s.pose = op->result().value(QStringLiteral("pose")).toInt();
+        const QJsonObject f = op->result().value(QStringLiteral("features")).toObject();
+        for (int i = 0; i < checklist.size(); ++i) {
+            if (f.value(QStringLiteral("f%1").arg(i + 1)).toString() == QLatin1String("different"))
+                s.different << checklist[i];
+        }
+        delete op;
+        return s;
+    };
+    QElapsedTimer total;
+    total.start();
+
+    // 1. Generate page: 8 prompts that never name the character, with and without it, same seeds.
+    const QStringList prompts{QStringLiteral("reading in a library, evening light"), QStringLiteral("walking in the rain with an umbrella"),
+                              QStringLiteral("sitting at a cafe table, smiling"), QStringLiteral("on a rooftop at night, city lights"),
+                              QStringLiteral("standing in a snowy forest"), QStringLiteral("at the beach, sunset"),
+                              QStringLiteral("playing the violin on a stage"), QStringLiteral("in a classroom, looking out of the window")};
+    {
+        ui::GeneratePage page(&studio);
+        auto *chip = page.findChild<ui::CharacterChip *>();
+        ui::AutoTextEdit *promptEdit = nullptr;
+        for (ui::AutoTextEdit *e : page.findChildren<ui::AutoTextEdit *>()) {
+            if (e->placeholderText().startsWith(QLatin1String("A portrait")))
+                promptEdit = e;
+        }
+        QPushButton *go = nullptr;
+        for (QPushButton *b : page.findChildren<QPushButton *>()) {
+            if (b->text() == QLatin1String("Generate"))
+                go = b;
+        }
+        QCheckBox *random = nullptr;
+        for (QCheckBox *c : page.findChildren<QCheckBox *>()) {
+            if (c->text() == QLatin1String("Random"))
+                random = c;
+        }
+        QSpinBox *seed = nullptr;
+        for (QSpinBox *sp : page.findChildren<QSpinBox *>()) {
+            if (sp->maximum() >= 2147483646)
+                seed = sp;
+        }
+        QVERIFY(chip && promptEdit && go && random && seed);
+        random->setChecked(false);
+        double sumWith = 0, sumWithout = 0;
+        for (int i = 0; i < prompts.size(); ++i) {
+            QImage images[2];
+            for (int with = 1; with >= 0; --with) {
+                chip->setUsedHere(with == 1);
+                seed->setValue(1000 + i);
+                promptEdit->setPlainText(prompts[i]);
+                const int before = int(studio.project()->assets().size());
+                go->click();
+                QVERIFY(QTest::qWaitFor([&] { return int(studio.project()->assets().size()) > before; }, 900000));
+                const doc::AssetInfo a = studio.project()->assets().first();
+                auto loaded = studio.project()->loadImage(a.id);
+                QTRY_VERIFY_WITH_TIMEOUT(loaded.isFinished(), 10000);
+                images[with] = loaded.result();
+                save(images[with], QStringLiteral("m14_generate_%1_%2.png").arg(i).arg(with ? QStringLiteral("with") : QStringLiteral("without")));
+            }
+            const Score w = score(images[1], prompts[i], character.references);
+            const Score wo = score(images[0], prompts[i], character.references);
+            sumWith += w.identity;
+            sumWithout += wo.identity;
+            qInfo().noquote() << QStringLiteral("  [%1 min] generate \"%2\": with %3 (pose %4) · without %5; different with: %6")
+                                     .arg(total.elapsed() / 60000.0, 0, 'f', 1)
+                                     .arg(prompts[i])
+                                     .arg(w.identity, 0, 'f', 1)
+                                     .arg(w.pose)
+                                     .arg(wo.identity, 0, 'f', 1)
+                                     .arg(w.different.join(QStringLiteral(", ")));
+        }
+        qInfo().noquote() << QStringLiteral("GENERATE identity mean: with %1, without %2")
+                                 .arg(sumWith / prompts.size(), 0, 'f', 2)
+                                 .arg(sumWithout / prompts.size(), 0, 'f', 2);
+        chip->setUsedHere(true);
+    }
+
+    // The character's LoRA test images have known poses: their keypoints place the fixes.
+    const QString runDir = ui::CharacterTraining::lastRun(studio.characters()->datasetDirectory(characterId));
+    const QJsonObject eval = ui::LoraEvaluation::saved(runDir);
+    const int bestEpoch = eval.value(QStringLiteral("bestEpoch")).toInt();
+    QString fullBody, portrait;
+    for (const QJsonValue &v : eval.value(QStringLiteral("cells")).toArray()) {
+        if (v[QStringLiteral("epoch")].toInt() == bestEpoch && qFuzzyCompare(v[QStringLiteral("weight")].toDouble(), 0.8)) {
+            if (v[QStringLiteral("shot")].toString() == QLatin1String("t2"))
+                fullBody = v[QStringLiteral("image")].toString();
+            if (v[QStringLiteral("shot")].toString() == QLatin1String("t4"))
+                portrait = v[QStringLiteral("image")].toString();
+        }
+    }
+    QVERIFY2(!fullBody.isEmpty() && !portrait.isEmpty(), "no LoRA test images of the best epoch");
+    const QList<QJsonObject> shots = Director::loraTestShots(character.sheet, lora.trigger);
+    auto keypoints = [&shots](const QString &id, const QSize &size) {
+        for (const QJsonObject &s : shots) {
+            if (s.value(QStringLiteral("id")).toString() == id)
+                return Director::poseForShot(s, size).people.value(0);
+        }
+        return pose::Person{};
+    };
+    auto around = [](const QPointF &c, double w, double h, const QSize &bounds) {
+        return QRectF(c.x() - w / 2, c.y() - h / 2, w, h).toAlignedRect() & QRect(QPoint(0, 0), bounds);
+    };
+
+    // 2. Editor: Fill selection fixes on the three-quarter image, with and without the character.
+    {
+        const QImage base(fullBody);
+        QVERIFY(!base.isNull());
+        const pose::Person p = keypoints(QStringLiteral("t2"), base.size());
+        const double unit = QLineF(p.body[1].pos, p.body[0].pos).length(); // neck to nose
+        const QList<std::tuple<QString, QRect, QString>> fixes{
+            {QStringLiteral("hand"), around(p.body[4].pos, unit * 1.6, unit * 1.6, base.size()), QStringLiteral("a hand resting on the chest, five fingers")},
+            {QStringLiteral("face"), around(p.body[0].pos, unit * 2.0, unit * 2.2, base.size()), QStringLiteral("a calm face looking at the viewer")},
+            {QStringLiteral("sleeve"), around((p.body[6].pos + p.body[7].pos) / 2, unit * 1.4, unit * 2.2, base.size()), QStringLiteral("a sleeve")},
+            {QStringLiteral("hair"), around(p.body[0].pos - QPointF(0, unit * 1.2), unit * 2.4, unit * 1.4, base.size()), QStringLiteral("hair")}};
+        const Score original = score(base, QStringLiteral("three-quarter view on a city street"), character.references);
+        qInfo().noquote() << QStringLiteral("  editor base: identity %1, different: %2")
+                                 .arg(original.identity, 0, 'f', 1)
+                                 .arg(original.different.join(QStringLiteral(", ")));
+        ui::AiPanel panel(&studio);
+        auto *chip = panel.findChild<ui::CharacterChip *>();
+        QVERIFY(chip);
+        for (const auto &[name, rect, prompt] : fixes) {
+            for (int with = 1; with >= 0; --with) {
+                chip->setUsedHere(with == 1);
+                doc::Document *doc = studio.openImageAsDocument(base, QStringLiteral("fix %1").arg(name));
+                panel.setDocument(doc);
+                QImage mask = img::createMask(base.size(), 0);
+                {
+                    QPainter painter(&mask);
+                    painter.fillRect(rect, Qt::white);
+                }
+                doc->setSelectionRaw(mask);
+                const int layers = doc->layerCount();
+                panel.runFromCanvas(ui::AiPanel::Mode::Inpaint, prompt);
+                QVERIFY(QTest::qWaitFor([&] { return doc->layerCount() > layers; }, 900000));
+                auto flat = async::run([snap = doc->snapshot(), size = doc->size()] { return doc::flatten(snap, size); });
+                QTRY_VERIFY_WITH_TIMEOUT(flat.isFinished(), 10000);
+                const QImage result = img::flatten(flat.result(), Qt::white);
+                save(result, QStringLiteral("m14_fix_%1_%2.png").arg(name, with ? QStringLiteral("with") : QStringLiteral("without")));
+                const Score s = score(result, QStringLiteral("three-quarter view on a city street"), character.references);
+                QStringList added;
+                for (const QString &d : s.different) {
+                    if (!original.different.contains(d))
+                        added << d;
+                }
+                qInfo().noquote() << QStringLiteral("  [%1 min] fix %2 %3: identity %4, new differences: %5")
+                                         .arg(total.elapsed() / 60000.0, 0, 'f', 1)
+                                         .arg(name, with ? QStringLiteral("with") : QStringLiteral("without"))
+                                         .arg(s.identity, 0, 'f', 1)
+                                         .arg(added.isEmpty() ? QStringLiteral("none") : added.join(QStringLiteral(", ")));
+                studio.closeDocument(doc);
+            }
+        }
+    }
+
+    // 3. Expression variants on the portrait, with and without the character.
+    {
+        const QImage base = img::normalized(QImage(portrait));
+        QVERIFY(!base.isNull());
+        const pose::Person p = keypoints(QStringLiteral("t4"), base.size());
+        const double eyes = QLineF(p.body[14].pos, p.body[15].pos).length();
+        for (int with = 1; with >= 0; --with) {
+            doc::PartSet set;
+            set.bind(studio.project());
+            set.setSource(base, QStringLiteral("portrait"), img::createMask(base.size(), 255));
+            QImage eyeMask = img::createMask(base.size(), 0);
+            QImage mouthMask = img::createMask(base.size(), 0);
+            {
+                QPainter e(&eyeMask);
+                e.fillRect(around(p.body[14].pos, eyes * 0.75, eyes * 0.5, base.size()), Qt::white);
+                e.fillRect(around(p.body[15].pos, eyes * 0.75, eyes * 0.5, base.size()), Qt::white);
+                QPainter m(&mouthMask);
+                m.fillRect(around(p.body[0].pos + QPointF(0, eyes * 0.55), eyes * 0.7, eyes * 0.35, base.size()), Qt::white);
+            }
+            QVERIFY(set.addPart(QStringLiteral("irides"), {}, {}, eyeMask));
+            QVERIFY(set.addPart(QStringLiteral("mouth"), {}, {}, mouthMask));
+            for (const ai::parts::ExpressionKind &kind : ai::parts::expressionKinds()) {
+                ExpressionOptions options;
+                options.kind = kind.id;
+                options.providerId = sdProvider->instanceId();
+                options.characterSummary = Director::appearanceTags(character.sheet);
+                if (with)
+                    options.character = character;
+                Job *job = studio.parts()->generateExpression(&set, {}, options);
+                QVERIFY(QTest::qWaitFor([job] { return job->isFinished(); }, 900000));
+                QVERIFY2(job->state() == Job::State::Succeeded, qPrintable(job->errorString()));
+                const doc::Part *variant = nullptr;
+                for (const doc::Part &part : set.parts()) {
+                    if (part.tag == kind.tag)
+                        variant = &part;
+                }
+                QVERIFY(variant && variant->hasResult());
+                QTRY_VERIFY_WITH_TIMEOUT(!set.resultImage(variant->label).isNull(), 10000);
+                const auto [before, after] = ui::expressionCrops(base, set.resultImage(variant->label), variant->chosenRect());
+                save(after, QStringLiteral("m14_expr_%1_%2.png").arg(kind.id, with ? QStringLiteral("with") : QStringLiteral("without")));
+                QList<QImage> refs{before};
+                refs << character.references;
+                const Score s = score(after, QStringLiteral("Close-up of the character's face. Planned expression: ") + kind.prompt, refs);
+                qInfo().noquote() << QStringLiteral("  [%1 min] expression %2 %3: identity %4, expression %5, different: %6")
+                                         .arg(total.elapsed() / 60000.0, 0, 'f', 1)
+                                         .arg(kind.id, with ? QStringLiteral("with") : QStringLiteral("without"))
+                                         .arg(s.identity, 0, 'f', 1)
+                                         .arg(s.pose)
+                                         .arg(s.different.isEmpty() ? QStringLiteral("none") : s.different.join(QStringLiteral(", ")));
+            }
+        }
+    }
+    qInfo() << "total" << total.elapsed() / 60000.0 << "min";
 }
 
 QTEST_MAIN(TestLive)
