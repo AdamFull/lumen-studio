@@ -738,8 +738,119 @@ QList<QJsonObject> Director::loraTestShots(const QJsonObject &sheet, const QStri
     return out;
 }
 
+QStringList Director::identityChecklist(const QJsonObject &sheet)
+{
+    // Subject and count tags say nothing about who the character is.
+    static const QRegularExpression subject(QStringLiteral("^(\\d\\+?(girl|boy|other)s?|solo|solo focus|multiple \\w+)$"));
+    QStringList out{QStringLiteral("the same face as in the references (face shape, eye shape, proportions)")};
+    for (const QString &t : splitTags(appearanceTags(sheet))) {
+        const QString tag = modelTag(t);
+        if (out.size() >= 12)
+            break;
+        if (!tag.isEmpty() && !subject.match(tag).hasMatch() && !out.contains(tag))
+            out << tag;
+    }
+    return out;
+}
+
+QJsonObject Director::identityChecklistSchema(int features)
+{
+    QJsonObject props;
+    QJsonArray required;
+    for (int i = 1; i <= features; ++i) {
+        const QString key = QStringLiteral("f%1").arg(i);
+        props.insert(key, QJsonObject{{QStringLiteral("type"), QStringLiteral("string")},
+                                      {QStringLiteral("enum"), QJsonArray{QStringLiteral("match"), QStringLiteral("close"),
+                                                                         QStringLiteral("different"), QStringLiteral("not_visible")}}});
+        required.append(key);
+    }
+    return QJsonObject{
+        {QStringLiteral("type"), QStringLiteral("object")},
+        {QStringLiteral("properties"),
+         QJsonObject{{QStringLiteral("features"),
+                      QJsonObject{{QStringLiteral("type"), QStringLiteral("object")},
+                                  {QStringLiteral("properties"), props},
+                                  {QStringLiteral("required"), required},
+                                  {QStringLiteral("additionalProperties"), false}}},
+                     {QStringLiteral("pose"), QJsonObject{{QStringLiteral("type"), QStringLiteral("integer")},
+                                                          {QStringLiteral("minimum"), 0},
+                                                          {QStringLiteral("maximum"), 10}}},
+                     {QStringLiteral("issues"), QJsonObject{{QStringLiteral("type"), QStringLiteral("array")},
+                                                            {QStringLiteral("items"), QJsonObject{{QStringLiteral("type"), QStringLiteral("string")}}},
+                                                            {QStringLiteral("maxItems"), 5}}}}},
+        {QStringLiteral("required"), QJsonArray{QStringLiteral("features"), QStringLiteral("pose"), QStringLiteral("issues")}},
+        {QStringLiteral("additionalProperties"), false}};
+}
+
+double Director::checklistIdentity(const QJsonObject &answer)
+{
+    const QJsonObject features = answer.value(QStringLiteral("features")).toObject();
+    double points = 0;
+    int visible = 0;
+    for (auto it = features.begin(); it != features.end(); ++it) {
+        const QString v = it.value().toString();
+        if (v == QLatin1String("match"))
+            points += 1;
+        else if (v == QLatin1String("close"))
+            points += 0.5;
+        else if (v != QLatin1String("different"))
+            continue; // not visible
+        ++visible;
+    }
+    return visible > 0 ? 10.0 * points / visible : -1;
+}
+
+StructuredChatOperation *Director::checkIdentity(const QImage &result, const QJsonObject &shot, const QJsonObject &character,
+                                                 const QList<QImage> &references)
+{
+    QString model;
+    LlmProvider *provider = llm(LlmRole::Vision, &model);
+    const QStringList checklist = identityChecklist(character);
+    ChatRequest req;
+    req.model = model;
+    req.temperature = 0.1;
+    req.jsonSchema = identityChecklistSchema(int(checklist.size()));
+    req.schemaName = QStringLiteral("identity_checklist");
+    req.maxTokens = 800;
+    req.messages << ChatMessage::system(QStringLiteral(
+        "You check whether an AI-generated image shows the same character as the reference images, feature by feature.\n"
+        "For each numbered feature answer:\n"
+        "- match: visible and the same as in the references and the description;\n"
+        "- close: visible but somewhat off (shade, length, shape, a missing detail);\n"
+        "- different: visible and wrong, or absent although this view would show it (no choker on a visible neck, "
+        "another garment instead of the described one);\n"
+        "- not_visible: hidden by the view, framing or pose (eyes in a back view, shoes in a portrait).\n"
+        "Judge only the character. The references only show who the character is: ignore their pose, framing and background.\n"
+        "pose: 0-10, how well pose, framing, camera angle and background follow the PLANNED SHOT.\n"
+        "issues: at most 5 short notes on what differs."));
+    QStringList lines;
+    for (int i = 0; i < checklist.size(); ++i)
+        lines << QStringLiteral("f%1: %2").arg(i + 1).arg(checklist[i]);
+    ChatMessage user = ChatMessage::user(QStringLiteral("Planned shot:\n%1\n\nFeatures of the character:\n%2\n\nThe first image is the "
+                                                        "generated result; the others are references of the character.")
+                                             .arg(QString::fromUtf8(QJsonDocument(shot).toJson(QJsonDocument::Compact)), lines.join(QLatin1Char('\n'))));
+    user.images.append(ChatImage{img::thumbnail(result, 1024), QStringLiteral("Generated result:")});
+    for (int i = 0; i < std::min<int>(2, int(references.size())); ++i)
+        user.images.append(ChatImage{img::thumbnail(references[i], 768), QStringLiteral("Reference %1:").arg(i + 1)});
+    req.messages << user;
+    if (!provider || !provider->capabilities().vision) {
+        auto *op = new StructuredChatOperation(provider, req);
+        failLater(op, provider ? tr("The model assigned to 'Vision analysis' (%1) cannot see images, so it cannot review results.")
+                                     .arg(provider->displayName())
+                               : tr("No language model is configured for 'Vision analysis'."));
+        return op;
+    }
+    return requestJson(provider, req);
+}
+
 double Director::loraTestScore(const QJsonObject &critique)
 {
+    if (critique.contains(QStringLiteral("features"))) {
+        const double pose = critique.value(QStringLiteral("pose")).toDouble(0);
+        const double identity = checklistIdentity(critique);
+        // Nothing of the character visible: the pose decides alone (rare; the test shots show the face).
+        return identity < 0 ? pose : (2.0 * identity + pose) / 3.0;
+    }
     const double overall = critique.value(QStringLiteral("overall")).toDouble(0);
     const double identity = critique.value(QStringLiteral("identity")).toDouble(overall);
     const double pose = critique.value(QStringLiteral("pose")).toDouble(overall);

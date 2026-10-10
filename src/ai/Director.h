@@ -76,8 +76,20 @@ public:
     // training set. The prompt spells out the appearance tags, as shots planned in Create do; with
     // `trigger` it starts with the trigger word (for the LoRA candidates).
     static QList<QJsonObject> loraTestShots(const QJsonObject &sheet, const QString &trigger);
-    // Score of a test image: identity counts twice as much as the pose.
+    // Score of a test image: identity counts twice as much as the pose. Takes a checkIdentity()
+    // answer (identity from the checklist) or a critiqueShot() verdict.
     static double loraTestScore(const QJsonObject &critique);
+    // Identity checklist (LoRA test): the vision model marks each of the character's features as
+    // matching, close, different or not visible in the image, and scores the pose against the
+    // planned shot. Stricter than critiqueShot()'s identity, which gives 9-10 to anything close.
+    StructuredChatOperation *checkIdentity(const QImage &result, const QJsonObject &shot, const QJsonObject &character,
+                                           const QList<QImage> &references);
+    // The features checked: the face, then the sheet's appearance tags (at most 11).
+    static QStringList identityChecklist(const QJsonObject &sheet);
+    static QJsonObject identityChecklistSchema(int features);
+    // Identity 0-10 from a checklist answer: matching features count 1, close ones ½, among the
+    // visible ones. -1 when no feature is visible.
+    static double checklistIdentity(const QJsonObject &answer);
     // Appearance tags of a character sheet: its "tags", else built from hair, eyes and outfit.
     static QString appearanceTags(const QJsonObject &sheet);
 

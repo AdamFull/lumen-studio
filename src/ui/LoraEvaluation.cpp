@@ -261,15 +261,19 @@ void LoraEvaluation::critiqueNext()
     }
     m_status = tr("The Critic compares the test images with the references (%1 left)…").arg(m_toCritique.size() + 1);
     emit changed();
-    ai::StructuredChatOperation *op = m_studio->director()->critiqueShot(QImage(cell.image), shot, m_sheet, m_references);
+    ai::StructuredChatOperation *op = m_studio->director()->checkIdentity(QImage(cell.image), shot, m_sheet, m_references);
     m_critique = op;
     QPointer<LoraEvaluation> self(this);
     connect(op, &ai::Operation::finished, this, [self, op, index] {
         if (!self)
             return;
         if (op->state() == ai::Operation::State::Succeeded) {
-            self->m_cells[index].critique = op->result();
-            self->m_cells[index].score = ai::Director::loraTestScore(op->result());
+            // Kept with the names of the features checked and the identity they add up to.
+            QJsonObject critique = op->result();
+            critique.insert(QStringLiteral("checklist"), QJsonArray::fromStringList(ai::Director::identityChecklist(self->m_sheet)));
+            critique.insert(QStringLiteral("identity"), ai::Director::checklistIdentity(critique));
+            self->m_cells[index].critique = critique;
+            self->m_cells[index].score = ai::Director::loraTestScore(critique);
         } else if (op->state() == ai::Operation::State::Failed) {
             return self->finish(false, tr("The Critic failed: %1").arg(op->errorString()));
         }

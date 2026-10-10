@@ -239,7 +239,10 @@ images of it:
    * **Test the LoRA** (under *Test the result*) checks which epoch works best:
      * The newest three epochs draw four new scenes with the LoRA.
      * For comparison the same scenes are drawn without it, with the reference image instead.
-     * The Critic scores each image, and the best epoch is tried at weights 0.6 and 1.0.
+     * The Critic checks each image feature by feature: the face, and each item of the character's
+       look (hair, eyes, every piece of clothing and accessory). Each is marked as matching, close,
+       different or not visible, and the score counts the visible ones. Hover a cell to see the
+       checklist. The best epoch is then tried at weights 0.6 and 1.0.
      * The grid shows every image and score; double-click an image to open it.
      * **Use epoch N at weight W** attaches the recommended epoch, or the row you select.
      * This needs a stable-diffusion.cpp server run by Lumen and takes about 45 minutes on an

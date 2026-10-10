@@ -1174,6 +1174,12 @@ A LoRA learns from 15–40 varied images of the character. They come from what L
     0.6 and 1.0. That makes 24 images, with a fixed seed per shot so only the LoRA differs.
   - The Critic scores every image against the references: (2 × identity + pose) / 3. On a tie the
     earlier epoch and the lower weight win (less overtraining, more room for prompts).
+  - Identity is a checklist (`Director::checkIdentity`), not the Create Critic's 0–10 guess, which
+    gave 9–10 to anything close. The features are the face plus the sheet's appearance tags (subject
+    tags like 1girl left out, at most 12). The vision model marks each as match, close, different or
+    not visible; the schema has one enum per feature. Identity = 10 × (match + ½ close) / visible
+    features, so a missing choker or another garment costs points. One call per image also returns
+    the pose score. The grid's tooltips list the verdicts (✓ ≈ ✗ –).
   - The candidates are copied into the Lumen-run sd.cpp server's LoRA folder (`lumen-eval/`;
     the server rescans it per request) and removed afterwards. Images and scores are kept in
     `run-*/eval/eval.json`.

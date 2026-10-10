@@ -1574,17 +1574,28 @@ void TestCanvas::loraEvaluation()
         const QJsonArray images{QJsonObject{{QStringLiteral("index"), 0}, {QStringLiteral("b64_json"), QString::fromLatin1(img::encode(im).toBase64())}}};
         return MockResponse::json({{QStringLiteral("status"), QStringLiteral("completed")}, {QStringLiteral("result"), QJsonObject{{QStringLiteral("images"), images}}}});
     });
-    // Identity scores in the order the Critic sees the images: the baseline, epochs 2, 3, 4 at
-    // weight 0.8, then the best epoch (3; epoch 4 only ties) at 0.6 and 1.0.
-    const QList<int> identity{5, 5, 5, 5, 7, 7, 7, 7, 9, 9, 9, 9, 9, 9, 9, 9, 8, 8, 8, 8, 9, 9, 9, 9};
+    // Identity checklists (face, red hair, red eyes, black robe; m = match, c = close, d = different)
+    // in the order the Critic sees the images: the baseline, epochs 2, 3, 4 at weight 0.8, then the
+    // best epoch (3; epoch 4 only ties) at 0.6 and 1.0.
+    QStringList checklists;
+    for (const char *rows : {"mmdd", "mmmd", "mmmm", "mmmm", "mmmc", "mmmm"}) {
+        for (int i = 0; i < 4; ++i)
+            checklists << QLatin1String(rows);
+    }
     int critiques = 0;
-    server.route("POST", QStringLiteral("/v1/chat/completions"), [&](const MockRequest &) {
-        const QJsonObject verdict{{QStringLiteral("overall"), 9},
-                                  {QStringLiteral("identity"), identity.value(critiques++, 1)},
+    QJsonObject checklistRequest;
+    server.route("POST", QStringLiteral("/v1/chat/completions"), [&](const MockRequest &req) {
+        checklistRequest = req.json();
+        const QString marks = checklists.value(critiques++, QStringLiteral("dddd"));
+        QJsonObject features;
+        for (int i = 0; i < marks.size(); ++i) {
+            features.insert(QStringLiteral("f%1").arg(i + 1), marks[i] == QLatin1Char('m')   ? QStringLiteral("match")
+                                                              : marks[i] == QLatin1Char('c') ? QStringLiteral("close")
+                                                                                             : QStringLiteral("different"));
+        }
+        const QJsonObject verdict{{QStringLiteral("features"), features},
                                   {QStringLiteral("pose"), 9},
-                                  {QStringLiteral("issues"), QJsonArray{QStringLiteral("hair a little darker")}},
-                                  {QStringLiteral("revised_prompt"), QStringLiteral("1girl")},
-                                  {QStringLiteral("negative_additions"), QString()}};
+                                  {QStringLiteral("issues"), QJsonArray{QStringLiteral("hair a little darker")}}};
         return MockResponse::json(
             {{QStringLiteral("choices"),
               QJsonArray{QJsonObject{{QStringLiteral("message"),
@@ -1720,8 +1731,14 @@ void TestCanvas::loraEvaluation()
     QVERIFY(table);
     QCOMPARE(table->rowCount(), 6);
     QCOMPARE(table->verticalHeaderItem(0)->text(), QStringLiteral("Without LoRA"));
+    // Baseline: 2 of 4 features → identity 5, score (2·5 + 9) / 3; epoch 3: all → (2·10 + 9) / 3.
     QCOMPARE(table->item(0, 4)->text(), QStringLiteral("6.3"));
-    QCOMPARE(table->item(2, 4)->text(), QStringLiteral("9.0"));
+    QCOMPARE(table->item(2, 4)->text(), QStringLiteral("9.7"));
+    QVERIFY(table->item(0, 0)->toolTip().contains(QStringLiteral("✗ black robe")));
+    QVERIFY(table->item(0, 0)->toolTip().contains(QStringLiteral("✓ red hair")));
+    // The Critic got the checklist, numbered like the schema.
+    QVERIFY(QJsonDocument(checklistRequest).toJson().contains("identity_checklist"));
+    QVERIFY(QJsonDocument(checklistRequest).toJson().contains("f4: black robe"));
 
     QPushButton *apply = nullptr;
     for (QPushButton *b : dlg.findChildren<QPushButton *>()) {

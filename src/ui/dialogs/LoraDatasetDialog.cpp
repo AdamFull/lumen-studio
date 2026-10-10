@@ -702,10 +702,20 @@ void LoraDatasetDialog::refreshEvaluation()
                         item->setText(QString::number(c.score, 'f', 1));
                         sum += c.score;
                         ++n;
-                        QStringList tip{tr("Identity %1 · pose %2 · overall %3")
-                                            .arg(c.critique.value(QStringLiteral("identity")).toInt())
-                                            .arg(c.critique.value(QStringLiteral("pose")).toInt())
-                                            .arg(c.critique.value(QStringLiteral("overall")).toInt())};
+                        QStringList tip{tr("Identity %1 · pose %2")
+                                            .arg(c.critique.value(QStringLiteral("identity")).toDouble(), 0, 'f', 1)
+                                            .arg(c.critique.value(QStringLiteral("pose")).toInt())};
+                        // The checklist: ✓ match, ≈ close, ✗ different, – not visible.
+                        const QJsonArray names = c.critique.value(QStringLiteral("checklist")).toArray();
+                        const QJsonObject verdicts = c.critique.value(QStringLiteral("features")).toObject();
+                        for (int f = 0; f < names.size(); ++f) {
+                            const QString v = verdicts.value(QStringLiteral("f%1").arg(f + 1)).toString();
+                            const QString mark = v == QLatin1String("match")       ? QStringLiteral("✓")
+                                                 : v == QLatin1String("close")     ? QStringLiteral("≈")
+                                                 : v == QLatin1String("different") ? QStringLiteral("✗")
+                                                                                   : QStringLiteral("–");
+                            tip << mark + QLatin1Char(' ') + names[f].toString();
+                        }
                         for (const QJsonValue &i : c.critique.value(QStringLiteral("issues")).toArray())
                             tip << QStringLiteral("• ") + i.toString();
                         item->setToolTip(tip.join(QLatin1Char('\n')));

@@ -48,6 +48,7 @@ private slots:
     void directorCritique();
     void directorDatasetPlan();
     void loraCaptions();
+    void identityChecklist();
     void cleanShotPrompts();
     void agentNativeTools();
     void agentJsonProtocol();
@@ -737,6 +738,52 @@ void TestServices::loraCaptions()
     QCOMPARE(suggestTrigger(QStringLiteral("Mira the Mage")), QStringLiteral("lmn_mira"));
     QCOMPARE(suggestTrigger(QStringLiteral("Аня")), QStringLiteral("lmn_char"));
     QVERIFY(imageTagsSchema().value(QStringLiteral("properties")).toObject().contains(QStringLiteral("tags")));
+}
+
+void TestServices::identityChecklist()
+{
+    // The face first, then the sheet's look; subject and count tags are not features.
+    const QJsonObject sheet{{QStringLiteral("tags"), QStringLiteral("1girl, solo, long_red_hair, yellow eyes, black hooded cloak, black choker")}};
+    const QStringList list = Director::identityChecklist(sheet);
+    QCOMPARE(list.size(), 5);
+    QVERIFY(list[0].contains(QStringLiteral("face")));
+    QCOMPARE(list.mid(1), (QStringList{QStringLiteral("long red hair"), QStringLiteral("yellow eyes"), QStringLiteral("black hooded cloak"),
+                                       QStringLiteral("black choker")}));
+    QCOMPARE(Director::identityChecklist({{QStringLiteral("tags"), QStringLiteral("2girls, multiple girls, red hair")}}).size(), 2);
+    // From the structured sheet fields when there are no tags.
+    const QJsonObject structured{{QStringLiteral("hair"), QJsonObject{{QStringLiteral("color"), QStringLiteral("silver")}}},
+                                 {QStringLiteral("eyes"), QJsonObject{{QStringLiteral("color"), QStringLiteral("blue")}}}};
+    QCOMPARE(Director::identityChecklist(structured).mid(1), (QStringList{QStringLiteral("silver hair"), QStringLiteral("blue eyes")}));
+
+    // The schema asks for every feature with a fixed verdict.
+    const QJsonObject schema = Director::identityChecklistSchema(3);
+    const QJsonObject features = schema[QStringLiteral("properties")][QStringLiteral("features")].toObject();
+    QCOMPARE(features[QStringLiteral("required")].toArray().size(), 3);
+    QCOMPARE(features[QStringLiteral("properties")][QStringLiteral("f3")][QStringLiteral("enum")].toArray().size(), 4);
+    const QJsonObject answer{{QStringLiteral("features"), QJsonObject{{QStringLiteral("f1"), QStringLiteral("match")},
+                                                                      {QStringLiteral("f2"), QStringLiteral("close")},
+                                                                      {QStringLiteral("f3"), QStringLiteral("different")}}},
+                             {QStringLiteral("pose"), 9},
+                             {QStringLiteral("issues"), QJsonArray{}}};
+    const json::SchemaValidator validator(schema);
+    QStringList errors;
+    QVERIFY2(validator.validate(answer, &errors), qPrintable(errors.join(QLatin1Char('\n'))));
+    QVERIFY(!validator.validate(QJsonObject{{QStringLiteral("features"), QJsonObject{{QStringLiteral("f1"), QStringLiteral("yes")}}},
+                                            {QStringLiteral("pose"), 9},
+                                            {QStringLiteral("issues"), QJsonArray{}}}));
+
+    // Identity: 1 + ½ of 3 visible features = 5; a hidden feature does not count.
+    QCOMPARE(Director::checklistIdentity(answer), 5.0);
+    QJsonObject hidden = answer;
+    hidden[QStringLiteral("features")] = QJsonObject{{QStringLiteral("f1"), QStringLiteral("match")}, {QStringLiteral("f2"), QStringLiteral("not_visible")}};
+    QCOMPARE(Director::checklistIdentity(hidden), 10.0);
+    hidden[QStringLiteral("features")] = QJsonObject{{QStringLiteral("f1"), QStringLiteral("not_visible")}};
+    QCOMPARE(Director::checklistIdentity(hidden), -1.0);
+    // The test score: identity twice, the pose once; the pose alone when nothing is visible.
+    QCOMPARE(Director::loraTestScore(answer), (2 * 5.0 + 9) / 3);
+    QCOMPARE(Director::loraTestScore(hidden), 9.0);
+    // A critiqueShot() verdict still works.
+    QCOMPARE(Director::loraTestScore({{QStringLiteral("identity"), 9}, {QStringLiteral("pose"), 6}}), 8.0);
 }
 
 QTEST_MAIN(TestServices)

@@ -1415,17 +1415,19 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     <name>lumen::ai::Director</name>
     <message>
         <location filename="../src/ai/Director.cpp" line="+177"/>
+        <location line="+559"/>
         <source>The model assigned to &apos;Vision analysis&apos; (%1) cannot see images, so it cannot review results.</source>
         <translation>Das Modell für die Bildanalyse (%1) kann keine Bilder verarbeiten und daher keine Ergebnisse bewerten.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-557"/>
         <location line="+35"/>
+        <location line="+524"/>
         <source>No language model is configured for &apos;Vision analysis&apos;.</source>
         <translation>Für die Bildanalyse ist kein Sprachmodell konfiguriert.</translation>
     </message>
     <message>
-        <location line="-2"/>
+        <location line="-526"/>
         <source>The model assigned to &apos;Vision analysis&apos; (%1) cannot see images, so it cannot write captions.</source>
         <translation>Das Modell für „Bildanalyse“ (%1) kann keine Bilder sehen und daher keine Beschreibungen schreiben.</translation>
     </message>
@@ -7659,12 +7661,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+4"/>
-        <location line="+742"/>
+        <location line="+752"/>
         <source>Write captions</source>
         <translation>Beschreibungen schreiben</translation>
     </message>
     <message>
-        <location line="-741"/>
+        <location line="-751"/>
         <source>The vision model tags every kept image that has no tags yet</source>
         <translation>Das Bildverständnismodell vertaggt jedes behaltene Bild, das noch keine Tags hat</translation>
     </message>
@@ -7725,12 +7727,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+875"/>
+        <location line="+885"/>
         <source>Remove</source>
         <translation>Entfernen</translation>
     </message>
     <message>
-        <location line="-871"/>
+        <location line="-881"/>
         <source>Export for training…</source>
         <translation>Für das Training exportieren…</translation>
     </message>
@@ -7987,12 +7989,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Epoche %1 · %2</translation>
     </message>
     <message>
-        <location line="+19"/>
-        <source>Identity %1 · pose %2 · overall %3</source>
-        <translation>Identität %1 · Pose %2 · gesamt %3</translation>
-    </message>
-    <message>
-        <location line="+8"/>
+        <location line="+37"/>
         <source>failed</source>
         <translation>fehlgeschlagen</translation>
     </message>
@@ -8053,18 +8050,23 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         </translation>
     </message>
     <message>
-        <location line="-341"/>
-        <location line="+343"/>
+        <location line="-351"/>
+        <location line="+353"/>
         <source>Stop</source>
         <translation>Stopp</translation>
     </message>
     <message>
-        <location line="-452"/>
+        <location line="-462"/>
         <source>The newest three epochs draw four new scenes with the LoRA; for comparison the same scenes are drawn without it, with the reference image through IP-Adapter. The Critic scores how well each image keeps the character (0–10). Takes about 45 minutes on an 8 GB GPU.</source>
         <translation>Die drei neuesten Epochen zeichnen vier neue Szenen mit der LoRA; zum Vergleich werden dieselben Szenen ohne sie gezeichnet, mit dem Referenzbild über IP-Adapter. Der Kritiker bewertet, wie gut jedes Bild den Charakter trifft (0–10). Dauert auf einer GPU mit 8 GB etwa 45 Minuten.</translation>
     </message>
     <message>
-        <location line="+499"/>
+        <location line="+268"/>
+        <source>Identity %1 · pose %2</source>
+        <translation>Identität %1 · Pose %2</translation>
+    </message>
+    <message>
+        <location line="+241"/>
         <source>Every kept image is tagged; the captions were rebuilt.</source>
         <translation>Jedes behaltene Bild ist vertaggt; die Beschreibungen wurden neu erstellt.</translation>
     </message>
@@ -8255,7 +8257,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Der Kritiker vergleicht die Testbilder mit den Referenzen (noch %1)…</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+16"/>
         <source>The Critic failed: %1</source>
         <translation>Der Kritiker ist fehlgeschlagen: %1</translation>
     </message>
