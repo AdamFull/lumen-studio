@@ -11,6 +11,7 @@
 #include "runtime/ModelFormats.h"
 #include "runtime/ModelHub.h"
 #include "runtime/ModelLibrary.h"
+#include "runtime/CloudTraining.h"
 #include "runtime/PodAgent.h"
 #include "runtime/RunPod.h"
 #include "runtime/RuntimeStore.h"
@@ -211,6 +212,7 @@ private slots:
     void zipSafePaths();
     void runPodClient();
     void podAgent();
+    void cloudTraining();
     void zipExtract();
     void zipRejectsUnsafeArchives();
     void downloadVerifiesAndResumes();
@@ -2405,6 +2407,241 @@ void TestRuntime::podAgent()
     // Shutdown ends the agent.
     QCOMPARE(errorOf(client.shutdown()), QString());
     QVERIFY(agent.waitForFinished(10000));
+}
+
+namespace {
+
+// Stands in for sdxl_train_network.py on the "pod": checks its inputs, prints like kohya and
+// writes one LoRA per epoch. FAKE_SLEEP makes it wait (to be cancelled).
+const char *kFakeSdScripts = R"(import os, sys, time
+a = sys.argv[1:]
+def arg(name):
+    return a[a.index(name) + 1]
+model = arg('--pretrained_model_name_or_path')
+img = arg('--train_data_dir')
+out = arg('--output_dir')
+name = arg('--output_name')
+epochs = int(arg('--max_train_epochs'))
+print('model %d bytes, %d image folder(s)' % (os.path.getsize(model), len(os.listdir(img))), flush=True)
+if os.environ.get('FAKE_SLEEP'):
+    print('epoch 1/%d' % epochs, flush=True)
+    time.sleep(120)
+os.makedirs(out, exist_ok=True)
+for e in range(1, epochs + 1):
+    print('epoch %d/%d' % (e, epochs), flush=True)
+    print('steps: %d%%|#####     | %d/%d [00:01<00:01,  2.00s/it, avr_loss=0.0%d]' % (100 * e // epochs, e, epochs, e), flush=True)
+    path = os.path.join(out, '%s-%06d.safetensors' % (name, e) if e < epochs else name + '.safetensors')
+    with open(path, 'wb') as f:
+        f.write(bytes([e]) * 4096)
+    print('saving checkpoint: ' + path, flush=True)
+)";
+
+// A fake RunPod: creating a pod starts the real agent here, with the token and script the
+// request carries.
+struct FakeRunPod
+{
+    MockHttpServer api;
+    QString python;
+    QTemporaryDir dir;
+    QProcess agent;
+    int port = 0;
+    QJsonObject created;
+    int polls = 0;
+    QStringList deleted;
+    bool slowTrainer = false;
+
+    FakeRunPod(const QString &py)
+        : python(py)
+    {
+        api.route("POST", QStringLiteral("/v2/pods"), [this](const MockRequest &req) {
+            created = req.json();
+            const QJsonObject env = created.value(QStringLiteral("env")).toObject();
+            const QString script = dir.filePath(QStringLiteral("agent.py"));
+            QFile f(script);
+            if (f.open(QIODevice::WriteOnly))
+                f.write(QByteArray::fromBase64(env.value(QStringLiteral("LUMEN_AGENT")).toString().toLatin1()));
+            f.close();
+            QTcpServer probe;
+            probe.listen(QHostAddress::LocalHost, 0);
+            port = probe.serverPort();
+            probe.close();
+            QProcessEnvironment pe = QProcessEnvironment::systemEnvironment();
+            pe.insert(QStringLiteral("LUMEN_TOKEN"), env.value(QStringLiteral("LUMEN_TOKEN")).toString());
+            pe.insert(QStringLiteral("LUMEN_PORT"), QString::number(port));
+            pe.insert(QStringLiteral("LUMEN_HOST"), QStringLiteral("127.0.0.1"));
+            pe.insert(QStringLiteral("LUMEN_WORK"), dir.filePath(QStringLiteral("work%1").arg(port)));
+            if (slowTrainer)
+                pe.insert(QStringLiteral("FAKE_SLEEP"), QStringLiteral("1"));
+            agent.setProcessEnvironment(pe);
+            agent.setProcessChannelMode(QProcess::MergedChannels);
+            agent.start(python, {script});
+            agent.waitForStarted(10000);
+            polls = 0;
+            return MockResponse::json({{QStringLiteral("id"), QStringLiteral("pod9")}, {QStringLiteral("name"), created.value(QStringLiteral("name"))},
+                                       {QStringLiteral("status"), QStringLiteral("PROVISIONING")}, {QStringLiteral("cost"), 0.69}},
+                                      201);
+        });
+        api.route("GET", QStringLiteral("/v2/pods/pod9"), [this](const MockRequest &) {
+            return MockResponse::json({{QStringLiteral("id"), QStringLiteral("pod9")},
+                                       {QStringLiteral("status"), ++polls < 2 ? QStringLiteral("STARTING") : QStringLiteral("RUNNING")},
+                                       {QStringLiteral("cost"), 0.69}});
+        });
+        api.route("DELETE", QStringLiteral("/v2/pods/pod9"), [this](const MockRequest &) {
+            deleted << QStringLiteral("pod9");
+            agent.kill();
+            MockResponse r;
+            r.status = 204;
+            return r;
+        });
+    }
+    ~FakeRunPod()
+    {
+        if (agent.state() != QProcess::NotRunning) {
+            agent.kill();
+            agent.waitForFinished(5000);
+        }
+    }
+};
+
+} // namespace
+
+void TestRuntime::cloudTraining()
+{
+    const QString python = findPython();
+    if (python.isEmpty())
+        QSKIP("no Python 3 on PATH");
+    QTemporaryDir dir;
+    // The training set ("<repeats>_<trigger>"), a base model, the fake trainer.
+    QDir().mkpath(dir.filePath(QStringLiteral("img/10_lmn")));
+    for (const char *name : {"img/10_lmn/001.png", "img/10_lmn/001.txt", "img/10_lmn/002.png", "img/10_lmn/002.txt"}) {
+        QFile f(dir.filePath(QLatin1String(name)));
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write("data");
+    }
+    const QByteArray model(300 * 1024, 'm');
+    const QString modelPath = dir.filePath(QStringLiteral("xl.safetensors"));
+    {
+        QFile f(modelPath);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write(model);
+    }
+    const QString trainer = dir.filePath(QStringLiteral("fake_sd_scripts.py"));
+    {
+        QFile f(trainer);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write(kFakeSdScripts);
+    }
+    net::HttpClient http;
+    JobQueue jobs;
+    FakeRunPod runpod(python);
+    RunPodClient client(&http);
+    client.setBaseUrl(runpod.api.baseUrl().toString() + QStringLiteral("/v2"));
+    client.keyProvider = [] { return QStringLiteral("rp_test"); };
+
+    auto options = [&](const QString &work) {
+        CloudTrainingOptions o;
+        o.training.checkpoint = modelPath;
+        o.training.family = QStringLiteral("SDXL");
+        o.training.imagesDir = dir.filePath(QStringLiteral("img"));
+        o.training.workDir = dir.filePath(work);
+        o.training.outputName = QStringLiteral("lmn");
+        o.training.trigger = QStringLiteral("lmn");
+        o.training.epochs = 3;
+        o.training.tier = VramTier::Large;
+        o.gpuId = QStringLiteral("NVIDIA GeForce RTX 4090");
+        o.testTrainer = trainer;
+        o.pollMs = 100;
+        o.startTimeoutSec = 30;
+        o.agentUrl = [&runpod](const RunPodPod &) { return QStringLiteral("http://127.0.0.1:%1").arg(runpod.port); };
+        return o;
+    };
+
+    // A whole run: the pod gets the agent, trains, the epochs come home, the pod is terminated.
+    Job *job = startCloudTraining(&client, &http, &jobs, options(QStringLiteral("run1")));
+    QStringList stages;
+    connect(job, &Job::progressChanged, job, [&stages](double, const QString &s) {
+        if (stages.isEmpty() || stages.last() != s)
+            stages << s;
+    });
+    QTRY_VERIFY_WITH_TIMEOUT(job->isFinished(), 60000);
+    QVERIFY2(job->state() == Job::State::Succeeded, qPrintable(job->errorString() + QStringLiteral("\n") + QString::fromUtf8(runpod.agent.readAll())));
+    // The pod: Lumen's name, the GPU, a token and the agent in its environment, port 8000.
+    QVERIFY(runpod.created.value(QStringLiteral("name")).toString().startsWith(QStringLiteral("lumen-train-lmn-")));
+    QCOMPARE(runpod.created.value(QStringLiteral("gpu")).toObject().value(QStringLiteral("id")).toString(), QStringLiteral("NVIDIA GeForce RTX 4090"));
+    QCOMPARE(runpod.created.value(QStringLiteral("ports")).toArray(), QJsonArray{QStringLiteral("8000/http")});
+    QCOMPARE(runpod.created.value(QStringLiteral("env")).toObject().value(QStringLiteral("LUMEN_TOKEN")).toString().size(), 48);
+    QCOMPARE(runpod.deleted, QStringList{QStringLiteral("pod9")});
+    QVERIFY(activeCloudPods().isEmpty());
+    const QVariantMap result = job->result().toMap();
+    QCOMPARE(result.value(QStringLiteral("pod")).toString(), QStringLiteral("pod9"));
+    QCOMPARE(result.value(QStringLiteral("files")).toStringList().size(), 3);
+    const QString final = result.value(QStringLiteral("final")).toString();
+    QVERIFY(final.endsWith(QStringLiteral("run1/output/lmn.safetensors")));
+    QFile finalFile(final);
+    QVERIFY(finalFile.open(QIODevice::ReadOnly));
+    QCOMPARE(finalFile.readAll(), QByteArray(4096, char(3)));
+    // The trainer saw the uploaded model and the unpacked set; the log came along.
+    QFile log(result.value(QStringLiteral("log")).toString());
+    QVERIFY(log.open(QIODevice::ReadOnly));
+    const QString text = QString::fromUtf8(log.readAll());
+    QVERIFY2(text.contains(QStringLiteral("model 307200 bytes, 1 image folder(s)")), qPrintable(text));
+    QVERIFY(text.contains(QStringLiteral("epoch 3/3")));
+    QCOMPARE(job->metadata().value(QStringLiteral("totalSteps")).toInt(), 3);
+    QVERIFY(stages.contains(QStringLiteral("Renting the cloud GPU…")));
+    QVERIFY(std::any_of(stages.begin(), stages.end(), [](const QString &s) { return s.startsWith(QStringLiteral("Epoch 3 of 3")); }));
+
+    // Cancelled while training: the pod is terminated, nothing is kept running.
+    runpod.deleted.clear();
+    runpod.slowTrainer = true;
+    Job *cancelled = startCloudTraining(&client, &http, &jobs, options(QStringLiteral("run2")));
+    QTRY_VERIFY_WITH_TIMEOUT(cancelled->metadata().value(QStringLiteral("stage")).toString().startsWith(QStringLiteral("Starting the trainer")), 60000);
+    QTest::qWait(500);
+    cancelled->cancel();
+    QTRY_VERIFY_WITH_TIMEOUT(cancelled->isFinished(), 30000);
+    QCOMPARE(cancelled->state(), Job::State::Cancelled);
+    QCOMPARE(runpod.deleted, QStringList{QStringLiteral("pod9")});
+    QVERIFY(activeCloudPods().isEmpty());
+
+    // A base model the pod cannot get (wrong checksum): a clear failure, and the pod is gone.
+    runpod.deleted.clear();
+    runpod.slowTrainer = false;
+    MockHttpServer web;
+    serveFile(web, QStringLiteral("/xl.safetensors"), model);
+    CloudTrainingOptions bad = options(QStringLiteral("run3"));
+    bad.checkpointUrl = web.baseUrl().toString() + QStringLiteral("/xl.safetensors");
+    bad.checkpointSha256 = QStringLiteral("0000");
+    Job *failed = startCloudTraining(&client, &http, &jobs, bad);
+    QTRY_VERIFY_WITH_TIMEOUT(failed->isFinished(), 60000);
+    QCOMPARE(failed->state(), Job::State::Failed);
+    QVERIFY2(failed->errorString().contains(QStringLiteral("could not download the base model")), qPrintable(failed->errorString()));
+    QCOMPARE(runpod.deleted, QStringList{QStringLiteral("pod9")});
+    // The same with the right checksum works, fetched by the pod instead of uploaded.
+    runpod.deleted.clear();
+    CloudTrainingOptions good = bad;
+    good.training.workDir = dir.filePath(QStringLiteral("run4"));
+    good.checkpointSha256 = QString::fromLatin1(QCryptographicHash::hash(model, QCryptographicHash::Sha256).toHex());
+    Job *fetched = startCloudTraining(&client, &http, &jobs, good);
+    QTRY_VERIFY_WITH_TIMEOUT(fetched->isFinished(), 60000);
+    QVERIFY2(fetched->state() == Job::State::Succeeded, qPrintable(fetched->errorString()));
+    QCOMPARE(runpod.deleted, QStringList{QStringLiteral("pod9")});
+
+    // Leftovers: Lumen's pods nothing here trains on (a stopped one too: it keeps its disk);
+    // other pods of the account are not Lumen's business.
+    runpod.api.route("GET", QStringLiteral("/v2/pods"), [](const MockRequest &) {
+        auto pod = [](const char *id, const char *name, const char *status) {
+            return QJsonObject{{QStringLiteral("id"), QLatin1String(id)}, {QStringLiteral("name"), QLatin1String(name)},
+                               {QStringLiteral("status"), QLatin1String(status)}};
+        };
+        return MockResponse::json({{QStringLiteral("pods"), QJsonArray{pod("a", "lumen-train-aki-20261011-1200", "RUNNING"),
+                                                                       pod("b", "lumen-train-bo-20261010-0900", "EXITED"),
+                                                                       pod("c", "lumen-train-old", "TERMINATED"),
+                                                                       pod("d", "my-notebook", "RUNNING")}}});
+    });
+    auto leftovers = leftoverCloudPods(&client);
+    QTRY_VERIFY(leftovers.isFinished());
+    QCOMPARE(leftovers.result().size(), 2);
+    QCOMPARE(leftovers.result()[0].id, QStringLiteral("a"));
+    QCOMPARE(leftovers.result()[1].id, QStringLiteral("b"));
 }
 
 QTEST_MAIN(TestRuntime)

@@ -72,6 +72,8 @@ struct TrainingProgress
 };
 // Updates `p` from one line of the trainer's output; returns whether anything changed.
 bool parseTrainingLine(const QString &line, TrainingProgress *p);
+// "Epoch 3 of 10 · step 600 of 2000 · loss 0.0712 · 14:40 left" (empty outside training).
+QString describeTrainingProgress(const TrainingProgress &p);
 
 // The LoRA files of a run: one per epoch ("<name>-000003.safetensors") and the final one.
 QStringList trainingOutputs(const QString &workDir, const QString &outputName);

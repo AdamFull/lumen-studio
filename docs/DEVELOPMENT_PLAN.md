@@ -1522,8 +1522,25 @@ Every request carries a random token generated for this pod (passed in the pod's
     chunked upload with SHA-256, fetch from a URL with a good and a bad checksum, zip and unzip,
     training refused before setup, the fake trainer's log and two epochs downloaded and verified,
     a tampered checksum, a path outside the work folder, cancel, shutdown; and the Linux recipe.
-- [ ] Cloud training job: the orchestration, cancel, failure handling, always terminating the pod;
-  leftover pods at start. Tests with the mock RunPod API and the local agent.
+- [x] Cloud training job (`runtime/CloudTraining`, Queue group "cloud-training"):
+  - Pack the set (`writeZip`) → create the pod (`lumen-train-<name>-<time>`, the agent base64 in
+    `LUMEN_AGENT` with a random 192-bit token, port 8000/http, the pod's command decodes and
+    runs it) → wait for RUNNING → wait for the agent → upload the Linux lock and start the setup,
+    which installs on the pod while the set (then unzipped) and the model travel; the model is
+    uploaded, or fetched by the pod from a URL with its SHA-256 → wait for setup and model →
+    train with `trainingArguments` built for `{work}` paths and the 24 GB preset → mirror the
+    log to `train.log` and the progress (shared `describeTrainingProgress`) → download the
+    epochs, verified → terminate the pod. The result map is the local one plus `pod` and
+    `costPerHour`; the status shows the cost so far.
+  - Every end terminates the pod: success, failure, cancel. Termination is tried twice; if it
+    still fails the job carries a warning naming the pod. A pod whose creation answer arrives
+    after a cancel is terminated on arrival. Polls tolerate six failures in a row (proxy
+    hiccups) before giving up.
+  - `leftoverCloudPods`: Lumen's pods not used by a training in this process and not terminated.
+  - Tests with a fake RunPod API that starts the real agent here from the create request's
+    environment, and a fake sd-scripts: a whole run (pod request, uploads, log, three epochs
+    downloaded, pod terminated), cancel during training, a base model with a wrong checksum
+    (failure, pod terminated) and one fetched by URL, and leftovers.
 - [ ] Train tab and costs: *Where*, GPU choice, estimate, confirmation; the result goes into the
   library and onto the character like a local training.
 - [ ] One short live run on RunPod (the user's account): the 29-image Akane set, 10 epochs.

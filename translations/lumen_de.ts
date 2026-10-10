@@ -3012,6 +3012,186 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
 </context>
 <context>
+    <name>lumen::runtime::CloudTraining</name>
+    <message>
+        <location filename="../src/runtime/CloudTraining.cpp" line="+76"/>
+        <source>The cloud trainer&apos;s files are missing from this Lumen.</source>
+        <translation>Die Dateien des Cloud-Trainers fehlen in diesem Lumen.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The base model %1 is missing.</source>
+        <translation>Das Basismodell %1 fehlt.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Packing the training set…</source>
+        <translation>Das Trainingsset wird gepackt…</translation>
+    </message>
+    <message>
+        <location line="+37"/>
+        <source> · about $%1 so far</source>
+        <translation> · bisher etwa %1 $</translation>
+    </message>
+    <message>
+        <location line="+25"/>
+        <source>The cloud GPU %1 could not be shut down (%2). Stop it at runpod.io, or Lumen will offer to on its next start.</source>
+        <translation>Die Cloud-GPU %1 konnte nicht heruntergefahren werden (%2). Stoppen Sie sie auf runpod.io, oder Lumen bietet es beim nächsten Start an.</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Lumen is shutting down</source>
+        <translation>Lumen wird beendet</translation>
+    </message>
+    <message>
+        <location line="+78"/>
+        <source>Renting the cloud GPU…</source>
+        <translation>Die Cloud-GPU wird gemietet…</translation>
+    </message>
+    <message>
+        <location line="+38"/>
+        <source>Starting the cloud GPU…</source>
+        <translation>Die Cloud-GPU startet…</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>The cloud GPU stopped while starting (%1).</source>
+        <translation>Die Cloud-GPU hat beim Start angehalten (%1).</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>The cloud GPU did not start in %1 minutes.</source>
+        <translation>Die Cloud-GPU ist nicht innerhalb von %1 Minuten gestartet.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Connecting to the cloud GPU…</source>
+        <translation>Verbindung zur Cloud-GPU wird hergestellt…</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>The cloud GPU&apos;s agent did not answer in %1 minutes.</source>
+        <translation>Der Agent der Cloud-GPU hat nicht innerhalb von %1 Minuten geantwortet.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Installing the trainer on the cloud GPU…</source>
+        <translation>Der Trainer wird auf der Cloud-GPU installiert…</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Cannot write %1.</source>
+        <translation>%1 kann nicht geschrieben werden.</translation>
+    </message>
+    <message>
+        <location line="+23"/>
+        <source>Uploading the training set…</source>
+        <translation>Das Trainingsset wird hochgeladen…</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Uploading the training set</source>
+        <translation>Trainingsset wird hochgeladen</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>%1: %2 of %3 MB</source>
+        <translation>%1: %2 von %3 MB</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>The cloud GPU downloads the base model…</source>
+        <translation>Die Cloud-GPU lädt das Basismodell herunter…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Uploading the base model</source>
+        <translation>Basismodell wird hochgeladen</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>The cloud GPU could not download the base model: %1</source>
+        <translation>Die Cloud-GPU konnte das Basismodell nicht herunterladen: %1</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Installing the trainer on the cloud GPU failed: %1</source>
+        <translation>Die Installation des Trainers auf der Cloud-GPU ist fehlgeschlagen: %1</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>The cloud GPU downloads the base model: %1 of %2 MB</source>
+        <translation>Die Cloud-GPU lädt das Basismodell herunter: %1 von %2 MB</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Installing the trainer on the cloud GPU: %1</source>
+        <translation>Der Trainer wird auf der Cloud-GPU installiert: %1</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>The cloud GPU was not ready within an hour.</source>
+        <translation>Die Cloud-GPU war nicht innerhalb einer Stunde bereit.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Starting the trainer…</source>
+        <translation>Der Trainer wird gestartet…</translation>
+    </message>
+    <message>
+        <location line="+34"/>
+        <source>The training took longer than a day.</source>
+        <translation>Das Training hat länger als einen Tag gedauert.</translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <source>Preparing the images…</source>
+        <translation>Die Bilder werden vorbereitet…</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>The trainer on the cloud GPU stopped with exit code %1:
+%2</source>
+        <translation>Der Trainer auf der Cloud-GPU wurde mit Exit-Code %1 beendet:
+%2</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Downloading the LoRA files…</source>
+        <translation>Die LoRA-Dateien werden heruntergeladen…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>The training on the cloud GPU wrote no LoRA files.</source>
+        <translation>Das Training auf der Cloud-GPU hat keine LoRA-Dateien geschrieben.</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Downloading %1 of %2</source>
+        <translation>Herunterladen %1 von %2</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>The final LoRA file is missing from the cloud GPU&apos;s output.</source>
+        <translation>Die endgültige LoRA-Datei fehlt in der Ausgabe der Cloud-GPU.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Shutting the cloud GPU down…</source>
+        <translation>Die Cloud-GPU wird heruntergefahren…</translation>
+    </message>
+    <message>
+        <location line="+36"/>
+        <source>Train LoRA %1 on a cloud GPU</source>
+        <translation>LoRA %1 auf einer Cloud-GPU trainieren</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Shutting down.</source>
+        <translation>Wird beendet.</translation>
+    </message>
+</context>
+<context>
     <name>lumen::runtime::FileDownload</name>
     <message>
         <location filename="../src/runtime/Download.cpp" line="+74"/>
@@ -3091,7 +3271,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::runtime::LoraTraining</name>
     <message>
-        <location filename="../src/runtime/LoraTraining.cpp" line="+172"/>
+        <location filename="../src/runtime/LoraTraining.cpp" line="+185"/>
         <source>The GPU ran out of memory. Close other programs that use the GPU, or choose a smaller preset.</source>
         <translation>Der GPU ist der Speicher ausgegangen. Schließen Sie andere Programme, die die GPU nutzen, oder wählen Sie kleinere Einstellungen.</translation>
     </message>
@@ -3126,7 +3306,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Die Bilder werden vorbereitet…</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-220"/>
         <source>Epoch %1 of %2 · step %3 of %4</source>
         <translation>Epoche %1 von %2 · Schritt %3 von %4</translation>
     </message>
@@ -3146,7 +3326,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation> · noch %1</translation>
     </message>
     <message>
-        <location line="+19"/>
+        <location line="+235"/>
         <source>Cannot start the trainer: %1</source>
         <translation>Der Trainer kann nicht gestartet werden: %1</translation>
     </message>

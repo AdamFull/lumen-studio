@@ -80,6 +80,19 @@ int totalSteps(int images, int repeats, int epochs, int batch)
     return perEpoch * epochs;
 }
 
+QString describeTrainingProgress(const TrainingProgress &p)
+{
+    if (p.phase != QLatin1String("training") || p.totalSteps <= 0 || p.step < 0)
+        return {};
+    QString status = p.epochs > 0 ? Text::tr("Epoch %1 of %2 · step %3 of %4").arg(p.epoch).arg(p.epochs).arg(p.step).arg(p.totalSteps)
+                                  : Text::tr("Step %1 of %2").arg(p.step).arg(p.totalSteps);
+    if (p.loss >= 0)
+        status += Text::tr(" · loss %1").arg(p.loss, 0, 'f', 4);
+    if (!p.remaining.isEmpty() && p.remaining != QLatin1String("?"))
+        status += Text::tr(" · %1 left").arg(p.remaining);
+    return status;
+}
+
 QStringList trainingArguments(const TrainingOptions &o, const InstalledRuntime &trainer)
 {
     const QString scripts = trainer.settings.value(QStringLiteral("scripts")).toString();
@@ -293,13 +306,7 @@ private:
         if (p.phase == QLatin1String("caching")) {
             m_job->setProgress(-1, Text::tr("Preparing the images…"));
         } else if (p.phase == QLatin1String("training") && p.totalSteps > 0 && p.step >= 0) {
-            QString status = p.epochs > 0 ? Text::tr("Epoch %1 of %2 · step %3 of %4").arg(p.epoch).arg(p.epochs).arg(p.step).arg(p.totalSteps)
-                                          : Text::tr("Step %1 of %2").arg(p.step).arg(p.totalSteps);
-            if (p.loss >= 0)
-                status += Text::tr(" · loss %1").arg(p.loss, 0, 'f', 4);
-            if (!p.remaining.isEmpty() && p.remaining != QLatin1String("?"))
-                status += Text::tr(" · %1 left").arg(p.remaining);
-            m_job->setProgress(std::clamp(double(p.step) / p.totalSteps, 0.0, 0.99), status);
+            m_job->setProgress(std::clamp(double(p.step) / p.totalSteps, 0.0, 0.99), describeTrainingProgress(p));
             m_job->metadata().insert(QStringLiteral("step"), p.step);
             m_job->metadata().insert(QStringLiteral("totalSteps"), p.totalSteps);
             m_job->metadata().insert(QStringLiteral("loss"), p.loss);

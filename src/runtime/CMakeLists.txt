@@ -9,6 +9,7 @@ add_library(lumen_runtime STATIC
     ModelFormats.h ModelFormats.cpp
     ModelLibrary.h ModelLibrary.cpp
     ModelHub.h ModelHub.cpp
+    CloudTraining.h CloudTraining.cpp
     PodAgent.h PodAgent.cpp
     RunPod.h RunPod.cpp
     Trainer.h Trainer.cpp
