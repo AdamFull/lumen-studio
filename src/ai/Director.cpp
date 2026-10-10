@@ -1,5 +1,6 @@
 #include "ai/Director.h"
 
+#include "ai/LoraCaptions.h"
 #include "ai/ProviderUtil.h"
 #include "core/ImageOps.h"
 #include "core/JsonUtil.h"
@@ -276,6 +277,41 @@ StructuredChatOperation *Director::critiqueShot(const QImage &result, const QJso
     if (!provider || !provider->capabilities().vision) {
         auto *op = new StructuredChatOperation(provider, req);
         failLater(op, provider ? tr("The model assigned to 'Vision analysis' (%1) cannot see images, so it cannot review results.")
+                                     .arg(provider->displayName())
+                               : tr("No language model is configured for 'Vision analysis'."));
+        return op;
+    }
+    return requestJson(provider, req);
+}
+
+StructuredChatOperation *Director::tagImage(const QImage &image)
+{
+    QString model;
+    LlmProvider *provider = llm(LlmRole::Vision, &model);
+    ChatRequest req;
+    req.model = model;
+    req.temperature = 0.1;
+    req.jsonSchema = imageTagsSchema();
+    req.schemaName = QStringLiteral("image_tags");
+    req.maxTokens = 800;
+    req.messages << ChatMessage::system(QStringLiteral(
+        "You tag images for training an anime image model. Answer with Danbooru tags (lower case, spaces instead of "
+        "underscores) for what is visible, most important first, 15-40 tags:\n"
+        "- people count (1girl, 1boy, solo);\n"
+        "- view and camera angle (from side, from behind, from above, from below, looking at viewer, looking back);\n"
+        "- framing (full body, cowboy shot, upper body, portrait, close-up);\n"
+        "- pose and gestures (standing, sitting, walking, arms at sides, hand on hip, waving, crossed arms, peace sign);\n"
+        "- expression, mouth and eyes (smile, open mouth, closed eyes, angry, blush);\n"
+        "- hair colour, length and style; eye colour; body features;\n"
+        "- each clothing item and accessory with its colour;\n"
+        "- background (simple background, white background, gradient background) and lighting.\n"
+        "Only tag what you can see. No sentences, no artist or quality tags."));
+    ChatMessage user = ChatMessage::user(QStringLiteral("Tag this image."));
+    user.images.append(ChatImage{img::thumbnail(image, 1024), QStringLiteral("Image:")});
+    req.messages << user;
+    if (!provider || !provider->capabilities().vision) {
+        auto *op = new StructuredChatOperation(provider, req);
+        failLater(op, provider ? tr("The model assigned to 'Vision analysis' (%1) cannot see images, so it cannot write captions.")
                                      .arg(provider->displayName())
                                : tr("No language model is configured for 'Vision analysis'."));
         return op;

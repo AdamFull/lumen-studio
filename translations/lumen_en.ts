@@ -297,6 +297,16 @@
     <name>lumen::ui::LoraDatasetDialog</name>
     <message numerus="yes">
         <location filename="../src/ui/dialogs/LoraDatasetDialog.cpp" line="+1" />
+        <source>%n image(s) without a caption.</source>
+        <translation><numerusform>%n image without a caption.</numerusform><numerusform>%n images without a caption.</numerusform></translation>
+    </message>
+    <message numerus="yes">
+        <location filename="../src/ui/dialogs/LoraDatasetDialog.cpp" line="+1" />
+        <source>Writing captions, %n left…</source>
+        <translation><numerusform>Writing captions, %n left…</numerusform><numerusform>Writing captions, %n left…</numerusform></translation>
+    </message>
+    <message numerus="yes">
+        <location filename="../src/ui/dialogs/LoraDatasetDialog.cpp" line="+1" />
         <source>Added %n image(s) from the session.</source>
         <translation><numerusform>Added %n image from the session.</numerusform><numerusform>Added %n images from the session.</numerusform></translation>
     </message>

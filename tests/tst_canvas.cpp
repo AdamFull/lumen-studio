@@ -32,6 +32,8 @@
 #include "ui/widgets/Controls.h"
 
 #include <QComboBox>
+#include <QCheckBox>
+#include <QTableWidget>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QTabWidget>
@@ -1181,7 +1183,21 @@ void TestCanvas::loraTrainingSet()
     });
     QList<int> scores{8, 4, 9};
     int critiques = 0;
-    server.route("POST", QStringLiteral("/v1/chat/completions"), [&](const MockRequest &) {
+    int taggings = 0;
+    auto answer = [](const QJsonObject &content) {
+        return MockResponse::json(
+            {{QStringLiteral("choices"),
+              QJsonArray{QJsonObject{{QStringLiteral("message"),
+                                      QJsonObject{{QStringLiteral("content"), QString::fromUtf8(QJsonDocument(content).toJson(QJsonDocument::Compact))}}},
+                                     {QStringLiteral("finish_reason"), QStringLiteral("stop")}}}}});
+    };
+    server.route("POST", QStringLiteral("/v1/chat/completions"), [&](const MockRequest &req) {
+        if (req.body.contains("image_tags")) {
+            ++taggings;
+            return answer({{QStringLiteral("tags"), QJsonArray{QStringLiteral("1girl"), QStringLiteral("solo"), QStringLiteral("red_hair"),
+                                                               QStringLiteral("red eyes"), QStringLiteral("black robe"), QStringLiteral("smile"),
+                                                               QStringLiteral("full body"), QStringLiteral("white background")}}});
+        }
         const int score = scores.value(critiques++, 7);
         const QJsonObject verdict{{QStringLiteral("overall"), 9},
                                   {QStringLiteral("identity"), score},
@@ -1288,10 +1304,65 @@ void TestCanvas::loraTrainingSet()
         QTest::qWait(500);
         dlg.grab().save(shots + QStringLiteral("/lora-training-set.png"));
     }
+    // Captions: the vision model tags the kept images; the character's own look is pruned.
+    QCOMPARE(ds->settings().trigger, QStringLiteral("lmn_mira"));
+    const int kept = ds->keptCount();
+    dlg.captionAll();
+    QTRY_VERIFY_WITH_TIMEOUT(!dlg.isCaptioning(), 20000);
+    QCOMPARE(taggings, kept);
+    auto *table = dlg.findChild<QTableWidget *>();
+    QVERIFY(table);
+    QCOMPARE(table->rowCount(), kept);
+    QString firstKept;
+    for (const doc::DatasetItem &i : ds->items()) {
+        if (!i.kept) {
+            QVERIFY(i.tags.isEmpty());
+            continue;
+        }
+        if (firstKept.isEmpty())
+            firstKept = i.id;
+        QCOMPARE(i.tags.size(), 8);
+        QCOMPARE(i.caption, QStringLiteral("lmn_mira, 1girl, solo, smile, full body, white background"));
+        QVERIFY(!i.captionEdited);
+    }
+    // A new trigger word and a changeable outfit rebuild the captions.
+    QLineEdit *trigger = nullptr;
+    QCheckBox *outfit = nullptr;
+    for (QLineEdit *e : dlg.findChildren<QLineEdit *>()) {
+        if (e->text() == QLatin1String("lmn_mira"))
+            trigger = e;
+    }
+    for (QCheckBox *c : dlg.findChildren<QCheckBox *>()) {
+        if (c->text().startsWith(QLatin1String("Outfit")))
+            outfit = c;
+    }
+    QVERIFY(trigger && outfit && outfit->isChecked());
+    trigger->setText(QStringLiteral("Mira V2"));
+    emit trigger->editingFinished();
+    QCOMPARE(ds->settings().trigger, QStringLiteral("mira_v2"));
+    QCOMPARE(ds->item(firstKept)->caption, QStringLiteral("mira_v2, 1girl, solo, smile, full body, white background"));
+    // A caption edited by hand keeps its words when the outfit setting changes.
+    QTableWidgetItem *cell = table->item(0, 1);
+    const QString edited = cell->data(Qt::UserRole).toString();
+    cell->setText(QStringLiteral("mira_v2, 1girl, solo, grin, from side"));
+    QTRY_VERIFY(ds->item(edited)->captionEdited);
+    outfit->setChecked(false);
+    QCOMPARE(ds->item(edited)->caption, QStringLiteral("mira_v2, 1girl, solo, grin, from side"));
+    for (const doc::DatasetItem &i : ds->items()) {
+        if (i.kept && i.id != edited)
+            QCOMPARE(i.caption, QStringLiteral("mira_v2, 1girl, solo, black robe, smile, full body, white background"));
+    }
+    if (!shots.isEmpty()) {
+        dlg.findChild<QTabWidget *>()->setCurrentIndex(1);
+        QTest::qWait(500);
+        dlg.grab().save(shots + QStringLiteral("/lora-captions.png"));
+    }
+
     // The set lives with the library character.
     doc::LoraDataset reloaded(studio.characters()->datasetDirectory(characterId));
     reloaded.load();
     QCOMPARE(reloaded.items().size(), 3);
+    QCOMPARE(reloaded.settings().trigger, QStringLiteral("mira_v2"));
 }
 
 QTEST_MAIN(TestCanvas)

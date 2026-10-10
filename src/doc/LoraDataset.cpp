@@ -41,6 +41,10 @@ QJsonObject toJson(const DatasetItem &i)
         o.insert(QStringLiteral("duplicate_of"), i.duplicateOf);
     if (!i.caption.isEmpty())
         o.insert(QStringLiteral("caption"), i.caption);
+    if (!i.tags.isEmpty())
+        o.insert(QStringLiteral("tags"), QJsonArray::fromStringList(i.tags));
+    if (i.captionEdited)
+        o.insert(QStringLiteral("caption_edited"), true);
     return o;
 }
 
@@ -57,6 +61,9 @@ DatasetItem fromJson(const QJsonObject &o)
     i.hash = o.value(QStringLiteral("hash")).toString().toULongLong(nullptr, 16);
     i.duplicateOf = o.value(QStringLiteral("duplicate_of")).toString();
     i.caption = o.value(QStringLiteral("caption")).toString();
+    for (const QJsonValue &t : o.value(QStringLiteral("tags")).toArray())
+        i.tags << t.toString();
+    i.captionEdited = o.value(QStringLiteral("caption_edited")).toBool();
     i.size = QSize(o.value(QStringLiteral("width")).toInt(), o.value(QStringLiteral("height")).toInt());
     i.added = QDateTime::fromString(o.value(QStringLiteral("added")).toString(), Qt::ISODate);
     return i;
@@ -143,8 +150,13 @@ void LoraDataset::load()
 {
     m_items.clear();
     QFile f(m_dir + QStringLiteral("/dataset.json"));
+    m_settings = {};
     if (f.open(QIODevice::ReadOnly)) {
-        for (const QJsonValue &v : QJsonDocument::fromJson(f.readAll()).object().value(QStringLiteral("items")).toArray()) {
+        const QJsonObject root = QJsonDocument::fromJson(f.readAll()).object();
+        const QJsonObject settings = root.value(QStringLiteral("settings")).toObject();
+        m_settings.trigger = settings.value(QStringLiteral("trigger")).toString();
+        m_settings.outfitIsIdentity = settings.value(QStringLiteral("outfit_is_identity")).toBool(true);
+        for (const QJsonValue &v : root.value(QStringLiteral("items")).toArray()) {
             DatasetItem i = fromJson(v.toObject());
             if (!i.id.isEmpty() && QFile::exists(m_dir + QStringLiteral("/images/") + i.file))
                 m_items << i;
@@ -162,7 +174,8 @@ bool LoraDataset::save() const
     QSaveFile f(m_dir + QStringLiteral("/dataset.json"));
     if (!f.open(QIODevice::WriteOnly))
         return false;
-    f.write(QJsonDocument(QJsonObject{{QStringLiteral("version"), 1}, {QStringLiteral("items"), items}}).toJson());
+    const QJsonObject settings{{QStringLiteral("trigger"), m_settings.trigger}, {QStringLiteral("outfit_is_identity"), m_settings.outfitIsIdentity}};
+    f.write(QJsonDocument(QJsonObject{{QStringLiteral("version"), 1}, {QStringLiteral("settings"), settings}, {QStringLiteral("items"), items}}).toJson());
     return f.commit();
 }
 
@@ -247,10 +260,44 @@ void LoraDataset::setCritique(const QString &id, int score, const QJsonObject &c
     }
 }
 
-void LoraDataset::setCaption(const QString &id, const QString &caption)
+void LoraDataset::setSettings(const DatasetSettings &settings)
 {
-    if (DatasetItem *i = find(id); i && i->caption != caption) {
+    m_settings = settings;
+    save();
+    emit changed();
+}
+
+void LoraDataset::setCaption(const QString &id, const QString &caption, bool edited)
+{
+    if (DatasetItem *i = find(id); i && (i->caption != caption || i->captionEdited != edited)) {
         i->caption = caption;
+        i->captionEdited = edited;
+        save();
+        emit changed();
+    }
+}
+
+void LoraDataset::setTags(const QString &id, const QStringList &tags)
+{
+    if (DatasetItem *i = find(id)) {
+        i->tags = tags;
+        save();
+        emit changed();
+    }
+}
+
+void LoraDataset::updateCaptions(const std::function<QString(const DatasetItem &)> &change)
+{
+    bool any = false;
+    for (DatasetItem &i : m_items) {
+        const QString caption = change(i);
+        if (caption != i.caption) {
+            i.caption = caption;
+            i.captionEdited = true;
+            any = true;
+        }
+    }
+    if (any) {
         save();
         emit changed();
     }
@@ -307,7 +354,7 @@ QFuture<int> LoraDataset::exportForTraining(const QString &folder, const QString
     QList<QPair<QString, QString>> work; // image path, caption
     for (const DatasetItem &i : m_items) {
         if (i.kept)
-            work.append({m_dir + QStringLiteral("/images/") + i.file, i.caption});
+            work.append({m_dir + QStringLiteral("/images/") + i.file, i.caption.isEmpty() ? m_settings.trigger : i.caption});
     }
     const QList<QSize> buckets = trainingBuckets(family);
     return async::run([work, folder, buckets] {

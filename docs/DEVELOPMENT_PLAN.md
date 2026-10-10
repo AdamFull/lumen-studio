@@ -1068,7 +1068,29 @@ A LoRA learns from 15–40 varied images of the character. They come from what L
     - The back view lost the hood: the kind of image the curation step rejects.
     - The reference's grey background sometimes beats the requested one (IP-Adapter).
     - Three-quarter views use 45°; 35° read as almost frontal.
-- [ ] Captioning with the vision model, identity-tag pruning, caption table editor.
+- [x] Captioning:
+  - `Director::tagImage`: the vision role answers with Danbooru tags (schema `{tags}`, 15–40 tags,
+    the model's `long_red_hair` spelling turned into `long red hair`).
+  - Identity pruning (`ai/LoraCaptions`) removes these tags:
+    - hair colour, length and style; eye colours (not eye states such as closed eyes); body features
+      (ears, tails, horns, skin, moles…);
+    - the sheet's own tags;
+    - with *Outfit is part of the character* (default), the outfit and accessories, including the
+      model's own words for them: a shared stem of 4+ letters matches hood / hooded / hoodie and
+      cloak / cloaked.
+    View, framing, pose, expression, background and lighting stay. The trigger word goes first and
+    keeps its underscores.
+  - The training set stores raw tags, caption, a hand-edited flag and the settings (trigger word,
+    default `lmn_<first name>`; outfit switch).
+  - Changing either setting rebuilds the captions. Hand-edited captions keep their words and only
+    get the new trigger.
+  - Captions tab: an editable table per kept image, the most common tags, find and replace, add or
+    remove a tag on every caption, rebuild from tags. Export writes the trigger word alone for an
+    image without a caption.
+  - Measured (Qwen3-VL 8B Q4_K_M, llama.cpp, RTX 4060): 8 training images tagged in 57–141 s
+    (6–18 s each). 36–40 identity tags were pruned.
+  - What stays is pose, expression, framing, background, and clothes the sheet does not list
+    (boots); the common-tags line shows those for one-click removal.
 - [ ] Trainer runtime: uv-managed venv with pinned sd-scripts + PyTorch (hash-checked), adopt
   existing kohya installs.
 - [ ] Training job: config generation, supervised run with progress, samples, cancel / resume,

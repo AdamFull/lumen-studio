@@ -7,7 +7,9 @@
 #include <QList>
 #include <QObject>
 #include <QSize>
+#include <QStringList>
 
+#include <functional>
 #include <optional>
 
 namespace lumen::doc {
@@ -24,7 +26,9 @@ struct DatasetItem
     QJsonObject critique;   // the Critic's answer
     quint64 hash = 0;       // difference hash for near-duplicate detection
     QString duplicateOf;    // id of a better image it nearly repeats
-    QString caption;        // training caption (tags)
+    QStringList tags;       // what the vision model saw (all tags, before pruning)
+    QString caption;        // training caption: trigger word first, then the tags that vary
+    bool captionEdited = false; // changed by hand: kept when captions are rebuilt
     QSize size;
     QDateTime added;
 };
@@ -40,6 +44,13 @@ QSize bucketFor(const QSize &size, const QList<QSize> &buckets);
 // Scales the image to cover the bucket and crops the rest, keeping more of the top (heads).
 QImage cropToBucket(const QImage &image, const QSize &bucket);
 
+// How captions are written for a training set.
+struct DatasetSettings
+{
+    QString trigger;              // the word that calls the character up ("lmn_mira")
+    bool outfitIsIdentity = true; // the outfit belongs to the character (its tags are pruned)
+};
+
 // The training images of one character's LoRA: <character folder>/dataset with images/ and
 // dataset.json. GUI-thread object; image work runs on worker threads.
 class LoraDataset : public QObject
@@ -54,6 +65,8 @@ public:
     bool save() const;
 
     QList<DatasetItem> items() const { return m_items; }
+    DatasetSettings settings() const { return m_settings; }
+    void setSettings(const DatasetSettings &settings);
     std::optional<DatasetItem> item(const QString &id) const;
     int keptCount() const;
     // An item that came from this project asset already (to avoid adding it twice).
@@ -62,7 +75,11 @@ public:
     QFuture<DatasetItem> add(const QImage &image, const QJsonObject &source, const QJsonObject &shot = {});
     void setKept(const QString &id, bool kept);
     void setCritique(const QString &id, int score, const QJsonObject &critique);
-    void setCaption(const QString &id, const QString &caption);
+    // `edited`: the user wrote it (rebuilding captions keeps it).
+    void setCaption(const QString &id, const QString &caption, bool edited = true);
+    void setTags(const QString &id, const QStringList &tags);
+    // Applies a function to every caption at once (find and replace, add or remove a tag).
+    void updateCaptions(const std::function<QString(const DatasetItem &)> &change);
     bool remove(const QString &id);
     // Flags images that nearly repeat a better one (higher score, or added earlier); returns how
     // many are flagged. Flagged images are not kept unless the user keeps them again.
@@ -80,6 +97,7 @@ private:
     DatasetItem *find(const QString &id);
     QString m_dir;
     QList<DatasetItem> m_items;
+    DatasetSettings m_settings;
 };
 
 } // namespace lumen::doc

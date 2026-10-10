@@ -9,10 +9,14 @@
 
 #include <functional>
 
+class QCheckBox;
 class QLabel;
+class QLineEdit;
 class QListWidget;
 class QPushButton;
 class QSpinBox;
+class QTabWidget;
+class QTableWidget;
 
 namespace lumen::ai {
 class Operation;
@@ -43,6 +47,12 @@ public:
     // Scores unscored images with the Critic one after another; images below the minimum are rejected.
     void scoreAll();
     bool isScoring() const { return !m_scoreQueue.isEmpty() || m_scoring; }
+    // Tags the kept images that have no tags yet with the vision model and writes their captions.
+    void captionAll();
+    bool isCaptioning() const { return !m_captionQueue.isEmpty() || m_captioning; }
+    // Captions from the stored tags with the current trigger word and outfit setting (hand-edited
+    // captions only get the new trigger word).
+    void rebuildCaptions(const QString &previousTrigger = QString());
     // Identity score of a critique for training images: the lower of overall and identity.
     static int datasetScore(const QJsonObject &critique);
 
@@ -54,6 +64,12 @@ private:
     void addFiles();
     void exportImages();
     void scoreNext();
+    void captionNext();
+    void reloadCaptions();
+    void applySettings();
+    void askReplace();
+    void askAddTag();
+    void askRemoveTag();
     QStringList selectedIds() const;
     QPixmap thumbnail(const QString &id);
 
@@ -72,6 +88,16 @@ private:
     QStringList m_scoreQueue;
     bool m_scoring = false;
     QPointer<ai::Operation> m_critique;
+    QTabWidget *m_tabs = nullptr;
+    QTableWidget *m_captions = nullptr;
+    QLineEdit *m_trigger = nullptr;
+    QCheckBox *m_outfit = nullptr;
+    QPushButton *m_captionButton = nullptr;
+    QLabel *m_tagSummary = nullptr;
+    QStringList m_captionQueue;
+    bool m_captioning = false;
+    QPointer<ai::Operation> m_tagging;
+    bool m_fillingCaptions = false;
     QJsonObject m_sheet;
     QList<QImage> m_references;
     bool m_referencesLoaded = false;

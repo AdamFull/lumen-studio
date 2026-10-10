@@ -21,6 +21,7 @@ add_library(lumen_ai STATIC
     PromptStyle.h PromptStyle.cpp
     GenerationService.h GenerationService.cpp
     Director.h Director.cpp
+    LoraCaptions.h LoraCaptions.cpp
     PartPipeline.h PartPipeline.cpp
     PartService.h PartService.cpp
 )

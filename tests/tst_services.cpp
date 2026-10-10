@@ -3,6 +3,7 @@
 #include "ai/Agent.h"
 #include "ai/Director.h"
 #include "ai/Gate.h"
+#include "ai/LoraCaptions.h"
 #include "ai/GenerationService.h"
 #include "ai/ProviderCatalog.h"
 #include "ai/StructuredChat.h"
@@ -46,6 +47,7 @@ private slots:
     void utilityOnAssets();
     void directorCritique();
     void directorDatasetPlan();
+    void loraCaptions();
     void cleanShotPrompts();
     void agentNativeTools();
     void agentJsonProtocol();
@@ -695,6 +697,46 @@ void TestServices::directorDatasetPlan()
                              {QStringLiteral("eyes"), QJsonObject{{QStringLiteral("color"), QStringLiteral("green")}}},
                              {QStringLiteral("outfit"), QJsonArray{QJsonObject{{QStringLiteral("item"), QStringLiteral("hoodie")}, {QStringLiteral("color"), QStringLiteral("yellow")}}}}};
     QCOMPARE(Director::appearanceTags(fields), QStringLiteral("silver hair, short hair, green eyes, yellow hoodie"));
+}
+
+void TestServices::loraCaptions()
+{
+    QCOMPARE(modelTag(QStringLiteral("  Long_Red_Hair ")), QStringLiteral("long red hair"));
+    QCOMPARE(normalizeTag(QStringLiteral(" LMN_Mira ")), QStringLiteral("lmn_mira")); // trigger words keep their underscores
+    QCOMPARE(splitTags(QStringLiteral("lmn_mira, 1girl")).first(), QStringLiteral("lmn_mira"));
+    QCOMPARE(normalizeTag(QStringLiteral("hood \\(clothing\\)")), QStringLiteral("hood (clothing)"));
+    QCOMPARE(splitTags(QStringLiteral("1girl, solo,1girl , , Smile")), (QStringList{QStringLiteral("1girl"), QStringLiteral("solo"), QStringLiteral("smile")}));
+
+    const QJsonObject sheet{{QStringLiteral("name"), QStringLiteral("Mira")},
+                            {QStringLiteral("tags"), QStringLiteral("long red hair, yellow eyes, black hooded cloak, black choker")},
+                            {QStringLiteral("distinctive_features"), QJsonArray{QStringLiteral("mole under eye")}}};
+    // Hair, eyes and body features belong to the character; expressions and gazes do not.
+    for (const char *tag : {"red hair", "long hair", "very long hair", "yellow eyes", "ahoge", "twintails", "mole under eye", "pointy ears"})
+        QVERIFY2(isIdentityTag(QLatin1String(tag), sheet, false), tag);
+    for (const char *tag : {"closed eyes", "looking at viewer", "smile", "1girl", "solo", "from side", "full body", "white background",
+                            "hand on hip", "hair ornament", "holding sword"})
+        QVERIFY2(!isIdentityTag(QLatin1String(tag), sheet, true), tag);
+    // The outfit: the sheet's tags and the model's own words for the same clothes.
+    QVERIFY(isIdentityTag(QStringLiteral("black choker"), sheet, true));
+    QVERIFY(isIdentityTag(QStringLiteral("cloak"), sheet, true));
+    QVERIFY(isIdentityTag(QStringLiteral("black cloak"), sheet, true));
+    for (const char *tag : {"hood", "black hood", "hooded", "black hoodie", "hood up"})
+        QVERIFY2(isIdentityTag(QLatin1String(tag), sheet, true), tag);
+    for (const char *tag : {"black boots", "holding", "hand on hip", "blush"})
+        QVERIFY2(!isIdentityTag(QLatin1String(tag), sheet, true), tag);
+    QVERIFY(!isIdentityTag(QStringLiteral("black choker"), sheet, false));
+    QVERIFY(!isIdentityTag(QStringLiteral("cloak"), sheet, false));
+
+    const QStringList tags{QStringLiteral("1girl"), QStringLiteral("solo"), QStringLiteral("long red hair"), QStringLiteral("yellow eyes"),
+                           QStringLiteral("black cloak"), QStringLiteral("choker"), QStringLiteral("smile"), QStringLiteral("from side"),
+                           QStringLiteral("full body"), QStringLiteral("standing"), QStringLiteral("white background")};
+    QCOMPARE(buildCaption(tags, sheet, QStringLiteral("lmn_mira"), true),
+             QStringLiteral("lmn_mira, 1girl, solo, smile, from side, full body, standing, white background"));
+    QCOMPARE(buildCaption(tags, sheet, QStringLiteral("lmn_mira"), false),
+             QStringLiteral("lmn_mira, 1girl, solo, black cloak, choker, smile, from side, full body, standing, white background"));
+    QCOMPARE(suggestTrigger(QStringLiteral("Mira the Mage")), QStringLiteral("lmn_mira"));
+    QCOMPARE(suggestTrigger(QStringLiteral("Аня")), QStringLiteral("lmn_char"));
+    QVERIFY(imageTagsSchema().value(QStringLiteral("properties")).toObject().contains(QStringLiteral("tags")));
 }
 
 QTEST_MAIN(TestServices)

@@ -52,6 +52,9 @@ public:
     StructuredChatOperation *critiqueShot(const QImage &result, const QJsonObject &shot, const QJsonObject &character,
                                           const QList<QImage> &references);
     static QJsonObject critiqueSchema();
+    // Danbooru-style tags of a training image (view, framing, pose, expression, clothes, hair, eyes,
+    // background) for LoRA captions; the answer follows imageTagsSchema() (ai/LoraCaptions.h).
+    StructuredChatOperation *tagImage(const QImage &image);
     // Overall score 0-10 of a critique (the minimum of overall, identity and pose).
     static int critiqueScore(const QJsonObject &critique);
     static bool critiqueAccepts(const QJsonObject &critique, int threshold);

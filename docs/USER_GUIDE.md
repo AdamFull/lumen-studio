@@ -204,8 +204,17 @@ images of it:
    the references; images below the minimum are rejected. **Find near-duplicates** drops repeats.
 4. Look through the rest yourself: double-click keeps or rejects an image. Only images where the
    character looks exactly right should stay; mistakes in the set end up in the LoRA.
-5. **Export for training…** writes the kept images at training sizes, for example for an
-   external trainer.
+5. **Captions** tab → **Write captions**: the vision model tags each kept image. Tags for the
+   character's fixed look are left out (hair and eye colour, hairstyle and, with *Outfit is part of
+   the character*, the clothes). The LoRA then ties those to the **trigger word**, which goes first.
+   Pose, view, expression and background tags stay, so you can still change them in prompts.
+   * Turn *Outfit is part of the character* off to keep outfit tags, if you want to change the
+     character's clothes later.
+   * Click a caption to edit it. The common-tags line shows what the captions say most often;
+     *Remove tag from all…* drops a tag that belongs to the character (for example boots it
+     always wears).
+6. **Export for training…** writes the kept images at training sizes with their captions, for
+   example for an external trainer.
 
 Training the LoRA inside Lumen comes next (development plan, M13).
 

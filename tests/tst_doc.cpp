@@ -468,6 +468,9 @@ void TestDoc::loraDataset()
     ds.setKept(ids[0], true); // the user decides
     QCOMPARE(ds.keptCount(), 3);
     ds.setCaption(ids[1], QStringLiteral("lmn_mira, 1girl, standing"));
+    ds.setTags(ids[2], {QStringLiteral("1girl"), QStringLiteral("red hair")});
+    ds.setCaption(ids[2], QStringLiteral("lmn_mira, 1girl"), false);
+    ds.setSettings({QStringLiteral("lmn_mira"), false});
 
     // Reloading keeps everything.
     LoraDataset again(dir.filePath(QStringLiteral("dataset")));
@@ -476,6 +479,16 @@ void TestDoc::loraDataset()
     QCOMPARE(again.item(ids[1])->score, 8);
     QCOMPARE(again.item(ids[1])->caption, QStringLiteral("lmn_mira, 1girl, standing"));
     QCOMPARE(again.item(ids[0])->hash, ds.item(ids[0])->hash);
+    QVERIFY(again.item(ids[1])->captionEdited);
+    QVERIFY(!again.item(ids[2])->captionEdited);
+    QCOMPARE(again.item(ids[2])->tags, (QStringList{QStringLiteral("1girl"), QStringLiteral("red hair")}));
+    QCOMPARE(again.settings().trigger, QStringLiteral("lmn_mira"));
+    QVERIFY(!again.settings().outfitIsIdentity);
+    // One change applied to every caption.
+    again.updateCaptions([](const DatasetItem &i) { return i.caption.isEmpty() ? i.caption : i.caption + QStringLiteral(", solo"); });
+    QCOMPARE(again.item(ids[2])->caption, QStringLiteral("lmn_mira, 1girl, solo"));
+    QVERIFY(again.item(ids[2])->captionEdited);
+    QCOMPARE(again.item(ids[0])->caption, QString());
     QCOMPARE(again.item(ids[2])->shot.value(QStringLiteral("id")).toString(), QStringLiteral("ds3"));
 
     // Training export: kept images at bucket sizes with captions.
@@ -488,7 +501,10 @@ void TestDoc::loraDataset()
     QCOMPARE(QImage(train.filePath(QStringLiteral("001.png"))).size(), QSize(832, 1216));
     QFile caption(train.filePath(QStringLiteral("002.txt")));
     QVERIFY(caption.open(QIODevice::ReadOnly));
-    QCOMPARE(caption.readAll(), QByteArray("lmn_mira, 1girl, standing"));
+    QCOMPARE(caption.readAll(), QByteArray("lmn_mira, 1girl, standing, solo"));
+    QFile bare(train.filePath(QStringLiteral("001.txt"))); // no caption yet: the trigger word alone
+    QVERIFY(bare.open(QIODevice::ReadOnly));
+    QCOMPARE(bare.readAll(), QByteArray("lmn_mira"));
 
     QVERIFY(again.remove(ids[0]));
     QVERIFY(!QFile::exists(dir.filePath(QStringLiteral("dataset/images/")) + ids[0] + QStringLiteral(".png")));

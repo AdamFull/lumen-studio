@@ -4,7 +4,7 @@
 <context>
     <name>QObject</name>
     <message>
-        <location filename="../src/ai/Director.cpp" line="+61"/>
+        <location filename="../src/ai/Director.cpp" line="+62"/>
         <source>General illustrations</source>
         <translation>Allgemeine Illustrationen</translation>
     </message>
@@ -1420,11 +1420,17 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+2"/>
+        <location line="+35"/>
         <source>No language model is configured for &apos;Vision analysis&apos;.</source>
         <translation>Für die Bildanalyse ist kein Sprachmodell konfiguriert.</translation>
     </message>
     <message>
-        <location line="+102"/>
+        <location line="-2"/>
+        <source>The model assigned to &apos;Vision analysis&apos; (%1) cannot see images, so it cannot write captions.</source>
+        <translation>Das Modell für „Bildanalyse“ (%1) kann keine Bilder sehen und daher keine Beschreibungen schreiben.</translation>
+    </message>
+    <message>
+        <location line="+104"/>
         <source>The model assigned to &apos;Vision analysis&apos; (%1) cannot see images. Choose a vision-capable model in Settings → Providers → Roles.</source>
         <translation>Das der &apos;Bildanalyse&apos; zugewiesene Modell (%1) kann keine Bilder sehen. Wählen Sie unter Einstellungen → Anbieter → Rollen ein bildfähiges Modell.</translation>
     </message>
@@ -7256,7 +7262,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::LoraDatasetDialog</name>
     <message>
-        <location filename="../src/ui/dialogs/LoraDatasetDialog.cpp" line="+54"/>
+        <location filename="../src/ui/dialogs/LoraDatasetDialog.cpp" line="+62"/>
         <source>LoRA training set — %1</source>
         <translation>LoRA-Trainingsset — %1</translation>
     </message>
@@ -7292,12 +7298,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+180"/>
+        <location line="+271"/>
         <source>Score with Critic</source>
         <translation>Mit Kritiker bewerten</translation>
     </message>
     <message>
-        <location line="-179"/>
+        <location line="-270"/>
         <source>A vision model compares each image with the character&apos;s references</source>
         <translation>Ein Bildverständnismodell vergleicht jedes Bild mit den Referenzen des Charakters</translation>
     </message>
@@ -7312,7 +7318,88 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Beinahe-Duplikate finden</translation>
     </message>
     <message>
-        <location line="+31"/>
+        <location line="+29"/>
+        <source>Images</source>
+        <translation>Bilder</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Each image gets tags for what changes (view, framing, pose, expression, background). Tags of the character&apos;s fixed look are left out, so the LoRA ties them to the trigger word.</source>
+        <translation>Jedes Bild erhält Tags für das, was sich ändert (Ansicht, Bildausschnitt, Pose, Ausdruck, Hintergrund). Tags für das feste Aussehen des Charakters werden weggelassen, damit die LoRA sie an das Auslösewort bindet.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Trigger word</source>
+        <translation>Auslösewort</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>A made-up word the model does not know yet; prompts use it to call up the character</source>
+        <translation>Ein erfundenes Wort, das das Modell noch nicht kennt; Prompts rufen damit den Charakter auf</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Outfit is part of the character</source>
+        <translation>Kleidung gehört zum Charakter</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>On: the outfit always comes with the character. Off: outfit tags stay in the captions, so prompts can change the clothes.</source>
+        <translation>An: Die Kleidung gehört immer zum Charakter. Aus: Kleidungs-Tags bleiben in den Beschreibungen, sodass Prompts die Kleidung ändern können.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <location line="+270"/>
+        <source>Write captions</source>
+        <translation>Beschreibungen schreiben</translation>
+    </message>
+    <message>
+        <location line="-269"/>
+        <source>The vision model tags every kept image that has no tags yet</source>
+        <translation>Das Bildverständnismodell vertaggt jedes behaltene Bild, das noch keine Tags hat</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Image</source>
+        <translation>Bild</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Caption</source>
+        <translation>Beschreibung</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Find and replace…</source>
+        <translation>Suchen und ersetzen…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Add tag to all…</source>
+        <translation>Tag zu allen hinzufügen…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Remove tag from all…</source>
+        <translation>Tag aus allen entfernen…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Rebuild from tags</source>
+        <translation>Aus Tags neu erstellen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Writes the captions again from the tags; hand-edited captions only get the new trigger word</source>
+        <translation>Schreibt die Beschreibungen erneut aus den Tags; von Hand bearbeitete Beschreibungen erhalten nur das neue Auslösewort</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Captions</source>
+        <translation>Beschreibungen</translation>
+    </message>
+    <message>
+        <location line="+28"/>
         <source>Keep</source>
         <translation>Behalten</translation>
     </message>
@@ -7323,12 +7410,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+196"/>
+        <location line="+405"/>
         <source>Remove</source>
         <translation>Entfernen</translation>
     </message>
     <message>
-        <location line="-192"/>
+        <location line="-401"/>
         <source>Export for training…</source>
         <translation>Für das Training exportieren…</translation>
     </message>
@@ -7369,7 +7456,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Keine Beinahe-Duplikate.</translation>
     </message>
     <message>
-        <location line="+52"/>
+        <location line="+68"/>
         <source>%1/10</source>
         <translation>%1/10</translation>
     </message>
@@ -7420,7 +7507,89 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Bewertung stoppen</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+30"/>
+        <source>Not tagged yet</source>
+        <translation>Noch nicht vertaggt</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>All tags: %1</source>
+        <translation>Alle Tags: %1</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+18"/>
+        <source>%n image(s) without a caption.</source>
+        <translation>
+            <numerusform>%n Bild ohne Beschreibung.</numerusform>
+            <numerusform>%n Bilder ohne Beschreibung.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Most common tags: %1</source>
+        <translation>Häufigste Tags: %1</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+2"/>
+        <source>Writing captions, %n left…</source>
+        <translation>
+            <numerusform>Beschreibungen werden geschrieben, %n übrig…</numerusform>
+            <numerusform>Beschreibungen werden geschrieben, %n übrig…</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Stop</source>
+        <translation>Stopp</translation>
+    </message>
+    <message>
+        <location line="+47"/>
+        <source>Every kept image is tagged; the captions were rebuilt.</source>
+        <translation>Jedes behaltene Bild ist vertaggt; die Beschreibungen wurden neu erstellt.</translation>
+    </message>
+    <message>
+        <location line="+40"/>
+        <source>Writing captions failed: %1</source>
+        <translation>Das Schreiben der Beschreibungen ist fehlgeschlagen: %1</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <location line="+3"/>
+        <source>Find and replace</source>
+        <translation>Suchen und ersetzen</translation>
+    </message>
+    <message>
+        <location line="-3"/>
+        <source>Find tag:</source>
+        <translation>Tag suchen:</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Replace &quot;%1&quot; with (empty removes it):</source>
+        <translation>„%1“ ersetzen durch (leer entfernt es):</translation>
+    </message>
+    <message>
+        <location line="+20"/>
+        <source>Add tag</source>
+        <translation>Tag hinzufügen</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Tag to add to every caption:</source>
+        <translation>Tag, das jeder Beschreibung hinzugefügt wird:</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Remove tag</source>
+        <translation>Tag entfernen</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Tag to remove from every caption:</source>
+        <translation>Tag, das aus jeder Beschreibung entfernt wird:</translation>
+    </message>
+    <message>
+        <location line="+16"/>
         <source>No images yet.&lt;br&gt;&lt;br&gt;1. &lt;b&gt;Plan training shots&lt;/b&gt; fills the Create page with 24 shots.&lt;br&gt;2. Generate them there (two variants per shot work well).&lt;br&gt;3. &lt;b&gt;Add session results&lt;/b&gt;.&lt;br&gt;4. &lt;b&gt;Score with Critic&lt;/b&gt;, then check the rest yourself.</source>
         <translation>Noch keine Bilder.&lt;br&gt;&lt;br&gt;1. &lt;b&gt;Trainingsaufnahmen planen&lt;/b&gt; füllt die Seite Erstellen mit 24 Aufnahmen.&lt;br&gt;2. Erzeugen Sie sie dort (zwei Varianten pro Aufnahme funktionieren gut).&lt;br&gt;3. &lt;b&gt;Ergebnisse der Sitzung hinzufügen&lt;/b&gt;.&lt;br&gt;4. &lt;b&gt;Mit Kritiker bewerten&lt;/b&gt;, dann den Rest selbst prüfen.</translation>
     </message>

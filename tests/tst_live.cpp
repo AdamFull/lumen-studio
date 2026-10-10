@@ -8,6 +8,7 @@
 #include "ai/Agent.h"
 #include "ai/Director.h"
 #include "ai/Gate.h"
+#include "ai/LoraCaptions.h"
 #include "ai/PromptStyle.h"
 #include "ai/ProviderCatalog.h"
 #include "ai/ProviderRegistry.h"
@@ -23,6 +24,7 @@
 #include "runtime/ModelHub.h"
 #include "runtime/ModelLibrary.h"
 #include "runtime/RuntimeStore.h"
+#include "runtime/ServerProfile.h"
 #include "runtime/Supervisor.h"
 #include "ui/Studio.h"
 #include "ui/assistant/AssistantPanel.h"
@@ -33,6 +35,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QPainter>
+#include <QRegularExpression>
 #include <QSignalSpy>
 #include <QSpinBox>
 #include <QTemporaryDir>
@@ -86,6 +89,7 @@ private slots:
     void hubDownload();
     void managedSdLora();
     void managedDatasetShots();
+    void managedCaptions();
 
 private:
     net::HttpClient m_http;
@@ -1098,6 +1102,76 @@ void TestLive::managedDatasetShots()
     }
     p.end();
     save(sheetImage, QStringLiteral("dataset_contact_sheet.png"));
+    servers.stop(profile.id);
+    QTRY_COMPARE_WITH_TIMEOUT(servers.state(profile.id), runtime::ServerState::Stopped, 30000);
+}
+
+// LUMEN_LIVE_CAPTION_DIR=<folder with dataset_ds*.png> with LUMEN_LIVE_LLAMA_SERVER / _MODEL / _MMPROJ:
+// the vision model tags each training image through a Lumen-run llama-server, and the captions are
+// built with the character's look pruned (LUMEN_LIVE_DATASET_TAGS = the character's tags).
+void TestLive::managedCaptions()
+{
+    const QString folder = qEnvironmentVariable("LUMEN_LIVE_CAPTION_DIR");
+    const QString exe = qEnvironmentVariable("LUMEN_LIVE_LLAMA_SERVER");
+    const QString model = qEnvironmentVariable("LUMEN_LIVE_LLAMA_MODEL");
+    const QString mmproj = qEnvironmentVariable("LUMEN_LIVE_LLAMA_MMPROJ");
+    if (folder.isEmpty() || exe.isEmpty() || model.isEmpty() || mmproj.isEmpty())
+        QSKIP("LUMEN_LIVE_CAPTION_DIR and LUMEN_LIVE_LLAMA_SERVER / _MODEL / _MMPROJ are needed");
+    QTemporaryDir root;
+    JobQueue jobs;
+    runtime::RuntimeStore store(&m_http, &jobs);
+    store.setRoot(root.filePath(QStringLiteral("runtimes")));
+    QFuture<runtime::InstalledRuntime> adopted = store.adopt(exe);
+    QVERIFY(waitFor(adopted, 30000));
+    runtime::ServerSupervisor servers(&store, &m_http);
+    servers.setConfigPath(root.filePath(QStringLiteral("servers.json")));
+    servers.setLogDir(root.filePath(QStringLiteral("logs")));
+    runtime::ServerProfile profile = servers.createProfile(adopted.result().id, QStringLiteral("Live tagger"));
+    profile.options = runtime::presetOptions(QStringLiteral("llama.cpp"), runtime::VramTier::Small);
+    profile.options.insert(QStringLiteral("model"), model);
+    profile.options.insert(QStringLiteral("mmproj"), mmproj);
+    profile.startupTimeoutSec = 300;
+    servers.addProfile(profile);
+
+    std::unique_ptr<ProviderRegistry> registry(new ProviderRegistry(&m_http));
+    registerBuiltInProviders(*registry);
+    for (Provider *p : registry->providers())
+        registry->removeProvider(p->instanceId());
+    Provider *llm = registry->addProvider(QStringLiteral("llamacpp"), QStringLiteral("Tagger"),
+                                          {{QStringLiteral("url"), runtime::providerUrl(QStringLiteral("llama.cpp"), profile.port)},
+                                           {QStringLiteral("timeout_s"), 600}});
+    QVERIFY(llm);
+    llm->setGate(std::make_shared<SupervisorGate>(&servers, profile.id));
+    registry->setRole(LlmRole::Vision, {llm->instanceId(), runtime::llamaModelName(model)});
+    Director director(registry.get());
+
+    const QJsonObject sheet{{QStringLiteral("gender_presentation"), QStringLiteral("female")},
+                            {QStringLiteral("tags"), qEnvironmentVariable("LUMEN_LIVE_DATASET_TAGS",
+                                                                          QStringLiteral("long red hair, yellow eyes, black hooded cloak, black choker"))}};
+    const QStringList files = QDir(folder).entryList({QStringLiteral("dataset_ds*.png")}, QDir::Files, QDir::Name).filter(QRegularExpression(QStringLiteral("ds\\d+\\.png$")));
+    QVERIFY(!files.isEmpty());
+    int pruned = 0;
+    QElapsedTimer total;
+    total.start();
+    for (const QString &f : files) {
+        QElapsedTimer t;
+        t.start();
+        StructuredChatOperation *op = director.tagImage(QImage(QDir(folder).filePath(f)));
+        op->setAutoDelete(false);
+        QTRY_VERIFY_WITH_TIMEOUT(op->isFinished(), 600000);
+        QVERIFY2(op->state() == Operation::State::Succeeded, qPrintable(op->errorString()));
+        QStringList tags;
+        for (const QJsonValue &v : op->result().value(QStringLiteral("tags")).toArray())
+            tags << modelTag(v.toString());
+        const QString caption = buildCaption(tags, sheet, QStringLiteral("lmn_live"), true);
+        pruned += int(tags.size()) - int(splitTags(caption).size()) + 1;
+        qInfo().noquote() << f << t.elapsed() << "ms\n  tags:   " << tags.join(QStringLiteral(", ")) << "\n  caption:" << caption;
+        QVERIFY(caption.startsWith(QStringLiteral("lmn_live, ")));
+        QVERIFY(!caption.contains(QStringLiteral("red hair")));
+        QVERIFY(!caption.contains(QStringLiteral("yellow eyes")));
+        delete op;
+    }
+    qInfo() << files.size() << "images tagged in" << total.elapsed() / 1000 << "s;" << pruned << "identity tags pruned";
     servers.stop(profile.id);
     QTRY_COMPARE_WITH_TIMEOUT(servers.state(profile.id), runtime::ServerState::Stopped, 30000);
 }

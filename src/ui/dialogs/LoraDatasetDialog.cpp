@@ -1,6 +1,7 @@
 #include "ui/dialogs/LoraDatasetDialog.h"
 
 #include "ai/Director.h"
+#include "ai/LoraCaptions.h"
 #include "ai/StructuredChat.h"
 #include "core/Async.h"
 #include "core/Error.h"
@@ -12,7 +13,12 @@
 #include "ui/director/DirectorSession.h"
 #include "ui/widgets/Controls.h"
 
+#include <QCheckBox>
 #include <QFileDialog>
+#include <QFormLayout>
+#include <QHeaderView>
+#include <QInputDialog>
+#include <QLineEdit>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QListWidget>
@@ -21,6 +27,8 @@
 #include <QPushButton>
 #include <QSpinBox>
 #include <QSplitter>
+#include <QTabWidget>
+#include <QTableWidget>
 #include <QVBoxLayout>
 
 namespace lumen::ui {
@@ -84,7 +92,8 @@ LoraDatasetDialog::LoraDatasetDialog(Studio *studio, const QString &characterId,
     bar->addStretch();
     v->addLayout(bar);
 
-    auto *split = new QSplitter(Qt::Horizontal, this);
+    m_tabs = new QTabWidget(this);
+    auto *split = new QSplitter(Qt::Horizontal, m_tabs);
     m_grid = new QListWidget(split);
     m_grid->setViewMode(QListView::IconMode);
     m_grid->setIconSize(QSize(kThumb, kThumb));
@@ -101,7 +110,81 @@ LoraDatasetDialog::LoraDatasetDialog(Studio *studio, const QString &characterId,
     m_details->setContentsMargins(12, 0, 0, 0);
     split->setStretchFactor(0, 4);
     split->setStretchFactor(1, 1);
-    v->addWidget(split, 1);
+    m_tabs->addTab(split, tr("Images"));
+
+    // Captions.
+    auto *captionPage = new QWidget(m_tabs);
+    auto *cv = new QVBoxLayout(captionPage);
+    cv->addWidget(mutedLabel(tr("Each image gets tags for what changes (view, framing, pose, expression, background). Tags of the "
+                                "character's fixed look are left out, so the LoRA ties them to the trigger word."),
+                             captionPage));
+    auto *crow = new QHBoxLayout;
+    crow->addWidget(new QLabel(tr("Trigger word"), captionPage));
+    m_trigger = new QLineEdit(captionPage);
+    m_trigger->setMaximumWidth(220);
+    m_trigger->setToolTip(tr("A made-up word the model does not know yet; prompts use it to call up the character"));
+    crow->addWidget(m_trigger);
+    m_outfit = new QCheckBox(tr("Outfit is part of the character"), captionPage);
+    m_outfit->setToolTip(tr("On: the outfit always comes with the character. Off: outfit tags stay in the captions, so prompts "
+                            "can change the clothes."));
+    crow->addWidget(m_outfit);
+    crow->addStretch();
+    m_captionButton = new QPushButton(Icons::get(QStringLiteral("text")), tr("Write captions"), captionPage);
+    m_captionButton->setToolTip(tr("The vision model tags every kept image that has no tags yet"));
+    Theme::setRole(m_captionButton, QStringLiteral("primary"));
+    crow->addWidget(m_captionButton);
+    cv->addLayout(crow);
+    m_captions = new QTableWidget(0, 2, captionPage);
+    m_captions->setHorizontalHeaderLabels({tr("Image"), tr("Caption")});
+    m_captions->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Fixed);
+    m_captions->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+    m_captions->setColumnWidth(0, 92);
+    m_captions->verticalHeader()->setVisible(false);
+    m_captions->verticalHeader()->setDefaultSectionSize(92);
+    m_captions->setIconSize(QSize(84, 84));
+    m_captions->setWordWrap(true);
+    cv->addWidget(m_captions, 1);
+    m_tagSummary = mutedLabel(QString(), captionPage);
+    m_tagSummary->setWordWrap(true);
+    cv->addWidget(m_tagSummary);
+    auto *edits = new QHBoxLayout;
+    auto *replace = new QPushButton(tr("Find and replace…"), captionPage);
+    auto *addTag = new QPushButton(Icons::get(QStringLiteral("plus")), tr("Add tag to all…"), captionPage);
+    auto *removeTag = new QPushButton(Icons::get(QStringLiteral("minus")), tr("Remove tag from all…"), captionPage);
+    auto *rebuild = new QPushButton(Icons::get(QStringLiteral("refresh")), tr("Rebuild from tags"), captionPage);
+    rebuild->setToolTip(tr("Writes the captions again from the tags; hand-edited captions only get the new trigger word"));
+    edits->addWidget(replace);
+    edits->addWidget(addTag);
+    edits->addWidget(removeTag);
+    edits->addStretch();
+    edits->addWidget(rebuild);
+    cv->addLayout(edits);
+    m_tabs->addTab(captionPage, tr("Captions"));
+    v->addWidget(m_tabs, 1);
+
+    connect(m_captionButton, &QPushButton::clicked, this, [this] {
+        if (isCaptioning()) {
+            m_captionQueue.clear();
+            if (m_tagging)
+                m_tagging->cancel();
+            return;
+        }
+        captionAll();
+    });
+    connect(m_trigger, &QLineEdit::editingFinished, this, &LoraDatasetDialog::applySettings);
+    connect(m_outfit, &QCheckBox::toggled, this, &LoraDatasetDialog::applySettings);
+    connect(rebuild, &QPushButton::clicked, this, [this] { rebuildCaptions(); });
+    connect(replace, &QPushButton::clicked, this, &LoraDatasetDialog::askReplace);
+    connect(addTag, &QPushButton::clicked, this, &LoraDatasetDialog::askAddTag);
+    connect(removeTag, &QPushButton::clicked, this, &LoraDatasetDialog::askRemoveTag);
+    connect(m_captions, &QTableWidget::itemChanged, this, [this](QTableWidgetItem *item) {
+        if (m_fillingCaptions || item->column() != 1)
+            return;
+        const QString caption = ai::joinTags(ai::splitTags(item->text()));
+        const QString id = item->data(Qt::UserRole).toString();
+        // Later: saving rebuilds the table, which must not happen inside its own signal.
+        QMetaObject::invokeMethod(this, [this, id, caption] { m_dataset->setCaption(id, caption, true); }, Qt::QueuedConnection);
+    });
 
     auto *selection = new QHBoxLayout;
     auto *keep = new QPushButton(Icons::get(QStringLiteral("check")), tr("Keep"), this);
@@ -158,13 +241,29 @@ LoraDatasetDialog::LoraDatasetDialog(Studio *studio, const QString &characterId,
     });
     connect(m_dataset, &doc::LoraDataset::changed, this, &LoraDatasetDialog::reload);
     m_dataset->load();
+    // A trigger word from the character's name the first time.
+    doc::DatasetSettings settings = m_dataset->settings();
+    if (settings.trigger.isEmpty()) {
+        settings.trigger = ai::suggestTrigger(entry ? entry->name : QString());
+        m_dataset->setSettings(settings);
+    }
+    {
+        QSignalBlocker b1(m_trigger);
+        QSignalBlocker b2(m_outfit);
+        m_trigger->setText(settings.trigger);
+        m_outfit->setChecked(settings.outfitIsIdentity);
+    }
+    reloadCaptions();
 }
 
 LoraDatasetDialog::~LoraDatasetDialog()
 {
     m_scoreQueue.clear();
+    m_captionQueue.clear();
     if (m_critique)
         m_critique->cancel();
+    if (m_tagging)
+        m_tagging->cancel();
 }
 
 QPixmap LoraDatasetDialog::thumbnail(const QString &id)
@@ -248,6 +347,199 @@ void LoraDatasetDialog::reload()
     m_status->setText(text);
     m_score->setText(isScoring() ? tr("Stop scoring") : tr("Score with Critic"));
     showCurrent();
+    reloadCaptions();
+}
+
+void LoraDatasetDialog::reloadCaptions()
+{
+    if (!m_captions)
+        return;
+    m_fillingCaptions = true;
+    const QList<doc::DatasetItem> items = m_dataset->items();
+    QList<doc::DatasetItem> kept;
+    for (const doc::DatasetItem &i : items) {
+        if (i.kept)
+            kept << i;
+    }
+    m_captions->setRowCount(int(kept.size()));
+    QHash<QString, int> counts;
+    int missing = 0;
+    for (int row = 0; row < kept.size(); ++row) {
+        const doc::DatasetItem &i = kept[row];
+        auto *image = new QTableWidgetItem;
+        image->setFlags(Qt::ItemIsEnabled);
+        const QPixmap pm = thumbnail(i.id);
+        if (!pm.isNull())
+            image->setIcon(QIcon(pm));
+        image->setToolTip(i.shot.value(QStringLiteral("title")).toString());
+        m_captions->setItem(row, 0, image);
+        auto *caption = new QTableWidgetItem(i.caption);
+        caption->setData(Qt::UserRole, i.id);
+        caption->setToolTip(i.tags.isEmpty() ? tr("Not tagged yet") : tr("All tags: %1").arg(i.tags.join(QStringLiteral(", "))));
+        if (i.caption.isEmpty())
+            ++missing;
+        m_captions->setItem(row, 1, caption);
+        for (const QString &t : ai::splitTags(i.caption))
+            counts[t] += 1;
+    }
+    m_fillingCaptions = false;
+    // The most common tags show what the captions say overall.
+    QList<QPair<int, QString>> common;
+    for (auto it = counts.cbegin(); it != counts.cend(); ++it) {
+        if (it.key() != m_dataset->settings().trigger)
+            common.append({it.value(), it.key()});
+    }
+    std::sort(common.begin(), common.end(), [](const auto &a, const auto &b) { return a.first > b.first || (a.first == b.first && a.second < b.second); });
+    QStringList top;
+    for (int k = 0; k < std::min<int>(14, int(common.size())); ++k)
+        top << QStringLiteral("%1 (%2)").arg(common[k].second).arg(common[k].first);
+    QString summary = missing > 0 ? tr("%n image(s) without a caption.", nullptr, missing) + QLatin1Char(' ') : QString();
+    if (!top.isEmpty())
+        summary += tr("Most common tags: %1").arg(top.join(QStringLiteral(", ")));
+    if (isCaptioning())
+        summary = tr("Writing captions, %n left…", nullptr, int(m_captionQueue.size()) + (m_captioning ? 1 : 0)) + QLatin1Char(' ') + summary;
+    m_tagSummary->setText(summary);
+    m_captionButton->setText(isCaptioning() ? tr("Stop") : tr("Write captions"));
+}
+
+void LoraDatasetDialog::applySettings()
+{
+    doc::DatasetSettings s = m_dataset->settings();
+    const QString previous = s.trigger;
+    const QString trigger = ai::normalizeTag(m_trigger->text()).replace(QLatin1Char(' '), QLatin1Char('_'));
+    if (trigger.isEmpty()) {
+        m_trigger->setText(previous);
+        return;
+    }
+    if (trigger == previous && m_outfit->isChecked() == s.outfitIsIdentity)
+        return;
+    s.trigger = trigger;
+    s.outfitIsIdentity = m_outfit->isChecked();
+    m_trigger->setText(trigger);
+    m_dataset->setSettings(s);
+    rebuildCaptions(previous);
+}
+
+void LoraDatasetDialog::rebuildCaptions(const QString &previousTrigger)
+{
+    const doc::DatasetSettings s = m_dataset->settings();
+    for (const doc::DatasetItem &i : m_dataset->items()) {
+        if (i.captionEdited) {
+            QStringList tags = ai::splitTags(i.caption);
+            if (!previousTrigger.isEmpty())
+                tags.removeAll(ai::normalizeTag(previousTrigger));
+            tags.removeAll(s.trigger);
+            tags.prepend(s.trigger);
+            m_dataset->setCaption(i.id, ai::joinTags(tags), true);
+        } else if (!i.tags.isEmpty()) {
+            m_dataset->setCaption(i.id, ai::buildCaption(i.tags, m_sheet, s.trigger, s.outfitIsIdentity), false);
+        }
+    }
+}
+
+void LoraDatasetDialog::captionAll()
+{
+    m_captionQueue.clear();
+    for (const doc::DatasetItem &i : m_dataset->items()) {
+        if (i.kept && i.tags.isEmpty())
+            m_captionQueue << i.id;
+    }
+    if (m_captionQueue.isEmpty()) {
+        rebuildCaptions();
+        m_studio->notify(tr("Every kept image is tagged; the captions were rebuilt."));
+        return;
+    }
+    captionNext();
+}
+
+void LoraDatasetDialog::captionNext()
+{
+    if (m_captioning)
+        return;
+    if (m_captionQueue.isEmpty()) {
+        reloadCaptions();
+        return;
+    }
+    const QString id = m_captionQueue.takeFirst();
+    if (!m_dataset->item(id)) {
+        captionNext();
+        return;
+    }
+    m_captioning = true;
+    reloadCaptions();
+    ai::StructuredChatOperation *op = m_studio->director()->tagImage(QImage(m_dataset->imagePath(id)));
+    m_tagging = op;
+    QPointer<LoraDatasetDialog> self(this);
+    connect(op, &ai::Operation::finished, this, [self, op, id] {
+        if (!self)
+            return;
+        self->m_captioning = false;
+        if (op->state() == ai::Operation::State::Succeeded) {
+            QStringList tags;
+            for (const QJsonValue &v : op->result().value(QStringLiteral("tags")).toArray()) {
+                const QString t = ai::modelTag(v.toString());
+                if (!t.isEmpty() && !tags.contains(t))
+                    tags << t;
+            }
+            const doc::DatasetSettings s = self->m_dataset->settings();
+            self->m_dataset->setTags(id, tags);
+            self->m_dataset->setCaption(id, ai::buildCaption(tags, self->m_sheet, s.trigger, s.outfitIsIdentity), false);
+        } else if (op->state() == ai::Operation::State::Failed) {
+            self->m_captionQueue.clear();
+            self->m_studio->notify(tr("Writing captions failed: %1").arg(op->errorString()), QStringLiteral("error"));
+        }
+        self->captionNext();
+    });
+}
+
+void LoraDatasetDialog::askReplace()
+{
+    bool ok = false;
+    const QString from = ai::normalizeTag(QInputDialog::getText(this, tr("Find and replace"), tr("Find tag:"), QLineEdit::Normal, QString(), &ok));
+    if (!ok || from.isEmpty())
+        return;
+    const QString to = ai::normalizeTag(QInputDialog::getText(this, tr("Find and replace"), tr("Replace \"%1\" with (empty removes it):").arg(from),
+                                                              QLineEdit::Normal, QString(), &ok));
+    if (!ok)
+        return;
+    m_dataset->updateCaptions([from, to](const doc::DatasetItem &i) {
+        QStringList tags = ai::splitTags(i.caption);
+        const qsizetype at = tags.indexOf(from);
+        if (at < 0)
+            return i.caption;
+        if (to.isEmpty() || tags.contains(to))
+            tags.removeAt(at);
+        else
+            tags[at] = to;
+        return ai::joinTags(tags);
+    });
+}
+
+void LoraDatasetDialog::askAddTag()
+{
+    bool ok = false;
+    const QString tag = ai::normalizeTag(QInputDialog::getText(this, tr("Add tag"), tr("Tag to add to every caption:"), QLineEdit::Normal, QString(), &ok));
+    if (!ok || tag.isEmpty())
+        return;
+    m_dataset->updateCaptions([tag](const doc::DatasetItem &i) {
+        QStringList tags = ai::splitTags(i.caption);
+        if (!tags.contains(tag))
+            tags << tag;
+        return ai::joinTags(tags);
+    });
+}
+
+void LoraDatasetDialog::askRemoveTag()
+{
+    bool ok = false;
+    const QString tag = ai::normalizeTag(QInputDialog::getText(this, tr("Remove tag"), tr("Tag to remove from every caption:"), QLineEdit::Normal, QString(), &ok));
+    if (!ok || tag.isEmpty())
+        return;
+    m_dataset->updateCaptions([tag](const doc::DatasetItem &i) {
+        QStringList tags = ai::splitTags(i.caption);
+        tags.removeAll(tag);
+        return ai::joinTags(tags);
+    });
 }
 
 void LoraDatasetDialog::showCurrent()
