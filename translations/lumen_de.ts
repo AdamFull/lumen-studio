@@ -1038,7 +1038,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Die Regie ist nicht verfügbar.</translation>
     </message>
     <message>
-        <location filename="../src/ui/Studio.cpp" line="+80"/>
+        <location filename="../src/ui/Studio.cpp" line="+81"/>
         <location line="+17"/>
         <source>Lumen is shutting down.</source>
         <translation>Lumen wird beendet.</translation>
@@ -2953,13 +2953,13 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::runtime::FileDownload</name>
     <message>
-        <location filename="../src/runtime/Download.cpp" line="+63"/>
+        <location filename="../src/runtime/Download.cpp" line="+74"/>
         <source>No network access.</source>
         <translation>Kein Netzwerkzugriff.</translation>
     </message>
     <message>
         <location line="+75"/>
-        <location line="+46"/>
+        <location line="+52"/>
         <source>Cannot write %1: %2</source>
         <translation>%1 kann nicht geschrieben werden: %2</translation>
     </message>
@@ -2969,7 +2969,22 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Der Download ist größer als erwartet.</translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location line="+27"/>
+        <source>The server redirected the download to an invalid address.</source>
+        <translation>Der Server hat den Download an eine ungültige Adresse umgeleitet.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>The server redirected the download to an insecure address.</source>
+        <translation>Der Server hat den Download an eine unsichere Adresse umgeleitet.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Too many redirects while downloading %1.</source>
+        <translation>Zu viele Umleitungen beim Herunterladen von %1.</translation>
+    </message>
+    <message>
+        <location line="+26"/>
         <source>HTTP %1 while downloading %2</source>
         <translation>HTTP %1 beim Herunterladen von %2</translation>
     </message>
@@ -3103,14 +3118,115 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
 </context>
 <context>
+    <name>lumen::runtime::ModelHub</name>
+    <message>
+        <location filename="../src/runtime/ModelHub.cpp" line="+67"/>
+        <source>not found</source>
+        <translation>nicht gefunden</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1: %2</source>
+        <translation>%1: %2</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Unexpected answer from %1.</source>
+        <translation>Unerwartete Antwort von %1.</translation>
+    </message>
+    <message>
+        <location line="+286"/>
+        <source>%1 is a pickle file, which can run code when loaded. Lumen only downloads it when you allow it.</source>
+        <translation>%1 ist eine Pickle-Datei, die beim Laden Code ausführen kann. Lumen lädt sie nur herunter, wenn Sie es erlauben.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Invalid download address.</source>
+        <translation>Ungültige Download-Adresse.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Not enough disk space: %1 needed on %2, %3 free.</source>
+        <translation>Nicht genug Speicherplatz: %1 benötigt auf %2, %3 frei.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Checking the existing %1…</source>
+        <translation>Vorhandene Datei %1 wird geprüft…</translation>
+    </message>
+    <message>
+        <location line="+34"/>
+        <source>Downloading %1…</source>
+        <translation>%1 wird heruntergeladen…</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Downloading %1 — %2 of %3</source>
+        <translation>%1 wird heruntergeladen — %2 von %3</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Downloading %1 — %2</source>
+        <translation>%1 wird heruntergeladen — %2</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <location line="+27"/>
+        <location line="+338"/>
+        <location line="+45"/>
+        <source>Shutting down.</source>
+        <translation>Wird beendet.</translation>
+    </message>
+    <message>
+        <location line="-396"/>
+        <source>Civitai requires an API key for this download. Add one under Settings → Models → Download.</source>
+        <translation>Civitai verlangt für diesen Download einen API-Schlüssel. Fügen Sie einen unter Einstellungen → Modelle → Herunterladen hinzu.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Civitai refused the download (HTTP %1). Check your API key, or whether the model needs early access.</source>
+        <translation>Civitai hat den Download abgelehnt (HTTP %1). Prüfen Sie Ihren API-Schlüssel oder ob das Modell Early Access erfordert.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>This repository is gated: accept its terms on huggingface.co and add an access token under Settings → Models → Download.</source>
+        <translation>Dieses Repository ist zugangsbeschränkt: Akzeptieren Sie die Bedingungen auf huggingface.co und fügen Sie unter Einstellungen → Modelle → Herunterladen ein Zugriffstoken hinzu.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Hugging Face refused the download (HTTP %1). Accept the repository&apos;s terms on huggingface.co with the account of your token.</source>
+        <translation>Hugging Face hat den Download abgelehnt (HTTP %1). Akzeptieren Sie die Bedingungen des Repositorys auf huggingface.co mit dem Konto Ihres Tokens.</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Checking %1…</source>
+        <translation>%1 wird geprüft…</translation>
+    </message>
+    <message>
+        <location line="+321"/>
+        <source>Invalid repository name: %1</source>
+        <translation>Ungültiger Repository-Name: %1</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Hugging Face did not report the current version of %1.</source>
+        <translation>Hugging Face hat die aktuelle Version von %1 nicht gemeldet.</translation>
+    </message>
+    <message>
+        <location line="+45"/>
+        <source>Download %1</source>
+        <translation>%1 herunterladen</translation>
+    </message>
+</context>
+<context>
     <name>lumen::runtime::ModelLibrary</name>
     <message>
-        <location filename="../src/runtime/ModelLibrary.cpp" line="+173"/>
+        <location filename="../src/runtime/ModelLibrary.cpp" line="+210"/>
         <source>Lumen models</source>
         <translation>Lumen-Modelle</translation>
     </message>
     <message>
-        <location line="+198"/>
+        <location line="+227"/>
         <source>Cannot read %1.</source>
         <translation>%1 kann nicht gelesen werden.</translation>
     </message>
@@ -5805,9 +5921,68 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
 </context>
 <context>
+    <name>lumen::ui::HubAccountsDialog</name>
+    <message>
+        <location filename="../src/ui/dialogs/ModelHubDialog.cpp" line="+637"/>
+        <source>Model hub accounts</source>
+        <translation>Konten für Modell-Hubs</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Saved — type a new one to replace it</source>
+        <translation>Gespeichert — zum Ersetzen einen neuen eingeben</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <location line="+9"/>
+        <source>Not set</source>
+        <translation>Nicht festgelegt</translation>
+    </message>
+    <message>
+        <location line="-5"/>
+        <source>Forget the saved token</source>
+        <translation>Gespeichertes Token vergessen</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Hugging Face token</source>
+        <translation>Hugging-Face-Token</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>For gated models (for example FLUX.1 dev): accept the model&apos;s terms on its page, then create a read-only token at &lt;a href=&apos;https://huggingface.co/settings/tokens&apos;&gt;huggingface.co/settings/tokens&lt;/a&gt;.</source>
+        <translation>Für zugangsbeschränkte Modelle (zum Beispiel FLUX.1 dev): Akzeptieren Sie die Bedingungen auf der Seite des Modells und erstellen Sie dann ein Lese-Token unter &lt;a href=&apos;https://huggingface.co/settings/tokens&apos;&gt;huggingface.co/settings/tokens&lt;/a&gt;.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Civitai API key</source>
+        <translation>Civitai-API-Schlüssel</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Civitai asks for one for most downloads: create it under &lt;a href=&apos;https://civitai.com/user/account&apos;&gt;civitai.com/user/account&lt;/a&gt; → API Keys.</source>
+        <translation>Civitai verlangt ihn für die meisten Downloads: Erstellen Sie ihn unter &lt;a href=&apos;https://civitai.com/user/account&apos;&gt;civitai.com/user/account&lt;/a&gt; → API Keys.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Tokens are kept in the Windows Credential Manager and are only sent to their own site.</source>
+        <translation>Tokens werden in der Windows-Anmeldeinformationsverwaltung gespeichert und nur an ihre eigene Website gesendet.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Tokens are kept in a private file in Lumen&apos;s data folder and are only sent to their own site.</source>
+        <translation>Tokens werden in einer privaten Datei in Lumens Datenordner gespeichert und nur an ihre eigene Website gesendet.</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Cannot save the token: %1</source>
+        <translation>Das Token kann nicht gespeichert werden: %1</translation>
+    </message>
+</context>
+<context>
     <name>lumen::ui::InstallRuntimeDialog</name>
     <message>
-        <location filename="../src/ui/dialogs/LocalServersPage.cpp" line="+623"/>
+        <location filename="../src/ui/dialogs/LocalServersPage.cpp" line="+635"/>
         <source>Download a server program</source>
         <translation>Serverprogramm herunterladen</translation>
     </message>
@@ -6325,7 +6500,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::LocalServersPage</name>
     <message>
-        <location filename="../src/ui/dialogs/LocalServersPage.cpp" line="-695"/>
+        <location filename="../src/ui/dialogs/LocalServersPage.cpp" line="-706"/>
         <source>Existing install</source>
         <translation>Vorhandene Installation</translation>
     </message>
@@ -6361,6 +6536,16 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+3"/>
+        <source>Set up local AI…</source>
+        <translation>Lokale KI einrichten…</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Download the programs and a set of models that suit this computer, and set everything up</source>
+        <translation>Die Programme und passende Modelle für diesen Computer herunterladen und alles einrichten</translation>
+    </message>
+    <message>
+        <location line="+9"/>
         <source>Programs</source>
         <translation>Programme</translation>
     </message>
@@ -6589,6 +6774,276 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <location line="+8"/>
         <source>Stop and remove the server &apos;%1&apos;?</source>
         <translation>Server „%1“ beenden und entfernen?</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::ui::LocalSetup</name>
+    <message>
+        <location filename="../src/ui/dialogs/LocalSetupDialog.cpp" line="+202"/>
+        <source>%1 cannot be downloaded: %2</source>
+        <translation>%1 kann nicht heruntergeladen werden: %2</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>no release found</source>
+        <translation>kein Release gefunden</translation>
+    </message>
+    <message>
+        <location line="+29"/>
+        <source>A step was removed from the Queue.</source>
+        <translation>Ein Schritt wurde aus der Warteschlange entfernt.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>cancelled</source>
+        <translation>abgebrochen</translation>
+    </message>
+    <message>
+        <location line="+40"/>
+        <source>Local assistant</source>
+        <translation>Lokaler Assistent</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>Local images</source>
+        <translation>Lokale Bilder</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>Everything was already set up.</source>
+        <translation>Es war bereits alles eingerichtet.</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Added: %1.</source>
+        <translation>Hinzugefügt: %1.</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::ui::LocalSetupDialog</name>
+    <message>
+        <location line="-253"/>
+        <source>Compact — for GPUs under 8 GB and computers without one</source>
+        <translation>Kompakt — für GPUs unter 8 GB und Computer ohne GPU</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Standard — for 8 GB GPUs</source>
+        <translation>Standard — für GPUs mit 8 GB</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Large — for GPUs with 12 GB or more</source>
+        <translation>Groß — für GPUs mit 12 GB oder mehr</translation>
+    </message>
+    <message>
+        <location line="+259"/>
+        <location line="+11"/>
+        <source>Set up local AI</source>
+        <translation>Lokale KI einrichten</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Lumen downloads the server programs and a set of open models, then sets them up: an assistant that understands images (llama.cpp) and image generation with pose control, reference images and upscaling (stable-diffusion.cpp). Everything runs on this computer; files you already have are reused.</source>
+        <translation>Lumen lädt die Serverprogramme und einen Satz offener Modelle herunter und richtet sie ein: einen Assistenten, der Bilder versteht (llama.cpp), und Bilderzeugung mit Posensteuerung, Referenzbildern und Hochskalierung (stable-diffusion.cpp). Alles läuft auf diesem Computer; vorhandene Dateien werden wiederverwendet.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Checking this computer…</source>
+        <translation>Dieser Computer wird geprüft…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Model set</source>
+        <translation>Modellsatz</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Assistant: language and vision model</source>
+        <translation>Assistent: Sprach- und Bildverständnismodell</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Image generation: SDXL model with pose ControlNet, IP-Adapter and upscaler</source>
+        <translation>Bilderzeugung: SDXL-Modell mit Posen-ControlNet, IP-Adapter und Hochskalierer</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Item</source>
+        <translation>Element</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Size</source>
+        <translation>Größe</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Status</source>
+        <translation>Status</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Licence</source>
+        <translation>Lizenz</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Setting up…</source>
+        <translation>Wird eingerichtet…</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Downloads continue in the Queue when you close this window; Lumen finishes the setup when they are done. Interrupted downloads resume where they stopped.</source>
+        <translation>Downloads laufen in der Warteschlange weiter, wenn Sie dieses Fenster schließen; Lumen schließt die Einrichtung ab, wenn sie fertig sind. Unterbrochene Downloads werden dort fortgesetzt, wo sie aufgehört haben.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Step</source>
+        <translation>Schritt</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Progress</source>
+        <translation>Fortschritt</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Generate a test image</source>
+        <translation>Testbild erzeugen</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Try again</source>
+        <translation>Erneut versuchen</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Close</source>
+        <translation>Schließen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Set up</source>
+        <translation>Einrichten</translation>
+    </message>
+    <message>
+        <location line="+36"/>
+        <source>This computer: %1</source>
+        <translation>Dieser Computer: %1</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source> (recommended)</source>
+        <translation> (empfohlen)</translation>
+    </message>
+    <message>
+        <location line="+37"/>
+        <source>Installed (%1)</source>
+        <translation>Installiert (%1)</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Installed</source>
+        <translation>Installiert</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Download from GitHub</source>
+        <translation>Von GitHub herunterladen</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Looking up…</source>
+        <translation>Wird nachgeschlagen…</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Download from Hugging Face</source>
+        <translation>Von Hugging Face herunterladen</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Already on this computer</source>
+        <translation>Bereits auf diesem Computer</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>To download: &lt;b&gt;%1&lt;/b&gt;</source>
+        <translation>Herunterzuladen: &lt;b&gt;%1&lt;/b&gt;</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Nothing to download.</source>
+        <translation>Nichts herunterzuladen.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>free on %1: %2</source>
+        <translation>frei auf %1: %2</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Not enough disk space.</source>
+        <translation>Nicht genug Speicherplatz.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>By downloading you accept the models&apos; licences (see the Licence column and each model&apos;s page).</source>
+        <translation>Mit dem Herunterladen akzeptieren Sie die Lizenzen der Modelle (siehe Spalte Lizenz und die Seite des jeweiligen Modells).</translation>
+    </message>
+    <message>
+        <location line="+32"/>
+        <source>Done</source>
+        <translation>Fertig</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Waiting</source>
+        <translation>Wartet</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Setting up the servers…</source>
+        <translation>Die Server werden eingerichtet…</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+0"/>
+        <source>%n step(s)</source>
+        <translation>
+            <numerusform>%n Schritt</numerusform>
+            <numerusform>%n Schritte</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Local AI is ready</source>
+        <translation>Lokale KI ist bereit</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The servers start when Lumen first needs them, which takes a moment the first time. You can change them under Settings → Local servers.</source>
+        <translation>Die Server starten, sobald Lumen sie zum ersten Mal braucht; das dauert beim ersten Mal einen Moment. Sie können sie unter Einstellungen → Lokale Server ändern.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>The setup did not finish</source>
+        <translation>Die Einrichtung wurde nicht abgeschlossen</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>Local AI test</source>
+        <translation>Test der lokalen KI</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Starting the server and generating — the first image takes about a minute…</source>
+        <translation>Server wird gestartet und Bild erzeugt — das erste Bild dauert etwa eine Minute…</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>The test failed: %1</source>
+        <translation>Der Test ist fehlgeschlagen: %1</translation>
     </message>
 </context>
 <context>
@@ -6999,14 +7454,300 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
 </context>
 <context>
+    <name>lumen::ui::ModelHubDialog</name>
+    <message>
+        <location filename="../src/ui/dialogs/ModelHubDialog.cpp" line="-561"/>
+        <source>Download models</source>
+        <translation>Modelle herunterladen</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Search models…</source>
+        <translation>Modelle suchen…</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Search</source>
+        <translation>Suchen</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Adult content</source>
+        <translation>Inhalte für Erwachsene</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Include models Civitai marks as adult content</source>
+        <translation>Modelle einbeziehen, die Civitai als Inhalte für Erwachsene kennzeichnet</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Accounts…</source>
+        <translation>Konten…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Access tokens for gated Hugging Face models and Civitai downloads</source>
+        <translation>Zugriffstokens für zugangsbeschränkte Hugging-Face-Modelle und Civitai-Downloads</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Model</source>
+        <translation>Modell</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Author</source>
+        <translation>Autor</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Type</source>
+        <translation>Typ</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Downloads</source>
+        <translation>Downloads</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Load more</source>
+        <translation>Mehr laden</translation>
+    </message>
+    <message>
+        <location line="+39"/>
+        <source>Version</source>
+        <translation>Version</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>File</source>
+        <translation>Datei</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Precision</source>
+        <translation>Genauigkeit</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Size</source>
+        <translation>Größe</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>GPU</source>
+        <translation>GPU</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>On this computer</source>
+        <translation>Auf diesem Computer</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Download</source>
+        <translation>Herunterladen</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Files go into Lumen&apos;s models folder and are checked against the hub&apos;s SHA-256 checksums. Check each model&apos;s licence before you use what you make with it.</source>
+        <translation>Dateien landen in Lumens Modellordner und werden mit den SHA-256-Prüfsummen des Hubs abgeglichen. Prüfen Sie die Lizenz jedes Modells, bevor Sie verwenden, was Sie damit erstellen.</translation>
+    </message>
+    <message>
+        <location line="+27"/>
+        <source>Also download the vision projector (%1), so the model can see images</source>
+        <translation>Auch den Vision-Projektor herunterladen (%1), damit das Modell Bilder sehen kann</translation>
+    </message>
+    <message>
+        <location line="+46"/>
+        <source>Language and vision (GGUF)</source>
+        <translation>Sprache und Bildverständnis (GGUF)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Image models</source>
+        <translation>Bildmodelle</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>LoRAs</source>
+        <translation>LoRAs</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>ControlNets</source>
+        <translation>ControlNets</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Upscalers</source>
+        <translation>Hochskalierer</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Everything</source>
+        <translation>Alles</translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <source>Searching %1…</source>
+        <translation>%1 wird durchsucht…</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>%1 — gated: needs an access token and accepted terms</source>
+        <translation>%1 — zugangsbeschränkt: erfordert ein Zugriffstoken und akzeptierte Bedingungen</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Nothing found.</source>
+        <translation>Nichts gefunden.</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+0"/>
+        <source>%n model(s)</source>
+        <translation>
+            <numerusform>%n Modell</numerusform>
+            <numerusform>%n Modelle</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Search failed: %1</source>
+        <translation>Suche fehlgeschlagen: %1</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Choose a model</source>
+        <translation>Wählen Sie ein Modell</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Hugging Face hosts language and vision models (GGUF files for llama.cpp) and many image models.</source>
+        <translation>Hugging Face bietet Sprach- und Bildverständnismodelle (GGUF-Dateien für llama.cpp) und viele Bildmodelle.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Civitai hosts image checkpoints, LoRAs and ControlNets made by the community.</source>
+        <translation>Civitai bietet Bild-Checkpoints, LoRAs und ControlNets aus der Community.</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>by %1</source>
+        <translation>von %1</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1 downloads</source>
+        <translation>%1 Downloads</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <location line="+8"/>
+        <source>Licence: %1</source>
+        <translation>Lizenz: %1</translation>
+    </message>
+    <message>
+        <location line="-8"/>
+        <source>not stated</source>
+        <translation>nicht angegeben</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>no commercial use</source>
+        <translation>keine kommerzielle Nutzung</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>commercial use: %1</source>
+        <translation>kommerzielle Nutzung: %1</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>no credit needed</source>
+        <translation>keine Namensnennung nötig</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>credit the creator</source>
+        <translation>Namensnennung erforderlich</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Gated model: accept its terms on huggingface.co, then add an access token under Accounts….</source>
+        <translation>Zugangsbeschränktes Modell: Akzeptieren Sie die Bedingungen auf huggingface.co und fügen Sie dann unter Konten… ein Zugriffstoken hinzu.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Civitai asks for an API key for most downloads: add one under Accounts….</source>
+        <translation>Civitai verlangt für die meisten Downloads einen API-Schlüssel: Fügen Sie einen unter Konten… hinzu.</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>Loading the files of %1…</source>
+        <translation>Dateien von %1 werden geladen…</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Cannot list the files: %1</source>
+        <translation>Die Dateien können nicht aufgelistet werden: %1</translation>
+    </message>
+    <message>
+        <location line="+38"/>
+        <source>Trigger words: %1</source>
+        <translation>Auslösewörter: %1</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>In the library</source>
+        <translation>In der Bibliothek</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Pickle format: it can contain code that runs when Python tools load it.</source>
+        <translation>Pickle-Format: kann Code enthalten, der beim Laden durch Python-Werkzeuge ausgeführt wird.</translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <source>Pickle file</source>
+        <translation>Pickle-Datei</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1 is in a pickle format. Such files can contain code that runs when Python tools (ComfyUI, WebUI) load them. Lumen&apos;s own servers do not run it, but prefer a .safetensors version when there is one.
+
+Download it anyway?</source>
+        <translation>%1 liegt im Pickle-Format vor. Solche Dateien können Code enthalten, der beim Laden durch Python-Werkzeuge (ComfyUI, WebUI) ausgeführt wird. Lumens eigene Server führen ihn nicht aus, aber bevorzugen Sie eine .safetensors-Version, wenn es eine gibt.
+
+Trotzdem herunterladen?</translation>
+    </message>
+    <message>
+        <location line="+37"/>
+        <source>Already in the library.</source>
+        <translation>Bereits in der Bibliothek.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Downloading %1 — progress is shown in the Queue.</source>
+        <translation>%1 wird heruntergeladen — der Fortschritt wird in der Warteschlange angezeigt.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Queued: %1</source>
+        <translation>In der Warteschlange: %1</translation>
+    </message>
+</context>
+<context>
     <name>lumen::ui::ModelsPage</name>
     <message>
-        <location filename="../src/ui/dialogs/ModelsPage.cpp" line="+159"/>
+        <location filename="../src/ui/dialogs/ModelsPage.cpp" line="+160"/>
         <source>No matching models in the library</source>
         <translation>Keine passenden Modelle in der Bibliothek</translation>
     </message>
     <message>
-        <location line="+34"/>
+        <location line="+52"/>
         <source>Models</source>
         <translation>Modelle</translation>
     </message>
@@ -7036,7 +7777,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Neu durchsuchen</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+19"/>
         <source>Name</source>
         <translation>Name</translation>
     </message>
@@ -7071,22 +7812,32 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Ordner</translation>
     </message>
     <message>
-        <location line="+61"/>
+        <location line="-58"/>
         <source>Fits</source>
         <translation>Passt</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="+2"/>
         <source>Partly</source>
         <translation>Teilweise</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="+1"/>
         <source>Too large</source>
         <translation>Zu groß</translation>
     </message>
     <message>
-        <location line="+29"/>
+        <location line="+37"/>
+        <source>Download…</source>
+        <translation>Herunterladen…</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Find and download models from Hugging Face and Civitai</source>
+        <translation>Modelle auf Hugging Face und Civitai finden und herunterladen</translation>
+    </message>
+    <message>
+        <location line="+101"/>
         <source> · GPU: %1</source>
         <translation> · GPU: %1</translation>
     </message>
@@ -7197,7 +7948,17 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Verwendet von: %1</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+5"/>
+        <source>Downloaded from &lt;a href=&apos;%1&apos;&gt;%2&lt;/a&gt; (version %3)</source>
+        <translation>Heruntergeladen von &lt;a href=&apos;%1&apos;&gt;%2&lt;/a&gt; (Version %3)</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Licence: %1</source>
+        <translation>Lizenz: %1</translation>
+    </message>
+    <message>
+        <location line="+8"/>
         <source>Civitai</source>
         <translation>Civitai</translation>
     </message>
@@ -7316,7 +8077,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::OnboardingDialog</name>
     <message>
-        <location filename="../src/ui/dialogs/SettingsDialog.cpp" line="+657"/>
+        <location filename="../src/ui/dialogs/SettingsDialog.cpp" line="+658"/>
         <source>Welcome to Lumen Studio</source>
         <translation>Willkommen bei Lumen Studio</translation>
     </message>
@@ -7347,11 +8108,21 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
+        <source>Set up local AI…</source>
+        <translation>Lokale KI einrichten…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Download free models and run them on this computer</source>
+        <translation>Freie Modelle herunterladen und auf diesem Computer ausführen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Continue</source>
         <translation>Weiter</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+29"/>
         <source>Searching for local servers...</source>
         <translation>Lokale Server werden gesucht...</translation>
     </message>
@@ -9090,7 +9861,7 @@ oder aus der Bibliothek ziehen</translation>
 <context>
     <name>lumen::ui::ProviderForm</name>
     <message>
-        <location filename="../src/ui/dialogs/SettingsDialog.cpp" line="-672"/>
+        <location filename="../src/ui/dialogs/SettingsDialog.cpp" line="-680"/>
         <source>Documentation</source>
         <translation>Dokumentation</translation>
     </message>
@@ -9346,13 +10117,13 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Servereinstellungen</translation>
     </message>
     <message>
-        <location line="-659"/>
-        <location line="+674"/>
+        <location line="-670"/>
+        <location line="+685"/>
         <source>Name</source>
         <translation>Name</translation>
     </message>
     <message>
-        <location line="-673"/>
+        <location line="-684"/>
         <source>Model file</source>
         <translation>Modelldatei</translation>
     </message>
@@ -9382,7 +10153,7 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Modell hinzufügen</translation>
     </message>
     <message>
-        <location line="+646"/>
+        <location line="+657"/>
         <source>Program</source>
         <translation>Programm</translation>
     </message>

@@ -62,6 +62,20 @@ ControlNet. Qwen3-VL-8B handles the assistant, planning, reference analysis and 
 Instead of starting servers yourself, Lumen can install and run them. Open **Settings → Local
 servers**.
 
+**The quick way: Set up local AI.** The button on the Local servers page (and in the welcome
+dialog) does everything at once:
+* It suggests a model set for your graphics card: *Compact* below 8 GB, *Standard* for 8 GB, *Large*
+  for 12 GB and more. Each set has a vision language model (Qwen3-VL) and an SDXL image model
+  (Animagine XL 4.0) with pose ControlNet, IP-Adapter and an upscaler.
+* The plan lists each program and file with its size and licence. Files you already have are
+  reused, even in your ComfyUI folders.
+* **Set up** downloads what is missing (about 17 GB for the standard set), then creates the two
+  servers as providers. Image generation then uses the local image model.
+* Downloads continue in the Queue if you close the window, and an interrupted download resumes.
+* **Generate a test image** checks the result.
+
+The steps below do the same by hand.
+
 1. **Get the program.** Use **Download…** for a release from GitHub. Lumen picks the build for your
    graphics card (CUDA for NVIDIA, Vulkan for AMD and Intel, CPU otherwise) and shows the download
    size. Files are checked against the checksums GitHub publishes. Alternatively, **Add existing…**
@@ -117,6 +131,18 @@ folders, Downloads, and the folders your servers already use. Files stay where t
   of the server settings have a library menu next to *Browse*.
 * **Pickle files:** files in pickle formats (.ckpt, .pt, .pth, .bin) are marked; prefer
   .safetensors.
+
+**Downloading models.** **Download…** on the Models page searches Hugging Face and Civitai:
+* Pick a model, then a file. For language models Lumen suggests the best quantisation that fits
+  your GPU and also downloads the vision projector, so the model can see images.
+* Files go into Lumen's models folder, sorted by type, and are checked against the hub's checksum.
+  Lumen remembers where each file came from, its version, licence and trigger words.
+* **Accounts…** stores access tokens in the Windows Credential Manager. Hugging Face needs a token
+  for gated models such as FLUX.1 dev (accept the terms on the model's page first); Civitai asks
+  for an API key for most downloads. A token is only sent to its own site.
+* Civitai results leave out adult content unless you tick *Adult content*.
+* Check a model's licence before you use what you make with it; Civitai shows commercial-use
+  and credit rules.
 
 **Tuned for.** New servers start with options for the GPU Lumen detected (up to 8 GB, 12 GB, or
 16 GB and more). Change *Tuned for* to apply another set.

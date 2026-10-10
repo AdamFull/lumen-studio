@@ -10,6 +10,7 @@
 #include "doc/Project.h"
 #include "net/HttpClient.h"
 #include "pose/Skeleton.h"
+#include "runtime/ModelHub.h"
 #include "runtime/ModelLibrary.h"
 #include "runtime/RuntimeStore.h"
 #include "runtime/Supervisor.h"
@@ -45,6 +46,8 @@ public:
     runtime::ServerSupervisor *servers() { return &m_servers; }
     // Model files on this computer (Lumen's models folder and folders the user added).
     runtime::ModelLibrary *models() { return &m_models; }
+    // Hugging Face / Civitai search and downloads into the library.
+    runtime::ModelHub *hub() { return &m_hub; }
     // Provider of a managed server (bound through its "managed_server" setting), if any.
     ai::Provider *providerForServer(const QString &profileId) const;
     doc::Project *project() { return m_project; }
@@ -134,6 +137,7 @@ private:
     runtime::RuntimeStore m_runtimes;
     runtime::ServerSupervisor m_servers; // destroyed before the providers: stops the servers
     runtime::ModelLibrary m_models;
+    runtime::ModelHub m_hub;
     ai::GenerationService m_generation;
     ai::Director m_director;
     ai::PartService m_parts;

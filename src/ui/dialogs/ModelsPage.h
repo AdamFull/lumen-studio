@@ -29,6 +29,8 @@ public:
 
     // Fit of a model on this computer's GPU: "fits", "partial", "too large" or "" when unknown.
     static QString fitKey(const runtime::ModelEntry &e, const std::optional<runtime::HardwareInfo> &hw);
+    static QString fitText(const QString &key);
+    static QColor fitColor(const QString &key);
 
 private:
     void reload();

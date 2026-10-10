@@ -9,6 +9,7 @@
 #include "ui/Studio.h"
 #include "ui/Theme.h"
 #include "ui/dialogs/LocalServersPage.h"
+#include "ui/dialogs/ModelHubDialog.h"
 #include "ui/widgets/Controls.h"
 
 #include <QApplication>
@@ -183,6 +184,24 @@ QString ModelsPage::fitKey(const ModelEntry &e, const std::optional<runtime::Har
     return QStringLiteral("too large");
 }
 
+QString ModelsPage::fitText(const QString &key)
+{
+    if (key == QLatin1String("fits"))
+        return tr("Fits");
+    if (key == QLatin1String("partial"))
+        return tr("Partly");
+    return key.isEmpty() ? QString() : tr("Too large");
+}
+
+QColor ModelsPage::fitColor(const QString &key)
+{
+    if (key == QLatin1String("fits"))
+        return Theme::palette().success;
+    if (key == QLatin1String("partial"))
+        return Theme::palette().warning;
+    return Theme::palette().danger;
+}
+
 ModelsPage::ModelsPage(Studio *studio, QWidget *parent)
     : QWidget(parent)
     , m_studio(studio)
@@ -208,6 +227,16 @@ ModelsPage::ModelsPage(Studio *studio, QWidget *parent)
     m_folders->setMenu(new QMenu(m_folders));
     connect(m_folders->menu(), &QMenu::aboutToShow, this, &ModelsPage::buildFoldersMenu);
     auto *rescan = new QPushButton(Icons::get(QStringLiteral("refresh")), tr("Rescan"), this);
+    auto *download = new QPushButton(Icons::get(QStringLiteral("download")), tr("Download…"), this);
+    Theme::setRole(download, QStringLiteral("primary"));
+    download->setToolTip(tr("Find and download models from Hugging Face and Civitai"));
+    connect(download, &QPushButton::clicked, this, [this] {
+        auto *dlg = new ModelHubDialog(m_studio, this);
+        dlg->setAttribute(Qt::WA_DeleteOnClose);
+        dlg->show();
+        dlg->search();
+    });
+    bar->addWidget(download);
     bar->addWidget(m_search, 1);
     bar->addWidget(m_kind);
     bar->addWidget(m_folders);
@@ -277,24 +306,19 @@ void ModelsPage::reload()
             && !e.civitai.value(QStringLiteral("name")).toString().contains(needle, Qt::CaseInsensitive))
             continue;
         const QString fit = fitKey(e, m_hardware);
-        const QString fitText = fit == QLatin1String("fits") ? tr("Fits") : fit == QLatin1String("partial") ? tr("Partly") : fit.isEmpty() ? QString() : tr("Too large");
         // Which scanned folder it is in (copies of the same file in two places are common).
         QString folder;
         for (const runtime::ModelRoot &r : m_studio->models()->roots()) {
             if (e.path.startsWith(r.path + QLatin1Char('/'), Qt::CaseInsensitive) && r.path.size() >= folder.size())
                 folder = r.label;
         }
-        auto *item = new ModelItem(m_list, QStringList{e.name(), runtime::modelKindLabel(e.info.kind), family, e.info.precision, sizeText(e.size), fitText, folder});
+        auto *item = new ModelItem(m_list, QStringList{e.name(), runtime::modelKindLabel(e.info.kind), family, e.info.precision, sizeText(e.size), fitText(fit), folder});
         item->setData(0, Qt::UserRole, e.path);
         item->setData(4, Qt::UserRole, double(e.size));
         item->setToolTip(0, QDir::toNativeSeparators(e.path));
         item->setTextAlignment(4, Qt::AlignRight | Qt::AlignVCenter);
-        if (fit == QLatin1String("fits"))
-            item->setForeground(5, Theme::palette().success);
-        else if (fit == QLatin1String("partial"))
-            item->setForeground(5, Theme::palette().warning);
-        else if (!fit.isEmpty())
-            item->setForeground(5, Theme::palette().danger);
+        if (!fit.isEmpty())
+            item->setForeground(5, fitColor(fit));
         if (e.info.unsafeFormat)
             item->setIcon(0, Icons::get(QStringLiteral("warning")));
         if (e.path == current)
@@ -443,6 +467,20 @@ void ModelsPage::showDetails()
     }
     const QStringList users = serversUsing(e.path);
     m_detailsLayout->addWidget(mutedLabel(users.isEmpty() ? tr("Not used by a server.") : tr("Used by: %1").arg(users.join(QStringLiteral(", "))), m_details));
+
+    // Downloaded by Lumen: where from, which version, under which licence.
+    if (!e.source.isEmpty() && e.source.value(QStringLiteral("source")).toString() == QLatin1String("huggingface")) {
+        const QString repo = e.source.value(QStringLiteral("model")).toString();
+        QString text = tr("Downloaded from <a href='%1'>%2</a> (version %3)")
+                           .arg(QStringLiteral("https://huggingface.co/") + repo, repo.toHtmlEscaped(), e.source.value(QStringLiteral("version")).toString().left(7));
+        const QString licence = e.source.value(QStringLiteral("license")).toString();
+        if (!licence.isEmpty())
+            text += QStringLiteral("<br>") + tr("Licence: %1").arg(licence.toHtmlEscaped());
+        auto *src = new QLabel(text, m_details);
+        src->setOpenExternalLinks(true);
+        src->setWordWrap(true);
+        m_detailsLayout->addWidget(src);
+    }
 
     // Civitai.
     m_detailsLayout->addWidget(sectionLabel(tr("Civitai"), m_details));

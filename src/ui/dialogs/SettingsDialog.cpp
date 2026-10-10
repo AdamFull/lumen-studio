@@ -1,5 +1,6 @@
 #include "ui/dialogs/SettingsDialog.h"
 #include "ui/dialogs/LocalServersPage.h"
+#include "ui/dialogs/LocalSetupDialog.h"
 #include "ui/dialogs/ModelsPage.h"
 #include "ui/dialogs/ShortcutsPage.h"
 
@@ -678,14 +679,22 @@ OnboardingDialog::OnboardingDialog(Studio *studio, QWidget *parent)
     auto *buttons = new QHBoxLayout;
     auto *again = new QPushButton(Icons::get(QStringLiteral("refresh")), tr("Search again"), this);
     auto *cloud = new QPushButton(Icons::get(QStringLiteral("cloud")), tr("Add cloud provider..."), this);
+    auto *local = new QPushButton(Icons::get(QStringLiteral("sparkles")), tr("Set up local AI…"), this);
+    local->setToolTip(tr("Download free models and run them on this computer"));
     auto *done = new QPushButton(tr("Continue"), this);
     Theme::setRole(done, QStringLiteral("primary"));
     buttons->addWidget(again);
     buttons->addWidget(cloud);
+    buttons->addWidget(local);
     buttons->addStretch();
     buttons->addWidget(done);
     v->addLayout(buttons);
     connect(again, &QPushButton::clicked, this, &OnboardingDialog::detect);
+    connect(local, &QPushButton::clicked, this, [this] {
+        LocalSetupDialog dlg(m_studio, this);
+        dlg.exec();
+        detect();
+    });
     connect(done, &QPushButton::clicked, this, &QDialog::accept);
     connect(cloud, &QPushButton::clicked, this, [this] {
         SettingsDialog dlg(m_studio, this);

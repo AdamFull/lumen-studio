@@ -20,6 +20,8 @@
 #include "doc/Project.h"
 #include "net/HttpClient.h"
 #include "pose/Rig.h"
+#include "runtime/ModelHub.h"
+#include "runtime/ModelLibrary.h"
 #include "runtime/RuntimeStore.h"
 #include "runtime/Supervisor.h"
 #include "ui/Studio.h"
@@ -80,6 +82,7 @@ private slots:
     void managedStudioScenario();
     void managedSdUpscale();
     void managedComfyUi();
+    void hubDownload();
 
 private:
     net::HttpClient m_http;
@@ -852,6 +855,68 @@ void TestLive::managedComfyUi()
     servers.stop(profile.id);
     QTRY_COMPARE_WITH_TIMEOUT(servers.state(profile.id), runtime::ServerState::Stopped, 30000);
     QVERIFY(runtime::portIsFree(profile.port));
+}
+
+// LUMEN_LIVE_HUB=1: searches both hubs and downloads the smallest starter file (Real-ESRGAN x4plus,
+// 64 MB) from Hugging Face through its CDN redirect, checked against the pinned SHA-256.
+void TestLive::hubDownload()
+{
+    if (!qEnvironmentVariableIntValue("LUMEN_LIVE_HUB"))
+        QSKIP("set LUMEN_LIVE_HUB=1");
+    net::HttpClient http;
+    JobQueue jobs;
+    QTemporaryDir data;
+    runtime::ModelLibrary lib(&http);
+    lib.setDataDir(data.path());
+    lib.load();
+    runtime::ModelHub hub(&http, &jobs, &lib);
+    hub.tokenProvider = [](runtime::HubSource) { return QString(); };
+
+    runtime::HubQuery q;
+    q.text = QStringLiteral("Qwen3-VL-8B-Instruct-GGUF");
+    q.category = QStringLiteral("llm");
+    QFuture<runtime::HubPage> page = hub.search(runtime::HubSource::HuggingFace, q);
+    QTRY_VERIFY_WITH_TIMEOUT(page.isFinished(), 30000);
+    QVERIFY(!page.result().models.isEmpty());
+    QVERIFY(!page.result().nextCursor.isEmpty() || page.result().models.size() < q.limit);
+    runtime::HubModel qwen;
+    for (const runtime::HubModel &m : page.result().models) {
+        if (m.id == QLatin1String("Qwen/Qwen3-VL-8B-Instruct-GGUF"))
+            qwen = m;
+    }
+    QVERIFY(!qwen.id.isEmpty());
+    QFuture<runtime::HubModel> details = hub.details(qwen);
+    QTRY_VERIFY_WITH_TIMEOUT(details.isFinished(), 30000);
+    const QList<runtime::HubFile> files = details.result().versions.value(0).files;
+    runtime::HubFile q4;
+    for (const runtime::HubFile &f : files) {
+        if (f.path == QLatin1String("Qwen3VL-8B-Instruct-Q4_K_M.gguf"))
+            q4 = f;
+    }
+    QCOMPARE(q4.sha256, QStringLiteral("67d1659bfe71b89d50b45a4ad1a9e5b997e5bb16ce5da66a6a6167abd569e9e2"));
+    QCOMPARE(runtime::projectorFor(files, q4)->path, QStringLiteral("mmproj-Qwen3VL-8B-Instruct-Q8_0.gguf"));
+
+    q.text = QStringLiteral("openpose");
+    q.category = QStringLiteral("controlnet");
+    QFuture<runtime::HubPage> civ = hub.search(runtime::HubSource::Civitai, q);
+    QTRY_VERIFY_WITH_TIMEOUT(civ.isFinished(), 30000);
+    QVERIFY(!civ.result().models.isEmpty());
+    for (const runtime::HubModel &m : civ.result().models)
+        QVERIFY(!m.nsfw);
+
+    const QList<runtime::StarterSet> sets = runtime::starterSets();
+    const runtime::StarterFile *up = sets.first().file(QStringLiteral("upscaler"));
+    QVERIFY(up);
+    QElapsedTimer t;
+    t.start();
+    Job *job = hub.download(runtime::starterDownload(*up));
+    QTRY_VERIFY_WITH_TIMEOUT(job->isFinished(), 600000);
+    QVERIFY2(job->state() == Job::State::Succeeded, qPrintable(job->errorString()));
+    const auto entry = lib.entry(job->result().toString());
+    QVERIFY(entry);
+    QCOMPARE(entry->info.kind, runtime::ModelKind::Upscaler);
+    QCOMPARE(entry->sha256, up->sha256);
+    qInfo() << "downloaded" << entry->path << entry->size << "bytes in" << t.elapsed() << "ms";
 }
 
 QTEST_MAIN(TestLive)

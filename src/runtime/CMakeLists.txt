@@ -8,11 +8,17 @@ add_library(lumen_runtime STATIC
     Supervisor.h Supervisor.cpp
     ModelFormats.h ModelFormats.cpp
     ModelLibrary.h ModelLibrary.cpp
+    ModelHub.h ModelHub.cpp
 )
 qt_add_resources(lumen_runtime runtime_catalog
     PREFIX "/runtimes"
     BASE "${PROJECT_SOURCE_DIR}/resources/runtimes"
     FILES "${PROJECT_SOURCE_DIR}/resources/runtimes/catalog.json"
+)
+qt_add_resources(lumen_runtime model_starters
+    PREFIX "/models"
+    BASE "${PROJECT_SOURCE_DIR}/resources/models"
+    FILES "${PROJECT_SOURCE_DIR}/resources/models/starters.json"
 )
 find_package(ZLIB QUIET)
 target_include_directories(lumen_runtime PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)

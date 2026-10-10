@@ -52,7 +52,43 @@ bool hasModelFiles(const QString &dir, int depth = 2)
     return false;
 }
 
+// Header info of a new or changed file, plus what its sidecar says about where it came from.
+ModelEntry inspectEntry(const QString &path, const QFileInfo &fi)
+{
+    ModelEntry e;
+    e.path = path;
+    e.size = fi.size();
+    e.modified = fi.lastModified();
+    e.info = inspectModel(path);
+    e.source = readSidecar(path);
+    if (!e.source.isEmpty()) {
+        // The checksum was verified when the file was downloaded.
+        if (qint64(e.source.value(QStringLiteral("size")).toDouble(-1)) == e.size)
+            e.sha256 = e.source.value(QStringLiteral("sha256")).toString().toLower();
+        if (e.source.value(QStringLiteral("source")).toString() == QLatin1String("civitai"))
+            e.civitai = e.source.value(QStringLiteral("civitai")).toObject();
+        if (e.info.triggerWords.isEmpty()) {
+            for (const QJsonValue &w : e.source.value(QStringLiteral("trainedWords")).toArray())
+                e.info.triggerWords << w.toString();
+        }
+    }
+    return e;
+}
+
 } // namespace
+
+QString sidecarPath(const QString &modelPath)
+{
+    return modelPath + QStringLiteral(".lumen.json");
+}
+
+QJsonObject readSidecar(const QString &modelPath)
+{
+    QFile f(sidecarPath(modelPath));
+    if (!f.open(QIODevice::ReadOnly) || f.size() > 1024 * 1024)
+        return {};
+    return QJsonDocument::fromJson(f.readAll()).object();
+}
 
 QString ModelEntry::name() const
 {
@@ -160,6 +196,7 @@ void ModelLibrary::load()
             e.info = modelInfoFromJson(o.value(QStringLiteral("info")).toObject());
             e.sha256 = o.value(QStringLiteral("sha256")).toString();
             e.civitai = o.value(QStringLiteral("civitai")).toObject();
+            e.source = o.value(QStringLiteral("source")).toObject();
             if (!e.path.isEmpty())
                 m_entries.insert(e.path, e);
         }
@@ -188,7 +225,8 @@ void ModelLibrary::save() const
                                   {QStringLiteral("modified"), double(e.modified.toMSecsSinceEpoch())},
                                   {QStringLiteral("info"), modelInfoToJson(e.info)},
                                   {QStringLiteral("sha256"), e.sha256},
-                                  {QStringLiteral("civitai"), e.civitai}});
+                                  {QStringLiteral("civitai"), e.civitai},
+                                  {QStringLiteral("source"), e.source}});
     }
     QDir().mkpath(m_dataDir);
     QSaveFile f(indexPath());
@@ -315,7 +353,7 @@ void ModelLibrary::rescan()
                 if (old != known.cend() && old->size == e.size && old->modified == e.modified) {
                     e = *old; // unchanged: keep header info, hash and lookups
                 } else {
-                    e.info = inspectModel(path);
+                    e = inspectEntry(path, fi);
                 }
                 found.insert(path, e);
             }
@@ -349,6 +387,34 @@ QList<ModelEntry> ModelLibrary::entries(ModelKind kind) const
             out << e;
     }
     return out;
+}
+
+std::optional<ModelEntry> ModelLibrary::find(const QString &sha256, const QString &fileName, qint64 size) const
+{
+    const QString digest = sha256.toLower();
+    std::optional<ModelEntry> byName;
+    for (const ModelEntry &e : m_entries) {
+        if (!digest.isEmpty() && e.sha256.compare(digest, Qt::CaseInsensitive) == 0)
+            return e;
+        if (!byName && !fileName.isEmpty() && size >= 0 && e.size == size
+            && QFileInfo(e.path).fileName().compare(fileName, Qt::CaseInsensitive) == 0)
+            byName = e;
+    }
+    return byName;
+}
+
+QFuture<ModelEntry> ModelLibrary::addFile(const QString &path)
+{
+    const QString clean = QDir::cleanPath(QFileInfo(path).absoluteFilePath());
+    QPointer<ModelLibrary> self(this);
+    return async::run([clean] { return inspectEntry(clean, QFileInfo(clean)); }).then(this, [self](ModelEntry e) {
+        if (self && QFileInfo::exists(e.path)) {
+            self->m_entries.insert(e.path, e);
+            self->save();
+            emit self->changed();
+        }
+        return e;
+    });
 }
 
 std::optional<ModelEntry> ModelLibrary::entry(const QString &path) const
@@ -459,6 +525,7 @@ bool ModelLibrary::trash(const QString &path, QString *error)
             *error = Text::tr("Cannot move %1 to the recycle bin: %2").arg(QDir::toNativeSeparators(clean), why);
         return false;
     }
+    QFile::remove(sidecarPath(clean)); // a few bytes of metadata; not worth the recycle bin
     m_entries.remove(clean);
     save();
     emit changed();

@@ -35,11 +35,15 @@ struct ModelEntry
     ModelInfo info;
     QString sha256;          // computed on request, kept while size and date do not change
     QJsonObject civitai;     // lookup result (see ModelLibrary::lookupCivitai); {"notFound": true} if unknown
+    QJsonObject source;      // where Lumen downloaded it from (the "<file>.lumen.json" sidecar)
 
     QString name() const;    // file name without extension
 };
 
 QJsonObject modelInfoToJson(const ModelInfo &info);
+// "<model file>.lumen.json": source, revision, licence, trigger words and checksum of a download.
+QString sidecarPath(const QString &modelPath);
+QJsonObject readSidecar(const QString &modelPath);
 ModelInfo modelInfoFromJson(const QJsonObject &o);
 
 // The model files on this computer: Lumen's models folder plus folders the user adds (ComfyUI,
@@ -72,6 +76,11 @@ public:
     QList<ModelEntry> entries() const;
     QList<ModelEntry> entries(ModelKind kind) const;
     std::optional<ModelEntry> entry(const QString &path) const;
+    // A file that is already on this computer: same SHA-256 when known, otherwise the same file
+    // name and size.
+    std::optional<ModelEntry> find(const QString &sha256, const QString &fileName = QString(), qint64 size = -1) const;
+    // Adds (or refreshes) one file without a full rescan, e.g. after a download.
+    QFuture<ModelEntry> addFile(const QString &path);
 
     QFuture<QString> computeHash(const QString &path);
     // Civitai's model page, base model, trigger words and preview for a file (looked up by its

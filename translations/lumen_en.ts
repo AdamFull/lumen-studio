@@ -277,4 +277,20 @@
         <translation><numerusform> · %n folder</numerusform><numerusform> · %n folders</numerusform></translation>
     </message>
 </context>
+<context>
+    <name>lumen::ui::ModelHubDialog</name>
+    <message numerus="yes">
+        <location filename="../src/ui/dialogs/ModelHubDialog.cpp" line="+1" />
+        <source>%n model(s)</source>
+        <translation><numerusform>%n model</numerusform><numerusform>%n models</numerusform></translation>
+    </message>
+</context>
+<context>
+    <name>lumen::ui::LocalSetupDialog</name>
+    <message numerus="yes">
+        <location filename="../src/ui/dialogs/LocalSetupDialog.cpp" line="+1" />
+        <source>%n step(s)</source>
+        <translation><numerusform>%n step</numerusform><numerusform>%n steps</numerusform></translation>
+    </message>
+</context>
 </TS>

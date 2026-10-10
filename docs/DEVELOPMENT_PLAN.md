@@ -487,7 +487,7 @@ every local back-end is a server the user installs, starts and configures elsewh
 connects to its URL. After M12 Lumen can **install** a local runtime (download from the
 project's GitHub releases) or **adopt** one that is already installed. It **starts and stops**
 the server itself, exposes its launch options as provider settings, and manages the **model files**
-the servers load. Downloading models from Hugging Face and Civitai comes in a later phase. Remote
+the servers load, including downloads from Hugging Face and Civitai (phase E). Remote
 or externally started servers keep working as they do now (URL only).
 
 #### 12.1 Why stable-diffusion.cpp becomes the default local image back-end
@@ -831,13 +831,52 @@ Phase D — model library
   downloads).
 
 Phase E — hub downloads
-- [ ] Starter sets per VRAM tier (`resources/models/starters.json`) and "Set up local studio"
-  (moved from phase D).
-- [ ] Hugging Face search and download (revision pinning, gated token, quant picker, mmproj
-  pairing).
-- [ ] Civitai search and download (token, NSFW filter, hashes, licence fields).
-- [ ] Onboarding: a "Set up local AI" path (hardware → recommended runtimes + starter set with
-  sizes → install → start → test generation).
+- [x] `ModelHub` (runtime):
+  - Hugging Face search (`/api/models`, GGUF / text-to-image / LoRA / ControlNet filters, cursor
+    paging from the `Link` header); details pin the current commit and list the files from the
+    tree API with their LFS SHA-256.
+  - Civitai search (`/api/v1/models`, types, `nsfw=false` by default, adult models also dropped
+    client-side, safe preview images); versions with files, SHA-256, format, precision, trigger
+    words and the licence permissions.
+  - Downloads are Queue jobs (group `model-download`, two at a time). They resume, check the
+    hub's SHA-256 and refuse pickle files unless allowed.
+  - The file goes into Lumen's models folder, in the sub-folder for its kind. After the
+    download the header decides the kind and the file moves if the name-based guess was wrong.
+  - A `<file>.lumen.json` sidecar records source, revision, licence, trigger words and checksum;
+    the library reads it, so downloaded files need no hashing or Civitai lookup.
+  - A same-named different file is never overwritten.
+- [x] `FileDownload` follows redirects itself: `Authorization`/`Cookie` only go to the original
+  origin (Hugging Face and Civitai redirect to CDNs with signed URLs); https → http is refused;
+  retries start again from the original URL because signed links expire.
+- [x] Tokens: Hugging Face (gated repositories) and Civitai (most downloads need an API key) in
+  the credential store (`hub/<source>/token`), edited under *Accounts…*; 401/403 explain which
+  token is missing.
+- [x] Settings → Models → **Download…**:
+  - search both hubs; a model's files with precision, size, GPU fit and "in the library";
+  - the suggested file is the best common quantisation that fits the GPU (Q8_0 → Q6_K → Q5_K_M →
+    Q4_K_M …);
+  - a GGUF model offers its vision projector (`mmproj-*` and `*.mmproj-*` names, Q8_0 preferred);
+  - split GGUF files are downloaded with all their parts.
+- [x] Starter sets (`resources/models/starters.json`): compact (Qwen3-VL 4B Q4_K_M), standard
+  (8B Q4_K_M, 8 GB GPUs) and large (8B Q8_0, 12 GB+). Each set adds Animagine XL 4.0 Opt, xinsir
+  OpenPose ControlNet, IP-Adapter SDXL ViT-H, its CLIP ViT-H encoder and Real-ESRGAN x4plus.
+  All files are pinned to a commit with their SHA-256 and licence.
+- [x] **Set up local AI** (Local servers page and the welcome dialog):
+  - hardware → recommended set → plan with sizes, licences and free disk space;
+  - files already on the computer (same checksum, or same name and size) and installed programs
+    are reused;
+  - missing programs install from GitHub and missing files download from Hugging Face (Queue);
+  - then the llama.cpp and sd.cpp servers are created with the GPU preset, as providers. The
+    language model takes the free roles and the image server becomes the default image provider.
+  - The setup finishes when the window is closed meanwhile. Running it again changes nothing.
+  - "Generate a test image" at the end.
+- Tests: redirects keep the token at home, hub search parsing (both hubs), details + downloads
+  (kind correction, sidecar, reuse, name clash, pickle refusal, Civitai 401), starter sets
+  (pinned and complete, tier choice), the wizard end to end with fake servers and a mock hub.
+  Live (`LUMEN_LIVE_HUB=1`): both hubs searched, Qwen3-VL files listed with the pinned checksum,
+  Real-ESRGAN (64 MB) downloaded through the CDN redirect in 5 s and recognised as an upscaler.
+- Not verified yet: AC 1 on a clean machine (this machine already has the models; the full
+  17 GB standard set was not downloaded again).
 
 **AC**:
 1. On a clean Windows machine with an NVIDIA GPU, a user installs llama.cpp (CUDA) and sd.cpp

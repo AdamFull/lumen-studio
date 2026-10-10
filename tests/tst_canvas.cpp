@@ -17,6 +17,9 @@
 #include "pose/Rig.h"
 #include "MockHttpServer.h"
 #include "ui/dialogs/LocalServersPage.h"
+#include "ui/dialogs/LocalSetupDialog.h"
+#include "ui/dialogs/ModelHubDialog.h"
+#include "runtime/ModelLibrary.h"
 #include "ui/dialogs/ModelsPage.h"
 #include "ui/dialogs/SettingsDialog.h"
 #include "ui/dialogs/ShortcutsPage.h"
@@ -35,6 +38,7 @@
 #include <QPushButton>
 #include <QListWidget>
 #include <QSpinBox>
+#include <QScopeGuard>
 #include <QTemporaryDir>
 #include <QToolButton>
 #include <QtTest>
@@ -82,6 +86,7 @@ private slots:
     void criticRetriesShot();
     void assistantRunsReferenceScenario();
     void localServersWiring();
+    void localSetupWizard();
 
 private:
     ToolEvent at(double x, double y, Qt::KeyboardModifiers mods = Qt::NoModifier) const
@@ -854,6 +859,185 @@ void TestCanvas::localServersWiring()
     studio.providers()->removeProvider(provider->instanceId());
     servers->removeProfile(profile.id);
     studio.runtimes()->remove(rt.id);
+}
+
+void TestCanvas::localSetupWizard()
+{
+    Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
+    QTemporaryDir dir;
+    Studio studio;
+    runtime::ServerSupervisor *servers = studio.servers();
+    const QString own = studio.models()->defaultFolder();
+    // Leaves the (persistent) test data folder as it found it, also when a check fails.
+    auto cleanup = [&studio, servers, own, &dir] {
+        for (const runtime::ServerProfile &p : servers->profiles()) {
+            if (ai::Provider *provider = studio.providerForServer(p.id))
+                studio.providers()->removeProvider(provider->instanceId());
+            servers->removeProfile(p.id);
+        }
+        studio.models()->moveToTrash = [](const QString &path, QString *) { return QFile::remove(path); };
+        for (const runtime::ModelEntry &e : studio.models()->entries()) {
+            if (e.path.startsWith(own))
+                studio.models()->trash(e.path);
+        }
+        studio.models()->removeRoot(QDir::cleanPath(dir.filePath(QStringLiteral("comfy"))));
+        for (const QString &kind : {QStringLiteral("llama.cpp"), QStringLiteral("sd.cpp")})
+            studio.runtimes()->remove(QStringLiteral("adopted/setup-") + kind);
+    };
+    cleanup();
+    auto guard = qScopeGuard(cleanup);
+    // Installed programs are reused: fake servers adopted for both kinds.
+    for (const QString &kind : {QStringLiteral("llama.cpp"), QStringLiteral("sd.cpp")}) {
+        const QString exe = dir.filePath(kind + QStringLiteral("/server.exe"));
+        QDir().mkpath(QFileInfo(exe).absolutePath());
+        QVERIFY(QFile::copy(QStringLiteral(FAKE_SERVER_PATH), exe));
+        runtime::InstalledRuntime rt;
+        rt.id = QStringLiteral("adopted/setup-") + kind;
+        rt.kind = kind;
+        rt.executable = exe;
+        rt.directory = QFileInfo(exe).absolutePath();
+        studio.runtimes()->addInstalled(rt);
+    }
+    // A starter set of small files served by a mock Hugging Face; content differs per run.
+    MockHttpServer hf;
+    studio.hub()->setBaseUrls(hf.baseUrl().toString(), hf.baseUrl().toString());
+    const QString revision = QStringLiteral("0123456789abcdef0123456789abcdef01234567");
+    const QByteArray stamp = QByteArray::number(QDateTime::currentMSecsSinceEpoch());
+    struct Item
+    {
+        const char *id, *role, *kind, *path;
+    };
+    const QList<Item> items{{"lm", "language", "llm", "Tiny-Q4_K_M.gguf"},
+                            {"proj", "projector", "projector", "mmproj-Tiny-Q8_0.gguf"},
+                            {"ckpt", "checkpoint", "checkpoint", "tiny-xl.safetensors"},
+                            {"cn", "control_net", "controlnet", "cn/diffusion_pytorch_model.safetensors"},
+                            {"ipa", "ip_adapter", "ipadapter", "ip-adapter_tiny.safetensors"},
+                            {"clip", "clip_vision", "clip_vision", "image_encoder/model.safetensors"},
+                            {"up", "upscaler", "upscaler", "TinyESRGAN_x4.safetensors"}};
+    QJsonArray files;
+    QJsonArray ids;
+    QMap<QString, QByteArray> contents;
+    for (const Item &it : items) {
+        const QByteArray data = QByteArray(2 * 1024 * 1024, 'x') + it.id + stamp;
+        contents.insert(QLatin1String(it.role), data);
+        files.append(QJsonObject{{QStringLiteral("id"), QLatin1String(it.id)},
+                                 {QStringLiteral("role"), QLatin1String(it.role)},
+                                 {QStringLiteral("kind"), QLatin1String(it.kind)},
+                                 {QStringLiteral("name"), QStringLiteral("Tiny %1").arg(QLatin1String(it.id))},
+                                 {QStringLiteral("repo"), QStringLiteral("org/tiny")},
+                                 {QStringLiteral("revision"), revision},
+                                 {QStringLiteral("path"), QLatin1String(it.path)},
+                                 {QStringLiteral("saveAs"), QLatin1String(it.id) == QLatin1String("cn") ? QStringLiteral("tiny-controlnet.safetensors") : QString()},
+                                 {QStringLiteral("size"), data.size()},
+                                 {QStringLiteral("sha256"), QString::fromLatin1(QCryptographicHash::hash(data, QCryptographicHash::Sha256).toHex())},
+                                 {QStringLiteral("license"), QStringLiteral("apache-2.0")}});
+        ids.append(QLatin1String(it.id));
+        if (QLatin1String(it.role) == QLatin1String("upscaler"))
+            continue; // already on this computer (below)
+        hf.route("GET", QStringLiteral("/org/tiny/resolve/%1/%2").arg(revision, QLatin1String(it.path)), [data](const MockRequest &) {
+            MockResponse r;
+            r.contentType = "application/octet-stream";
+            r.body = data;
+            return r;
+        });
+    }
+    const QByteArray starters = QJsonDocument(QJsonObject{
+        {QStringLiteral("files"), files},
+        {QStringLiteral("sets"), QJsonArray{QJsonObject{{QStringLiteral("id"), QStringLiteral("standard")}, {QStringLiteral("minVramGb"), 0}, {QStringLiteral("files"), ids}}}}}).toJson();
+    // The upscaler is in a folder the library scans already.
+    const QString existing = dir.filePath(QStringLiteral("comfy/upscale_models/TinyESRGAN_x4.safetensors"));
+    QDir().mkpath(QFileInfo(existing).absolutePath());
+    {
+        QFile f(existing);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write(contents.value(QStringLiteral("upscaler")));
+    }
+    QSignalSpy scanned(studio.models(), &runtime::ModelLibrary::scanFinished);
+    QVERIFY(studio.models()->addRoot(dir.filePath(QStringLiteral("comfy"))));
+    QTRY_VERIFY_WITH_TIMEOUT(scanned.size() >= 1 && !studio.models()->isScanning(), 20000);
+
+    LocalSetupDialog dlg(&studio);
+    dlg.setup()->setSets(runtime::starterSets(starters));
+    dlg.resize(760, 620);
+    dlg.show();
+    QPushButton *start = nullptr;
+    for (QPushButton *b : dlg.findChildren<QPushButton *>()) {
+        if (b->text() == QLatin1String("Set up"))
+            start = b;
+    }
+    QVERIFY(start);
+    QTRY_VERIFY_WITH_TIMEOUT(start->isEnabled(), 20000); // hardware probe
+    auto *plan = dlg.findChild<QTreeWidget *>(QStringLiteral("setupPlan"));
+    QVERIFY(plan);
+    QCOMPARE(plan->topLevelItemCount(), 2 + 7); // two programs, seven files
+    QCOMPARE(plan->topLevelItem(0)->text(2), QStringLiteral("Installed"));
+    QCOMPARE(plan->topLevelItem(8)->text(2), QStringLiteral("Already on this computer"));
+    qint64 expected = 0;
+    for (auto it = contents.cbegin(); it != contents.cend(); ++it)
+        expected += it.key() == QLatin1String("upscaler") ? 0 : it.value().size();
+    QCOMPARE(dlg.setup()->downloadSize({QStringLiteral("standard"), true, true}), expected);
+    const QString shots = qEnvironmentVariable("LUMEN_SCREENSHOT_DIR");
+    if (!shots.isEmpty())
+        dlg.grab().save(shots + QStringLiteral("/local-setup.png"));
+
+    QSignalSpy finished(dlg.setup(), &LocalSetup::finished);
+    start->click();
+    QTRY_VERIFY_WITH_TIMEOUT(finished.size() == 1, 30000);
+    QVERIFY2(finished.first().at(0).toBool(), qPrintable(finished.first().at(1).toString()));
+    const QList<runtime::ServerProfile> profiles = servers->profiles();
+    QCOMPARE(profiles.size(), 2);
+    const auto llama = servers->profile(dlg.setup()->languageServer());
+    const auto sd = servers->profile(dlg.setup()->imageServer());
+    QVERIFY(llama && sd);
+    QCOMPARE(QDir::fromNativeSeparators(llama->options.value(QStringLiteral("model")).toString()), own + QStringLiteral("/llm/Tiny-Q4_K_M.gguf"));
+    QCOMPARE(QDir::fromNativeSeparators(llama->options.value(QStringLiteral("mmproj")).toString()), own + QStringLiteral("/llm/mmproj-Tiny-Q8_0.gguf"));
+    QVERIFY(llama->options.contains(QStringLiteral("context"))); // GPU preset
+    QCOMPARE(llama->name, QStringLiteral("Tiny lm"));
+    QCOMPARE(QDir::fromNativeSeparators(sd->options.value(QStringLiteral("model")).toString()), own + QStringLiteral("/checkpoints/tiny-xl.safetensors"));
+    QCOMPARE(QDir::fromNativeSeparators(sd->options.value(QStringLiteral("control_net")).toString()), own + QStringLiteral("/controlnet/tiny-controlnet.safetensors"));
+    QCOMPARE(QDir::fromNativeSeparators(sd->options.value(QStringLiteral("clip_vision")).toString()), own + QStringLiteral("/clip_vision/model.safetensors"));
+    QCOMPARE(QDir::fromNativeSeparators(sd->options.value(QStringLiteral("upscalers_dir")).toString()), QFileInfo(existing).absolutePath());
+    QVERIFY(sd->options.contains(QStringLiteral("weight_type")));
+    ai::Provider *sdProvider = studio.providerForServer(sd->id);
+    QVERIFY(sdProvider && studio.providerForServer(llama->id));
+    QCOMPARE(studio.providers()->defaultImageProvider(), sdProvider);
+    QVERIFY(QFileInfo::exists(runtime::sidecarPath(own + QStringLiteral("/llm/Tiny-Q4_K_M.gguf"))));
+    if (!shots.isEmpty()) {
+        dlg.grab().save(shots + QStringLiteral("/local-setup-done.png"));
+        // The download dialog against the real hubs (read-only public APIs): LUMEN_SCREENSHOT_HUB=1.
+        if (qEnvironmentVariableIntValue("LUMEN_SCREENSHOT_HUB")) {
+            studio.hub()->setBaseUrls(QStringLiteral("https://huggingface.co"), QStringLiteral("https://civitai.com"));
+            ModelHubDialog hub(&studio);
+            hub.show();
+            hub.setSearchText(QStringLiteral("Qwen3-VL-8B-Instruct"));
+            hub.search();
+            QTest::qWait(6000);
+            hub.grab().save(shots + QStringLiteral("/hub-huggingface.png"));
+            hub.setSource(runtime::HubSource::Civitai);
+            hub.setCategory(QStringLiteral("lora"));
+            hub.setSearchText(QStringLiteral("watercolor"));
+            hub.search();
+            QTest::qWait(8000);
+            hub.grab().save(shots + QStringLiteral("/hub-civitai.png"));
+        }
+    }
+
+    // Running it again changes nothing and downloads nothing.
+    {
+        LocalSetup again(&studio);
+        again.setSets(runtime::starterSets(starters));
+        QFuture<void> prepared = again.prepare();
+        QTRY_VERIFY_WITH_TIMEOUT(prepared.isFinished(), 20000);
+        const LocalSetup::Options o{QStringLiteral("standard"), true, true};
+        QCOMPARE(again.downloadSize(o), 0);
+        QSignalSpy done(&again, &LocalSetup::finished);
+        again.run(o);
+        QTRY_VERIFY_WITH_TIMEOUT(done.size() == 1, 10000);
+        QCOMPARE(done.first().at(1).toString(), QStringLiteral("Everything was already set up."));
+        QCOMPARE(servers->profiles().size(), 2);
+    }
+
+    dlg.close();
 }
 
 QTEST_MAIN(TestCanvas)

@@ -7,6 +7,7 @@
 #include "runtime/Download.h"
 #include "runtime/Hardware.h"
 #include "runtime/ModelFormats.h"
+#include "runtime/ModelHub.h"
 #include "runtime/ModelLibrary.h"
 #include "runtime/RuntimeStore.h"
 #include "runtime/ServerProfile.h"
@@ -21,6 +22,8 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QNetworkAccessManager>
+#include <QRegularExpression>
+#include <QUrlQuery>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTest>
@@ -200,6 +203,7 @@ private slots:
     void zipRejectsUnsafeArchives();
     void downloadVerifiesAndResumes();
     void downloadRejectsTampering();
+    void downloadRedirectsKeepTokenAtHome();
     void catalogAndBackendChoice();
     void hardwareProbe();
     void planFromReleases();
@@ -214,6 +218,9 @@ private slots:
     void inspectRealModels();
     void modelFormats();
     void modelLibrary();
+    void hubNamesAndStarters();
+    void hubSearch();
+    void hubDownloads();
 
 private:
     QTemporaryDir m_tmp;
@@ -1349,6 +1356,380 @@ void TestRuntime::modelLibrary()
 }
 
 // LUMEN_TEST_MODEL_DIRS=<dir>;<dir>: prints how every model file found there is classified.
+void TestRuntime::downloadRedirectsKeepTokenAtHome()
+{
+    QTemporaryDir dir;
+    MockHttpServer hub;
+    MockHttpServer cdn;
+    const QByteArray data(300000, 'm');
+    QByteArray hubAuth;
+    QByteArray cdnAuth = "unset";
+    hub.route("GET", QStringLiteral("/org/repo/resolve/abc/model.gguf"), [&](const MockRequest &req) {
+        hubAuth = req.headers.value("authorization");
+        MockResponse r;
+        r.status = 302;
+        r.headers.append({"Location", cdn.baseUrl().toString().toUtf8() + "/blob/signed?x=1"});
+        return r;
+    });
+    // A relative redirect stays at home: the token goes along.
+    hub.route("GET", QStringLiteral("/relative"), [](const MockRequest &) {
+        MockResponse r;
+        r.status = 307;
+        r.headers.append(qMakePair(QByteArrayLiteral("Location"), QByteArrayLiteral("/org/repo/resolve/abc/model.gguf")));
+        return r;
+    });
+    cdn.route("GET", QStringLiteral("/blob/signed"), [&](const MockRequest &req) {
+        cdnAuth = req.headers.value("authorization");
+        MockResponse r;
+        r.contentType = "application/octet-stream";
+        r.body = data;
+        return r;
+    });
+    QNetworkAccessManager nam;
+    DownloadSpec spec;
+    spec.url = QUrl(hub.baseUrl().toString() + QStringLiteral("/relative"));
+    spec.destination = dir.filePath(QStringLiteral("model.gguf"));
+    spec.sha256 = sha256(data);
+    spec.size = data.size();
+    spec.headers << qMakePair(QByteArrayLiteral("Authorization"), QByteArrayLiteral("Bearer secret"));
+    FileDownload d(&nam, spec);
+    QSignalSpy done(&d, &FileDownload::finished);
+    d.start();
+    QVERIFY(done.wait(10000));
+    QVERIFY2(d.ok(), qPrintable(d.errorString()));
+    QCOMPARE(hubAuth, QByteArray("Bearer secret"));
+    QVERIFY(cdnAuth.isEmpty()); // the CDN never sees the token
+    QCOMPARE(readAll(spec.destination), data);
+
+    // Redirect loops end with an error.
+    hub.route("GET", QStringLiteral("/loop"), [](const MockRequest &) {
+        MockResponse r;
+        r.status = 302;
+        r.headers.append(qMakePair(QByteArrayLiteral("Location"), QByteArrayLiteral("/loop")));
+        return r;
+    });
+    DownloadSpec loop = spec;
+    loop.url = QUrl(hub.baseUrl().toString() + QStringLiteral("/loop"));
+    loop.destination = dir.filePath(QStringLiteral("loop.gguf"));
+    FileDownload l(&nam, loop);
+    QSignalSpy loopDone(&l, &FileDownload::finished);
+    l.start();
+    QVERIFY(loopDone.wait(10000));
+    QVERIFY(!l.ok());
+    QVERIFY(l.errorString().contains(QStringLiteral("redirect")));
+}
+
+void TestRuntime::hubNamesAndStarters()
+{
+    QCOMPARE(precisionFromName(QStringLiteral("Qwen3VL-8B-Instruct-Q4_K_M.gguf")), QStringLiteral("Q4_K_M"));
+    QCOMPARE(precisionFromName(QStringLiteral("mmproj-Qwen3VL-8B-Instruct-Q8_0.gguf")), QStringLiteral("Q8_0"));
+    QCOMPARE(precisionFromName(QStringLiteral("gemma-3-12b-it-IQ4_XS.gguf")), QStringLiteral("IQ4_XS"));
+    QCOMPARE(precisionFromName(QStringLiteral("mmproj-F16.gguf")), QStringLiteral("F16"));
+    QCOMPARE(precisionFromName(QStringLiteral("model.fp16.safetensors")), QStringLiteral("FP16"));
+    QCOMPARE(precisionFromName(QStringLiteral("animagine-xl-4.0-opt.safetensors")), QString());
+
+    auto file = [](const QString &path) {
+        HubFile f;
+        f.path = path;
+        f.format = path.endsWith(QLatin1String(".gguf")) ? QStringLiteral("gguf") : QStringLiteral("safetensors");
+        f.kind = path.contains(QLatin1String("mmproj")) ? ModelKind::Projector : ModelKind::Llm;
+        return f;
+    };
+    const QList<HubFile> files{file(QStringLiteral("Big-Q4_K_M-00002-of-00003.gguf")), file(QStringLiteral("Big-Q4_K_M-00001-of-00003.gguf")),
+                               file(QStringLiteral("Big-Q4_K_M-00003-of-00003.gguf")), file(QStringLiteral("Big-Q8_0-00001-of-00002.gguf")),
+                               file(QStringLiteral("Small-Q4_K_M.gguf")), file(QStringLiteral("mmproj-BF16.gguf")),
+                               file(QStringLiteral("mmproj-Q8_0.gguf"))};
+    const QList<HubFile> parts = splitParts(files, files[0]);
+    QCOMPARE(parts.size(), 3);
+    QCOMPARE(parts.first().path, QStringLiteral("Big-Q4_K_M-00001-of-00003.gguf"));
+    QCOMPARE(splitParts(files, files[4]).size(), 1);
+    QCOMPARE(projectorFor(files, files[4])->path, QStringLiteral("mmproj-Q8_0.gguf"));
+    QVERIFY(!projectorFor(files, files[5])); // a projector has none
+    // mradermacher-style names: "<model>.mmproj-Q8_0.gguf".
+    QCOMPARE(projectorFor({file(QStringLiteral("M.Q4_K_M.gguf")), file(QStringLiteral("M.mmproj-f16.gguf")), file(QStringLiteral("M.mmproj-Q8_0.gguf"))},
+                          file(QStringLiteral("M.Q4_K_M.gguf")))->path,
+             QStringLiteral("M.mmproj-Q8_0.gguf"));
+
+    // The bundled starter sets: pinned commits, checksums, and the files the wizard needs.
+    const QList<StarterSet> sets = starterSets();
+    QCOMPARE(sets.size(), 3);
+    for (const StarterSet &s : sets) {
+        for (const char *role : {"language", "projector", "checkpoint", "control_net", "ip_adapter", "clip_vision", "upscaler"})
+            QVERIFY2(s.file(QLatin1String(role)), role);
+        for (const StarterFile &f : s.files) {
+            QVERIFY2(QRegularExpression(QStringLiteral("^[0-9a-f]{40}$")).match(f.revision).hasMatch(), qPrintable(f.id));
+            QVERIFY2(QRegularExpression(QStringLiteral("^[0-9a-f]{64}$")).match(f.sha256).hasMatch(), qPrintable(f.id));
+            QVERIFY(f.size > 1000000);
+            QVERIFY(f.kind != ModelKind::Unknown);
+            QVERIFY(!f.license.isEmpty());
+            QVERIFY(f.fileName().endsWith(QLatin1String(".gguf")) || f.fileName().endsWith(QLatin1String(".safetensors")));
+        }
+    }
+    const quint64 gb = 1024ull * 1024 * 1024;
+    QCOMPARE(pickStarterSet(sets, 0)->id, QStringLiteral("compact"));
+    QCOMPARE(pickStarterSet(sets, 4 * gb)->id, QStringLiteral("compact"));
+    QCOMPARE(pickStarterSet(sets, quint64(7.7 * gb))->id, QStringLiteral("standard")); // an "8 GB" laptop GPU
+    QCOMPARE(pickStarterSet(sets, 16 * gb)->id, QStringLiteral("large"));
+    const HubDownload d = starterDownload(*sets[1].file(QStringLiteral("control_net")));
+    QCOMPARE(d.title(), QStringLiteral("xinsir-controlnet-openpose-sdxl-1.0.safetensors"));
+    QCOMPARE(d.file.url.toString(), QStringLiteral("https://huggingface.co/xinsir/controlnet-openpose-sdxl-1.0/resolve/"
+                                                   "23f966cd5cfdd3f7729c903e243d87152162d2b7/diffusion_pytorch_model.safetensors"));
+}
+
+void TestRuntime::hubSearch()
+{
+    MockHttpServer hf;
+    MockHttpServer civ;
+    QUrlQuery hfQuery;
+    hf.route("GET", QStringLiteral("/api/models"), [&](const MockRequest &req) {
+        hfQuery = req.query;
+        QJsonArray list;
+        list.append(QJsonObject{{QStringLiteral("id"), QStringLiteral("Qwen/Qwen3-VL-8B-Instruct-GGUF")},
+                                {QStringLiteral("downloads"), 418007},
+                                {QStringLiteral("likes"), 166},
+                                {QStringLiteral("gated"), false},
+                                {QStringLiteral("pipeline_tag"), QStringLiteral("image-text-to-text")},
+                                {QStringLiteral("tags"), QJsonArray{QStringLiteral("gguf"), QStringLiteral("license:apache-2.0")}}});
+        list.append(QJsonObject{{QStringLiteral("id"), QStringLiteral("black-forest-labs/FLUX.1-dev")}, {QStringLiteral("gated"), QStringLiteral("auto")}});
+        MockResponse r;
+        r.body = QJsonDocument(list).toJson();
+        r.headers.append({"Link", "<" + hf.baseUrl().toString().toUtf8() + "/api/models?search=qwen&cursor=eyJuZXh0Ijo%3D>; rel=\"next\""});
+        return r;
+    });
+    QUrlQuery civQuery;
+    civ.route("GET", QStringLiteral("/api/v1/models"), [&](const MockRequest &req) {
+        civQuery = req.query;
+        auto model = [](int id, bool nsfw, const QString &file, const QString &format) {
+            return QJsonObject{
+                {QStringLiteral("id"), id},
+                {QStringLiteral("name"), QStringLiteral("Model %1").arg(id)},
+                {QStringLiteral("type"), QStringLiteral("LORA")},
+                {QStringLiteral("nsfw"), nsfw},
+                {QStringLiteral("allowCommercialUse"), QJsonArray{QStringLiteral("Image")}},
+                {QStringLiteral("allowDerivatives"), true},
+                {QStringLiteral("creator"), QJsonObject{{QStringLiteral("username"), QStringLiteral("someone")}}},
+                {QStringLiteral("stats"), QJsonObject{{QStringLiteral("downloadCount"), 1234}}},
+                {QStringLiteral("description"), QStringLiteral("<p>A <b>style</b> LoRA &amp; more.</p><p>Second</p>")},
+                {QStringLiteral("modelVersions"),
+                 QJsonArray{QJsonObject{
+                     {QStringLiteral("id"), id * 10},
+                     {QStringLiteral("name"), QStringLiteral("v1")},
+                     {QStringLiteral("baseModel"), QStringLiteral("Illustrious")},
+                     {QStringLiteral("trainedWords"), QJsonArray{QStringLiteral("stylexyz ")}},
+                     {QStringLiteral("images"), QJsonArray{QJsonObject{{QStringLiteral("url"), QStringLiteral("https://image.civitai.com/a/original=true/1.jpeg")},
+                                                                       {QStringLiteral("nsfwLevel"), 8}},
+                                                           QJsonObject{{QStringLiteral("url"), QStringLiteral("https://image.civitai.com/a/original=true/2.jpeg")},
+                                                                       {QStringLiteral("nsfwLevel"), 1}}}},
+                     {QStringLiteral("files"),
+                      QJsonArray{QJsonObject{{QStringLiteral("name"), file},
+                                             {QStringLiteral("sizeKB"), 1024.5},
+                                             {QStringLiteral("type"), QStringLiteral("Model")},
+                                             {QStringLiteral("primary"), true},
+                                             {QStringLiteral("metadata"), QJsonObject{{QStringLiteral("format"), format}, {QStringLiteral("fp"), QStringLiteral("fp16")}}},
+                                             {QStringLiteral("hashes"), QJsonObject{{QStringLiteral("SHA256"), QStringLiteral("ABCDEF")}}},
+                                             {QStringLiteral("downloadUrl"), QStringLiteral("https://civitai.com/api/download/models/%1").arg(id * 10)}},
+                                 QJsonObject{{QStringLiteral("name"), QStringLiteral("training.zip")}, {QStringLiteral("type"), QStringLiteral("Training Data")}}}}}}}};
+        };
+        QJsonArray items{model(1, false, QStringLiteral("style.safetensors"), QStringLiteral("SafeTensor")),
+                         model(2, true, QStringLiteral("adult.safetensors"), QStringLiteral("SafeTensor")),
+                         model(3, false, QStringLiteral("old.pt"), QStringLiteral("PickleTensor"))};
+        return MockResponse::json({{QStringLiteral("items"), items}, {QStringLiteral("metadata"), QJsonObject{{QStringLiteral("nextCursor"), QStringLiteral("2|100")}}}});
+    });
+
+    net::HttpClient http;
+    JobQueue jobs;
+    QTemporaryDir data;
+    ModelLibrary lib(&http);
+    lib.setDataDir(data.path());
+    ModelHub hub(&http, &jobs, &lib);
+    hub.setBaseUrls(hf.baseUrl().toString(), civ.baseUrl().toString());
+
+    HubQuery q;
+    q.text = QStringLiteral("qwen");
+    q.category = QStringLiteral("llm");
+    QFuture<HubPage> f = hub.search(HubSource::HuggingFace, q);
+    QTRY_VERIFY_WITH_TIMEOUT(f.isFinished(), 10000);
+    HubPage page = f.result();
+    QCOMPARE(hfQuery.queryItemValue(QStringLiteral("filter")), QStringLiteral("gguf"));
+    QCOMPARE(hfQuery.queryItemValue(QStringLiteral("search")), QStringLiteral("qwen"));
+    QVERIFY(hfQuery.allQueryItemValues(QStringLiteral("expand[]")).contains(QStringLiteral("gated")));
+    QCOMPARE(page.models.size(), 2);
+    QCOMPARE(page.models[0].author, QStringLiteral("Qwen"));
+    QCOMPARE(page.models[0].license, QStringLiteral("apache-2.0"));
+    QCOMPARE(page.models[0].downloads, 418007);
+    QVERIFY(page.models[0].gated.isEmpty());
+    QCOMPARE(page.models[1].gated, QStringLiteral("auto"));
+    QCOMPARE(page.nextCursor, QStringLiteral("eyJuZXh0Ijo="));
+
+    q.text = QStringLiteral("style");
+    q.category = QStringLiteral("lora");
+    f = hub.search(HubSource::Civitai, q);
+    QTRY_VERIFY_WITH_TIMEOUT(f.isFinished(), 10000);
+    page = f.result();
+    QCOMPARE(civQuery.queryItemValue(QStringLiteral("nsfw")), QStringLiteral("false"));
+    QVERIFY(civQuery.allQueryItemValues(QStringLiteral("types")).contains(QStringLiteral("LORA")));
+    QCOMPARE(page.models.size(), 2); // the adult model is left out
+    const HubModel &m = page.models[0];
+    QCOMPARE(m.id, QStringLiteral("1"));
+    QCOMPARE(m.description, QStringLiteral("A style LoRA & more.\nSecond"));
+    QCOMPARE(m.preview.toString(), QStringLiteral("https://image.civitai.com/a/width=320/2.jpeg")); // the safe image
+    QCOMPARE(m.versions.size(), 1);
+    QCOMPARE(m.versions[0].trainedWords, QStringList{QStringLiteral("stylexyz")});
+    QCOMPARE(m.versions[0].files.size(), 1); // the training data is not a model
+    QCOMPARE(m.versions[0].files[0].sha256, QStringLiteral("abcdef"));
+    QCOMPARE(m.versions[0].files[0].kind, ModelKind::Lora);
+    QCOMPARE(m.versions[0].files[0].precision, QStringLiteral("FP16"));
+    QVERIFY(page.models[1].versions[0].files[0].pickle());
+    QCOMPARE(page.nextCursor, QStringLiteral("2|100"));
+
+    // Civitai has no language models.
+    q.category = QStringLiteral("llm");
+    f = hub.search(HubSource::Civitai, q);
+    QVERIFY(f.isFinished());
+    QVERIFY(f.result().models.isEmpty());
+}
+
+void TestRuntime::hubDownloads()
+{
+    MockHttpServer hf;
+    MockHttpServer cdn;
+    const QByteArray padding(2 * 1024 * 1024, '\0');
+    // Named like a checkpoint, but the header says LoRA: it ends up in loras/.
+    const QByteArray lora = makeSafetensors({{QStringLiteral("lora_unet_a.lora_down.weight"), {8, 640}}},
+                                            {{QStringLiteral("ss_base_model_version"), QStringLiteral("sdxl_base_v1-0")}}) + padding;
+    const QByteArray gguf = makeGguf(QStringLiteral("qwen3vl"), 15, {{QStringLiteral("blk.0.attn_q.weight"), {4096, 4096}}}) + padding;
+    const QString sha = QStringLiteral("0123456789abcdef0123456789abcdef01234567");
+    hf.route("GET", QStringLiteral("/api/models/org/repo"), [&](const MockRequest &) {
+        return MockResponse::json({{QStringLiteral("id"), QStringLiteral("org/repo")},
+                                   {QStringLiteral("sha"), sha},
+                                   {QStringLiteral("pipeline_tag"), QStringLiteral("text-to-image")},
+                                   {QStringLiteral("cardData"), QJsonObject{{QStringLiteral("license"), QStringLiteral("openrail++")}}}});
+    });
+    hf.route("GET", QStringLiteral("/api/models/org/repo/tree/") + sha, [&](const MockRequest &req) {
+        QJsonArray tree;
+        tree.append(QJsonObject{{QStringLiteral("type"), QStringLiteral("file")}, {QStringLiteral("path"), QStringLiteral("README.md")}, {QStringLiteral("size"), 100}});
+        tree.append(QJsonObject{{QStringLiteral("type"), QStringLiteral("file")},
+                                {QStringLiteral("path"), QStringLiteral("unet/model one.safetensors")},
+                                {QStringLiteral("size"), lora.size()},
+                                {QStringLiteral("lfs"), QJsonObject{{QStringLiteral("oid"), sha256(lora)}}}});
+        tree.append(QJsonObject{{QStringLiteral("type"), QStringLiteral("file")},
+                                {QStringLiteral("path"), QStringLiteral("Model-Q4_K_M.gguf")},
+                                {QStringLiteral("size"), gguf.size()},
+                                {QStringLiteral("lfs"), QJsonObject{{QStringLiteral("oid"), sha256(gguf)}}}});
+        tree.append(QJsonObject{{QStringLiteral("type"), QStringLiteral("file")},
+                                {QStringLiteral("path"), QStringLiteral("old.ckpt")},
+                                {QStringLiteral("size"), 5000000},
+                                {QStringLiteral("lfs"), QJsonObject{{QStringLiteral("oid"), QStringLiteral("aa")}}}});
+        MockResponse r = MockResponse::json({});
+        r.body = req.query.queryItemValue(QStringLiteral("recursive")) == QLatin1String("true") ? QJsonDocument(tree).toJson() : "[]";
+        return r;
+    });
+    QByteArray auth = "unset";
+    hf.route("GET", QStringLiteral("/org/repo/resolve/") + sha + QStringLiteral("/unet/model one.safetensors"), [&](const MockRequest &req) {
+        auth = req.headers.value("authorization");
+        MockResponse r;
+        r.status = 302;
+        r.headers.append({"Location", cdn.baseUrl().toString().toUtf8() + "/xet/lora"});
+        return r;
+    });
+    serveFile(cdn, QStringLiteral("/xet/lora"), lora);
+    serveFile(hf, QStringLiteral("/org/repo/resolve/") + sha + QStringLiteral("/Model-Q4_K_M.gguf"), gguf);
+
+    net::HttpClient http;
+    JobQueue jobs;
+    QTemporaryDir data;
+    ModelLibrary lib(&http);
+    lib.setDataDir(data.path());
+    lib.load();
+    ModelHub hub(&http, &jobs, &lib);
+    hub.setBaseUrls(hf.baseUrl().toString(), cdn.baseUrl().toString());
+    hub.tokenProvider = [](HubSource s) { return s == HubSource::HuggingFace ? QStringLiteral("hf_test") : QString(); };
+
+    HubModel start;
+    start.id = QStringLiteral("org/repo");
+    QFuture<HubModel> df = hub.details(start);
+    QTRY_VERIFY_WITH_TIMEOUT(df.isFinished(), 10000);
+    const HubModel m = df.result();
+    QCOMPARE(m.license, QStringLiteral("openrail++"));
+    QCOMPARE(m.versions.size(), 1);
+    const QList<HubFile> files = m.versions[0].files;
+    QCOMPARE(files.size(), 3); // README is not a model
+    QCOMPARE(files[0].path, QStringLiteral("Model-Q4_K_M.gguf"));
+    QCOMPARE(files[0].kind, ModelKind::Llm);
+    QCOMPARE(files[0].precision, QStringLiteral("Q4_K_M"));
+    QVERIFY(files[1].pickle());
+    QCOMPARE(files[2].kind, ModelKind::Checkpoint); // a guess from the repository's pipeline
+    QVERIFY(files[2].url.toString(QUrl::FullyEncoded).endsWith(QStringLiteral("/unet/model%20one.safetensors")));
+
+    auto request = [&](const HubFile &f) {
+        HubDownload d;
+        d.source = HubSource::HuggingFace;
+        d.modelId = m.id;
+        d.modelName = m.name;
+        d.versionId = sha;
+        d.file = f;
+        d.license = m.license;
+        d.page = m.page;
+        return d;
+    };
+    QSignalSpy downloaded(&hub, &ModelHub::downloaded);
+    Job *j1 = hub.download(request(files[2]));
+    Job *j2 = hub.download(request(files[0]));
+    QTRY_VERIFY_WITH_TIMEOUT(j1->isFinished() && j2->isFinished(), 20000);
+    QVERIFY2(j1->state() == Job::State::Succeeded, qPrintable(j1->errorString()));
+    QVERIFY2(j2->state() == Job::State::Succeeded, qPrintable(j2->errorString()));
+    QCOMPARE(auth, QByteArray("Bearer hf_test"));
+    const QString loraPath = j1->result().toString();
+    QCOMPARE(loraPath, QDir::cleanPath(lib.defaultFolder() + QStringLiteral("/loras/model one.safetensors")));
+    QCOMPARE(readAll(loraPath), lora);
+    const QJsonObject side = readSidecar(loraPath);
+    QCOMPARE(side.value(QStringLiteral("source")).toString(), QStringLiteral("huggingface"));
+    QCOMPARE(side.value(QStringLiteral("version")).toString(), sha);
+    QCOMPARE(side.value(QStringLiteral("license")).toString(), QStringLiteral("openrail++"));
+    QCOMPARE(downloaded.size(), 2);
+    const auto entry = lib.entry(loraPath);
+    QVERIFY(entry);
+    QCOMPARE(entry->info.kind, ModelKind::Lora);
+    QCOMPARE(entry->sha256, sha256(lora)); // verified while downloading, not hashed again
+    QCOMPARE(entry->source.value(QStringLiteral("model")).toString(), QStringLiteral("org/repo"));
+    QCOMPARE(lib.find(sha256(gguf))->path, QDir::cleanPath(lib.defaultFolder() + QStringLiteral("/llm/Model-Q4_K_M.gguf")));
+
+    // The same file again: recognised on disk, not downloaded twice.
+    Job *again = hub.download(request(files[0]));
+    QTRY_VERIFY_WITH_TIMEOUT(again->isFinished(), 10000);
+    QCOMPARE(again->state(), Job::State::Succeeded);
+    QCOMPARE(again->result().toString(), lib.find(sha256(gguf))->path);
+    // A different file of the same name gets another name; the existing one stays.
+    HubFile other = files[0];
+    other.sha256 = sha256(gguf + "x");
+    other.size = gguf.size();
+    Job *clash = hub.download(request(other));
+    QTRY_VERIFY_WITH_TIMEOUT(clash->isFinished(), 10000);
+    QCOMPARE(clash->state(), Job::State::Failed); // checksum mismatch, served bytes differ
+    QCOMPARE(readAll(lib.defaultFolder() + QStringLiteral("/llm/Model-Q4_K_M.gguf")), gguf);
+
+    // Pickle files need an explicit yes.
+    Job *pickle = hub.download(request(files[1]));
+    QTRY_VERIFY_WITH_TIMEOUT(pickle->isFinished(), 10000);
+    QCOMPARE(pickle->state(), Job::State::Failed);
+    QVERIFY(pickle->errorString().contains(QStringLiteral("pickle")));
+
+    // Civitai without an API key: a clear message.
+    cdn.route("GET", QStringLiteral("/api/download/models/5"), [](const MockRequest &) { return MockResponse::json({}, 401); });
+    HubDownload civ;
+    civ.source = HubSource::Civitai;
+    civ.modelId = QStringLiteral("1");
+    civ.versionId = QStringLiteral("5");
+    civ.file.path = QStringLiteral("style.safetensors");
+    civ.file.format = QStringLiteral("safetensors");
+    civ.file.kind = ModelKind::Lora;
+    civ.file.url = QUrl(cdn.baseUrl().toString() + QStringLiteral("/api/download/models/5"));
+    Job *denied = hub.download(civ);
+    QTRY_VERIFY_WITH_TIMEOUT(denied->isFinished(), 10000);
+    QCOMPARE(denied->state(), Job::State::Failed);
+    QVERIFY2(denied->errorString().contains(QStringLiteral("API key")), qPrintable(denied->errorString()));
+}
+
 void TestRuntime::inspectRealModels()
 {
     const QStringList dirs = qEnvironmentVariable("LUMEN_TEST_MODEL_DIRS").split(QLatin1Char(';'), Qt::SkipEmptyParts);

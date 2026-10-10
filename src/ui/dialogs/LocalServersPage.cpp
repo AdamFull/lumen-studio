@@ -1,4 +1,5 @@
 #include "ui/dialogs/LocalServersPage.h"
+#include "ui/dialogs/LocalSetupDialog.h"
 #include "ui/dialogs/ModelsPage.h"
 
 #include "ai/ProviderRegistry.h"
@@ -220,7 +221,18 @@ LocalServersPage::LocalServersPage(Studio *studio, QWidget *parent)
                                "needs them and stop when Lumen closes."),
                             this));
     m_hardwareLabel = mutedLabel(tr("Checking this computer…"), this);
-    v->addWidget(m_hardwareLabel);
+    auto *setupRow = new QHBoxLayout;
+    setupRow->addWidget(m_hardwareLabel, 1);
+    auto *setup = new QPushButton(Icons::get(QStringLiteral("sparkles")), tr("Set up local AI…"), this);
+    Theme::setRole(setup, QStringLiteral("primary"));
+    setup->setToolTip(tr("Download the programs and a set of models that suit this computer, and set everything up"));
+    connect(setup, &QPushButton::clicked, this, [this] {
+        auto *dlg = new LocalSetupDialog(m_studio, this);
+        dlg->setAttribute(Qt::WA_DeleteOnClose);
+        dlg->show();
+    });
+    setupRow->addWidget(setup);
+    v->addLayout(setupRow);
 
     v->addWidget(sectionLabel(tr("Programs"), this));
     m_runtimes = makeTree({tr("Program"), tr("Version"), tr("Build"), tr("Folder")}, this);

@@ -19,6 +19,17 @@ std::shared_ptr<QCryptographicHash> freshHash()
     return std::make_shared<QCryptographicHash>(QCryptographicHash::Sha256);
 }
 
+bool sameOrigin(const QUrl &a, const QUrl &b)
+{
+    return a.scheme() == b.scheme() && a.host().compare(b.host(), Qt::CaseInsensitive) == 0
+           && a.port(a.scheme() == QLatin1String("https") ? 443 : 80) == b.port(b.scheme() == QLatin1String("https") ? 443 : 80);
+}
+
+bool isCredential(const QByteArray &header)
+{
+    return header.compare("Authorization", Qt::CaseInsensitive) == 0 || header.compare("Cookie", Qt::CaseInsensitive) == 0;
+}
+
 } // namespace
 
 QString sha256OfFile(const QString &path, qint64 limit)
@@ -139,12 +150,18 @@ void FileDownload::request()
         return;
     }
     m_file.seek(m_received);
-    QNetworkRequest req(m_spec.url);
-    req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
+    if (m_url.isEmpty())
+        m_url = m_spec.url;
+    QNetworkRequest req(m_url);
+    // Redirects are followed here, so that credentials can be dropped when the origin changes.
+    req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::ManualRedirectPolicy);
     req.setTransferTimeout(60000);
     req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("LumenStudio/%1").arg(QCoreApplication::applicationVersion()));
-    for (const auto &h : std::as_const(m_spec.headers))
-        req.setRawHeader(h.first, h.second);
+    const bool trusted = sameOrigin(m_url, m_spec.url);
+    for (const auto &h : std::as_const(m_spec.headers)) {
+        if (trusted || !isCredential(h.first))
+            req.setRawHeader(h.first, h.second);
+    }
     m_rangeRequested = m_received > 0;
     if (m_rangeRequested)
         req.setRawHeader("Range", "bytes=" + QByteArray::number(m_received) + '-');
@@ -217,7 +234,28 @@ void FileDownload::onReplyFinished()
     if (m_cancelled)
         return;
     const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    m_status = status;
     const QNetworkReply::NetworkError err = reply->error();
+    if (status == 301 || status == 302 || status == 303 || status == 307 || status == 308) {
+        const QUrl location = QUrl::fromEncoded(reply->rawHeader("Location"));
+        const QUrl next = m_url.resolved(location);
+        if (location.isEmpty() || !next.isValid()) {
+            finish(tr("The server redirected the download to an invalid address."));
+            return;
+        }
+        if (m_url.scheme() == QLatin1String("https") && next.scheme() != QLatin1String("https")) {
+            finish(tr("The server redirected the download to an insecure address."));
+            return;
+        }
+        if (++m_redirects > maxRedirects) {
+            finish(tr("Too many redirects while downloading %1.").arg(m_spec.url.fileName()));
+            return;
+        }
+        m_url = next;
+        --m_attempts; // a redirect is not a failed attempt
+        request();
+        return;
+    }
     if (status == 416 && m_received > 0) {
         // Range not satisfiable: the .part file probably holds the whole file already.
         complete();
@@ -230,10 +268,13 @@ void FileDownload::onReplyFinished()
     const bool transient = status == 0 || status == 408 || status == 429 || status >= 500;
     if (transient && m_attempts <= maxRetries) {
         qCInfo(lcNet) << "download interrupted, resuming" << m_spec.url.host() << reply->errorString();
+        // Start again from the original address: signed CDN links expire.
+        m_url = QUrl();
+        m_redirects = 0;
         QTimer::singleShot(retryDelayMs * m_attempts, this, [this] { request(); });
         return;
     }
-    QString message = status ? tr("HTTP %1 while downloading %2").arg(status).arg(m_spec.url.fileName())
+    QString message = status ? tr("HTTP %1 while downloading %2").arg(status).arg(QFileInfo(m_spec.destination).fileName())
                              : reply->errorString();
     if (status == 401 || status == 403)
         message += QStringLiteral(" — ") + tr("access denied (a token may be required)");
