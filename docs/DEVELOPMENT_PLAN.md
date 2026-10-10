@@ -1158,6 +1158,14 @@ A LoRA learns from 15–40 varied images of the character. They come from what L
   - A first live run prompted the candidates with the trigger word alone. The 8-image LoRA kept
     hair and eyes but dropped the outfit in new scenes (bikini on the beach, hoodie in the café):
     5.7–6.6 against 8.9 for the baseline. That measured the LoRA in a way Lumen never uses it.
+  - Live run with the fair prompts (RTX 4060 8 GB, WAI-Illustrious, the 8-image LoRA from the
+    full training run, Qwen3-VL-8B as Critic): 24 images and 24 critiques in 45 min.
+    - Means: baseline 9.08; epochs 4 / 5 / 6 at 0.8: 8.67 / 8.67 / 9.17; epoch 6 at 0.6 / 1.0:
+      8.83 / 9.08. Recommended: epoch 6 at 0.8.
+    - Identity alone: 9.75 with the LoRA against 9.5 for IP-Adapter. The LoRA rows look alike
+      across scenes; the baseline added cat ears, pom-poms and an orange tint in one shot.
+    - The margin is small: four shots, one Critic pass, and scores near the top of the scale. A
+      25-image set and a stricter Critic prompt are needed to settle AC 2.
   - Stage 1: the baseline and the newest three epochs at weight 0.8. Stage 2: the best epoch at
     0.6 and 1.0. That makes 24 images, with a fixed seed per shot so only the LoRA differs.
   - The Critic scores every image against the references: (2 × identity + pose) / 3. On a tie the
