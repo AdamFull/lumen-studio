@@ -105,6 +105,19 @@ or a git checkout with its venv: pick `main.py` or the folder) and WebUI / Forge
 Lumen then starts and stops them like the other servers. ComfyUI Desktop keeps its own models,
 extra model paths and custom nodes.
 
+**Models.** Settings → Models lists the model files Lumen knows: its own models folder and the
+folders you add. *Folders → Found on this computer* offers your ComfyUI, WebUI and LM Studio
+folders, Downloads, and the folders your servers already use. Files stay where they are.
+
+* **What each file is:** Lumen reads each file's header to tell the type (checkpoint, LoRA,
+  ControlNet, language model…), family (SDXL, FLUX…) and precision, and whether it fits your GPU.
+* **Civitai:** *Look up on Civitai* finds a file's page, base model, trigger words and a preview.
+  This sends the file's checksum to civitai.com, so it only happens when you click it.
+* **Using a model:** *Use with a server* adds a model to a server (or creates one). The model fields
+  of the server settings have a library menu next to *Browse*.
+* **Pickle files:** files in pickle formats (.ckpt, .pt, .pth, .bin) are marked; prefer
+  .safetensors.
+
 **Tuned for.** New servers start with options for the GPU Lumen detected (up to 8 GB, 12 GB, or
 16 GB and more). Change *Tuned for* to apply another set.
 

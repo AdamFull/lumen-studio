@@ -264,4 +264,17 @@
         <translation><numerusform>%n server running</numerusform><numerusform>%n servers running</numerusform></translation>
     </message>
 </context>
+<context>
+    <name>lumen::ui::ModelsPage</name>
+    <message numerus="yes">
+        <location filename="../src/ui/dialogs/ModelsPage.cpp" line="+1" />
+        <source>%n model(s) shown, %1</source>
+        <translation><numerusform>%n model shown, %1</numerusform><numerusform>%n models shown, %1</numerusform></translation>
+    </message>
+    <message numerus="yes">
+        <location filename="../src/ui/dialogs/ModelsPage.cpp" line="+1" />
+        <source> · %n folder(s)</source>
+        <translation><numerusform> · %n folder</numerusform><numerusform> · %n folders</numerusform></translation>
+    </message>
+</context>
 </TS>

@@ -22,6 +22,7 @@ Studio::Studio(QObject *parent)
     , m_registry(&m_http)
     , m_runtimes(&m_http, &m_jobs)
     , m_servers(&m_runtimes, &m_http)
+    , m_models(&m_http)
     , m_generation(&m_registry, &m_jobs)
     , m_director(&m_registry)
     , m_parts(&m_registry, &m_jobs, &m_generation)
@@ -36,6 +37,8 @@ Studio::Studio(QObject *parent)
     connect(&m_registry, &ai::ProviderRegistry::providersChanged, this, &Studio::applyServerBindings);
     connect(&m_servers, &runtime::ServerSupervisor::profilesChanged, this, &Studio::applyServerBindings);
     QTimer::singleShot(0, &m_servers, &runtime::ServerSupervisor::startAutoStartServers);
+    m_models.load();
+    QTimer::singleShot(0, &m_models, &runtime::ModelLibrary::rescan); // new or changed files since the last run
 
     m_autosave.setInterval(std::max(10, Settings::instance().autosaveIntervalSec()) * 1000);
     connect(&m_autosave, &QTimer::timeout, this, &Studio::autosave);

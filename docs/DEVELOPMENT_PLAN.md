@@ -804,10 +804,35 @@ Phase C — llama.cpp management
   - SD WebUI / Forge is covered by unit tests only (no install on the test machine).
 
 Phase D — model library
-- [ ] Index (scan roots, GGUF / safetensors header parsing, lazy sha256), browser UI, fit hints,
-  Civitai by-hash enrichment (opt-in), starter sets and "Set up local studio".
+- [x] Header inspection (`ModelFormats`):
+  - GGUF and safetensors headers are read without loading weights.
+  - Classification comes from tensor names and metadata: checkpoints (SD 1.5 / 2 / SDXL / SD 3 /
+    FLUX), diffusion models (FLUX, SD 3, Qwen-Image, Anima / Cosmos), LoRAs (base family, trigger
+    phrase), ControlNets, IP-Adapters (SD 1.5 vs SDXL by width), CLIP vision, VAEs (latent
+    channels), text encoders, upscalers, embeddings, LLMs (architecture, quantisation, context,
+    layers / KV heads) and vision projectors.
+  - Pickle files are never unpickled; folder names classify them.
+  - Checked against the 22 model files on the test machine.
+- [x] `ModelLibrary`:
+  - Lumen's models folder with typed sub-folders, plus folders scanned in place.
+  - A JSON index next to the settings (instead of SQLite): unchanged files are not read again.
+  - Lazy SHA-256; opt-in Civitai lookup by hash per file (page, base model, trigger words, a safe
+    preview).
+  - Folder suggestions: ComfyUI / WebUI installs, ComfyUI Desktop, LM Studio, Downloads, and
+    folders of models the servers use.
+  - Removal to the recycle bin.
+- [x] Settings → Models:
+  - search and type filter, family / precision / size / folder, and GPU fit ("Fits / Partly /
+    Too large" from the weights plus a 16k KV cache, or SDXL at q8_0 with activations);
+  - details with Civitai info and preview, "used by" servers, "use with a server" (new or
+    existing), show in folder, recycle bin;
+  - model file fields of the server dialog get a "choose from the library" menu.
+- Moved to phase E: starter sets and "Set up local studio" (they need the Hugging Face
+  downloads).
 
 Phase E — hub downloads
+- [ ] Starter sets per VRAM tier (`resources/models/starters.json`) and "Set up local studio"
+  (moved from phase D).
 - [ ] Hugging Face search and download (revision pinning, gated token, quant picker, mmproj
   pairing).
 - [ ] Civitai search and download (token, NSFW filter, hashes, licence fields).

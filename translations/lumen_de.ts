@@ -1038,7 +1038,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Die Regie ist nicht verfügbar.</translation>
     </message>
     <message>
-        <location filename="../src/ui/Studio.cpp" line="+77"/>
+        <location filename="../src/ui/Studio.cpp" line="+80"/>
         <location line="+17"/>
         <source>Lumen is shutting down.</source>
         <translation>Lumen wird beendet.</translation>
@@ -3010,6 +3010,119 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <location line="+5"/>
         <source> · %1 RAM</source>
         <translation> · %1 RAM</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::runtime::ModelFormats</name>
+    <message>
+        <location filename="../src/runtime/ModelFormats.cpp" line="+32"/>
+        <source>Other</source>
+        <translation>Sonstiges</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Checkpoint</source>
+        <translation>Checkpoint</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Diffusion model</source>
+        <translation>Diffusionsmodell</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>LoRA</source>
+        <translation>LoRA</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>ControlNet</source>
+        <translation>ControlNet</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>IP-Adapter</source>
+        <translation>IP-Adapter</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>CLIP vision</source>
+        <translation>CLIP Vision</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>VAE</source>
+        <translation>VAE</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Text encoder</source>
+        <translation>Text-Encoder</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Upscaler</source>
+        <translation>Hochskalierer</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Embedding</source>
+        <translation>Embedding</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Language model</source>
+        <translation>Sprachmodell</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Vision projector</source>
+        <translation>Vision-Projektor</translation>
+    </message>
+    <message>
+        <location line="+226"/>
+        <source>Not a safetensors file.</source>
+        <translation>Keine safetensors-Datei.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Damaged safetensors header: %1</source>
+        <translation>Beschädigter safetensors-Header: %1</translation>
+    </message>
+    <message>
+        <location line="+133"/>
+        <source>Not a GGUF file (or an unsupported version).</source>
+        <translation>Keine GGUF-Datei (oder eine nicht unterstützte Version).</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <location line="+16"/>
+        <location line="+17"/>
+        <source>Damaged GGUF header.</source>
+        <translation>Beschädigter GGUF-Header.</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::runtime::ModelLibrary</name>
+    <message>
+        <location filename="../src/runtime/ModelLibrary.cpp" line="+173"/>
+        <source>Lumen models</source>
+        <translation>Lumen-Modelle</translation>
+    </message>
+    <message>
+        <location line="+198"/>
+        <source>Cannot read %1.</source>
+        <translation>%1 kann nicht gelesen werden.</translation>
+    </message>
+    <message>
+        <location line="+59"/>
+        <source>Civitai lookup failed: %1</source>
+        <translation>Civitai-Abfrage fehlgeschlagen: %1</translation>
+    </message>
+    <message>
+        <location line="+29"/>
+        <source>Cannot move %1 to the recycle bin: %2</source>
+        <translation>%1 kann nicht in den Papierkorb verschoben werden: %2</translation>
     </message>
 </context>
 <context>
@@ -5694,7 +5807,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::InstallRuntimeDialog</name>
     <message>
-        <location filename="../src/ui/dialogs/LocalServersPage.cpp" line="+603"/>
+        <location filename="../src/ui/dialogs/LocalServersPage.cpp" line="+623"/>
         <source>Download a server program</source>
         <translation>Serverprogramm herunterladen</translation>
     </message>
@@ -6212,7 +6325,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::LocalServersPage</name>
     <message>
-        <location filename="../src/ui/dialogs/LocalServersPage.cpp" line="-676"/>
+        <location filename="../src/ui/dialogs/LocalServersPage.cpp" line="-695"/>
         <source>Existing install</source>
         <translation>Vorhandene Installation</translation>
     </message>
@@ -6232,7 +6345,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Bei Bedarf</translation>
     </message>
     <message>
-        <location line="+121"/>
+        <location line="+135"/>
         <source>Local AI servers</source>
         <translation>Lokale KI-Server</translation>
     </message>
@@ -6298,12 +6411,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <location line="+262"/>
         <location line="+6"/>
         <location line="+4"/>
-        <location line="+68"/>
+        <location line="+73"/>
         <source>Remove</source>
         <translation>Entfernen</translation>
     </message>
     <message>
-        <location line="-350"/>
+        <location line="-355"/>
         <source>Servers</source>
         <translation>Server</translation>
     </message>
@@ -6458,12 +6571,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Es ist noch kein Serverprogramm installiert. Jetzt eines herunterladen?</translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location line="+41"/>
         <source>%1 added as a provider. It starts when Lumen first uses it.</source>
         <translation>%1 als Anbieter hinzugefügt. Er startet, sobald Lumen ihn zum ersten Mal verwendet.</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+16"/>
         <source>Restart</source>
         <translation>Neu starten</translation>
     </message>
@@ -6886,6 +6999,297 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
 </context>
 <context>
+    <name>lumen::ui::ModelsPage</name>
+    <message>
+        <location filename="../src/ui/dialogs/ModelsPage.cpp" line="+159"/>
+        <source>No matching models in the library</source>
+        <translation>Keine passenden Modelle in der Bibliothek</translation>
+    </message>
+    <message>
+        <location line="+34"/>
+        <source>Models</source>
+        <translation>Modelle</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Model files on this computer: Lumen&apos;s models folder and the folders you add (ComfyUI, WebUI, LM Studio, Downloads…). Files stay where they are; Lumen reads their headers to tell what they are.</source>
+        <translation>Modelldateien auf diesem Computer: Lumens Modellordner und die Ordner, die Sie hinzufügen (ComfyUI, WebUI, LM Studio, Downloads…). Die Dateien bleiben, wo sie sind; Lumen liest ihre Header, um zu erkennen, was sie sind.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Search models…</source>
+        <translation>Modelle suchen…</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>All types</source>
+        <translation>Alle Typen</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Folders</source>
+        <translation>Ordner</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Rescan</source>
+        <translation>Neu durchsuchen</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Name</source>
+        <translation>Name</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Type</source>
+        <translation>Typ</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Family</source>
+        <translation>Familie</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Precision</source>
+        <translation>Genauigkeit</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Size</source>
+        <translation>Größe</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>GPU</source>
+        <translation>GPU</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Folder</source>
+        <translation>Ordner</translation>
+    </message>
+    <message>
+        <location line="+61"/>
+        <source>Fits</source>
+        <translation>Passt</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Partly</source>
+        <translation>Teilweise</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Too large</source>
+        <translation>Zu groß</translation>
+    </message>
+    <message>
+        <location line="+29"/>
+        <source> · GPU: %1</source>
+        <translation> · GPU: %1</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Scanning…</source>
+        <translation>Wird durchsucht…</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+1"/>
+        <source>%n model(s) shown, %1</source>
+        <translation>
+            <numerusform>%n Modell angezeigt, %1</numerusform>
+            <numerusform>%n Modelle angezeigt, %1</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+0"/>
+        <source> · %n folder(s)</source>
+        <translation>
+            <numerusform> · %n Ordner</numerusform>
+            <numerusform> · %n Ordner</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+48"/>
+        <source>Scanned folders</source>
+        <translation>Durchsuchte Ordner</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Open</source>
+        <translation>Öffnen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Stop scanning this folder</source>
+        <translation>Diesen Ordner nicht mehr durchsuchen</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Found on this computer</source>
+        <translation>Auf diesem Computer gefunden</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Add folder…</source>
+        <translation>Ordner hinzufügen…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Add a folder with models</source>
+        <translation>Ordner mit Modellen hinzufügen</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>No models yet. Add the folders where your models are with Folders → Found on this computer or Add folder…, or put files into Lumen&apos;s models folder.</source>
+        <translation>Noch keine Modelle. Fügen Sie die Ordner mit Ihren Modellen über Ordner → Auf diesem Computer gefunden oder Ordner hinzufügen… hinzu, oder legen Sie Dateien in Lumens Modellordner.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Select a model to see its details.</source>
+        <translation>Wählen Sie ein Modell, um die Details zu sehen.</translation>
+    </message>
+    <message>
+        <location line="+23"/>
+        <source>%1 parameters</source>
+        <translation>%1 Parameter</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>context %1</source>
+        <translation>Kontext %1</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Fits in the GPU&apos;s memory (about %1 needed).</source>
+        <translation>Passt in den GPU-Speicher (etwa %1 benötigt).</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Runs partly from system memory: slower (about %1 needed, %2 VRAM).</source>
+        <translation>Läuft teilweise aus dem Arbeitsspeicher: langsamer (etwa %1 benötigt, %2 VRAM).</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Too large for this GPU (about %1 needed, %2 VRAM).</source>
+        <translation>Zu groß für diese GPU (etwa %1 benötigt, %2 VRAM).</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Trigger words: %1</source>
+        <translation>Auslösewörter: %1</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Pickle format (.ckpt/.pt/.pth/.bin): it can contain code that runs when Python tools load it. Prefer .safetensors versions from trusted sources.</source>
+        <translation>Pickle-Format (.ckpt/.pt/.pth/.bin): kann Code enthalten, der beim Laden durch Python-Werkzeuge ausgeführt wird. Bevorzugen Sie .safetensors-Versionen aus vertrauenswürdigen Quellen.</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Not used by a server.</source>
+        <translation>Von keinem Server verwendet.</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Used by: %1</source>
+        <translation>Verwendet von: %1</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Civitai</source>
+        <translation>Civitai</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Not found on Civitai.</source>
+        <translation>Auf Civitai nicht gefunden.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Base model: %1</source>
+        <translation>Basismodell: %1</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Trained words: %1</source>
+        <translation>Trainierte Wörter: %1</translation>
+    </message>
+    <message>
+        <location line="+38"/>
+        <source>Looking a file up sends its SHA-256 checksum to civitai.com.</source>
+        <translation>Beim Nachschlagen wird die SHA-256-Prüfsumme der Datei an civitai.com gesendet.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Look up on Civitai</source>
+        <translation>Auf Civitai nachschlagen</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Look up again</source>
+        <translation>Erneut nachschlagen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Use with a server</source>
+        <translation>Mit einem Server verwenden</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Show in folder</source>
+        <translation>Im Ordner anzeigen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+38"/>
+        <location line="+4"/>
+        <source>Move to recycle bin</source>
+        <translation>In den Papierkorb</translation>
+    </message>
+    <message>
+        <location line="-20"/>
+        <source>Hashing and looking up…</source>
+        <translation>Prüfsumme wird berechnet und nachgeschlagen…</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Move %1 to the recycle bin?</source>
+        <translation>%1 in den Papierkorb verschieben?</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>It is used by: %1.</source>
+        <translation>Es wird verwendet von: %1.</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>Use in %1</source>
+        <translation>In %1 verwenden</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>%1 uses it after a restart.</source>
+        <translation>%1 verwendet es nach einem Neustart.</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>%1 updated.</source>
+        <translation>%1 aktualisiert.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>New server with this model…</source>
+        <translation>Neuer Server mit diesem Modell…</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Install or add %1 under Local servers first.</source>
+        <translation>Installieren oder fügen Sie %1 zuerst unter Lokale Server hinzu.</translation>
+    </message>
+</context>
+<context>
     <name>lumen::ui::MoveTool</name>
     <message>
         <location filename="../src/ui/canvas/Tools.cpp" line="+248"/>
@@ -6912,7 +7316,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::OnboardingDialog</name>
     <message>
-        <location filename="../src/ui/dialogs/SettingsDialog.cpp" line="+653"/>
+        <location filename="../src/ui/dialogs/SettingsDialog.cpp" line="+657"/>
         <source>Welcome to Lumen Studio</source>
         <translation>Willkommen bei Lumen Studio</translation>
     </message>
@@ -8686,7 +9090,7 @@ oder aus der Bibliothek ziehen</translation>
 <context>
     <name>lumen::ui::ProviderForm</name>
     <message>
-        <location filename="../src/ui/dialogs/SettingsDialog.cpp" line="-669"/>
+        <location filename="../src/ui/dialogs/SettingsDialog.cpp" line="-672"/>
         <source>Documentation</source>
         <translation>Dokumentation</translation>
     </message>
@@ -8894,7 +9298,7 @@ oder aus der Bibliothek ziehen</translation>
 <context>
     <name>lumen::ui::ServerLogDialog</name>
     <message>
-        <location filename="../src/ui/dialogs/LocalServersPage.cpp" line="+515"/>
+        <location filename="../src/ui/dialogs/LocalServersPage.cpp" line="+527"/>
         <source>Server log — %1</source>
         <translation>Serverprotokoll – %1</translation>
     </message>
@@ -8932,7 +9336,7 @@ oder aus der Bibliothek ziehen</translation>
 <context>
     <name>lumen::ui::ServerProfileDialog</name>
     <message>
-        <location line="-367"/>
+        <location line="-379"/>
         <source>New server</source>
         <translation>Neuer Server</translation>
     </message>
@@ -8942,13 +9346,13 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Servereinstellungen</translation>
     </message>
     <message>
-        <location line="-641"/>
-        <location line="+656"/>
+        <location line="-659"/>
+        <location line="+674"/>
         <source>Name</source>
         <translation>Name</translation>
     </message>
     <message>
-        <location line="-655"/>
+        <location line="-673"/>
         <source>Model file</source>
         <translation>Modelldatei</translation>
     </message>
@@ -8968,12 +9372,17 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Entfernen</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+4"/>
+        <source>From library</source>
+        <translation>Aus der Bibliothek</translation>
+    </message>
+    <message>
+        <location line="+20"/>
         <source>Add model</source>
         <translation>Modell hinzufügen</translation>
     </message>
     <message>
-        <location line="+641"/>
+        <location line="+646"/>
         <source>Program</source>
         <translation>Programm</translation>
     </message>
@@ -9078,7 +9487,12 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Durchsuchen…</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+4"/>
+        <source>Choose from the model library</source>
+        <translation>Aus der Modellbibliothek wählen</translation>
+    </message>
+    <message>
+        <location line="+17"/>
         <location line="+56"/>
         <source>All files (*)</source>
         <translation>Alle Dateien (*)</translation>
@@ -9089,7 +9503,7 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Automatisch</translation>
     </message>
     <message>
-        <location line="+73"/>
+        <location line="+74"/>
         <source>Lumen has no provider for %1 yet.</source>
         <translation>Lumen hat noch keinen Anbieter für %1.</translation>
     </message>
@@ -9184,6 +9598,11 @@ oder aus der Bibliothek ziehen</translation>
     </message>
     <message>
         <location line="+1"/>
+        <source>Models</source>
+        <translation>Modelle</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>General</source>
         <translation>Allgemein</translation>
     </message>
@@ -9193,7 +9612,7 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Tastenkürzel</translation>
     </message>
     <message>
-        <location line="+32"/>
+        <location line="+34"/>
         <source>Add provider</source>
         <translation>Anbieter hinzufügen</translation>
     </message>

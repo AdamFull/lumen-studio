@@ -17,6 +17,7 @@
 #include "pose/Rig.h"
 #include "MockHttpServer.h"
 #include "ui/dialogs/LocalServersPage.h"
+#include "ui/dialogs/ModelsPage.h"
 #include "ui/dialogs/SettingsDialog.h"
 #include "ui/dialogs/ShortcutsPage.h"
 #include "ui/widgets/ServerStatus.h"
@@ -782,6 +783,27 @@ void TestCanvas::localServersWiring()
             QTest::qWait(4000); // hardware probe + GitHub
             install.grab().save(shots + QStringLiteral("/install.png"));
             window.grab().save(shots + QStringLiteral("/window.png"));
+            // The model library with real folders (LUMEN_SCREENSHOT_MODEL_DIRS=<dir>;<dir>).
+            const QStringList modelDirs = qEnvironmentVariable("LUMEN_SCREENSHOT_MODEL_DIRS").split(QLatin1Char(';'), Qt::SkipEmptyParts);
+            if (!modelDirs.isEmpty()) {
+                QSignalSpy scanned(studio.models(), &runtime::ModelLibrary::scanFinished);
+                for (const QString &d : modelDirs)
+                    studio.models()->addRoot(d);
+                QTRY_VERIFY_WITH_TIMEOUT(!studio.models()->isScanning() && scanned.size() >= 1, 60000);
+                dlg.showTab(QStringLiteral("models"));
+                QTest::qWait(1500); // hardware probe
+                auto *list = dlg.findChild<ModelsPage *>()->findChild<QTreeWidget *>();
+                for (int i = 0; i < list->topLevelItemCount(); ++i) {
+                    if (list->topLevelItem(i)->text(0).startsWith(QLatin1String("Qwen3VL")))
+                        list->setCurrentItem(list->topLevelItem(i));
+                }
+                QTest::qWait(300);
+                dlg.resize(1200, 760);
+                QTest::qWait(300);
+                dlg.grab().save(shots + QStringLiteral("/models.png"));
+                for (const runtime::ModelRoot &r : studio.models()->roots())
+                    studio.models()->removeRoot(r.path);
+            }
         }
         dlg.showTab(QStringLiteral("providers"));
         QTest::qWait(50);

@@ -1,4 +1,5 @@
 #include "ui/dialogs/LocalServersPage.h"
+#include "ui/dialogs/ModelsPage.h"
 
 #include "ai/ProviderRegistry.h"
 #include "core/Error.h"
@@ -99,7 +100,8 @@ QColor stateColor(ServerState s)
 class ModelListEditor : public QWidget
 {
 public:
-    ModelListEditor(const QVariantList &value, const QString &filter, std::function<void()> changed, QWidget *parent)
+    ModelListEditor(const QVariantList &value, const QString &filter, std::function<void()> changed, QWidget *parent,
+                    runtime::ModelLibrary *library = nullptr)
         : QWidget(parent)
         , m_filter(filter)
         , m_changed(std::move(changed))
@@ -118,6 +120,19 @@ public:
         auto *add = new QPushButton(Icons::get(QStringLiteral("plus")), QCoreApplication::translate("lumen::ui::ServerProfileDialog", "Add model…"), this);
         auto *remove = new QPushButton(Icons::get(QStringLiteral("trash")), QCoreApplication::translate("lumen::ui::ServerProfileDialog", "Remove"), this);
         bar->addWidget(add);
+        if (library) {
+            auto *fromLibrary = new QPushButton(Icons::get(QStringLiteral("layers")),
+                                                QCoreApplication::translate("lumen::ui::ServerProfileDialog", "From library"), this);
+            auto *menu = new QMenu(fromLibrary);
+            fromLibrary->setMenu(menu);
+            connect(menu, &QMenu::aboutToShow, this, [this, menu, library] {
+                fillModelMenu(menu, library, {runtime::ModelKind::Llm}, [this](const QString &path) {
+                    addRow(runtime::llamaModelName(path), path, QDir::toNativeSeparators(runtime::findProjector(path)));
+                    m_changed();
+                });
+            });
+            bar->addWidget(fromLibrary);
+        }
         bar->addWidget(remove);
         bar->addStretch();
         v->addLayout(bar);
@@ -528,12 +543,16 @@ void LocalServersPage::newServer()
     ServerProfileDialog dlg(m_studio, m_studio->servers()->createProfile(runtimeId), true, this);
     if (dlg.exec() != QDialog::Accepted)
         return;
-    const runtime::ServerProfile p = dlg.profile();
-    m_studio->servers()->addProfile(p);
-    if (dlg.createProvider()) {
-        const QString kind = m_studio->servers()->kindOf(p.id);
+    addServer(m_studio, dlg.profile(), dlg.createProvider());
+}
+
+void addServer(Studio *studio, const runtime::ServerProfile &p, bool createProvider)
+{
+    studio->servers()->addProfile(p);
+    if (createProvider) {
+        const QString kind = studio->servers()->kindOf(p.id);
         QVariantMap settings{{QStringLiteral("url"), runtime::providerUrl(kind, p.port)}, {QStringLiteral("managed_server"), p.id}};
-        if (ai::Provider *provider = m_studio->providers()->addProvider(runtime::providerTypeFor(kind), p.name, settings)) {
+        if (ai::Provider *provider = studio->providers()->addProvider(runtime::providerTypeFor(kind), p.name, settings)) {
             // Roles nobody handles yet go to this server. A vision model takes every role: on one
             // GPU, switching between a vision and a text model costs a reload each time (measured:
             // twice the time of the reference scenario), and the vision model handled tool calls better.
@@ -550,13 +569,14 @@ void LocalServersPage::newServer()
                 if (text.isEmpty())
                     text = vision;
                 for (ai::LlmRole role : ai::allLlmRoles()) {
-                    if (!m_studio->providers()->role(role).providerId.isEmpty())
+                    if (!studio->providers()->role(role).providerId.isEmpty())
                         continue;
                     const QString model = vision.isEmpty() ? text : vision;
-                    m_studio->providers()->setRole(role, {provider->instanceId(), model});
+                    studio->providers()->setRole(role, {provider->instanceId(), model});
                 }
             }
-            m_studio->notify(tr("%1 added as a provider. It starts when Lumen first uses it.").arg(p.name), QStringLiteral("success"));
+            studio->notify(QCoreApplication::translate("lumen::ui::LocalServersPage", "%1 added as a provider. It starts when Lumen first uses it.").arg(p.name),
+                           QStringLiteral("success"));
         }
     }
 }
@@ -920,6 +940,17 @@ void ServerProfileDialog::buildOptions()
             edit->setMinimumWidth(320);
             auto *browse = iconButton(QStringLiteral("folder"), tr("Browse…"), row);
             h->addWidget(edit, 1);
+            const QList<runtime::ModelKind> libraryKinds = modelKindsForOption(k, f.key);
+            if (!libraryKinds.isEmpty()) {
+                auto *library = iconButton(QStringLiteral("layers"), tr("Choose from the model library"), row);
+                library->setPopupMode(QToolButton::InstantPopup);
+                auto *menu = new QMenu(library);
+                library->setMenu(menu);
+                connect(menu, &QMenu::aboutToShow, this, [this, menu, libraryKinds, edit] {
+                    fillModelMenu(menu, m_studio->models(), libraryKinds, [edit](const QString &path) { edit->setText(path); });
+                });
+                h->addWidget(library);
+            }
             h->addWidget(browse);
             const bool dir = f.type == OptionField::Type::Directory;
             const QString filter = f.filter;
@@ -984,7 +1015,8 @@ void ServerProfileDialog::buildOptions()
             break;
         }
         case OptionField::Type::ModelList:
-            w = new ModelListEditor(value.toList(), f.filter + QStringLiteral(";;") + tr("All files (*)"), [this] { updatePreview(); }, box);
+            w = new ModelListEditor(value.toList(), f.filter + QStringLiteral(";;") + tr("All files (*)"), [this] { updatePreview(); }, box,
+                                    m_studio->models());
             break;
         }
         if (!f.help.isEmpty()) {

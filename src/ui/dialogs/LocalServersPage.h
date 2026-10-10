@@ -122,6 +122,10 @@ private:
     QString m_builtFor;
 };
 
+// Adds a server profile and, optionally, a provider bound to it; a language server takes the roles
+// nobody handles yet.
+void addServer(Studio *studio, const runtime::ServerProfile &profile, bool createProvider);
+
 // Live log of a server with start/stop controls.
 class ServerLogDialog : public QDialog
 {

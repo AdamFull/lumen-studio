@@ -10,6 +10,7 @@
 #include "doc/Project.h"
 #include "net/HttpClient.h"
 #include "pose/Skeleton.h"
+#include "runtime/ModelLibrary.h"
 #include "runtime/RuntimeStore.h"
 #include "runtime/Supervisor.h"
 
@@ -42,6 +43,8 @@ public:
     // Local server programs (installed or adopted) and the servers Lumen runs with them.
     runtime::RuntimeStore *runtimes() { return &m_runtimes; }
     runtime::ServerSupervisor *servers() { return &m_servers; }
+    // Model files on this computer (Lumen's models folder and folders the user added).
+    runtime::ModelLibrary *models() { return &m_models; }
     // Provider of a managed server (bound through its "managed_server" setting), if any.
     ai::Provider *providerForServer(const QString &profileId) const;
     doc::Project *project() { return m_project; }
@@ -130,6 +133,7 @@ private:
     JobQueue m_jobs;
     runtime::RuntimeStore m_runtimes;
     runtime::ServerSupervisor m_servers; // destroyed before the providers: stops the servers
+    runtime::ModelLibrary m_models;
     ai::GenerationService m_generation;
     ai::Director m_director;
     ai::PartService m_parts;
