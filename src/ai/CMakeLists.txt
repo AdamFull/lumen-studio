@@ -6,6 +6,7 @@ add_library(lumen_ai STATIC
     ProviderUtil.h ProviderUtil.cpp
     ProviderRegistry.h ProviderRegistry.cpp
     providers/SdWebUiProvider.h providers/SdWebUiProvider.cpp
+    providers/SdCppProvider.h providers/SdCppProvider.cpp
     providers/OpenAiChatProvider.h providers/OpenAiChatProvider.cpp
     providers/AnthropicProvider.h providers/AnthropicProvider.cpp
     providers/GeminiProvider.h providers/GeminiProvider.cpp

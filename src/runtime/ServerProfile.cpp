@@ -112,7 +112,12 @@ QList<OptionField> sdOptions()
     OptionField upscale = field(QStringLiteral("upscale_model"), Text::tr("Upscaler"), T::File, {}, Text::tr("ESRGAN model for 2×/4× upscaling."));
     upscale.filter = models;
     out << upscale;
-    out << field(QStringLiteral("offload_to_cpu"), Text::tr("Keep weights in RAM"), T::Boolean, false,
+    OptionField precision = field(QStringLiteral("weight_type"), Text::tr("Weight precision"), T::Choice, QStringLiteral("q8_0"),
+                                  Text::tr("Converts the weights when loading. q8_0 halves an SDXL model with no visible change, so the "
+                                           "model and a ControlNet fit in 8 GB and run faster; 'file' keeps what the file stores."));
+    precision.choices = {QStringLiteral("q8_0"), QStringLiteral("q5_0"), QStringLiteral("q4_K"), QStringLiteral("f16"), QStringLiteral("file")};
+    out << precision;
+    out << field(QStringLiteral("offload_to_cpu"), Text::tr("Keep weights in RAM"), T::Boolean, true,
                  Text::tr("Moves weights to the GPU only while generating (--offload-to-cpu). Slower, but leaves VRAM for a "
                     "language model on the same GPU."));
     OptionField maxVram = field(QStringLiteral("max_vram"), Text::tr("VRAM budget (GB)"), T::Number, 0.0,
@@ -320,6 +325,9 @@ LaunchCommand buildLaunch(const ServerProfile &p, const InstalledRuntime &rt)
         file(QStringLiteral("--lora-model-dir"), QStringLiteral("lora_dir"));
         file(QStringLiteral("--upscale-model"), QStringLiteral("upscale_model"));
         a << QStringLiteral("--listen-ip") << QStringLiteral("127.0.0.1") << QStringLiteral("--listen-port") << QString::number(p.port);
+        const QString weightType = str(QStringLiteral("weight_type"));
+        if (!weightType.isEmpty() && weightType != QLatin1String("file"))
+            a << QStringLiteral("--type") << weightType;
         if (flag(QStringLiteral("offload_to_cpu")))
             a << QStringLiteral("--offload-to-cpu");
         const double vram = p.option(QStringLiteral("max_vram"), kind).toDouble();

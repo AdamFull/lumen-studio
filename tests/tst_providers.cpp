@@ -1,11 +1,14 @@
 #include "MockHttpServer.h"
 
 #include "ai/ProviderRegistry.h"
+#include "ai/ProviderUtil.h"
 #include "ai/providers/OpenAiChatProvider.h"
+#include "ai/providers/SdCppProvider.h"
 #include "ai/providers/SdWebUiProvider.h"
 #include "core/ImageOps.h"
 #include "net/HttpClient.h"
 
+#include <QBuffer>
 #include <QJsonArray>
 #include <QSignalSpy>
 #include <QtTest>
@@ -35,6 +38,8 @@ private slots:
     void openaiHttpError();
     void thinkSplitting();
     void registryPersistsRoles();
+    void sdcppGenerateWithPoseAndReference();
+    void sdcppFailureCancelAndUpscale();
 
 private:
     net::HttpClient m_http;
@@ -313,6 +318,223 @@ void TestProviders::registryPersistsRoles()
     QVERIFY(again.llmFor(LlmRole::Vision, &model));
     QCOMPARE(model, QStringLiteral("qwen2.5vl"));
     QFile::remove(registry.configPath());
+}
+
+namespace {
+
+QString pngBase64(const QSize &size, const QColor &color)
+{
+    QImage img(size, QImage::Format_RGB32);
+    img.fill(color);
+    QByteArray bytes;
+    QBuffer buf(&bytes);
+    buf.open(QIODevice::WriteOnly);
+    img.save(&buf, "PNG");
+    return QString::fromLatin1(bytes.toBase64());
+}
+
+} // namespace
+
+void TestProviders::sdcppGenerateWithPoseAndReference()
+{
+    MockHttpServer server;
+    QJsonObject submitted;
+    int polls = 0;
+    server.route("GET", QStringLiteral("/sdcpp/v1/capabilities"), [](const MockRequest &) {
+        return MockResponse::json({{QStringLiteral("model"), QJsonObject{{QStringLiteral("name"), QStringLiteral("waiIllustriousSDXL_v170.safetensors")}}},
+                                   {QStringLiteral("samplers"), QJsonArray{QStringLiteral("euler"), QStringLiteral("euler_a")}},
+                                   {QStringLiteral("schedulers"), QJsonArray{QStringLiteral("discrete"), QStringLiteral("karras")}}});
+    });
+    server.route("POST", QStringLiteral("/sdcpp/v1/img_gen"), [&](const MockRequest &req) {
+        submitted = req.json();
+        return MockResponse::json({{QStringLiteral("id"), QStringLiteral("job_1")},
+                                   {QStringLiteral("status"), QStringLiteral("queued")},
+                                   {QStringLiteral("poll_url"), QStringLiteral("/sdcpp/v1/jobs/job_1")}},
+                                  202);
+    });
+    server.route("GET", QStringLiteral("/sdcpp/v1/jobs/job_1"), [&](const MockRequest &) {
+        ++polls;
+        if (polls == 1)
+            return MockResponse::json({{QStringLiteral("status"), QStringLiteral("queued")}, {QStringLiteral("queue_position"), 1}});
+        if (polls == 2) {
+            return MockResponse::json({{QStringLiteral("status"), QStringLiteral("generating")},
+                                       {QStringLiteral("preview"), QJsonObject{{QStringLiteral("pass"), 1},
+                                                                                {QStringLiteral("step"), 7},
+                                                                                {QStringLiteral("total_steps"), 28},
+                                                                                {QStringLiteral("b64_json"), pngBase64(QSize(64, 96), Qt::gray)}}}});
+        }
+        const QJsonArray images{
+            QJsonObject{{QStringLiteral("index"), 0}, {QStringLiteral("b64_json"), pngBase64(QSize(832, 1216), Qt::red)}},
+            QJsonObject{{QStringLiteral("index"), 1}, {QStringLiteral("b64_json"), pngBase64(QSize(832, 1216), Qt::blue)}}};
+        return MockResponse::json({{QStringLiteral("status"), QStringLiteral("completed")},
+                                   {QStringLiteral("result"), QJsonObject{{QStringLiteral("images"), images}}}});
+    });
+
+    SdCppProvider sd(SdCppProvider::describe(), QStringLiteral("sd"), &m_http, nullptr);
+    sd.pollIntervalMs = 20;
+    sd.configure({{QStringLiteral("url"), server.baseUrl().toString()}});
+    // Without a ControlNet / IP-Adapter on the server, pose and references are not offered.
+    QVERIFY(!sd.capabilities().poseControl);
+    QCOMPARE(sd.capabilities().maxReferences, 0);
+    sd.configure({{QStringLiteral("control_net"), true}, {QStringLiteral("ip_adapter"), true}});
+    QVERIFY(sd.capabilities().poseControl);
+    QCOMPARE(sd.capabilities().maxReferences, 1);
+    QVERIFY(!sd.supportsUtility(Utility::Upscale));
+
+    QFuture<QString> test = sd.testConnection();
+    QTRY_VERIFY(test.isFinished());
+    QCOMPARE(test.result(), QStringLiteral("Connected - model: waiIllustriousSDXL_v170.safetensors"));
+    QFuture<QStringList> samplers = sd.listOptions(QStringLiteral("sampler"));
+    QTRY_VERIFY(samplers.isFinished());
+    QCOMPARE(samplers.result(), (QStringList{QStringLiteral("euler"), QStringLiteral("euler_a")}));
+
+    ImageRequest r;
+    r.prompt = QStringLiteral("1girl, red hair");
+    r.negativePrompt = QStringLiteral("lowres");
+    r.size = QSize(832, 1216);
+    r.seed = 1234;
+    r.steps = 28;
+    r.cfg = 6.0;
+    r.sampler = QStringLiteral("euler_a");
+    r.batchCount = 2;
+    ControlInput pose;
+    pose.image = QImage(832, 1216, QImage::Format_RGB32);
+    pose.image.fill(Qt::black);
+    pose.weight = 0.9;
+    r.controls << pose;
+    ReferenceImage style;
+    style.image = QImage(64, 64, QImage::Format_ARGB32);
+    style.image.fill(Qt::transparent);
+    style.role = ReferenceRole::Style;
+    ReferenceImage character;
+    character.image = QImage(64, 64, QImage::Format_ARGB32);
+    character.image.fill(Qt::green);
+    character.role = ReferenceRole::Character;
+    character.weight = 0.8;
+    r.references << style << character;
+
+    ImageOperation *op = sd.generate(r);
+    op->setAutoDelete(false);
+    QSignalSpy progress(op, &Operation::progress);
+    QSignalSpy preview(op, &Operation::preview);
+    QTRY_VERIFY_WITH_TIMEOUT(op->isFinished(), 5000);
+    QVERIFY2(op->state() == Operation::State::Succeeded, qPrintable(op->errorString()));
+    QCOMPARE(op->result().images.size(), 2);
+    QCOMPARE(op->result().images[0].image.pixelColor(10, 10), QColor(Qt::red));
+    QCOMPARE(op->result().images[1].seed, qint64(1235));
+    QVERIFY(preview.size() >= 1);
+    bool sawStep = false;
+    bool sawQueue = false;
+    for (const QList<QVariant> &args : progress) {
+        sawStep |= args.at(1).toString() == QString::fromUtf8("Image 1 of 2 · step 7 / 28");
+        sawQueue |= args.at(1).toString() == QStringLiteral("Queued (position 1)");
+    }
+    QVERIFY(sawStep);
+    QVERIFY(sawQueue);
+    delete op;
+
+    QCOMPARE(submitted.value(QStringLiteral("prompt")).toString(), r.prompt);
+    QCOMPARE(submitted.value(QStringLiteral("width")).toInt(), 832);
+    QCOMPARE(submitted.value(QStringLiteral("batch_count")).toInt(), 2);
+    QCOMPARE(submitted.value(QStringLiteral("seed")).toInteger(), 1234);
+    const QJsonObject sample = submitted.value(QStringLiteral("sample_params")).toObject();
+    QCOMPARE(sample.value(QStringLiteral("sample_method")).toString(), QStringLiteral("euler_a"));
+    QCOMPARE(sample.value(QStringLiteral("sample_steps")).toInt(), 28);
+    QCOMPARE(sample.value(QStringLiteral("guidance")).toObject().value(QStringLiteral("txt_cfg")).toDouble(), 6.0);
+    QVERIFY(submitted.value(QStringLiteral("vae_tiling_params")).toObject().value(QStringLiteral("enabled")).toBool());
+    QVERIFY(!submitted.value(QStringLiteral("control_image")).toString().isEmpty());
+    QCOMPARE(submitted.value(QStringLiteral("control_strength")).toDouble(), 0.9);
+    // The character reference is used, and its weight is limited because a pose map is present.
+    const QImage ipa = decodeBase64Image(submitted.value(QStringLiteral("ip_adapter_image")).toString());
+    QCOMPARE(ipa.pixelColor(5, 5), QColor(Qt::green));
+    QCOMPARE(submitted.value(QStringLiteral("ip_adapter_strength")).toDouble(), 0.3);
+    QVERIFY(!submitted.contains(QStringLiteral("init_image")));
+
+    // img2img + inpaint, no pose: the reference keeps its own weight.
+    ImageRequest inpaint = r;
+    inpaint.mode = GenMode::Inpaint;
+    inpaint.controls.clear();
+    inpaint.initImage = QImage(512, 512, QImage::Format_ARGB32);
+    inpaint.initImage.fill(Qt::white);
+    inpaint.mask = QImage(512, 512, QImage::Format_Grayscale8);
+    inpaint.mask.fill(200);
+    inpaint.denoise = 0.55;
+    const QJsonObject body = sd.buildPayload(inpaint);
+    QCOMPARE(body.value(QStringLiteral("strength")).toDouble(), 0.55);
+    QVERIFY(!body.value(QStringLiteral("init_image")).toString().isEmpty());
+    const QImage mask = decodeBase64Image(body.value(QStringLiteral("mask_image")).toString());
+    QCOMPARE(qGray(mask.pixel(3, 3)), 255);
+    QCOMPARE(body.value(QStringLiteral("ip_adapter_strength")).toDouble(), 0.8);
+    QVERIFY(!body.contains(QStringLiteral("control_image")));
+    // Instruction edits are not offered.
+    ImageRequest edit = r;
+    edit.mode = GenMode::Edit;
+    op = sd.generate(edit);
+    op->setAutoDelete(false);
+    QTRY_VERIFY(op->isFinished());
+    QVERIFY(op->state() == Operation::State::Failed);
+    delete op;
+}
+
+void TestProviders::sdcppFailureCancelAndUpscale()
+{
+    MockHttpServer server;
+    int jobs = 0;
+    int cancels = 0;
+    server.route("POST", QStringLiteral("/sdcpp/v1/img_gen"), [&](const MockRequest &) {
+        ++jobs;
+        return MockResponse::json({{QStringLiteral("id"), QStringLiteral("job_%1").arg(jobs)}}, 202);
+    });
+    server.route("GET", QStringLiteral("/sdcpp/v1/jobs/job_1"), [](const MockRequest &) {
+        return MockResponse::json({{QStringLiteral("status"), QStringLiteral("failed")},
+                                   {QStringLiteral("error"), QJsonObject{{QStringLiteral("code"), QStringLiteral("generation_failed")},
+                                                                         {QStringLiteral("message"), QStringLiteral("CUDA out of memory")}}}});
+    });
+    server.route("GET", QStringLiteral("/sdcpp/v1/jobs/job_2"), [](const MockRequest &) {
+        return MockResponse::json({{QStringLiteral("status"), QStringLiteral("generating")}});
+    });
+    server.route("POST", QStringLiteral("/sdcpp/v1/jobs/job_2/cancel"), [&](const MockRequest &) {
+        ++cancels;
+        return MockResponse::json({{QStringLiteral("error"), QStringLiteral("cannot cancel a running job")}}, 409);
+    });
+    server.route("POST", QStringLiteral("/sdcpp/v1/upscale"), [](const MockRequest &req) {
+        const QImage in = decodeBase64Image(req.json().value(QStringLiteral("image")).toString());
+        const QJsonArray images{QJsonObject{{QStringLiteral("index"), 0}, {QStringLiteral("b64_json"), pngBase64(in.size() * 4, Qt::yellow)}}};
+        return MockResponse::json({{QStringLiteral("images"), images}, {QStringLiteral("upscaler"), QStringLiteral("RealESRGAN_x4plus_anime_6B")}});
+    });
+    SdCppProvider sd(SdCppProvider::describe(), QStringLiteral("sd"), &m_http, nullptr);
+    sd.pollIntervalMs = 20;
+    sd.configure({{QStringLiteral("url"), server.baseUrl().toString()}, {QStringLiteral("upscaler"), true}});
+    ImageRequest r;
+    r.prompt = QStringLiteral("x");
+
+    ImageOperation *op = sd.generate(r);
+    op->setAutoDelete(false);
+    QTRY_VERIFY_WITH_TIMEOUT(op->isFinished(), 5000);
+    QCOMPARE(op->errorString(), QStringLiteral("CUDA out of memory"));
+    delete op;
+
+    // A running job cannot be stopped by the server; the operation still ends at once.
+    op = sd.generate(r);
+    op->setAutoDelete(false);
+    QTRY_COMPARE_WITH_TIMEOUT(jobs, 2, 5000);
+    QTest::qWait(100);
+    op->cancel();
+    QTRY_VERIFY_WITH_TIMEOUT(op->isFinished(), 5000);
+    QVERIFY(op->state() == Operation::State::Cancelled);
+    QCOMPARE(cancels, 1);
+    delete op;
+
+    QVERIFY(sd.supportsUtility(Utility::Upscale));
+    QImage small(100, 60, QImage::Format_ARGB32);
+    small.fill(QColor(0, 0, 0, 0));
+    op = sd.runUtility(Utility::Upscale, small, {{QStringLiteral("factor"), 2.0}});
+    op->setAutoDelete(false);
+    QTRY_VERIFY_WITH_TIMEOUT(op->isFinished(), 5000);
+    QVERIFY2(op->state() == Operation::State::Succeeded, qPrintable(op->errorString()));
+    // The model's own 4x is brought to the requested 2x.
+    QCOMPARE(op->result().images.first().image.size(), QSize(200, 120));
+    delete op;
 }
 
 QTEST_MAIN(TestProviders)

@@ -111,12 +111,27 @@ void Studio::applyServerBindings()
         }
         p->setGate(std::make_shared<ServerGate>(&m_servers, profileId));
         const QString kind = m_servers.kindOf(profileId);
-        const QString url = runtime::providerUrl(kind, profile->port);
-        if (!kind.isEmpty() && p->text(QStringLiteral("url")) != url) {
-            QVariantMap settings = m_registry.settingsFor(p->instanceId());
-            settings.insert(QStringLiteral("url"), url);
-            urlUpdates.append({p->instanceId(), settings});
+        if (kind.isEmpty())
+            continue;
+        // What the provider must know about the server: its URL and, for stable-diffusion.cpp,
+        // which optional models it was started with.
+        QVariantMap wanted{{QStringLiteral("url"), runtime::providerUrl(kind, profile->port)}};
+        if (kind == QLatin1String("sd.cpp")) {
+            auto has = [&](const QString &key) { return !profile->option(key, kind).toString().trimmed().isEmpty(); };
+            wanted.insert(QStringLiteral("control_net"), has(QStringLiteral("control_net")));
+            wanted.insert(QStringLiteral("ip_adapter"), has(QStringLiteral("ip_adapter")) && has(QStringLiteral("clip_vision")));
+            wanted.insert(QStringLiteral("upscaler"), has(QStringLiteral("upscale_model")));
         }
+        QVariantMap settings = m_registry.settingsFor(p->instanceId());
+        bool changed = false;
+        for (auto it = wanted.cbegin(); it != wanted.cend(); ++it) {
+            if (settings.value(it.key()) != it.value()) {
+                settings.insert(it.key(), it.value());
+                changed = true;
+            }
+        }
+        if (changed)
+            urlUpdates.append({p->instanceId(), settings});
     }
     // Updating re-creates provider instances (and re-enters here), so do it after the loop.
     for (const auto &[id, settings] : std::as_const(urlUpdates)) {

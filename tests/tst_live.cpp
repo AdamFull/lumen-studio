@@ -13,6 +13,7 @@
 #include "ai/ProviderRegistry.h"
 #include "ai/providers/ComfyUiProvider.h"
 #include "ai/providers/OpenAiChatProvider.h"
+#include "ai/providers/SdCppProvider.h"
 #include "core/Job.h"
 #include "core/JobQueue.h"
 #include "core/Settings.h"
@@ -75,6 +76,7 @@ private slots:
     void assistantWithReferenceAndCritic();
     void managedLlamaServer();
     void installRuntime();
+    void managedSdServer();
 
 private:
     net::HttpClient m_http;
@@ -489,7 +491,7 @@ void TestLive::managedLlamaServer()
 }
 
 // LUMEN_LIVE_INSTALL=<runtime>:<backend>, e.g. "sd.cpp:cpu": installs a real release from GitHub
-// into a temporary folder (downloads it!) and checks that the server runs.
+// (downloads it!) and checks that the server runs.
 void TestLive::installRuntime()
 {
     const QString what = qEnvironmentVariable("LUMEN_LIVE_INSTALL");
@@ -497,10 +499,14 @@ void TestLive::installRuntime()
         QSKIP("LUMEN_LIVE_INSTALL is not set");
     const runtime::RuntimeSpec *spec = runtime::Catalog::instance().runtime(what.section(QLatin1Char(':'), 0, 0));
     QVERIFY(spec);
-    QTemporaryDir root;
+    // LUMEN_LIVE_INSTALL_ROOT keeps the install (e.g. the app's own runtimes folder); otherwise a
+    // temporary folder is used.
+    QTemporaryDir tmp;
+    const QString keep = qEnvironmentVariable("LUMEN_LIVE_INSTALL_ROOT");
     JobQueue jobs;
     runtime::RuntimeStore store(&m_http, &jobs);
-    store.setRoot(root.filePath(QStringLiteral("runtimes")));
+    store.setRoot(keep.isEmpty() ? tmp.filePath(QStringLiteral("runtimes")) : keep);
+    store.load();
     QFuture<QList<runtime::Release>> releases = store.feed()->fetch(*spec);
     QVERIFY(waitFor(releases, 60000));
     const runtime::InstallPlan plan = runtime::planInstall(*spec, what.section(QLatin1Char(':'), 1), releases.result());
@@ -515,6 +521,107 @@ void TestLive::installRuntime()
     QVERIFY(rt);
     qInfo() << "installed in" << t.elapsed() << "ms:" << rt->executable << rt->versionInfo;
     QVERIFY(!rt->versionInfo.isEmpty());
+}
+
+// LUMEN_LIVE_SD_RUNTIMES=<runtimes folder with an installed sd.cpp>, LUMEN_LIVE_SD_MODEL=<checkpoint>,
+// optional LUMEN_LIVE_SD_CONTROLNET, LUMEN_LIVE_SD_IPADAPTER + LUMEN_LIVE_SD_CLIPVISION, LUMEN_LIVE_REFERENCE:
+// Lumen starts sd-server on the first request (8 GB defaults: q8_0, weights in RAM, VAE tiling) and
+// generates a pose-controlled shot with the reference through the native API.
+void TestLive::managedSdServer()
+{
+    const QString root = qEnvironmentVariable("LUMEN_LIVE_SD_RUNTIMES");
+    const QString model = qEnvironmentVariable("LUMEN_LIVE_SD_MODEL");
+    if (root.isEmpty() || model.isEmpty())
+        QSKIP("LUMEN_LIVE_SD_RUNTIMES and LUMEN_LIVE_SD_MODEL are needed");
+    QTemporaryDir tmp;
+    JobQueue jobs;
+    runtime::RuntimeStore store(&m_http, &jobs);
+    store.setRoot(root);
+    store.load();
+    const auto rt = store.latestManaged(QStringLiteral("sd.cpp"));
+    QVERIFY2(rt, "no managed sd.cpp install in LUMEN_LIVE_SD_RUNTIMES");
+
+    runtime::ServerSupervisor servers(&store, &m_http);
+    servers.setConfigPath(tmp.filePath(QStringLiteral("servers.json")));
+    servers.setLogDir(tmp.filePath(QStringLiteral("logs")));
+    runtime::ServerProfile profile = servers.createProfile(rt->id, QStringLiteral("Live sd.cpp"));
+    profile.options.insert(QStringLiteral("model"), model);
+    const QString controlNet = qEnvironmentVariable("LUMEN_LIVE_SD_CONTROLNET");
+    const QString ipAdapter = qEnvironmentVariable("LUMEN_LIVE_SD_IPADAPTER");
+    const QString clipVision = qEnvironmentVariable("LUMEN_LIVE_SD_CLIPVISION");
+    if (!controlNet.isEmpty())
+        profile.options.insert(QStringLiteral("control_net"), controlNet);
+    if (!ipAdapter.isEmpty() && !clipVision.isEmpty()) {
+        profile.options.insert(QStringLiteral("ip_adapter"), ipAdapter);
+        profile.options.insert(QStringLiteral("clip_vision"), clipVision);
+    }
+    profile.startupTimeoutSec = 300;
+    servers.addProfile(profile);
+    qInfo().noquote() << "command:" << servers.launchFor(profile.id).commandLine();
+
+    SdCppProvider sd(SdCppProvider::describe(), QStringLiteral("live-sd"), &m_http, nullptr);
+    sd.configure({{QStringLiteral("url"), runtime::providerUrl(rt->kind, profile.port)},
+                  {QStringLiteral("control_net"), !controlNet.isEmpty()},
+                  {QStringLiteral("ip_adapter"), !ipAdapter.isEmpty() && !clipVision.isEmpty()}});
+    sd.setGate(std::make_shared<SupervisorGate>(&servers, profile.id));
+
+    QList<ReferenceImage> refs;
+    const QString refPath = qEnvironmentVariable("LUMEN_LIVE_REFERENCE");
+    if (!refPath.isEmpty() && sd.capabilities().maxReferences > 0) {
+        ReferenceImage ref;
+        ref.image = QImage(refPath);
+        ref.role = ReferenceRole::Character;
+        QVERIFY(!ref.image.isNull());
+        refs << ref;
+    }
+    QJsonObject shot{{QStringLiteral("aspect_ratio"), QStringLiteral("2:3")},
+                     {QStringLiteral("prompt"), QStringLiteral("1girl, solo, long red hair, red eyes, black robe with gold ornaments, wide sleeves, "
+                                                               "standing, arms at sides, full body, front view, plain grey background, "
+                                                               "masterpiece, best quality")},
+                     {QStringLiteral("negative_prompt"), QStringLiteral("lowres, bad anatomy, bad hands, extra fingers, worst quality, text")},
+                     {QStringLiteral("pose"), pose::RigParams().toJson()}};
+    const ImageCapabilities caps = sd.capabilities();
+    PromptStyle style;
+    const QSize size = Director::sizeForAspect(QStringLiteral("2:3"), caps.nativePixels, caps.sizeMultiple);
+    const pose::Pose pose = Director::poseForShot(shot, size);
+    ImageRequest r = Director::buildShotRequest(shot, refs, pose, style, caps);
+    r.seed = 7;
+    r.steps = 28;
+    r.cfg = 6.0;
+    r.sampler = QStringLiteral("euler_a");
+    qInfo() << "request:" << r.size << "pose" << !r.controls.isEmpty() << "references" << r.references.size();
+
+    QElapsedTimer t;
+    t.start();
+    ImageOperation *op = gatedGenerate(&sd, r);
+    op->setAutoDelete(false);
+    int previews = 0;
+    QString lastStatus;
+    connect(op, &Operation::preview, this, [&previews] { ++previews; });
+    connect(op, &Operation::progress, this, [&lastStatus](double, const QString &s) { lastStatus = s; });
+    QTRY_VERIFY_WITH_TIMEOUT(op->isFinished(), 900000);
+    if (op->state() != Operation::State::Succeeded)
+        qInfo().noquote() << servers.log(profile.id).mid(std::max<qsizetype>(0, servers.log(profile.id).size() - 30)).join(QLatin1Char('\n'));
+    QVERIFY2(op->state() == Operation::State::Succeeded, qPrintable(op->errorString()));
+    qInfo() << "first image after" << t.elapsed() << "ms (includes server start)," << previews << "previews, last status" << lastStatus;
+    save(op->result().images.value(0).image, QStringLiteral("sdcpp_shot.png"));
+    if (!r.controls.isEmpty())
+        save(r.controls.first().image, QStringLiteral("sdcpp_pose_map.png"));
+    delete op;
+
+    // A second request reuses the running server.
+    t.restart();
+    r.seed = 8;
+    op = gatedGenerate(&sd, r);
+    op->setAutoDelete(false);
+    QTRY_VERIFY_WITH_TIMEOUT(op->isFinished(), 900000);
+    QVERIFY2(op->state() == Operation::State::Succeeded, qPrintable(op->errorString()));
+    qInfo() << "second image after" << t.elapsed() << "ms";
+    save(op->result().images.value(0).image, QStringLiteral("sdcpp_shot2.png"));
+    delete op;
+
+    servers.stop(profile.id);
+    QTRY_COMPARE_WITH_TIMEOUT(servers.state(profile.id), runtime::ServerState::Stopped, 30000);
 }
 
 QTEST_MAIN(TestLive)

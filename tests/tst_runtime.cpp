@@ -257,8 +257,13 @@ void TestRuntime::zipExtract()
     const QString real = qEnvironmentVariable("LUMEN_TEST_RELEASE_ZIP");
     if (!real.isEmpty()) {
         QTemporaryDir out;
-        QCOMPARE(extractZip(real, out.path()), QString());
-        QVERIFY(QFileInfo::exists(out.filePath(QStringLiteral("sd-server.exe"))) || QFileInfo::exists(out.filePath(QStringLiteral("llama-server.exe"))));
+        QCOMPARE(extractZip(real, out.path()), QString()); // CRC-checked
+        QList<ZipEntry> realEntries;
+        QCOMPARE(listZip(real, &realEntries), QString());
+        for (const ZipEntry &e : std::as_const(realEntries)) {
+            if (!e.directory)
+                QCOMPARE(QFileInfo(out.filePath(e.name)).size(), qint64(e.size));
+        }
     }
 }
 

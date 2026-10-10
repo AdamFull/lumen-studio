@@ -8,6 +8,7 @@
 #include "ai/providers/OpenAiChatProvider.h"
 #include "ai/providers/OpenAiImageProvider.h"
 #include "ai/providers/PartServerProvider.h"
+#include "ai/providers/SdCppProvider.h"
 #include "ai/providers/SdWebUiProvider.h"
 #include "ai/providers/StabilityProvider.h"
 
@@ -28,6 +29,7 @@ ProviderRegistry::Factory factory()
 void registerBuiltInProviders(ProviderRegistry &registry)
 {
     // Image back-ends: local first.
+    registry.registerType(SdCppProvider::describe(), factory<SdCppProvider>());
     registry.registerType(SdWebUiProvider::describe(), factory<SdWebUiProvider>());
     registry.registerType(ComfyUiProvider::describe(), factory<ComfyUiProvider>());
     registry.registerType(OpenAiImageProvider::describe(), factory<OpenAiImageProvider>());

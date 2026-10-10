@@ -271,11 +271,12 @@ QString extractZip(const QString &zipPath, const QString &destDir, const std::fu
             } else {
                 zs.next_in = reinterpret_cast<Bytef *>(in.data());
                 zs.avail_in = uInt(got);
-                do {
+                for (;;) {
                     zs.next_out = reinterpret_cast<Bytef *>(out.data());
                     zs.avail_out = uInt(out.size());
                     const int rc = inflate(&zs, Z_NO_FLUSH);
-                    if (rc != Z_OK && rc != Z_STREAM_END && !(rc == Z_BUF_ERROR && got == 0))
+                    // Z_BUF_ERROR only means "no progress possible": more input is needed.
+                    if (rc != Z_OK && rc != Z_STREAM_END && rc != Z_BUF_ERROR)
                         return Text::tr("Damaged archive (cannot decompress %1).").arg(e.name);
                     const qint64 produced = out.size() - qint64(zs.avail_out);
                     if (produced > 0) {
@@ -289,9 +290,14 @@ QString extractZip(const QString &zipPath, const QString &destDir, const std::fu
                         streamEnd = true;
                         break;
                     }
-                    if (got == 0 && produced == 0)
-                        return Text::tr("Damaged archive (truncated data in %1).").arg(e.name);
-                } while (zs.avail_out == 0 || zs.avail_in > 0);
+                    if (zs.avail_out > 0 || rc == Z_BUF_ERROR) {
+                        // Input used up. With nothing left to read the stream is cut short.
+                        if (remaining == 0 && zs.avail_in == 0 && produced == 0)
+                            return Text::tr("Damaged archive (truncated data in %1).").arg(e.name);
+                        if (zs.avail_in == 0)
+                            break;
+                    }
+                }
             }
             if (written > e.size)
                 return Text::tr("Damaged archive (%1 is larger than declared).").arg(e.name);
