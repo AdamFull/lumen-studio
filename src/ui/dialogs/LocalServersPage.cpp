@@ -10,6 +10,7 @@
 #include "runtime/ServerProfile.h"
 #include "runtime/RuntimeStore.h"
 #include "runtime/Supervisor.h"
+#include "runtime/Trainer.h"
 #include "ui/Icons.h"
 #include "ui/Studio.h"
 #include "ui/Theme.h"
@@ -414,7 +415,7 @@ void LocalServersPage::addExisting()
     QString path = chosen->data().toString();
     if (chosen == browse) {
         path = QFileDialog::getOpenFileName(this, tr("Choose a server program"), QString(),
-                                            tr("Servers (llama-server.exe sd-server.exe llama-server sd-server main.py webui.bat)"));
+                                            tr("Servers and trainers (llama-server.exe sd-server.exe llama-server sd-server main.py webui.bat sdxl_train_network.py)"));
     }
     if (path.isEmpty())
         return;
@@ -544,7 +545,13 @@ void LocalServersPage::removeRuntime()
 void LocalServersPage::newServer()
 {
     QString runtimeId = selectedRuntime();
-    const QList<runtime::InstalledRuntime> all = m_studio->runtimes()->runtimes();
+    QList<runtime::InstalledRuntime> all;
+    for (const runtime::InstalledRuntime &rt : m_studio->runtimes()->runtimes()) {
+        if (!runtime::isTrainerKind(rt.kind))
+            all << rt; // trainers run training jobs, not servers
+    }
+    if (const auto selected = m_studio->runtimes()->runtime(runtimeId); selected && runtime::isTrainerKind(selected->kind))
+        runtimeId.clear();
     if (all.isEmpty()) {
         if (QMessageBox::question(this, tr("New server"), tr("No server program is installed yet. Download one now?")) == QMessageBox::Yes)
             install();
@@ -644,8 +651,17 @@ InstallRuntimeDialog::InstallRuntimeDialog(Studio *studio, const std::optional<r
         m_runtime->addItem(Icons::get(QStringLiteral("server")), r.name, r.id);
         m_runtime->setItemData(m_runtime->count() - 1, r.description, Qt::ToolTipRole);
     }
-    if (!runtimeId.isEmpty())
-        m_runtime->setCurrentIndex(std::max(0, m_runtime->findData(runtimeId)));
+    // LoRA trainers install into a Python environment instead of from a release archive.
+    for (const runtime::TrainerRecipe &t : runtime::TrainerCatalog::instance().trainers) {
+        m_runtime->addItem(Icons::get(QStringLiteral("star")), tr("%1 (LoRA trainer)").arg(t.name), QStringLiteral("trainer:") + t.id);
+        m_runtime->setItemData(m_runtime->count() - 1, t.description, Qt::ToolTipRole);
+    }
+    if (!runtimeId.isEmpty()) {
+        int index = m_runtime->findData(runtimeId);
+        if (index < 0)
+            index = m_runtime->findData(QStringLiteral("trainer:") + runtimeId);
+        m_runtime->setCurrentIndex(std::max(0, index));
+    }
     form->addRow(tr("Program"), m_runtime);
     m_backend = new QComboBox(this);
     form->addRow(tr("Build"), m_backend);
@@ -668,6 +684,13 @@ InstallRuntimeDialog::InstallRuntimeDialog(Studio *studio, const std::optional<r
     v->addWidget(buttons);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
     connect(m_install, &QPushButton::clicked, this, [this] {
+        if (!trainerId().isEmpty()) {
+            const runtime::TrainerRecipe *t = runtime::TrainerCatalog::instance().trainer(trainerId());
+            m_studio->runtimes()->installTrainer(trainerId(), m_backend->currentData().toString());
+            m_studio->notify(tr("Installing %1 — progress is shown in the Queue.").arg(t ? t->name : trainerId()));
+            accept();
+            return;
+        }
         if (!m_plan.ok())
             return;
         m_studio->runtimes()->install(m_plan);
@@ -688,8 +711,32 @@ InstallRuntimeDialog::InstallRuntimeDialog(Studio *studio, const std::optional<r
     fetch();
 }
 
+QString InstallRuntimeDialog::trainerId() const
+{
+    const QString data = m_runtime->currentData().toString();
+    return data.startsWith(QLatin1String("trainer:")) ? data.mid(8) : QString();
+}
+
 void InstallRuntimeDialog::fetch()
 {
+    if (const runtime::TrainerRecipe *t = runtime::TrainerCatalog::instance().trainer(trainerId())) {
+        QString why;
+        const QString recommended = m_hw ? runtime::recommendedTrainerVariant(*t, *m_hw, &why) : QString();
+        {
+            QSignalBlocker block(m_backend);
+            m_backend->clear();
+            for (const runtime::TrainerVariant &v : t->variants)
+                m_backend->addItem(v.id == recommended ? v.label + tr(" (recommended)") : v.label, v.id);
+            m_backend->setCurrentIndex(std::max(0, m_backend->findData(recommended)));
+        }
+        m_about->setText(QStringLiteral("%1<br>%2 · <a href='%3'>%3</a>").arg(t->description.toHtmlEscaped(), tr("Licence: %1").arg(t->license),
+                                                                              t->homepage.toString()));
+        updatePlan();
+        if (m_hw && recommended.isEmpty()) {
+            m_release->setText(m_release->text() + QStringLiteral("<br><span style='color:%1'>%2</span>").arg(Theme::palette().warning.name(), why.toHtmlEscaped()));
+        }
+        return;
+    }
     const runtime::RuntimeSpec *spec = runtime::Catalog::instance().runtime(m_runtime->currentData().toString());
     if (!spec)
         return;
@@ -738,6 +785,25 @@ void InstallRuntimeDialog::fetch()
 
 void InstallRuntimeDialog::updatePlan()
 {
+    if (const runtime::TrainerRecipe *t = runtime::TrainerCatalog::instance().trainer(trainerId())) {
+        const runtime::TrainerVariant *v = t->variant(m_backend->currentData().toString());
+        if (!v)
+            return;
+        QStringList parts;
+        parts << tr("Version <b>%1</b>, Python %2, PyTorch %3.").arg(t->version, t->python, v->torch);
+        parts << tr("Download: about %1 (PyTorch with CUDA is most of it); about %2 on disk.")
+                     .arg(runtime::formatBytes(v->downloadSize), runtime::formatBytes(v->downloadSize * 2));
+        parts << tr("Every file is checked: uv and the trainer against pinned SHA-256 checksums, the Python packages against a "
+                    "hashed lock file.");
+        const bool installed = m_studio->runtimes()->runtime(QStringLiteral("%1/%2-%3").arg(t->id, t->version, v->id)).has_value();
+        if (installed)
+            parts << tr("This version is already installed.");
+        m_release->setText(parts.join(QStringLiteral("<br>")));
+        Theme::setRole(m_release, QString());
+        m_install->setText(installed ? tr("Reinstall") : tr("Download and install"));
+        m_install->setEnabled(true);
+        return;
+    }
     const runtime::RuntimeSpec *spec = runtime::Catalog::instance().runtime(m_runtime->currentData().toString());
     if (!spec || !m_releases.contains(spec->id))
         return;

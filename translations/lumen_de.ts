@@ -3363,7 +3363,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Wird beendet.</translation>
     </message>
     <message>
-        <location line="+30"/>
+        <location line="+27"/>
+        <source>kohya sd-scripts (existing install)</source>
+        <translation>kohya sd-scripts (vorhandene Installation)</translation>
+    </message>
+    <message>
+        <location line="+22"/>
         <source>%1 is not a server Lumen can run. Choose llama-server, sd-server, ComfyUI&apos;s main.py or the WebUI&apos;s webui.bat.</source>
         <translation>%1 ist kein Server, den Lumen ausführen kann. Wählen Sie llama-server, sd-server, die main.py von ComfyUI oder die webui.bat der WebUI.</translation>
     </message>
@@ -3836,6 +3841,138 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <location line="-1"/>
         <source>Stopping…</source>
         <translation>Wird beendet…</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::runtime::Trainer</name>
+    <message>
+        <location filename="../src/runtime/Trainer.cpp" line="+118"/>
+        <source>Training needs an NVIDIA GPU with a current driver.</source>
+        <translation>Das Training braucht eine NVIDIA-GPU mit aktuellem Treiber.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>The NVIDIA driver supports CUDA %1; training needs %2 or newer. Update the driver.</source>
+        <translation>Der NVIDIA-Treiber unterstützt CUDA %1; das Training braucht %2 oder neuer. Aktualisieren Sie den Treiber.</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>%1 is not a kohya sd-scripts folder (sdxl_train_network.py is missing).</source>
+        <translation>%1 ist kein kohya-sd-scripts-Ordner (sdxl_train_network.py fehlt).</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>No Python environment (venv) found next to %1. Run its setup first.</source>
+        <translation>Keine Python-Umgebung (venv) neben %1 gefunden. Führen Sie zuerst dessen Einrichtung aus.</translation>
+    </message>
+    <message>
+        <location line="+107"/>
+        <source>Not enough disk space: %1 needed on %2, %3 free.</source>
+        <translation>Nicht genug Speicherplatz: %1 benötigt auf %2, %3 frei.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>The package list for %1 is missing.</source>
+        <translation>Die Paketliste für %1 fehlt.</translation>
+    </message>
+    <message>
+        <location line="+56"/>
+        <source>Downloading %1…</source>
+        <translation>%1 wird heruntergeladen…</translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <source>Cannot unpack %1: %2</source>
+        <translation>%1 kann nicht entpackt werden: %2</translation>
+    </message>
+    <message>
+        <location line="+25"/>
+        <source>Cannot start %1: %2</source>
+        <translation>%1 kann nicht gestartet werden: %2</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>%1 failed (exit code %2):
+%3</source>
+        <translation>%1 ist fehlgeschlagen (Exit-Code %2):
+%3</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>The uv archive does not contain uv.exe.</source>
+        <translation>Das uv-Archiv enthält keine uv.exe.</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>The trainer&apos;s source archive has an unexpected layout.</source>
+        <translation>Das Quellarchiv des Trainers hat einen unerwarteten Aufbau.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Installing Python %1</source>
+        <translation>Python %1 wird installiert</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Creating the Python environment</source>
+        <translation>Die Python-Umgebung wird erstellt</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Cannot write %1.</source>
+        <translation>%1 kann nicht geschrieben werden.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Installing PyTorch and the trainer&apos;s packages (about %1)</source>
+        <translation>PyTorch und die Pakete des Trainers werden installiert (etwa %1)</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Checking PyTorch and the GPU</source>
+        <translation>PyTorch und die GPU werden geprüft</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>The check of the Python environment printed nothing useful:
+%1</source>
+        <translation>Die Prüfung der Python-Umgebung hat nichts Verwertbares ausgegeben:
+%1</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>PyTorch %1 was installed instead of %2.</source>
+        <translation>Statt PyTorch %2 wurde %1 installiert.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>PyTorch does not see the NVIDIA GPU. Update the NVIDIA driver (CUDA %1 or newer) and try again.</source>
+        <translation>PyTorch sieht die NVIDIA-GPU nicht. Aktualisieren Sie den NVIDIA-Treiber (CUDA %1 oder neuer) und versuchen Sie es erneut.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Finishing…</source>
+        <translation>Wird abgeschlossen…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Cannot move the new files into %1.</source>
+        <translation>Die neuen Dateien können nicht nach %1 verschoben werden.</translation>
+    </message>
+    <message>
+        <location line="+43"/>
+        <source>Install %1 %2</source>
+        <translation>%1 %2 installieren</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Shutting down.</source>
+        <translation>Wird beendet.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Unknown trainer.</source>
+        <translation>Unbekannter Trainer.</translation>
     </message>
 </context>
 <context>
@@ -6195,12 +6332,17 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::InstallRuntimeDialog</name>
     <message>
-        <location filename="../src/ui/dialogs/LocalServersPage.cpp" line="+635"/>
+        <location filename="../src/ui/dialogs/LocalServersPage.cpp" line="+642"/>
         <source>Download a server program</source>
         <translation>Serverprogramm herunterladen</translation>
     </message>
     <message>
         <location line="+14"/>
+        <source>%1 (LoRA trainer)</source>
+        <translation>%1 (LoRA-Trainer)</translation>
+    </message>
+    <message>
+        <location line="+9"/>
         <source>Program</source>
         <translation>Programm</translation>
     </message>
@@ -6216,22 +6358,30 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+4"/>
-        <location line="+106"/>
+        <location line="+122"/>
+        <location line="+34"/>
         <source>Download and install</source>
         <translation>Herunterladen und installieren</translation>
     </message>
     <message>
-        <location line="-97"/>
+        <location line="-147"/>
+        <source>Installing %1 — progress is shown in the Queue.</source>
+        <translation>%1 wird installiert — der Fortschritt wird in der Warteschlange angezeigt.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
         <source>Installing %1 %2 — progress is shown in the Queue.</source>
         <translation>%1 %2 wird installiert – der Fortschritt steht in der Warteschlange.</translation>
     </message>
     <message>
-        <location line="+30"/>
+        <location line="+32"/>
+        <location line="+22"/>
         <source> (recommended)</source>
         <translation> (empfohlen)</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="-19"/>
+        <location line="+26"/>
         <source>Licence: %1</source>
         <translation>Lizenz: %1</translation>
     </message>
@@ -6241,7 +6391,22 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Sucht das neueste Release auf GitHub…</translation>
     </message>
     <message>
-        <location line="+36"/>
+        <location line="+29"/>
+        <source>Version &lt;b&gt;%1&lt;/b&gt;, Python %2, PyTorch %3.</source>
+        <translation>Version &lt;b&gt;%1&lt;/b&gt;, Python %2, PyTorch %3.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Download: about %1 (PyTorch with CUDA is most of it); about %2 on disk.</source>
+        <translation>Download: etwa %1 (das meiste ist PyTorch mit CUDA); etwa %2 auf dem Datenträger.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Every file is checked: uv and the trainer against pinned SHA-256 checksums, the Python packages against a hashed lock file.</source>
+        <translation>Jede Datei wird geprüft: uv und der Trainer gegen festgelegte SHA-256-Prüfsummen, die Python-Pakete gegen eine Sperrdatei mit Prüfsummen.</translation>
+    </message>
+    <message>
+        <location line="+23"/>
         <source>Release &lt;b&gt;%1&lt;/b&gt; from %2.</source>
         <translation>Release &lt;b&gt;%1&lt;/b&gt; vom %2.</translation>
     </message>
@@ -6266,12 +6431,14 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Warnung: Dieser Build %1.</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="-31"/>
+        <location line="+34"/>
         <source>This version is already installed.</source>
         <translation>Diese Version ist bereits installiert.</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="-31"/>
+        <location line="+34"/>
         <source>Reinstall</source>
         <translation>Neu installieren</translation>
     </message>
@@ -6713,7 +6880,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::LocalServersPage</name>
     <message>
-        <location filename="../src/ui/dialogs/LocalServersPage.cpp" line="-706"/>
+        <location filename="../src/ui/dialogs/LocalServersPage.cpp" line="-771"/>
         <source>Existing install</source>
         <translation>Vorhandene Installation</translation>
     </message>
@@ -6809,12 +6976,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <location line="+262"/>
         <location line="+6"/>
         <location line="+4"/>
-        <location line="+73"/>
+        <location line="+79"/>
         <source>Remove</source>
         <translation>Entfernen</translation>
     </message>
     <message>
-        <location line="-355"/>
+        <location line="-361"/>
         <source>Servers</source>
         <translation>Server</translation>
     </message>
@@ -6889,17 +7056,17 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Serverprogramm wählen</translation>
     </message>
     <message>
-        <location line="-171"/>
+        <location line="+1"/>
+        <source>Servers and trainers (llama-server.exe sd-server.exe llama-server sd-server main.py webui.bat sdxl_train_network.py)</source>
+        <translation>Server und Trainer (llama-server.exe sd-server.exe llama-server sd-server main.py webui.bat sdxl_train_network.py)</translation>
+    </message>
+    <message>
+        <location line="-172"/>
         <source>Use llama-server, sd-server, ComfyUI or Stable Diffusion WebUI you installed yourself</source>
         <translation>Selbst installierten llama-server, sd-server, ComfyUI oder Stable Diffusion WebUI verwenden</translation>
     </message>
     <message>
-        <location line="+172"/>
-        <source>Servers (llama-server.exe sd-server.exe llama-server sd-server main.py webui.bat)</source>
-        <translation>Server (llama-server.exe sd-server.exe llama-server sd-server main.py webui.bat)</translation>
-    </message>
-    <message>
-        <location line="+9"/>
+        <location line="+181"/>
         <source>%1 added.</source>
         <translation>%1 hinzugefügt.</translation>
     </message>
@@ -6959,7 +7126,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>%1 vergessen? Das Programm selbst bleibt, wo es ist.</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+19"/>
         <source>New server</source>
         <translation>Neuer Server</translation>
     </message>
@@ -10698,7 +10865,7 @@ oder aus der Bibliothek ziehen</translation>
 <context>
     <name>lumen::ui::ServerLogDialog</name>
     <message>
-        <location filename="../src/ui/dialogs/LocalServersPage.cpp" line="+527"/>
+        <location filename="../src/ui/dialogs/LocalServersPage.cpp" line="+586"/>
         <source>Server log — %1</source>
         <translation>Serverprotokoll – %1</translation>
     </message>
@@ -10746,13 +10913,13 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Servereinstellungen</translation>
     </message>
     <message>
-        <location line="-670"/>
-        <location line="+685"/>
+        <location line="-735"/>
+        <location line="+750"/>
         <source>Name</source>
         <translation>Name</translation>
     </message>
     <message>
-        <location line="-684"/>
+        <location line="-749"/>
         <source>Model file</source>
         <translation>Modelldatei</translation>
     </message>
@@ -10782,7 +10949,7 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Modell hinzufügen</translation>
     </message>
     <message>
-        <location line="+657"/>
+        <location line="+722"/>
         <source>Program</source>
         <translation>Programm</translation>
     </message>

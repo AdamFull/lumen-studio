@@ -9,11 +9,15 @@ add_library(lumen_runtime STATIC
     ModelFormats.h ModelFormats.cpp
     ModelLibrary.h ModelLibrary.cpp
     ModelHub.h ModelHub.cpp
+    Trainer.h Trainer.cpp
 )
 qt_add_resources(lumen_runtime runtime_catalog
     PREFIX "/runtimes"
     BASE "${PROJECT_SOURCE_DIR}/resources/runtimes"
     FILES "${PROJECT_SOURCE_DIR}/resources/runtimes/catalog.json"
+          "${PROJECT_SOURCE_DIR}/resources/runtimes/trainers.json"
+          "${PROJECT_SOURCE_DIR}/resources/runtimes/trainers/kohya-v0.12.0-cu128.txt"
+          "${PROJECT_SOURCE_DIR}/resources/runtimes/trainers/kohya-v0.12.0-cu124.txt"
 )
 qt_add_resources(lumen_runtime model_starters
     PREFIX "/models"

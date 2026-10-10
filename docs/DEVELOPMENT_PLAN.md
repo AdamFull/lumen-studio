@@ -1091,8 +1091,26 @@ A LoRA learns from 15–40 varied images of the character. They come from what L
     (6–18 s each). 36–40 identity tags were pruned.
   - What stays is pose, expression, framing, background, and clothes the sheet does not list
     (boots); the common-tags line shows those for one-click removal.
-- [ ] Trainer runtime: uv-managed venv with pinned sd-scripts + PyTorch (hash-checked), adopt
-  existing kohya installs.
+- [x] Trainer runtime (`runtime/Trainer`, `resources/runtimes/trainers.json`):
+  - Pins:
+    - uv 0.12.18 by its GitHub release digest;
+    - CPython 3.10.21 (sd-scripts' tested version), installed by uv, which checks its own hashes;
+    - sd-scripts v0.12.0 by commit `690ea7f` and the source archive's SHA-256;
+    - the packages by hashed lock files (`uv pip compile --generate-hashes`, 68 packages each,
+      PyPI plus the PyTorch index).
+  - Two variants: CUDA 12.8 / PyTorch 2.8.0 (also RTX 50) and CUDA 12.4 / PyTorch 2.6.0. The
+    newest one the NVIDIA driver supports is chosen.
+  - Install job: uv → source → Python → venv → `uv pip install --require-hashes --no-deps` → a check
+    that imports torch and the trainer's library and needs `torch.cuda.is_available()`. Then the
+    staging folder becomes `runtimes/kohya/v0.12.0-cu128` and uv's cache (several GB) is deleted.
+  - uv runs with its own Python and cache folders under `runtimes/tools`, and ignores user uv
+    configuration and `VIRTUAL_ENV` / `PYTHONPATH`.
+  - Runtime kind `kohya` (catalogue role "trainer"). Settings → Local servers → Download… lists it
+    with the recommended variant, sizes and licence. No servers can be created from it.
+  - Add existing… adopts an sd-scripts checkout or a kohya_ss install with its venv.
+  - Commands go through `RuntimeStore::processRunner`, which tests replace with a simulation.
+  - Measured (RTX 4060, 8 GB; driver CUDA 13.3): the real install took 370 s and needs 7.4 GB
+    on disk. PyTorch 2.8.0+cu128 sees the GPU.
 - [ ] Training job: config generation, supervised run with progress, samples, cancel / resume,
   GPU takeover, 8 / 12 / 16 GB presets measured on real hardware.
 - [ ] Evaluation grid, Critic identity scoring per epoch, recommended epoch and weight.

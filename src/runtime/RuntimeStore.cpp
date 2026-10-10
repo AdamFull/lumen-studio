@@ -1,5 +1,4 @@
 #include "runtime/RuntimeStore.h"
-
 #include "core/Async.h"
 #include "core/Error.h"
 #include "core/Job.h"
@@ -8,6 +7,7 @@
 #include "core/Paths.h"
 #include "net/HttpClient.h"
 #include "runtime/Download.h"
+#include "runtime/Trainer.h"
 #include "runtime/Zip.h"
 
 #include <QCoreApplication>
@@ -714,6 +714,25 @@ Job *RuntimeStore::install(const InstallPlan &plan)
 QFuture<InstalledRuntime> RuntimeStore::adopt(const QString &executable)
 {
     const QFileInfo fi(executable);
+    // Trainers (kohya sd-scripts or kohya_ss): a folder or a script in it, with its venv.
+    {
+        const QDir dir(fi.isDir() ? fi.absoluteFilePath() : fi.absolutePath());
+        if (QFileInfo::exists(dir.filePath(QStringLiteral("sdxl_train_network.py")))
+            || QFileInfo::exists(dir.filePath(QStringLiteral("sd-scripts/sdxl_train_network.py")))) {
+            QString error;
+            std::optional<InstalledRuntime> trainer = detectTrainer(executable, &error);
+            if (!trainer)
+                return QtFuture::makeExceptionalFuture<InstalledRuntime>(std::make_exception_ptr(Error(error)));
+            for (const InstalledRuntime &rt : std::as_const(m_runtimes)) {
+                if (rt.kind == trainer->kind && QDir(rt.directory) == QDir(trainer->directory))
+                    return QtFuture::makeReadyValueFuture(rt);
+            }
+            trainer->id = QStringLiteral("adopted/") + QUuid::createUuid().toString(QUuid::Id128).left(12);
+            trainer->versionInfo = Text::tr("kohya sd-scripts (existing install)");
+            addInstalled(*trainer);
+            return QtFuture::makeReadyValueFuture(*trainer);
+        }
+    }
     // Python apps are recognised from their files; nothing is run.
     if (fi.isDir() || fi.fileName() == QLatin1String("main.py") || fi.fileName().startsWith(QLatin1String("webui"))) {
         QString error;

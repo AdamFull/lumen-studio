@@ -1,5 +1,6 @@
 #include "MockHttpServer.h"
 
+#include "core/Async.h"
 #include "core/Job.h"
 #include "core/JobQueue.h"
 #include "net/HttpClient.h"
@@ -11,6 +12,7 @@
 #include "runtime/ModelLibrary.h"
 #include "runtime/RuntimeStore.h"
 #include "runtime/ServerProfile.h"
+#include "runtime/Trainer.h"
 #include "runtime/Supervisor.h"
 #include "runtime/Zip.h"
 
@@ -27,6 +29,7 @@
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QVersionNumber>
 
 #include <zlib.h>
 
@@ -221,6 +224,9 @@ private slots:
     void hubNamesAndStarters();
     void hubSearch();
     void hubDownloads();
+    void trainerRecipes();
+    void trainerAdopt();
+    void trainerInstall();
 
 private:
     QTemporaryDir m_tmp;
@@ -1728,6 +1734,176 @@ void TestRuntime::hubDownloads()
     QTRY_VERIFY_WITH_TIMEOUT(denied->isFinished(), 10000);
     QCOMPARE(denied->state(), Job::State::Failed);
     QVERIFY2(denied->errorString().contains(QStringLiteral("API key")), qPrintable(denied->errorString()));
+}
+
+void TestRuntime::trainerRecipes()
+{
+    const TrainerCatalog &catalog = TrainerCatalog::instance();
+    QCOMPARE(catalog.uvVersion, QStringLiteral("0.12.18"));
+    QVERIFY(QRegularExpression(QStringLiteral("^[0-9a-f]{64}$")).match(catalog.uv.sha256).hasMatch());
+    const TrainerRecipe *kohya = catalog.trainer(QStringLiteral("kohya"));
+    QVERIFY(kohya);
+    QVERIFY(QRegularExpression(QStringLiteral("^[0-9a-f]{40}$")).match(kohya->commit).hasMatch());
+    QVERIFY(kohya->source.url.toString().contains(kohya->commit));
+    QVERIFY(QRegularExpression(QStringLiteral("^[0-9a-f]{64}$")).match(kohya->source.sha256).hasMatch());
+    QCOMPARE(kohya->variants.size(), 2);
+    // Every locked package carries hashes, and PyTorch is the CUDA build of the variant.
+    for (const TrainerVariant &v : kohya->variants) {
+        const QString lock = QString::fromUtf8(trainerLock(v));
+        QVERIFY2(!lock.isEmpty(), qPrintable(v.lock));
+        QVERIFY(lock.contains(QStringLiteral("torch==%1+%2").arg(v.torch, v.id)));
+        QVERIFY(lock.contains(QStringLiteral("--extra-index-url https://download.pytorch.org/whl/") + v.id));
+        const QStringList lines = lock.split(QLatin1Char('\n'));
+        int packages = 0;
+        for (int i = 0; i < lines.size(); ++i) {
+            if (!QRegularExpression(QStringLiteral("^[A-Za-z0-9_.\\-\\[\\]]+==\\S+")).match(lines[i]).hasMatch())
+                continue;
+            ++packages;
+            QVERIFY2(lines[i].endsWith(QLatin1Char('\\')) && lines.value(i + 1).trimmed().startsWith(QLatin1String("--hash=sha256:")), qPrintable(lines[i]));
+        }
+        QVERIFY(packages > 50);
+    }
+    // The newest CUDA build the driver supports.
+    HardwareInfo hw;
+    hw.nvidiaDriver = QStringLiteral("610.62");
+    hw.cudaVersion = QVersionNumber(13, 3);
+    QCOMPARE(recommendedTrainerVariant(*kohya, hw), QStringLiteral("cu128"));
+    hw.cudaVersion = QVersionNumber(12, 6);
+    QCOMPARE(recommendedTrainerVariant(*kohya, hw), QStringLiteral("cu124"));
+    QString why;
+    hw.cudaVersion = QVersionNumber(12, 2);
+    QVERIFY(recommendedTrainerVariant(*kohya, hw, &why).isEmpty());
+    QVERIFY(why.contains(QStringLiteral("12.4")));
+    QVERIFY(recommendedTrainerVariant(*kohya, HardwareInfo(), &why).isEmpty());
+    QVERIFY(isTrainerKind(QStringLiteral("kohya")));
+    QVERIFY(!isTrainerKind(QStringLiteral("sd.cpp")));
+    QCOMPARE(Catalog::instance().runtime(QStringLiteral("kohya"))->name, QStringLiteral("kohya sd-scripts"));
+}
+
+void TestRuntime::trainerAdopt()
+{
+    QTemporaryDir dir;
+    // kohya_ss: the GUI's folder with sd-scripts inside and the venv at the top.
+    QVERIFY(writeFile(dir.filePath(QStringLiteral("kohya_ss/sd-scripts/sdxl_train_network.py")), "# trainer"));
+    QString error;
+    QVERIFY(!detectTrainer(dir.filePath(QStringLiteral("kohya_ss")), &error));
+    QVERIFY(error.contains(QStringLiteral("venv")));
+    QVERIFY(writeFile(dir.filePath(QStringLiteral("kohya_ss/venv/Scripts/python.exe")), "MZ"));
+    const auto rt = detectTrainer(dir.filePath(QStringLiteral("kohya_ss")), &error);
+    QVERIFY2(rt, qPrintable(error));
+    QCOMPARE(rt->kind, QStringLiteral("kohya"));
+    QCOMPARE(rt->settings.value(QStringLiteral("scripts")).toString(), QDir::cleanPath(dir.filePath(QStringLiteral("kohya_ss/sd-scripts"))));
+    QCOMPARE(rt->executable, QDir::cleanPath(dir.filePath(QStringLiteral("kohya_ss/venv/Scripts/python.exe"))));
+    QVERIFY(!detectTrainer(dir.path(), &error)); // not a trainer folder
+
+    net::HttpClient http;
+    JobQueue jobs;
+    RuntimeStore store(&http, &jobs);
+    store.setRoot(dir.filePath(QStringLiteral("runtimes")));
+    QFuture<InstalledRuntime> adopted = store.adopt(dir.filePath(QStringLiteral("kohya_ss/sd-scripts/sdxl_train_network.py")));
+    QTRY_VERIFY(adopted.isFinished());
+    QCOMPARE(adopted.result().kind, QStringLiteral("kohya"));
+    QCOMPARE(store.runtimes(QStringLiteral("kohya")).size(), 1);
+    // The same folder again is not added twice.
+    QFuture<InstalledRuntime> again = store.adopt(dir.filePath(QStringLiteral("kohya_ss")));
+    QTRY_VERIFY(again.isFinished());
+    QCOMPARE(store.runtimes(QStringLiteral("kohya")).size(), 1);
+}
+
+void TestRuntime::trainerInstall()
+{
+    MockHttpServer server;
+    QTemporaryDir dir;
+    const QByteArray uvZip = makeZip({{QStringLiteral("uv.exe"), "uv"}, {QStringLiteral("uvx.exe"), "uvx"}});
+    const QByteArray sourceZip = makeZip({{QStringLiteral("sd-scripts-abc/sdxl_train_network.py"), "# train"},
+                                          {QStringLiteral("sd-scripts-abc/library/train_util.py"), "# util"}});
+    serveFile(server, QStringLiteral("/uv.zip"), uvZip);
+    serveFile(server, QStringLiteral("/src.zip"), sourceZip);
+    const QByteArray json = QJsonDocument(QJsonObject{
+        {QStringLiteral("uv"), QJsonObject{{QStringLiteral("version"), QStringLiteral("9.9.9")},
+                                          {QStringLiteral("url"), server.baseUrl().toString() + QStringLiteral("/uv.zip")},
+                                          {QStringLiteral("size"), uvZip.size()},
+                                          {QStringLiteral("sha256"), sha256(uvZip)}}},
+        {QStringLiteral("trainers"),
+         QJsonArray{QJsonObject{{QStringLiteral("id"), QStringLiteral("kohya")},
+                                {QStringLiteral("name"), QStringLiteral("kohya sd-scripts")},
+                                {QStringLiteral("version"), QStringLiteral("v0.12.0")},
+                                {QStringLiteral("commit"), QStringLiteral("abc")},
+                                {QStringLiteral("python"), QStringLiteral("3.10.21")},
+                                {QStringLiteral("source"), QJsonObject{{QStringLiteral("url"), server.baseUrl().toString() + QStringLiteral("/src.zip")},
+                                                                       {QStringLiteral("size"), sourceZip.size()},
+                                                                       {QStringLiteral("sha256"), sha256(sourceZip)},
+                                                                       {QStringLiteral("root"), QStringLiteral("sd-scripts-abc")}}},
+                                {QStringLiteral("variants"), QJsonArray{QJsonObject{{QStringLiteral("id"), QStringLiteral("cu128")},
+                                                                                    {QStringLiteral("label"), QStringLiteral("CUDA 12.8")},
+                                                                                    {QStringLiteral("minCuda"), QStringLiteral("12.8")},
+                                                                                    {QStringLiteral("torch"), QStringLiteral("2.8.0")},
+                                                                                    {QStringLiteral("lock"), QStringLiteral("kohya-v0.12.0-cu128.txt")},
+                                                                                    {QStringLiteral("downloadSize"), 1000}}}}}}}}).toJson();
+    net::HttpClient http;
+    JobQueue jobs;
+    RuntimeStore store(&http, &jobs);
+    store.setRoot(dir.filePath(QStringLiteral("runtimes")));
+    store.setTrainerCatalog(TrainerCatalog::fromJson(json));
+    // uv and Python are simulated: each command is recorded and leaves what the real one would.
+    QStringList commands;
+    QString gpu = QStringLiteral("True");
+    store.processRunner = [&](const QString &program, const QStringList &args, const QProcessEnvironment &env, const QString &workDir,
+                              std::function<void(const QString &)> line, const async::CancelToken &) {
+        commands << QFileInfo(program).fileName() + QLatin1Char(' ') + args.join(QLatin1Char(' '));
+        ProcessResult r;
+        r.started = true;
+        r.exitCode = 0;
+        if (env.value(QStringLiteral("UV_PYTHON_INSTALL_DIR")).isEmpty())
+            r.exitCode = 99; // uv must use Lumen's own Python folder
+        if (args.value(0) == QLatin1String("venv")) {
+            writeFile(args.last() + QStringLiteral("/Scripts/python.exe"), "MZ");
+        } else if (args.value(0) == QLatin1String("pip")) {
+            const QString lock = args.last();
+            r.exitCode = QFile::exists(lock) && args.contains(QStringLiteral("--require-hashes")) ? 0 : 2;
+            if (line) {
+                line(QStringLiteral("Downloading torch (2.3GiB)"));
+                line(QStringLiteral("Installed 68 packages in 41s"));
+            }
+        } else if (args.value(0) == QLatin1String("-c")) {
+            // The check runs in the trainer's folder so that its library imports.
+            r.exitCode = QFile::exists(workDir + QStringLiteral("/library/train_util.py")) ? 0 : 1;
+            r.output = QStringLiteral("LUMEN 2.8.0+cu128 %1 12.8\n").arg(gpu);
+        }
+        return QtFuture::makeReadyValueFuture(r);
+    };
+
+    Job *job = store.installTrainer(QStringLiteral("kohya"), QStringLiteral("cu128"));
+    QTRY_VERIFY_WITH_TIMEOUT(job->isFinished(), 20000);
+    QVERIFY2(job->state() == Job::State::Succeeded, qPrintable(job->errorString()));
+    QCOMPARE(job->result().toString(), QStringLiteral("kohya/v0.12.0-cu128"));
+    QCOMPARE(commands.size(), 4);
+    QVERIFY(commands[0].startsWith(QStringLiteral("uv.exe python install 3.10.21")));
+    QVERIFY(commands[1].startsWith(QStringLiteral("uv.exe venv --python 3.10.21")));
+    QVERIFY(commands[2].contains(QStringLiteral("pip install")) && commands[2].contains(QStringLiteral("--require-hashes"))
+            && commands[2].contains(QStringLiteral("--no-deps")));
+    QVERIFY(commands[3].startsWith(QStringLiteral("python.exe -c")));
+    const auto rt = store.runtime(QStringLiteral("kohya/v0.12.0-cu128"));
+    QVERIFY(rt);
+    QVERIFY(rt->managed);
+    QCOMPARE(rt->kind, QStringLiteral("kohya"));
+    QVERIFY(QFileInfo::exists(rt->settings.value(QStringLiteral("scripts")).toString() + QStringLiteral("/sdxl_train_network.py")));
+    QVERIFY(QFileInfo::exists(rt->executable));
+    QVERIFY(rt->versionInfo.contains(QStringLiteral("PyTorch 2.8.0+cu128")));
+    QVERIFY(QFileInfo::exists(rt->directory + QStringLiteral("/requirements.lock.txt")));
+    QVERIFY(!QFileInfo::exists(rt->directory + QStringLiteral(".staging")));
+    QVERIFY(QFileInfo::exists(dir.filePath(QStringLiteral("runtimes/tools/uv-9.9.9/uv.exe"))));
+
+    // A second install reuses uv; without a GPU in PyTorch the job fails with a clear message.
+    commands.clear();
+    gpu = QStringLiteral("False");
+    Job *noGpu = store.installTrainer(QStringLiteral("kohya"), QStringLiteral("cu128"));
+    QTRY_VERIFY_WITH_TIMEOUT(noGpu->isFinished(), 20000);
+    QCOMPARE(noGpu->state(), Job::State::Failed);
+    QVERIFY2(noGpu->errorString().contains(QStringLiteral("NVIDIA driver")), qPrintable(noGpu->errorString()));
+    // Removing the runtime deletes its folder.
+    QVERIFY(store.remove(QStringLiteral("kohya/v0.12.0-cu128")));
+    QVERIFY(!QFileInfo::exists(rt->directory));
 }
 
 void TestRuntime::inspectRealModels()

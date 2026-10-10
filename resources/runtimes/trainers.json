@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "comment": "LoRA trainers Lumen installs into a private Python environment. Every download is pinned: uv by its release digest, Python by uv's own checksums, the trainer's source by commit and SHA-256, and its packages by the hashed lock files next to this file.",
+  "uv": {
+    "version": "0.12.18",
+    "url": "https://github.com/astral-sh/uv/releases/download/0.12.18/uv-x86_64-pc-windows-msvc.zip",
+    "size": 17891221,
+    "sha256": "cae6a3bc25239f83dffb467a4b180508d9da23986c04639ebfa44e43e6a84bff",
+    "license": "MIT OR Apache-2.0"
+  },
+  "trainers": [
+    {
+      "id": "kohya",
+      "name": "kohya sd-scripts",
+      "description": "The most used trainer for SDXL / Illustrious / Pony LoRAs (Python, PyTorch).",
+      "homepage": "https://github.com/kohya-ss/sd-scripts",
+      "license": "Apache-2.0",
+      "version": "v0.12.0",
+      "commit": "690ea7f96c23182352ec63def76d431c6120bd2f",
+      "python": "3.10.21",
+      "source": {
+        "url": "https://github.com/kohya-ss/sd-scripts/archive/690ea7f96c23182352ec63def76d431c6120bd2f.zip",
+        "size": 6521861,
+        "sha256": "1fe6f6cd49decf6dc64f98834247b4c2777004acb45e4cdb01631abbb921dd65",
+        "root": "sd-scripts-690ea7f96c23182352ec63def76d431c6120bd2f"
+      },
+      "variants": [
+        {
+          "id": "cu128",
+          "label": "NVIDIA, CUDA 12.8 (PyTorch 2.8)",
+          "minCuda": "12.8",
+          "torch": "2.8.0",
+          "lock": "kohya-v0.12.0-cu128.txt",
+          "downloadSize": 3700000000
+        },
+        {
+          "id": "cu124",
+          "label": "NVIDIA, CUDA 12.4 (PyTorch 2.6)",
+          "minCuda": "12.4",
+          "torch": "2.6.0",
+          "lock": "kohya-v0.12.0-cu124.txt",
+          "downloadSize": 3300000000
+        }
+      ]
+    }
+  ]
+}

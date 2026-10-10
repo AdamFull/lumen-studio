@@ -75,6 +75,7 @@ public:
 private:
     void fetch();
     void updatePlan();
+    QString trainerId() const; // selected trainer ("kohya"), or empty for a server program
 
     Studio *m_studio;
     std::optional<runtime::HardwareInfo> m_hw;

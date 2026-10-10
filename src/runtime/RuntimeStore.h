@@ -8,6 +8,8 @@
 #include <QObject>
 #include <QProcessEnvironment>
 
+#include <functional>
+#include <memory>
 #include <optional>
 
 namespace lumen {
@@ -15,7 +17,25 @@ class Job;
 class JobQueue;
 }
 
+namespace lumen::async {
+class CancelToken;
+}
+
 namespace lumen::runtime {
+
+struct TrainerCatalog;
+
+struct ProcessResult
+{
+    int exitCode = -1;
+    bool started = false;
+    QString output;      // stdout and stderr, merged
+};
+// Runs a program and resolves when it ends; `line` receives output lines as they come. The token
+// kills it. RuntimeStore::processRunner replaces the real one in tests.
+using ProcessRunner = std::function<QFuture<ProcessResult>(const QString &program, const QStringList &arguments,
+                                                           const QProcessEnvironment &environment, const QString &workingDirectory,
+                                                           std::function<void(const QString &line)> line, const async::CancelToken &token)>;
 
 // A server program on this computer: downloaded by Lumen ("managed") or an existing install the
 // user pointed Lumen to ("adopted"; Lumen never modifies those).
@@ -83,6 +103,13 @@ public:
 
     // Downloads, verifies and unpacks a release as a Queue job. The job result is the new runtime id.
     Job *install(const InstallPlan &plan);
+    // Installs a LoRA trainer (runtime/Trainer.h) into a private Python environment as a Queue job:
+    // uv, the trainer's source, Python, then the locked packages with hash checking. The job
+    // result is the new runtime id.
+    Job *installTrainer(const QString &trainerId, const QString &variantId);
+    // Trainer recipes (tests replace the bundled ones) and how commands are run.
+    void setTrainerCatalog(const TrainerCatalog &catalog);
+    ProcessRunner processRunner;
     // Registers an existing server executable after checking that it runs.
     QFuture<InstalledRuntime> adopt(const QString &executable);
     // Deletes a managed install's folder (adopted ones are only forgotten). Shared CUDA runtime
@@ -110,6 +137,7 @@ private:
     ReleaseFeed m_feed;
     QString m_root;
     QList<InstalledRuntime> m_runtimes;
+    std::shared_ptr<TrainerCatalog> m_trainerCatalog;
 };
 
 } // namespace lumen::runtime

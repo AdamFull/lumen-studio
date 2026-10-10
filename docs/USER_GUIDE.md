@@ -144,6 +144,14 @@ folders, Downloads, and the folders your servers already use. Files stay where t
 * Check a model's licence before you use what you make with it; Civitai shows commercial-use
   and credit rules.
 
+**LoRA trainer.** *Download…* also offers **kohya sd-scripts (LoRA trainer)**, which trains
+character LoRAs:
+* Lumen installs it with its own Python and PyTorch in its data folder: about 4 GB to download
+  and 7.5 GB on disk. Your system Python is not touched.
+* The build that suits your NVIDIA driver is preselected.
+* Every file is checked against pinned checksums.
+* *Add existing…* also accepts an sd-scripts folder or a kohya_ss install that has its venv.
+
 **Tuned for.** New servers start with options for the GPU Lumen detected (up to 8 GB, 12 GB, or
 16 GB and more). Change *Tuned for* to apply another set.
 

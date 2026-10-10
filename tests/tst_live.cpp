@@ -26,11 +26,13 @@
 #include "runtime/RuntimeStore.h"
 #include "runtime/ServerProfile.h"
 #include "runtime/Supervisor.h"
+#include "runtime/Trainer.h"
 #include "ui/Studio.h"
 #include "ui/assistant/AssistantPanel.h"
 #include "ui/pages/CreatePage.h"
 
 #include <QDir>
+#include <QDirIterator>
 #include <QElapsedTimer>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -90,6 +92,7 @@ private slots:
     void managedSdLora();
     void managedDatasetShots();
     void managedCaptions();
+    void installTrainer();
 
 private:
     net::HttpClient m_http;
@@ -1174,6 +1177,41 @@ void TestLive::managedCaptions()
     qInfo() << files.size() << "images tagged in" << total.elapsed() / 1000 << "s;" << pruned << "identity tags pruned";
     servers.stop(profile.id);
     QTRY_COMPARE_WITH_TIMEOUT(servers.state(profile.id), runtime::ServerState::Stopped, 30000);
+}
+
+// LUMEN_LIVE_TRAINER=<trainer>:<variant>, e.g. "kohya:cu128": installs a LoRA trainer for real (downloads
+// uv, Python and PyTorch, several GB!). LUMEN_LIVE_INSTALL_ROOT keeps it (e.g. the app's runtimes folder).
+void TestLive::installTrainer()
+{
+    const QString what = qEnvironmentVariable("LUMEN_LIVE_TRAINER");
+    if (what.isEmpty())
+        QSKIP("LUMEN_LIVE_TRAINER is not set");
+    QTemporaryDir tmp;
+    const QString keep = qEnvironmentVariable("LUMEN_LIVE_INSTALL_ROOT");
+    JobQueue jobs;
+    runtime::RuntimeStore store(&m_http, &jobs);
+    store.setRoot(keep.isEmpty() ? tmp.filePath(QStringLiteral("runtimes")) : keep);
+    store.load();
+    QElapsedTimer t;
+    t.start();
+    Job *job = store.installTrainer(what.section(QLatin1Char(':'), 0, 0), what.section(QLatin1Char(':'), 1));
+    QString last;
+    connect(job, &Job::progressChanged, this, [&last](double p, const QString &status) {
+        if (status.section(QStringLiteral(" — "), 0, 0) != last.section(QStringLiteral(" — "), 0, 0))
+            qInfo().noquote() << int(p * 100) << "%" << status.left(160);
+        last = status;
+    });
+    QTRY_VERIFY_WITH_TIMEOUT(job->isFinished(), 3 * 3600 * 1000);
+    QVERIFY2(job->state() == Job::State::Succeeded, qPrintable(job->errorString()));
+    const auto rt = store.runtime(job->result().toString());
+    QVERIFY(rt);
+    qint64 bytes = 0;
+    QDirIterator it(rt->directory, QDir::Files, QDirIterator::Subdirectories);
+    while (it.hasNext()) {
+        it.next();
+        bytes += it.fileInfo().size();
+    }
+    qInfo().noquote() << "installed in" << t.elapsed() / 1000 << "s:" << rt->versionInfo << "·" << runtime::formatBytes(bytes) << "on disk";
 }
 
 QTEST_MAIN(TestLive)

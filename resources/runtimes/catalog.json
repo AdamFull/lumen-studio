@@ -126,6 +126,16 @@
       "executable": "webui.bat",
       "defaultPort": 7860,
       "healthPath": "/sdapi/v1/options"
+    },
+    {
+      "id": "kohya",
+      "name": "kohya sd-scripts",
+      "description": "LoRA trainer (Python, PyTorch). Lumen installs it into a private Python environment, or uses an existing sd-scripts or kohya_ss install.",
+      "role": "trainer",
+      "adoptOnly": true,
+      "homepage": "https://github.com/kohya-ss/sd-scripts",
+      "license": "Apache-2.0",
+      "executable": "sdxl_train_network.py"
     }
   ]
 }
