@@ -260,7 +260,7 @@
         <translation>Warten auf den Server...</translation>
     </message>
     <message>
-        <location filename="../src/app/main.cpp" line="+166"/>
+        <location filename="../src/app/main.cpp" line="+168"/>
         <source>Lumen Studio did not close properly last time. Open documents were restored from the last autosave; a crash report may be in the log folder (Help → Open log folder).</source>
         <translation>Lumen Studio wurde beim letzten Mal nicht ordnungsgemäß beendet. Geöffnete Dokumente wurden aus der letzten automatischen Sicherung wiederhergestellt; ein Absturzbericht befindet sich möglicherweise im Protokollordner (Hilfe → Protokollordner öffnen).</translation>
     </message>
@@ -5227,12 +5227,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::CharacterTraining</name>
     <message>
-        <location filename="../src/ui/CharacterTraining.cpp" line="+57"/>
+        <location filename="../src/ui/CharacterTraining.cpp" line="+58"/>
         <source>This character&apos;s LoRA is already being trained.</source>
         <translation>Die LoRA dieses Charakters wird bereits trainiert.</translation>
     </message>
     <message>
-        <location line="+94"/>
+        <location line="+108"/>
         <source>The character is not in the character library.</source>
         <translation>Der Charakter ist nicht in der Charakterbibliothek.</translation>
     </message>
@@ -5247,12 +5247,27 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Legen Sie zuerst im Reiter Beschreibungen des Trainingssets ein Auslösewort fest.</translation>
     </message>
     <message>
+        <location line="+3"/>
+        <source>A cloud training cannot be continued; start it again.</source>
+        <translation>Ein Cloud-Training kann nicht fortgesetzt werden; starten Sie es neu.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Add a RunPod API key under Settings → Cloud training first.</source>
+        <translation>Fügen Sie zuerst unter Einstellungen → Cloud-Training einen RunPod-API-Schlüssel hinzu.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Choose a cloud GPU first.</source>
+        <translation>Wählen Sie zuerst eine Cloud-GPU.</translation>
+    </message>
+    <message>
         <location line="+2"/>
         <source>The LoRA trainer is not installed.</source>
         <translation>Der LoRA-Trainer ist nicht installiert.</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+6"/>
         <source>Training works with SDXL (Illustrious, Pony, …) and SD 1.5 models; %1 is %2.</source>
         <translation>Training funktioniert mit SDXL- (Illustrious, Pony, …) und SD-1.5-Modellen; %1 ist %2.</translation>
     </message>
@@ -5262,12 +5277,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Es gibt kein gestopptes Training zum Fortsetzen.</translation>
     </message>
     <message>
-        <location line="+42"/>
+        <location line="+45"/>
         <source>No images to train on.</source>
         <translation>Keine Bilder zum Trainieren.</translation>
     </message>
     <message>
-        <location line="+33"/>
+        <location line="+45"/>
         <source>Training stopped. It can continue from the last finished epoch.</source>
         <translation>Training gestoppt. Es kann ab der letzten abgeschlossenen Epoche fortgesetzt werden.</translation>
     </message>
@@ -5285,7 +5300,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::CloudTrainingPage</name>
     <message>
-        <location filename="../src/ui/dialogs/CloudTrainingPage.cpp" line="+37"/>
+        <location filename="../src/ui/dialogs/CloudTrainingPage.cpp" line="+36"/>
         <source>Train character LoRAs on a rented RunPod GPU: about half an hour instead of hours on a laptop. Lumen starts the GPU, uploads the training set, trains with the same settings as on this computer, downloads the LoRA and shuts the GPU down. RunPod bills your account by the minute. Create an API key at &lt;a href=&apos;https://www.runpod.io/console/user/settings&apos;&gt;runpod.io → Settings → API Keys&lt;/a&gt;.</source>
         <translation>Trainieren Sie Charakter-LoRAs auf einer gemieteten RunPod-GPU: etwa eine halbe Stunde statt Stunden auf einem Laptop. Lumen startet die GPU, lädt das Trainingsset hoch, trainiert mit denselben Einstellungen wie auf diesem Computer, lädt die LoRA herunter und fährt die GPU wieder herunter. RunPod rechnet minutengenau über Ihr Konto ab. Einen API-Schlüssel erstellen Sie unter &lt;a href=&apos;https://www.runpod.io/console/user/settings&apos;&gt;runpod.io → Settings → API Keys&lt;/a&gt;.</translation>
     </message>
@@ -8075,7 +8090,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::LoraDatasetDialog</name>
     <message>
-        <location filename="../src/ui/dialogs/LoraDatasetDialog.cpp" line="+77"/>
+        <location filename="../src/ui/dialogs/LoraDatasetDialog.cpp" line="+81"/>
         <source>LoRA training set — %1</source>
         <translation>LoRA-Trainingsset — %1</translation>
     </message>
@@ -8162,12 +8177,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+4"/>
-        <location line="+781"/>
+        <location line="+948"/>
         <source>Write captions</source>
         <translation>Beschreibungen schreiben</translation>
     </message>
     <message>
-        <location line="-780"/>
+        <location line="-947"/>
         <source>The vision model tags every kept image that has no tags yet</source>
         <translation>Das Bildverständnismodell vertaggt jedes behaltene Bild, das noch keine Tags hat</translation>
     </message>
@@ -8228,12 +8243,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+914"/>
+        <location line="+1081"/>
         <source>Remove</source>
         <translation>Entfernen</translation>
     </message>
     <message>
-        <location line="-910"/>
+        <location line="-1077"/>
         <source>Export for training…</source>
         <translation>Für das Training exportieren…</translation>
     </message>
@@ -8325,12 +8340,96 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Bewertung stoppen</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+24"/>
+        <source>This computer</source>
+        <translation>Dieser Computer</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Cloud GPU (RunPod, paid by the hour)</source>
+        <translation>Cloud-GPU (RunPod, stundenweise bezahlt)</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Where</source>
+        <translation>Wo</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>GPUs with %1 GB or more; the price is RunPod&apos;s, per hour</source>
+        <translation>GPUs mit %1 GB oder mehr; der Preis ist der von RunPod, pro Stunde</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Cloud GPU</source>
+        <translation>Cloud-GPU</translation>
+    </message>
+    <message>
+        <location line="+185"/>
+        <source>%1 · %2 GB · $%3/h</source>
+        <translation>%1 · %2 GB · %3 $/h</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>RunPod offers no GPU with %1 GB or more right now.</source>
+        <translation>RunPod bietet gerade keine GPU mit %1 GB oder mehr an.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Cannot load RunPod&apos;s GPUs: %1</source>
+        <translation>Die GPUs von RunPod können nicht geladen werden: %1</translation>
+    </message>
+    <message>
+        <location line="+38"/>
+        <source>The base model (%1) is uploaded from this computer first; a slow upload adds to the time.</source>
+        <translation>Das Basismodell (%1) wird zuerst von diesem Computer hochgeladen; ein langsamer Upload verlängert die Zeit.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The GPU downloads the base model from Hugging Face itself.</source>
+        <translation>Die GPU lädt das Basismodell selbst von Hugging Face herunter.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Train on a cloud GPU</source>
+        <translation>Auf einer Cloud-GPU trainieren</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Rent a %1 on RunPod for this training?</source>
+        <translation>Für dieses Training eine %1 bei RunPod mieten?</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>It costs $%1 per hour. The training takes about %2, which is about $%3 (an estimate). %4
+
+You pay RunPod for every minute the GPU is rented. Lumen shuts it down when the training ends, fails or is stopped.</source>
+        <translation>Sie kostet %1 $ pro Stunde. Das Training dauert etwa %2, also etwa %3 $ (eine Schätzung). %4
+
+Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie herunter, wenn das Training endet, fehlschlägt oder gestoppt wird.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Rent and train</source>
+        <translation>Mieten und trainieren</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>Lumen rents a GPU on RunPod, installs the trainer there, uploads the training set, trains with the 24 GB settings and downloads the LoRA. This computer stays free. You pay RunPod by the hour.</source>
+        <translation>Lumen mietet eine GPU bei RunPod, installiert dort den Trainer, lädt das Trainingsset hoch, trainiert mit den 24-GB-Einstellungen und lädt die LoRA herunter. Dieser Computer bleibt frei. Sie bezahlen RunPod stundenweise.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Lumen can train on a rented GPU on RunPod. Add your RunPod API key first: &lt;a href=&apos;#&apos;&gt;Settings → Cloud training&lt;/a&gt;.</source>
+        <translation>Lumen kann auf einer gemieteten GPU bei RunPod trainieren. Fügen Sie zuerst Ihren RunPod-API-Schlüssel hinzu: &lt;a href=&apos;#&apos;&gt;Einstellungen → Cloud-Training&lt;/a&gt;.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
         <source>Lumen trains the LoRA with kohya sd-scripts on this computer. The GPU is used for the whole time: the servers stop and start again afterwards. On an 8 GB GPU a set of 25 images takes about two hours.</source>
         <translation>Lumen trainiert die LoRA mit kohya sd-scripts auf diesem Computer. Die GPU ist die ganze Zeit belegt: Die Server stoppen und starten danach wieder. Auf einer GPU mit 8 GB dauert ein Set mit 25 Bildern etwa zwei Stunden.</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="-266"/>
         <source>Install the trainer…</source>
         <translation>Trainer installieren…</translation>
     </message>
@@ -8340,7 +8439,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Trainer</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+3"/>
         <source>The LoRA works with this model and others of its family; use the model you generate with</source>
         <translation>Die LoRA funktioniert mit diesem Modell und anderen seiner Familie; verwenden Sie das Modell, mit dem Sie erzeugen</translation>
     </message>
@@ -8381,12 +8480,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+6"/>
-        <location line="+137"/>
+        <location line="+280"/>
         <source>Start training</source>
         <translation>Training starten</translation>
     </message>
     <message>
-        <location line="-135"/>
+        <location line="-278"/>
         <source>Continue the stopped training</source>
         <translation>Gestopptes Training fortsetzen</translation>
     </message>
@@ -8407,32 +8506,33 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+6"/>
-        <location line="+118"/>
+        <location line="+262"/>
         <source>Test the LoRA</source>
         <translation>LoRA testen</translation>
     </message>
     <message>
-        <location line="-35"/>
+        <location line="-64"/>
         <source>Not installed (about 4 GB to download)</source>
         <translation>Nicht installiert (etwa 4 GB Download)</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+24"/>
         <source>%1 images × %2 repeats × %3 epochs = &lt;b&gt;%4 steps&lt;/b&gt;, about %5.</source>
         <translation>%1 Bilder × %2 Wiederholungen × %3 Epochen = &lt;b&gt;%4 Schritte&lt;/b&gt;, etwa %5.</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="-2"/>
         <source>%1 h %2 min</source>
         <translation>%1 h %2 min</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="-37"/>
+        <location line="+37"/>
         <source>%1 min</source>
         <translation>%1 min</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+21"/>
         <source>Trigger word: &lt;b&gt;%1&lt;/b&gt;.</source>
         <translation>Auslösewort: &lt;b&gt;%1&lt;/b&gt;.</translation>
     </message>
@@ -8442,7 +8542,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Weniger als 15 Bilder: Die LoRA lernt wenig. Fügen Sie zuerst weitere hinzu.</translation>
     </message>
     <message numerus="yes">
-        <location line="+51"/>
+        <location line="+52"/>
         <source>%n earlier training(s), %1</source>
         <translation>
             <numerusform>%n früheres Training, %1</numerusform>
@@ -8510,7 +8610,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Epoche %1 ist dem Charakter mit Gewicht %2 angehängt: %3</translation>
     </message>
     <message>
-        <location line="+30"/>
+        <location line="+34"/>
         <source>Preparing the images…</source>
         <translation>Die Bilder werden vorbereitet…</translation>
     </message>
@@ -8551,23 +8651,33 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         </translation>
     </message>
     <message>
-        <location line="-379"/>
-        <location line="+381"/>
+        <location line="-384"/>
+        <location line="+386"/>
         <source>Stop</source>
         <translation>Stopp</translation>
     </message>
     <message>
-        <location line="-490"/>
+        <location line="-638"/>
         <source>The newest three epochs draw four new scenes with the LoRA; for comparison the same scenes are drawn without it, with the reference image through IP-Adapter. The Critic scores how well each image keeps the character (0–10). Takes about 45 minutes on an 8 GB GPU.</source>
         <translation>Die drei neuesten Epochen zeichnen vier neue Szenen mit der LoRA; zum Vergleich werden dieselben Szenen ohne sie gezeichnet, mit dem Referenzbild über IP-Adapter. Der Kritiker bewertet, wie gut jedes Bild den Charakter trifft (0–10). Dauert auf einer GPU mit 8 GB etwa 45 Minuten.</translation>
     </message>
     <message>
-        <location line="+296"/>
+        <location line="+237"/>
+        <source>With about %1 min to set up the GPU: about &lt;b&gt;$%2&lt;/b&gt; at $%3/h.</source>
+        <translation>Mit etwa %1 Min. für die Einrichtung der GPU: etwa &lt;b&gt;%2 $&lt;/b&gt; bei %3 $/h.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Loading RunPod&apos;s GPUs and prices…</source>
+        <translation>GPUs und Preise von RunPod werden geladen…</translation>
+    </message>
+    <message>
+        <location line="+198"/>
         <source>Identity %1 · pose %2</source>
         <translation>Identität %1 · Pose %2</translation>
     </message>
     <message>
-        <location line="+241"/>
+        <location line="+245"/>
         <source>Every kept image is tagged; the captions were rebuilt.</source>
         <translation>Jedes behaltene Bild ist vertaggt; die Beschreibungen wurden neu erstellt.</translation>
     </message>
@@ -8791,7 +8901,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::MainWindow</name>
     <message>
-        <location filename="../src/ui/MainWindow.cpp" line="+152"/>
+        <location filename="../src/ui/MainWindow.cpp" line="+154"/>
         <source>Create</source>
         <translation>Erstellen</translation>
     </message>
@@ -8978,12 +9088,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+3"/>
-        <location line="+240"/>
+        <location line="+287"/>
         <source>Quit</source>
         <translation>Beenden</translation>
     </message>
     <message>
-        <location line="-238"/>
+        <location line="-285"/>
         <source>&amp;Edit</source>
         <translation>&amp;Bearbeiten</translation>
     </message>
@@ -9148,8 +9258,50 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
             <numerusform>%n Bilder werden importiert...</numerusform>
         </translation>
     </message>
+    <message>
+        <location line="+39"/>
+        <source>Cloud GPUs still rented</source>
+        <translation>Noch gemietete Cloud-GPUs</translation>
+    </message>
     <message numerus="yes">
-        <location line="+36"/>
+        <location line="+1"/>
+        <source>%n cloud GPU(s) of earlier trainings are still rented on RunPod.</source>
+        <translation>
+            <numerusform>%n Cloud-GPU früherer Trainings ist noch bei RunPod gemietet.</numerusform>
+            <numerusform>%n Cloud-GPUs früherer Trainings sind noch bei RunPod gemietet.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>No training of this Lumen uses them. Together they cost about $%1 per hour (a stopped one still pays for its disk). Shut them down? Their files are lost.
+
+%2</source>
+        <translation>Kein Training dieses Lumen verwendet sie. Zusammen kosten sie etwa %1 $ pro Stunde (eine gestoppte zahlt weiter für ihren Speicher). Herunterfahren? Ihre Dateien gehen verloren.
+
+%2</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Shut them down</source>
+        <translation>Herunterfahren</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Keep them</source>
+        <translation>Behalten</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Cloud GPU %1 is shut down.</source>
+        <translation>Die Cloud-GPU %1 ist heruntergefahren.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Cloud GPU %1 could not be shut down: %2. Stop it at runpod.io.</source>
+        <translation>Die Cloud-GPU %1 konnte nicht heruntergefahren werden: %2. Stoppen Sie sie auf runpod.io.</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+23"/>
         <source>%n job(s) are still running. Quit anyway?</source>
         <translation>
             <numerusform>%n Auftrag läuft noch. Trotzdem beenden?</numerusform>

@@ -293,6 +293,26 @@ images of it:
 7. **Export for training…** writes the kept images at training sizes with their captions, for
    an external trainer.
 
+**Training on a cloud GPU.** Without a fast GPU, or to keep the computer free, the LoRA can be
+trained on a GPU rented from RunPod (runpod.io), billed by the minute.
+1. Create a RunPod account, add credit and create an API key (runpod.io → Settings → API Keys).
+2. Settings → **Cloud training**: paste the key and save it. It is kept in the system's credential
+   store, not in Lumen's settings. Choose Secure cloud (reliable) or Community cloud (cheaper),
+   and the preferred GPU; GPUs with 24 GB or more are listed with their price per hour.
+3. Train tab → **Where** → *Cloud GPU*. Pick the GPU; the summary shows the estimated time and
+   cost. A training of 25 images and 10 epochs takes roughly 30–40 minutes including setup.
+4. **Start training** asks first, with the price and the estimate. Lumen then rents the GPU,
+   installs the trainer there, sends the training set and the base model, trains and downloads
+   the LoRA. Base models downloaded from Hugging Face are fetched by the GPU itself; others are
+   uploaded from this computer first, which can take a while on a slow connection.
+5. The LoRA arrives in the model library and on the character, as with a local training, and can
+   be tested the same way.
+
+Lumen shuts the GPU down when the training ends, fails or is stopped. If Lumen was closed or
+crashed in between, it lists the GPUs that are still rented at the next start and offers to shut
+them down; you can also stop them at runpod.io. A stopped cloud training cannot be continued; start
+it again.
+
 ### Critic
 
 With **Critic** turned on, a vision model reviews every generated shot. It compares the result with

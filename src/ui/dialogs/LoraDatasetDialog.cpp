@@ -7,15 +7,18 @@
 #include "core/Async.h"
 #include "core/Error.h"
 #include "core/Job.h"
+#include "core/Settings.h"
 #include "doc/CharacterLibrary.h"
 #include "doc/Project.h"
 #include "runtime/LoraTraining.h"
 #include "runtime/ModelLibrary.h"
+#include "runtime/RunPod.h"
 #include "runtime/RuntimeStore.h"
 #include "runtime/Trainer.h"
 #include "ui/CharacterTraining.h"
 #include "ui/Icons.h"
 #include "ui/LoraEvaluation.h"
+#include "ui/MainWindow.h"
 #include "ui/Studio.h"
 #include "ui/Theme.h"
 #include "ui/dialogs/CharacterLoraDialog.h"
@@ -23,6 +26,7 @@
 #include "ui/director/DirectorSession.h"
 #include "ui/widgets/Controls.h"
 
+#include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDesktopServices>
@@ -378,17 +382,36 @@ QWidget *LoraDatasetDialog::buildTrainTab()
 {
     auto *page = new QWidget(m_tabs);
     auto *v = new QVBoxLayout(page);
-    v->addWidget(mutedLabel(tr("Lumen trains the LoRA with kohya sd-scripts on this computer. The GPU is used for the whole time: "
-                               "the servers stop and start again afterwards. On an 8 GB GPU a set of 25 images takes about two hours."),
-                            page));
+    m_trainIntro = mutedLabel(QString(), page);
+    m_trainIntro->setTextFormat(Qt::RichText);
+    m_trainIntro->setOpenExternalLinks(false);
+    connect(m_trainIntro, &QLabel::linkActivated, this, [] {
+        for (QWidget *w : QApplication::topLevelWidgets()) {
+            if (auto *main = qobject_cast<MainWindow *>(w))
+                main->openSettings(QStringLiteral("cloud"));
+        }
+    });
+    v->addWidget(m_trainIntro);
     auto *form = new QFormLayout;
+    m_trainForm = form;
     form->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    m_where = new QComboBox(page);
+    m_where->setObjectName(QStringLiteral("trainWhere"));
+    m_where->addItem(Icons::get(QStringLiteral("server")), tr("This computer"), false);
+    m_where->addItem(Icons::get(QStringLiteral("cloud")), tr("Cloud GPU (RunPod, paid by the hour)"), true);
+    m_where->setCurrentIndex(Settings::instance().value(QStringLiteral("lora/train_cloud"), false).toBool() ? 1 : 0);
+    form->addRow(tr("Where"), m_where);
+    m_cloudGpu = new QComboBox(page);
+    m_cloudGpu->setObjectName(QStringLiteral("cloudGpu"));
+    m_cloudGpu->setToolTip(tr("GPUs with %1 GB or more; the price is RunPod's, per hour").arg(runtime::kCloudTrainingMinGpuGb));
+    form->addRow(tr("Cloud GPU"), m_cloudGpu);
     auto *trainerRow = new QHBoxLayout;
     m_trainer = new QLabel(page);
     m_installTrainer = new QPushButton(Icons::get(QStringLiteral("download")), tr("Install the trainer…"), page);
     trainerRow->addWidget(m_trainer, 1);
     trainerRow->addWidget(m_installTrainer);
     form->addRow(tr("Trainer"), trainerRow);
+    m_trainerRow = trainerRow;
     m_checkpoint = new QComboBox(page);
     m_checkpoint->setToolTip(tr("The LoRA works with this model and others of its family; use the model you generate with"));
     form->addRow(tr("Base model"), m_checkpoint);
@@ -486,6 +509,17 @@ QWidget *LoraDatasetDialog::buildTrainTab()
     connect(m_preset, &QComboBox::currentIndexChanged, this, &LoraDatasetDialog::refreshTrainTab);
     connect(m_epochs, &QSpinBox::valueChanged, this, &LoraDatasetDialog::refreshTrainTab);
     connect(m_checkpoint, &QComboBox::currentIndexChanged, this, &LoraDatasetDialog::refreshTrainTab);
+    connect(m_where, &QComboBox::currentIndexChanged, this, [this] {
+        Settings::instance().setValue(QStringLiteral("lora/train_cloud"), trainInCloud());
+        if (trainInCloud() && m_cloudGpus.isEmpty())
+            loadCloudGpus();
+        refreshTrainTab();
+    });
+    connect(m_cloudGpu, &QComboBox::currentIndexChanged, this, [this] {
+        if (m_cloudGpu->currentIndex() >= 0 && !m_cloudGpus.isEmpty())
+            Settings::instance().setValue(QStringLiteral("cloud/runpod/gpu"), m_cloudGpu->currentData().toString());
+        refreshTrainTab();
+    });
     connect(m_trainButton, &QPushButton::clicked, this, [this] {
         if (m_trainingJob && !m_trainingJob->isFinished()) {
             m_trainingJob->cancel();
@@ -515,29 +549,161 @@ QWidget *LoraDatasetDialog::buildTrainTab()
             return;
         self->m_preset->setCurrentIndex(std::max(0, self->m_preset->findData(int(runtime::vramTierFor(hw.maxVram())))));
     });
+    if (trainInCloud())
+        loadCloudGpus();
     return page;
+}
+
+bool LoraDatasetDialog::trainInCloud() const
+{
+    return m_where && m_where->currentData().toBool();
+}
+
+void LoraDatasetDialog::loadCloudGpus()
+{
+    if (m_loadingGpus || !m_studio->runPod()->hasKey())
+        return;
+    m_loadingGpus = true;
+    m_gpuError.clear();
+    const bool community = Settings::instance().value(QStringLiteral("cloud/runpod/community"), false).toBool();
+    QPointer<LoraDatasetDialog> self(this);
+    auto done = [self] {
+        if (!self)
+            return;
+        self->m_loadingGpus = false;
+        self->refreshTrainTab();
+    };
+    m_studio->runPod()
+        ->gpus()
+        .then(this,
+              [self, community, done](const QList<runtime::RunPodGpu> &gpus) {
+                  if (!self)
+                      return;
+                  const QString saved = Settings::instance().value(QStringLiteral("cloud/runpod/gpu")).toString();
+                  QSignalBlocker block(self->m_cloudGpu);
+                  self->m_cloudGpus.clear();
+                  self->m_cloudGpu->clear();
+                  for (runtime::RunPodGpu g : gpus) {
+                      if (g.memoryGb < runtime::kCloudTrainingMinGpuGb || !g.offered(community))
+                          continue;
+                      // The price of the chosen cloud is the one that counts.
+                      g.securePrice = g.communityPrice = g.price(community);
+                      self->m_cloudGpus << g;
+                      self->m_cloudGpu->addItem(tr("%1 · %2 GB · $%3/h").arg(g.name).arg(g.memoryGb).arg(g.price(community), 0, 'f', 2), g.id);
+                  }
+                  if (self->m_cloudGpus.isEmpty())
+                      self->m_gpuError = tr("RunPod offers no GPU with %1 GB or more right now.").arg(runtime::kCloudTrainingMinGpuGb);
+                  self->m_cloudGpu->setCurrentIndex(std::max(0, self->m_cloudGpu->findData(saved)));
+                  done();
+              })
+        .onFailed(this, [self, done](const std::exception &e) {
+            if (self)
+                self->m_gpuError = tr("Cannot load RunPod's GPUs: %1").arg(QString::fromUtf8(e.what()));
+            done();
+        });
+}
+
+const runtime::RunPodGpu *LoraDatasetDialog::cloudGpu() const
+{
+    const QString id = m_cloudGpu->currentData().toString();
+    for (const runtime::RunPodGpu &g : m_cloudGpus) {
+        if (g.id == id)
+            return &g;
+    }
+    return nullptr;
+}
+
+int LoraDatasetDialog::trainingMinutes(int steps) const
+{
+    // Measured on an 8 GB RTX 4060 (3.1 s per step); a 24 GB cloud GPU (RTX 4090 class) with the
+    // 24 GB preset is an estimate, as is the 12/16 GB one.
+    double secondsPerStep = 2.4;
+    if (trainInCloud())
+        secondsPerStep = 1.2;
+    else if (m_preset->currentData().toInt() == int(runtime::VramTier::Small))
+        secondsPerStep = 3.1;
+    return int(steps * secondsPerStep / 60.0) + 2;
+}
+
+bool LoraDatasetDialog::confirmCloudTraining()
+{
+    const runtime::RunPodGpu *gpu = cloudGpu();
+    if (!gpu)
+        return false;
+    const int images = m_dataset->keptCount();
+    const runtime::TrainingPreset preset = runtime::trainingPreset(runtime::VramTier::Large);
+    const int steps = runtime::totalSteps(images, runtime::repeatsFor(images), m_epochs->value(), preset.batch);
+    const int minutes = trainingMinutes(steps) + kCloudSetupMinutes;
+    const QString checkpoint = m_checkpoint->currentData().toString();
+    const QString model = CharacterTraining::checkpointSource(m_studio, checkpoint).first.isEmpty()
+                              ? tr("The base model (%1) is uploaded from this computer first; a slow upload adds to the time.")
+                                    .arg(QLocale().formattedDataSize(QFileInfo(checkpoint).size()))
+                              : tr("The GPU downloads the base model from Hugging Face itself.");
+    QMessageBox box(QMessageBox::Question, tr("Train on a cloud GPU"),
+                    tr("Rent a %1 on RunPod for this training?").arg(gpu->name), QMessageBox::Yes | QMessageBox::Cancel, this);
+    box.setObjectName(QStringLiteral("confirmCloudTraining"));
+    box.setInformativeText(tr("It costs $%1 per hour. The training takes about %2, which is about $%3 (an estimate). %4\n\n"
+                              "You pay RunPod for every minute the GPU is rented. Lumen shuts it down when the training ends, "
+                              "fails or is stopped.")
+                               .arg(gpu->price(false), 0, 'f', 2)
+                               .arg(tr("%1 min").arg(minutes))
+                               .arg(gpu->price(false) * minutes / 60.0, 0, 'f', 2)
+                               .arg(model));
+    box.button(QMessageBox::Yes)->setText(tr("Rent and train"));
+    box.setDefaultButton(QMessageBox::Cancel);
+    return box.exec() == QMessageBox::Yes;
 }
 
 void LoraDatasetDialog::refreshTrainTab()
 {
     if (!m_trainer)
         return;
+    const bool cloud = trainInCloud();
+    const bool hasKey = m_studio->runPod()->hasKey();
     const QList<runtime::InstalledRuntime> trainers = m_studio->runtimes()->runtimes(QStringLiteral("kohya"));
     m_trainer->setText(trainers.isEmpty() ? tr("Not installed (about 4 GB to download)") : trainers.last().versionInfo);
     m_installTrainer->setVisible(trainers.isEmpty());
+    m_trainForm->setRowVisible(m_cloudGpu, cloud);
+    m_trainForm->setRowVisible(m_preset, !cloud);
+    m_trainForm->setRowVisible(m_trainerRow, !cloud);
+    if (cloud) {
+        m_trainIntro->setText(
+            hasKey ? tr("Lumen rents a GPU on RunPod, installs the trainer there, uploads the training set, trains with the 24 GB "
+                        "settings and downloads the LoRA. This computer stays free. You pay RunPod by the hour.")
+                   : tr("Lumen can train on a rented GPU on RunPod. Add your RunPod API key first: <a href='#'>Settings → Cloud "
+                        "training</a>."));
+    } else {
+        m_trainIntro->setText(tr("Lumen trains the LoRA with kohya sd-scripts on this computer. The GPU is used for the whole time: "
+                                 "the servers stop and start again afterwards. On an 8 GB GPU a set of 25 images takes about two hours."));
+    }
     const int images = m_dataset->keptCount();
     const int repeats = runtime::repeatsFor(images);
-    const runtime::TrainingPreset preset = runtime::trainingPreset(runtime::VramTier(m_preset->currentData().toInt()));
+    const runtime::VramTier tier = cloud ? runtime::VramTier::Large : runtime::VramTier(m_preset->currentData().toInt());
+    const runtime::TrainingPreset preset = runtime::trainingPreset(tier);
     const int steps = runtime::totalSteps(images, repeats, m_epochs->value(), preset.batch);
-    // Measured on an 8 GB RTX 4060 (3.1 s per step); larger presets are estimates.
-    const double secondsPerStep = m_preset->currentData().toInt() == int(runtime::VramTier::Small) ? 3.1 : 2.4;
-    const int minutes = int(steps * secondsPerStep / 60.0) + 2;
+    const int minutes = trainingMinutes(steps);
+    auto duration = [](int minutes) {
+        return minutes >= 90 ? tr("%1 h %2 min").arg(minutes / 60).arg(minutes % 60) : tr("%1 min").arg(minutes);
+    };
     QString summary = tr("%1 images × %2 repeats × %3 epochs = <b>%4 steps</b>, about %5.")
                           .arg(images)
                           .arg(repeats)
                           .arg(m_epochs->value())
                           .arg(steps)
-                          .arg(minutes >= 90 ? tr("%1 h %2 min").arg(minutes / 60).arg(minutes % 60) : tr("%1 min").arg(minutes));
+                          .arg(duration(minutes));
+    const runtime::RunPodGpu *gpu = cloud ? cloudGpu() : nullptr;
+    if (cloud && gpu) {
+        const int total = minutes + kCloudSetupMinutes;
+        summary += QStringLiteral(" ")
+                   + tr("With about %1 min to set up the GPU: about <b>$%2</b> at $%3/h.")
+                         .arg(kCloudSetupMinutes)
+                         .arg(gpu->price(false) * total / 60.0, 0, 'f', 2)
+                         .arg(gpu->price(false), 0, 'f', 2);
+    } else if (cloud && hasKey) {
+        const QString text = m_loadingGpus ? tr("Loading RunPod's GPUs and prices…") : m_gpuError;
+        if (!text.isEmpty())
+            summary += QStringLiteral("<br>") + text.toHtmlEscaped();
+    }
     summary += QStringLiteral(" ") + tr("Trigger word: <b>%1</b>.").arg(m_dataset->settings().trigger.toHtmlEscaped());
     if (images < 15)
         summary += QStringLiteral("<br><span style='color:%1'>%2</span>")
@@ -545,8 +711,9 @@ void LoraDatasetDialog::refreshTrainTab()
     m_trainSummary->setText(summary);
     const bool running = m_trainingJob && !m_trainingJob->isFinished();
     m_trainButton->setText(running ? tr("Stop") : tr("Start training"));
-    m_trainButton->setEnabled(running || (!trainers.isEmpty() && images > 0 && m_checkpoint->count() > 0));
-    m_resumeButton->setVisible(!running && CharacterTraining::canResume(CharacterTraining::lastRun(m_dataset->directory())));
+    const bool ready = cloud ? hasKey && gpu : !trainers.isEmpty();
+    m_trainButton->setEnabled(running || (ready && images > 0 && m_checkpoint->count() > 0));
+    m_resumeButton->setVisible(!running && !cloud && CharacterTraining::canResume(CharacterTraining::lastRun(m_dataset->directory())));
     m_resumeButton->setEnabled(!trainers.isEmpty());
     updateEvaluationButton();
 }
@@ -808,11 +975,15 @@ void LoraDatasetDialog::applyEvaluation()
 void LoraDatasetDialog::startTraining(bool resume)
 {
     const QList<runtime::InstalledRuntime> trainers = m_studio->runtimes()->runtimes(QStringLiteral("kohya"));
-    if (trainers.isEmpty())
+    const bool cloud = trainInCloud() && !resume;
+    if (cloud ? !confirmCloudTraining() : trainers.isEmpty())
         return;
     CharacterTraining::Settings s;
     s.characterId = m_characterId;
-    s.runtimeId = trainers.last().id;
+    s.runtimeId = cloud ? QString() : trainers.last().id;
+    s.cloud = cloud;
+    s.gpuId = cloud ? m_cloudGpu->currentData().toString() : QString();
+    s.community = Settings::instance().value(QStringLiteral("cloud/runpod/community"), false).toBool();
     s.checkpoint = m_checkpoint->currentData().toString();
     s.tier = runtime::VramTier(m_preset->currentData().toInt());
     s.epochs = m_epochs->value();

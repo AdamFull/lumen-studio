@@ -4,6 +4,8 @@
 #include "core/Log.h"
 #include "core/Paths.h"
 #include "core/Settings.h"
+#include "runtime/CloudTraining.h"
+#include "ui/Studio.h"
 #include "ui/Icons.h"
 #include "ui/PageFactory.h"
 #include "ui/Shortcuts.h"
@@ -491,6 +493,53 @@ void MainWindow::maybeShowOnboarding()
     OnboardingDialog dlg(m_studio, this);
     dlg.exec();
     Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
+}
+
+void MainWindow::checkLeftoverCloudPods()
+{
+    runtime::RunPodClient *runPod = m_studio->runPod();
+    if (!runPod->hasKey())
+        return;
+    QPointer<MainWindow> self(this);
+    runtime::leftoverCloudPods(runPod)
+        .then(this,
+              [self, runPod](const QList<runtime::RunPodPod> &pods) {
+                  if (!self || pods.isEmpty())
+                      return;
+                  double perHour = 0;
+                  QStringList names;
+                  for (const runtime::RunPodPod &p : pods) {
+                      perHour += p.costPerHour;
+                      names << QStringLiteral("%1 (%2)").arg(p.name, p.status.toLower());
+                  }
+                  QMessageBox box(QMessageBox::Warning, tr("Cloud GPUs still rented"),
+                                  tr("%n cloud GPU(s) of earlier trainings are still rented on RunPod.", nullptr, int(pods.size())),
+                                  QMessageBox::Yes | QMessageBox::No, self);
+                  box.setObjectName(QStringLiteral("leftoverPods"));
+                  box.setInformativeText(tr("No training of this Lumen uses them. Together they cost about $%1 per hour (a stopped "
+                                            "one still pays for its disk). Shut them down? Their files are lost.\n\n%2")
+                                             .arg(perHour, 0, 'f', 2)
+                                             .arg(names.join(u'\n')));
+                  box.button(QMessageBox::Yes)->setText(tr("Shut them down"));
+                  box.button(QMessageBox::No)->setText(tr("Keep them"));
+                  if (box.exec() != QMessageBox::Yes)
+                      return;
+                  for (const runtime::RunPodPod &p : pods) {
+                      const QString name = p.name;
+                      runPod->terminate(p.id)
+                          .then(self, [self, name] {
+                              if (self)
+                                  self->m_studio->notify(tr("Cloud GPU %1 is shut down.").arg(name), QStringLiteral("success"));
+                          })
+                          .onFailed(self, [self, name](const std::exception &e) {
+                              if (self)
+                                  self->m_studio->notify(tr("Cloud GPU %1 could not be shut down: %2. Stop it at runpod.io.")
+                                                             .arg(name, QString::fromUtf8(e.what())),
+                                                         QStringLiteral("error"));
+                          });
+                  }
+              })
+        .onFailed(this, [](const std::exception &e) { qCWarning(lcApp) << "Leftover cloud GPUs:" << e.what(); });
 }
 
 bool MainWindow::saveScreenshot(const QString &path)

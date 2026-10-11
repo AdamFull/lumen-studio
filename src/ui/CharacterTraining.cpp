@@ -4,6 +4,7 @@
 #include "core/Job.h"
 #include "doc/CharacterLibrary.h"
 #include "doc/LoraDataset.h"
+#include "runtime/CloudTraining.h"
 #include "runtime/LoraTraining.h"
 #include "runtime/ModelLibrary.h"
 #include "runtime/Trainer.h"
@@ -132,6 +133,20 @@ bool CharacterTraining::canResume(const QString &runDir)
            && !QFileInfo::exists(QDir(runDir).filePath(QStringLiteral("output/") + name + QStringLiteral(".safetensors")));
 }
 
+QPair<QString, QString> CharacterTraining::checkpointSource(Studio *studio, const QString &checkpoint)
+{
+    const auto entry = studio->models()->entry(checkpoint);
+    if (!entry)
+        return {};
+    const QJsonObject s = entry->source;
+    const QString url = s.value(QStringLiteral("url")).toString();
+    const QString sha = s.value(QStringLiteral("sha256")).toString();
+    // Civitai downloads need the user's token, which does not go to a rented machine.
+    if (s.value(QStringLiteral("source")).toString() != QLatin1String("huggingface") || url.isEmpty() || sha.size() != 64)
+        return {};
+    return {url, sha};
+}
+
 CharacterTraining::CharacterTraining(Studio *studio, const Settings &settings)
     : QObject(studio)
     , m_studio(studio)
@@ -159,8 +174,16 @@ bool CharacterTraining::begin(QString *error)
         return failNow(tr("Keep some images in the training set first."));
     if (m_trigger.isEmpty())
         return failNow(tr("Set a trigger word in the training set's Captions tab first."));
-    if (!m_studio->runtimes()->runtime(m_settings.runtimeId))
+    if (m_settings.cloud) {
+        if (m_settings.resume)
+            return failNow(tr("A cloud training cannot be continued; start it again."));
+        if (!m_studio->runPod()->hasKey())
+            return failNow(tr("Add a RunPod API key under Settings → Cloud training first."));
+        if (m_settings.gpuId.isEmpty())
+            return failNow(tr("Choose a cloud GPU first."));
+    } else if (!m_studio->runtimes()->runtime(m_settings.runtimeId)) {
         return failNow(tr("The LoRA trainer is not installed."));
+    }
     m_family = modelFamily(m_studio, m_settings.checkpoint);
     if (m_family.isEmpty())
         m_family = QStringLiteral("SDXL");
@@ -193,11 +216,14 @@ bool CharacterTraining::begin(QString *error)
                                           {QStringLiteral("checkpoint"), m_settings.checkpoint},
                                           {QStringLiteral("family"), m_family},
                                           {QStringLiteral("epochs"), m_settings.epochs},
+                              {QStringLiteral("where"), m_settings.cloud ? QStringLiteral("cloud") : QStringLiteral("local")},
                                           {QStringLiteral("tier"), int(m_settings.tier)},
                                           {QStringLiteral("trigger"), m_trigger},
                                           {QStringLiteral("images"), m_images},
                                           {QStringLiteral("repeats"), m_repeats},
                                           {QStringLiteral("outputName"), m_trigger},
+                                          {QStringLiteral("where"), m_settings.cloud ? QStringLiteral("cloud") : QStringLiteral("local")},
+                                          {QStringLiteral("gpu"), m_settings.gpuId},
                                           {QStringLiteral("started"), QDateTime::currentDateTime().toString(Qt::ISODate)}})
                     .toJson());
         f.commit();
@@ -238,7 +264,19 @@ void CharacterTraining::launch(const QString &resumeState)
     o.tier = m_settings.tier;
     o.resumeState = resumeState;
     o.title = m_name;
-    m_job = runtime::startTraining(m_studio->runtimes(), m_studio->servers(), m_studio->jobs(), o);
+    if (m_settings.cloud) {
+        runtime::CloudTrainingOptions co;
+        co.training = o;
+        co.training.tier = runtime::VramTier::Large; // 24 GB or more
+        co.gpuId = m_settings.gpuId;
+        co.community = m_settings.community;
+        const auto [url, sha] = checkpointSource(m_studio, m_settings.checkpoint);
+        co.checkpointUrl = url;
+        co.checkpointSha256 = sha;
+        m_job = runtime::startCloudTraining(m_studio->runPod(), m_studio->http(), m_studio->jobs(), co);
+    } else {
+        m_job = runtime::startTraining(m_studio->runtimes(), m_studio->servers(), m_studio->jobs(), o);
+    }
     connect(m_job, &Job::finished, this, &CharacterTraining::done);
     emit started(m_job);
 }

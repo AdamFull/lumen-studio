@@ -125,6 +125,7 @@ private slots:
     void assistantCharacter();
     void safeContent();
     void cloudTrainingPage();
+    void cloudTrainingTab();
 
 private:
     ToolEvent at(double x, double y, Qt::KeyboardModifiers mods = Qt::NoModifier) const
@@ -2511,6 +2512,202 @@ void TestCanvas::cloudTrainingPage()
         return std::any_of(labels.begin(), labels.end(), [](QLabel *l) { return l->text().contains(QStringLiteral("refused the API key")); });
     };
     QTRY_VERIFY(refusedShown());
+}
+
+void TestCanvas::cloudTrainingTab()
+{
+    Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
+    auto resetSettings = [] {
+        Settings::instance().setValue(QStringLiteral("cloud/runpod/gpu"), QString());
+        Settings::instance().setValue(QStringLiteral("cloud/runpod/community"), false);
+        Settings::instance().setValue(QStringLiteral("lora/train_cloud"), false);
+    };
+    resetSettings();
+    Settings::instance().setValue(QStringLiteral("cloud/runpod/gpu"), QStringLiteral("A100 80GB"));
+    QTemporaryDir dir;
+    // A base model downloaded from Hugging Face: the pod can fetch it itself.
+    const QString checkpoint = QDir::cleanPath(dir.filePath(QStringLiteral("models/checkpoints/xl.safetensors")));
+    QDir().mkpath(QFileInfo(checkpoint).absolutePath());
+    {
+        QFile f(checkpoint);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write(fakeSafetensors({QStringLiteral("model.diffusion_model.input_blocks.0.0.weight"),
+                                 QStringLiteral("model.diffusion_model.label_emb.0.0.weight"),
+                                 QStringLiteral("conditioner.embedders.1.model.ln_final.weight")}));
+        QFile side(runtime::sidecarPath(checkpoint));
+        QVERIFY(side.open(QIODevice::WriteOnly));
+        side.write(QJsonDocument(QJsonObject{{QStringLiteral("source"), QStringLiteral("huggingface")},
+                                             {QStringLiteral("url"), QStringLiteral("https://huggingface.co/acme/xl/resolve/main/xl.safetensors")},
+                                             {QStringLiteral("sha256"), QString(64, u'a')}})
+                       .toJson());
+    }
+
+    // RunPod: the catalogue, no capacity for the new pod, and a pod left by an earlier session.
+    MockHttpServer server;
+    server.route("GET", QStringLiteral("/v2/catalog/gpus"), [](const MockRequest &) {
+        auto gpu = [](const char *id, int memory, double secure) {
+            return QJsonObject{{QStringLiteral("id"), QLatin1String(id)}, {QStringLiteral("name"), QLatin1String(id)},
+                               {QStringLiteral("memory"), memory},
+                               {QStringLiteral("price"), QJsonObject{{QStringLiteral("secure"), secure}, {QStringLiteral("community"), 0.0}}},
+                               {QStringLiteral("maxCount"), QJsonObject{{QStringLiteral("secure"), 4}, {QStringLiteral("community"), 0}}}};
+        };
+        return MockResponse::json({{QStringLiteral("gpus"), QJsonArray{gpu("RTX A4000", 16, 0.17), gpu("RTX 4090", 24, 0.69),
+                                                                       gpu("A100 80GB", 80, 1.64)}}});
+    });
+    QJsonObject created;
+    server.route("POST", QStringLiteral("/v2/pods"), [&](const MockRequest &req) {
+        created = req.json();
+        return MockResponse::json({{QStringLiteral("title"), QStringLiteral("Bad Request")},
+                                   {QStringLiteral("detail"), QStringLiteral("There are no instances available with the requested specifications.")},
+                                   {QStringLiteral("status"), 400}},
+                                  400);
+    });
+    server.route("GET", QStringLiteral("/v2/pods"), [](const MockRequest &) {
+        return MockResponse::json({{QStringLiteral("pods"), QJsonArray{QJsonObject{{QStringLiteral("id"), QStringLiteral("old1")},
+                                                                                   {QStringLiteral("name"), QStringLiteral("lumen-train-mira-20261010-2200")},
+                                                                                   {QStringLiteral("status"), QStringLiteral("RUNNING")},
+                                                                                   {QStringLiteral("cost"), 0.69}}}}});
+    });
+    QStringList deleted;
+    server.route("DELETE", QStringLiteral("/v2/pods/old1"), [&](const MockRequest &) {
+        deleted << QStringLiteral("old1");
+        MockResponse r;
+        r.status = 204;
+        return r;
+    });
+
+    Studio studio;
+    studio.runPod()->setBaseUrl(server.baseUrl().toString() + QStringLiteral("/v2"));
+    studio.runPod()->keyProvider = [] { return QStringLiteral("rp_test"); };
+    QSignalSpy scanned(studio.models(), &runtime::ModelLibrary::scanFinished);
+    QVERIFY(studio.models()->addRoot(dir.filePath(QStringLiteral("models"))));
+    QTRY_VERIFY_WITH_TIMEOUT(scanned.size() >= 1 && !studio.models()->isScanning(), 20000);
+    QCOMPARE(CharacterTraining::checkpointSource(&studio, checkpoint).first,
+             QStringLiteral("https://huggingface.co/acme/xl/resolve/main/xl.safetensors"));
+
+    const QJsonObject sheet{{QStringLiteral("name"), QStringLiteral("Mira")}};
+    QImage ref(64, 96, QImage::Format_ARGB32);
+    ref.fill(Qt::red);
+    auto saved = studio.characters()->save(QStringLiteral("Mira (cloud test)"), sheet, {ref});
+    QTRY_VERIFY(saved.isFinished());
+    const QString characterId = saved.result().id;
+    auto cleanup = qScopeGuard([&] {
+        studio.characters()->remove(characterId);
+        studio.models()->removeRoot(QDir::cleanPath(dir.filePath(QStringLiteral("models"))));
+        resetSettings();
+    });
+    {
+        doc::LoraDataset ds(studio.characters()->datasetDirectory(characterId));
+        ds.load();
+        for (int i = 0; i < 3; ++i) {
+            QImage img(512, 768, QImage::Format_ARGB32);
+            img.fill(QColor(40 * i, 200, 40));
+            auto added = ds.add(img, {{QStringLiteral("file"), QStringLiteral("x")}});
+            QTRY_VERIFY(added.isFinished());
+            ds.setCaption(added.result().id, QStringLiteral("lmn_mira, 1girl"), false);
+        }
+        ds.setSettings({QStringLiteral("lmn_mira"), true});
+    }
+
+    LoraDatasetDialog dlg(&studio, characterId, nullptr, {});
+    dlg.resize(1080, 720);
+    dlg.show();
+    dlg.findChild<QTabWidget *>()->setCurrentIndex(2);
+    auto *where = dlg.findChild<QComboBox *>(QStringLiteral("trainWhere"));
+    auto *gpu = dlg.findChild<QComboBox *>(QStringLiteral("cloudGpu"));
+    QVERIFY(where && gpu);
+    QVERIFY(!gpu->isVisibleTo(&dlg));
+    QComboBox *base = nullptr;
+    for (QComboBox *c : dlg.findChildren<QComboBox *>()) {
+        if (c->findData(checkpoint) >= 0)
+            base = c;
+    }
+    QVERIFY(base);
+    base->setCurrentIndex(base->findData(checkpoint));
+    QPushButton *start = nullptr;
+    for (QPushButton *b : dlg.findChildren<QPushButton *>()) {
+        if (b->text() == QLatin1String("Start training"))
+            start = b;
+    }
+    QVERIFY(start);
+    auto labelWith = [&dlg](const QString &text) {
+        const QList<QLabel *> labels = dlg.findChildren<QLabel *>();
+        for (QLabel *l : labels) {
+            if (l->text().contains(text))
+                return l;
+        }
+        return static_cast<QLabel *>(nullptr);
+    };
+
+    // In the cloud: GPUs with 24 GB or more, the saved choice, and the price of the training.
+    where->setCurrentIndex(1);
+    QVERIFY(Settings::instance().value(QStringLiteral("lora/train_cloud")).toBool());
+    QTRY_COMPARE(gpu->count(), 2);
+    QVERIFY(gpu->isVisibleTo(&dlg));
+    QCOMPARE(gpu->currentData().toString(), QStringLiteral("A100 80GB"));
+    gpu->setCurrentIndex(gpu->findData(QStringLiteral("RTX 4090")));
+    QCOMPARE(Settings::instance().value(QStringLiteral("cloud/runpod/gpu")).toString(), QStringLiteral("RTX 4090"));
+    QVERIFY(labelWith(QStringLiteral("at $0.69/h")));
+    QTRY_VERIFY(start->isEnabled());
+
+    // Every start asks first, with the cost; "Cancel" rents nothing.
+    QString question;
+    auto answer = [&question](QMessageBox::StandardButton button) {
+        QTimer::singleShot(200, [&question, button] {
+            if (auto *box = qobject_cast<QMessageBox *>(QApplication::activeModalWidget())) {
+                question = box->objectName() + u'|' + box->text() + u'|' + box->informativeText();
+                box->button(button)->click();
+            }
+        });
+    };
+    answer(QMessageBox::Cancel);
+    start->click();
+    QVERIFY(question.startsWith(QStringLiteral("confirmCloudTraining|Rent a RTX 4090")));
+    QVERIFY(question.contains(QStringLiteral("$0.69 per hour")));
+    QVERIFY(question.contains(QStringLiteral("from Hugging Face")));
+    QTest::qWait(200);
+    QVERIFY(created.isEmpty());
+    QVERIFY(!CharacterTraining::running(characterId));
+
+    // "Rent and train": the pod Lumen asks for; RunPod's refusal ends the training with its reason.
+    answer(QMessageBox::Yes);
+    start->click();
+    QTRY_VERIFY_WITH_TIMEOUT(!created.isEmpty(), 10000);
+    QCOMPARE(created.value(QStringLiteral("gpu")).toObject().value(QStringLiteral("id")).toString(), QStringLiteral("RTX 4090"));
+    QCOMPARE(created.value(QStringLiteral("cloud")).toString(), QStringLiteral("SECURE"));
+    QVERIFY(created.value(QStringLiteral("name")).toString().startsWith(QLatin1String(runtime::RunPodClient::kTrainingPrefix)));
+    QTRY_VERIFY_WITH_TIMEOUT(labelWith(QStringLiteral("no instances available")), 10000);
+    QTRY_VERIFY(!CharacterTraining::running(characterId));
+    const QString run = CharacterTraining::lastRun(studio.characters()->datasetDirectory(characterId));
+    QFile runFile(run + QStringLiteral("/run.json"));
+    QVERIFY(runFile.open(QIODevice::ReadOnly));
+    const QJsonObject runJson = QJsonDocument::fromJson(runFile.readAll()).object();
+    QCOMPARE(runJson.value(QStringLiteral("where")).toString(), QStringLiteral("cloud"));
+    QCOMPARE(runJson.value(QStringLiteral("gpu")).toString(), QStringLiteral("RTX 4090"));
+    const QString shots = qEnvironmentVariable("LUMEN_SCREENSHOT_DIR");
+    if (!shots.isEmpty())
+        dlg.grab().save(shots + QStringLiteral("/lora-train-cloud.png"));
+    dlg.close();
+
+    // At start-up Lumen offers to shut down its pods nothing uses any more.
+    MainWindow window(&studio);
+    QString offer;
+    QTimer poll;
+    poll.setInterval(50);
+    connect(&poll, &QTimer::timeout, &poll, [&] {
+        auto *box = qobject_cast<QMessageBox *>(QApplication::activeModalWidget());
+        if (!box || box->objectName() != QLatin1String("leftoverPods"))
+            return;
+        offer = box->text() + u'|' + box->informativeText();
+        poll.stop();
+        box->button(QMessageBox::Yes)->click();
+    });
+    poll.start();
+    window.checkLeftoverCloudPods();
+    QTRY_COMPARE(deleted, QStringList{QStringLiteral("old1")});
+    QVERIFY(offer.startsWith(QStringLiteral("1 cloud GPU")));
+    QVERIFY(offer.contains(QStringLiteral("$0.69 per hour")));
+    QVERIFY(offer.contains(QStringLiteral("lumen-train-mira-20261010-2200")));
 }
 
 QTEST_MAIN(TestCanvas)

@@ -1541,8 +1541,28 @@ Every request carries a random token generated for this pod (passed in the pod's
     environment, and a fake sd-scripts: a whole run (pod request, uploads, log, three epochs
     downloaded, pod terminated), cancel during training, a base model with a wrong checksum
     (failure, pod terminated) and one fetched by URL, and leftovers.
-- [ ] Train tab and costs: *Where*, GPU choice, estimate, confirmation; the result goes into the
-  library and onto the character like a local training.
+- [x] Train tab and costs:
+  - *Where*: "This computer" or "Cloud GPU (RunPod, paid by the hour)", remembered. In the cloud
+    the trainer and VRAM rows are hidden (the 24 GB preset is used, no local trainer needed); a
+    GPU list loads from the catalogue (24 GB or more, offered in the chosen cloud, with its price;
+    the preferred GPU from settings is preselected and a new pick becomes the preferred one).
+    Without a key the tab links to Settings → Cloud training.
+  - The summary adds the cost: steps × 1.2 s (estimate for a 24 GB RTX 4090-class GPU) plus about
+    12 min to set up the GPU, at the GPU's price.
+  - Every start asks first (`confirmCloudTraining`): the GPU, price per hour, time and cost
+    estimate, whether the base model is uploaded (with its size) or downloaded by the pod from
+    Hugging Face, and that RunPod bills every minute. Cancel rents nothing.
+  - `CharacterTraining` with `cloud`, `gpuId`, `community` runs `startCloudTraining` and then the
+    same post-processing as a local training (library, sidecar, `setLora`); `run.json` and the
+    LoRA's sidecar note `where` (and the GPU). A cloud training cannot be continued, so the resume
+    button is local only. `checkpointSource` gives the pod a Hugging Face URL and SHA-256 from the
+    model's sidecar; Civitai models are uploaded (their token stays here).
+  - Start-up (`MainWindow::checkLeftoverCloudPods`, 3 s after the window shows, with a saved key):
+    Lumen's leftover pods are listed with their status and cost per hour, and shut down on
+    confirmation.
+  - Tests (mock RunPod): the cloud rows, the GPU list and saved choice, the cost line, the
+    confirmation (text, Cancel rents nothing), the pod request (GPU, Secure cloud, name prefix),
+    RunPod's refusal shown on the tab, `run.json`; the leftover-pod offer and the shutdown.
 - [ ] One short live run on RunPod (the user's account): the 29-image Akane set, 10 epochs.
 
 **AC**:

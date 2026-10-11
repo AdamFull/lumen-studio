@@ -27,6 +27,9 @@ public:
     void showPage(Page page);
     QWidget *pageWidget(Page page) const { return m_pageWidgets.value(page); }
     void openSettings(const QString &tab = QString());
+    // Cloud GPUs of earlier trainings that are still rented (after a crash or a failed shutdown):
+    // offers to shut them down. Done once at start-up when a RunPod key is saved.
+    void checkLeftoverCloudPods();
     // Renders the window into a PNG (used by automated UI checks).
     bool saveScreenshot(const QString &path);
 

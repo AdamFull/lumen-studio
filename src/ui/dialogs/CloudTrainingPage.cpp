@@ -24,8 +24,7 @@ namespace lumen::ui {
 
 namespace {
 
-// Training an SDXL LoRA with the text encoders and batch 2 wants 24 GB.
-constexpr int kMinGpuMemoryGb = 24;
+constexpr int kMinGpuMemoryGb = runtime::kCloudTrainingMinGpuGb;
 
 } // namespace
 

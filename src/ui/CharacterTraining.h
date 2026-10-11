@@ -29,7 +29,16 @@ public:
         runtime::VramTier tier = runtime::VramTier::Small;
         int epochs = 10;
         bool resume = false;        // continue the last stopped run
+        // Cloud (M15): train on a rented RunPod GPU instead of this computer (`runtimeId` and
+        // `tier` are not used; the 24 GB preset is).
+        bool cloud = false;
+        QString gpuId;
+        bool community = false;
     };
+
+    // Where a cloud pod can download the base model itself: a public Hugging Face file with its
+    // SHA-256, from the model's library sidecar. Empty when the file must be uploaded.
+    static QPair<QString, QString> checkpointSource(Studio *studio, const QString &checkpoint);
 
     // Starts a training; nullptr (and *error) when it cannot start.
     static CharacterTraining *start(Studio *studio, const Settings &settings, QString *error = nullptr);

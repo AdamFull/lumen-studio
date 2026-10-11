@@ -183,6 +183,11 @@
 <context>
     <name>lumen::ui::MainWindow</name>
     <message numerus="yes">
+        <location filename="../src/ui/MainWindow.cpp" line="+1" />
+        <source>%n cloud GPU(s) of earlier trainings are still rented on RunPod.</source>
+        <translation><numerusform>%n cloud GPU of an earlier training is still rented on RunPod.</numerusform><numerusform>%n cloud GPUs of earlier trainings are still rented on RunPod.</numerusform></translation>
+    </message>
+    <message numerus="yes">
         <location filename="../src/ui/MainWindow.cpp" line="+451" />
         <source>Importing %n image(s)...</source>
         <translation><numerusform>Importing %n image...</numerusform><numerusform>Importing %n images...</numerusform></translation>

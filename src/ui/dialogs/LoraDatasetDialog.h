@@ -1,6 +1,7 @@
 #pragma once
 
 #include "doc/LoraDataset.h"
+#include "runtime/RunPod.h"
 
 #include <QDialog>
 #include <QHash>
@@ -12,6 +13,8 @@
 
 class QCheckBox;
 class QComboBox;
+class QFormLayout;
+class QLayout;
 class QLabel;
 class QLineEdit;
 class QListWidget;
@@ -81,7 +84,15 @@ private:
     void askReplace();
     void askAddTag();
     void askRemoveTag();
+    // Renting the GPU, installing the trainer and moving the files, before the first step.
+    static constexpr int kCloudSetupMinutes = 12;
     QWidget *buildTrainTab();
+    bool trainInCloud() const;
+    void loadCloudGpus();
+    const runtime::RunPodGpu *cloudGpu() const;
+    // Training time on the GPU in minutes, for the Train tab's settings.
+    int trainingMinutes(int steps) const;
+    bool confirmCloudTraining();
     void refreshTrainTab();
     void bindTraining(CharacterTraining *training);
     void showTrainingJob();
@@ -122,6 +133,14 @@ private:
     bool m_captioning = false;
     QPointer<ai::Operation> m_tagging;
     bool m_fillingCaptions = false;
+    QLabel *m_trainIntro = nullptr;
+    QFormLayout *m_trainForm = nullptr;
+    QComboBox *m_where = nullptr;       // this computer or a RunPod GPU (M15)
+    QComboBox *m_cloudGpu = nullptr;
+    QList<runtime::RunPodGpu> m_cloudGpus;
+    bool m_loadingGpus = false;
+    QString m_gpuError;
+    QLayout *m_trainerRow = nullptr;
     QLabel *m_trainer = nullptr;
     QPushButton *m_installTrainer = nullptr;
     QComboBox *m_checkpoint = nullptr;

@@ -161,6 +161,8 @@ int main(int argc, char *argv[])
 
     window.show();
     QTimer::singleShot(0, &window, [&startup] { qCInfo(lcPerf) << "Window shown" << startup.elapsed() << "ms after start"; });
+    if (!parser.isSet(screenshotOpt))
+        QTimer::singleShot(3000, &window, &ui::MainWindow::checkLeftoverCloudPods);
     if (session.previousSessionCrashed()) {
         QTimer::singleShot(1500, &studio, [&studio] {
             studio.notify(QObject::tr("Lumen Studio did not close properly last time. Open documents were restored from the last "

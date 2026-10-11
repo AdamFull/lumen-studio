@@ -15,6 +15,9 @@ class HttpClient;
 
 namespace lumen::runtime {
 
+// Training an SDXL LoRA with the text encoders and batch 2 wants 24 GB.
+constexpr int kCloudTrainingMinGpuGb = 24;
+
 // A GPU type of RunPod's catalogue: VRAM and price per hour of one GPU.
 struct RunPodGpu
 {
