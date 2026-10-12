@@ -213,6 +213,10 @@ void classifyDiffusion(const Tensors &t, const QVariantMap &meta, ModelInfo *inf
     if (t.has(QStringLiteral("text_model.encoder.layers")) || t.hasPrefix(QStringLiteral("encoder.block.")) || t.hasPrefix(QStringLiteral("model.layers."))
         || t.hasPrefix(QStringLiteral("enc.blk."))) {
         info->kind = ModelKind::TextEncoder;
+        // Which slot of a server it fills: a language model (Qwen, Llama: sd.cpp --llm), T5, or CLIP.
+        info->family = t.hasPrefix(QStringLiteral("model.layers."))                                            ? QStringLiteral("LLM")
+                       : t.hasPrefix(QStringLiteral("encoder.block.")) || t.hasPrefix(QStringLiteral("enc.blk.")) ? QStringLiteral("T5")
+                                                                                                                  : QStringLiteral("CLIP");
         return;
     }
     // Autoencoders: 16 latent channels (FLUX / SD 3) or 4 (SD / SDXL).

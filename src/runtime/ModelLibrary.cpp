@@ -6,6 +6,7 @@
 #include "core/Paths.h"
 #include "net/HttpClient.h"
 #include "runtime/Download.h"
+#include "runtime/ModelHub.h"
 #include "runtime/RuntimeStore.h"
 
 #include <QCoreApplication>
@@ -18,6 +19,7 @@
 #include <QPointer>
 #include <QPromise>
 #include <QSaveFile>
+#include <QSet>
 #include <QStandardPaths>
 
 namespace lumen::runtime {
@@ -464,7 +466,7 @@ QFuture<QJsonObject> ModelLibrary::lookupCivitai(const QString &path)
             o.quiet = true;
             const QUrl url(self->m_civitaiBase + QStringLiteral("/api/v1/model-versions/by-hash/") + digest.toUpper());
             net::HttpCall *call = self->m_http->get(net::HttpClient::makeRequest(url, {{"User-Agent", "LumenStudio"}}), o);
-            QObject::connect(call, &net::HttpCall::finished, self, [self, call, promise, clean] {
+            QObject::connect(call, &net::HttpCall::finished, self, [self, call, promise, clean, digest] {
                 QJsonObject result;
                 if (call->status() == 404) {
                     result.insert(QStringLiteral("notFound"), true);
@@ -492,6 +494,36 @@ QFuture<QJsonObject> ModelLibrary::lookupCivitai(const QString &path)
                                          {QStringLiteral("trainedWords"), v.value(QStringLiteral("trainedWords")).toArray()},
                                          {QStringLiteral("preview"), preview},
                                          {QStringLiteral("page"), QStringLiteral("https://civitai.com/models/%1?modelVersionId=%2").arg(modelId).arg(versionId)}};
+                    // Its version's VAE and text encoder. This endpoint does not say which are
+                    // required; a mark from an earlier download stays.
+                    QList<HubFile> files;
+                    HubFile self_;
+                    for (const QJsonValue &fv : v.value(QStringLiteral("files")).toArray()) {
+                        const HubFile f = civitaiFile(fv.toObject(), model.value(QStringLiteral("type")).toString());
+                        if (f.path.isEmpty())
+                            continue;
+                        files << f;
+                        if (f.sha256 == digest.toLower())
+                            self_ = f;
+                    }
+                    if (self_.path.isEmpty()) {
+                        self_.path = QFileInfo(clean).fileName();
+                        self_.hubType = QStringLiteral("Model");
+                    }
+                    QSet<QString> required;
+                    if (self && self->m_entries.contains(clean)) {
+                        for (const QJsonValue &c : self->m_entries[clean].civitai.value(QStringLiteral("companions")).toArray()) {
+                            if (c.toObject().value(QStringLiteral("required")).toBool())
+                                required.insert(c.toObject().value(QStringLiteral("sha256")).toString());
+                        }
+                    }
+                    QJsonArray companions;
+                    for (HubFile c : companionFiles(files, self_)) {
+                        c.required = c.required || required.contains(c.sha256);
+                        companions.append(companionToJson(c));
+                    }
+                    if (!companions.isEmpty())
+                        result.insert(QStringLiteral("companions"), companions);
                 } else {
                     promise->setException(std::make_exception_ptr(Error(Text::tr("Civitai lookup failed: %1").arg(call->errorString()))));
                     promise->finish();

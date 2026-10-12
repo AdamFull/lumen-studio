@@ -1,6 +1,7 @@
 #include "ui/dialogs/LocalServersPage.h"
 #include "ui/dialogs/LocalSetupDialog.h"
 #include "ui/dialogs/ModelsPage.h"
+#include "runtime/ModelHub.h"
 
 #include "ai/ProviderRegistry.h"
 #include "core/Error.h"
@@ -1025,7 +1026,10 @@ void ServerProfileDialog::buildOptions()
                 auto *menu = new QMenu(library);
                 library->setMenu(menu);
                 connect(menu, &QMenu::aboutToShow, this, [this, menu, libraryKinds, edit] {
-                    fillModelMenu(menu, m_studio->models(), libraryKinds, [edit](const QString &path) { edit->setText(path); });
+                    fillModelMenu(menu, m_studio->models(), libraryKinds, [this, edit](const QString &path) {
+                        edit->setText(path);
+                        fillCompanions(edit->property("optionKey").toString(), path);
+                    });
                 });
                 h->addWidget(library);
             }
@@ -1042,6 +1046,7 @@ void ServerProfileDialog::buildOptions()
                     return;
                 edit->setText(QDir::toNativeSeparators(path));
                 Settings::instance().setValue(QStringLiteral("servers/lastModelDir"), dir ? path : QFileInfo(path).absolutePath());
+                fillCompanions(edit->property("optionKey").toString(), path);
                 // A vision model's projector usually sits next to it.
                 if (edit->property("optionKey").toString() == QLatin1String("model")) {
                     if (auto *mmproj = qobject_cast<QLineEdit *>(m_fields.value(QStringLiteral("mmproj"))); mmproj && mmproj->text().isEmpty())
@@ -1134,6 +1139,17 @@ void ServerProfileDialog::buildOptions()
         m_createProvider->setToolTip(available ? QString() : tr("Lumen has no provider for %1 yet.").arg(runtimeName(k)));
     }
     updatePreview();
+}
+
+void ServerProfileDialog::fillCompanions(const QString &key, const QString &path)
+{
+    if (key != QLatin1String("model") && key != QLatin1String("diffusion_model"))
+        return;
+    const QVariantMap options = runtime::companionServerOptions(m_studio->models(), QDir::cleanPath(QDir::fromNativeSeparators(path)));
+    for (auto it = options.begin(); it != options.end(); ++it) {
+        if (auto *edit = qobject_cast<QLineEdit *>(m_fields.value(it.key())); edit && edit->text().trimmed().isEmpty())
+            edit->setText(it.value().toString());
+    }
 }
 
 runtime::ServerProfile ServerProfileDialog::profile() const

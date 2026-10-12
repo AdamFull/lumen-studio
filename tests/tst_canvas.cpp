@@ -46,6 +46,8 @@
 #include "ai/Gate.h"
 #include "ui/widgets/Controls.h"
 
+#include <QCryptographicHash>
+#include <QTreeWidgetItemIterator>
 #include <QComboBox>
 #include <QCheckBox>
 #include <QDirIterator>
@@ -126,6 +128,7 @@ private slots:
     void safeContent();
     void cloudTrainingPage();
     void cloudTrainingTab();
+    void hubCompanionFiles();
 
 private:
     ToolEvent at(double x, double y, Qt::KeyboardModifiers mods = Qt::NoModifier) const
@@ -2708,6 +2711,141 @@ void TestCanvas::cloudTrainingTab()
     QVERIFY(offer.startsWith(QStringLiteral("1 cloud GPU")));
     QVERIFY(offer.contains(QStringLiteral("$0.69 per hour")));
     QVERIFY(offer.contains(QStringLiteral("lumen-train-mira-20261010-2200")));
+}
+
+void TestCanvas::hubCompanionFiles()
+{
+    Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
+    // A Civitai checkpoint whose version carries its text encoder (marked required) and VAE.
+    const QByteArray model = fakeSafetensors({QStringLiteral("model.diffusion_model.input_blocks.0.0.weight"),
+                                              QStringLiteral("model.diffusion_model.label_emb.0.0.weight")});
+    const QByteArray encoder = fakeSafetensors({QStringLiteral("model.layers.0.self_attn.q_proj.weight")}) + "te";
+    const QByteArray vae = fakeSafetensors({QStringLiteral("decoder.conv_in.weight"), QStringLiteral("encoder.down.0.block.0.conv1.weight")}) + "vae";
+    auto hex = [](const QByteArray &b) { return QString::fromLatin1(QCryptographicHash::hash(b, QCryptographicHash::Sha256).toHex()); };
+    MockHttpServer civ;
+    QStringList fetched;
+    auto serve = [&](const QString &path, const QByteArray &bytes) {
+        civ.route("GET", path, [&fetched, path, bytes](const MockRequest &) {
+            fetched << path;
+            MockResponse r;
+            r.body = bytes;
+            return r;
+        });
+    };
+    serve(QStringLiteral("/dl/model"), model);
+    serve(QStringLiteral("/dl/te"), encoder);
+    serve(QStringLiteral("/dl/vae"), vae);
+    auto file = [&](const char *name, const char *type, const QByteArray &bytes, const char *url, bool required) {
+        QJsonObject meta{{QStringLiteral("format"), QStringLiteral("SafeTensor")}, {QStringLiteral("fp"), QStringLiteral("bf16")}};
+        if (required)
+            meta.insert(QStringLiteral("isRequired"), true);
+        return QJsonObject{{QStringLiteral("name"), QLatin1String(name)}, {QStringLiteral("type"), QLatin1String(type)},
+                           {QStringLiteral("sizeKB"), bytes.size() / 1024.0}, {QStringLiteral("metadata"), meta},
+                           {QStringLiteral("primary"), QLatin1String(type) == QLatin1String("Model")},
+                           {QStringLiteral("hashes"), QJsonObject{{QStringLiteral("SHA256"), hex(bytes).toUpper()}}},
+                           {QStringLiteral("downloadUrl"), civ.baseUrl().toString() + QLatin1String(url)}};
+    };
+    civ.route("GET", QStringLiteral("/api/v1/models"), [&](const MockRequest &) {
+        const QJsonObject version{{QStringLiteral("id"), 30}, {QStringLiteral("name"), QStringLiteral("v1")}, {QStringLiteral("baseModel"), QStringLiteral("Anima")},
+                                  {QStringLiteral("files"), QJsonArray{file("harem_txt.safetensors", "Text Encoder", encoder, "/dl/te", true),
+                                                                       file("harem.safetensors", "Model", model, "/dl/model", false),
+                                                                       file("qwen_image_vae.safetensors", "VAE", vae, "/dl/vae", false)}}};
+        const QJsonObject m{{QStringLiteral("id"), 3}, {QStringLiteral("name"), QStringLiteral("Harem")}, {QStringLiteral("type"), QStringLiteral("Checkpoint")},
+                            {QStringLiteral("modelVersions"), QJsonArray{version}}};
+        return MockResponse::json({{QStringLiteral("items"), QJsonArray{m}}, {QStringLiteral("metadata"), QJsonObject{}}});
+    });
+
+    Studio studio;
+    studio.hub()->setBaseUrls(civ.baseUrl().toString(), civ.baseUrl().toString());
+    studio.hub()->tokenProvider = [](runtime::HubSource) { return QStringLiteral("civ_test"); };
+    studio.models()->moveToTrash = [](const QString &path, QString *) { return QFile::remove(path); };
+    auto cleanup = qScopeGuard([&] {
+        for (const QByteArray &b : {model, encoder, vae}) {
+            if (const auto e = studio.models()->find(hex(b)))
+                studio.models()->trash(e->path);
+        }
+    });
+    for (const QByteArray &b : {model, encoder, vae})
+        QVERIFY2(!studio.models()->find(hex(b)), "left over from an earlier run");
+
+    ModelHubDialog hub(&studio);
+    hub.resize(1100, 700);
+    hub.show();
+    hub.setSource(runtime::HubSource::Civitai);
+    hub.setSearchText(QStringLiteral("harem"));
+    hub.search();
+    QTreeWidget *results = nullptr;
+    QTreeWidget *files = nullptr;
+    for (QTreeWidget *t : hub.findChildren<QTreeWidget *>())
+        (t->headerItem()->text(0) == QLatin1String("Model") ? results : files) = t;
+    QVERIFY(results && files);
+    QTRY_COMPARE(results->topLevelItemCount(), 1);
+    results->setCurrentItem(results->topLevelItem(0));
+    QTRY_COMPARE(files->topLevelItemCount(), 3);
+    // The model file is preselected (primary); its companions come along, the required one
+    // without a choice.
+    QCOMPARE(files->currentItem()->text(0), QStringLiteral("harem.safetensors"));
+    auto *companions = hub.findChild<QCheckBox *>(QStringLiteral("companions"));
+    QVERIFY(companions);
+    QVERIFY(companions->isVisibleTo(&hub));
+    QVERIFY(companions->isChecked());
+    QVERIFY(!companions->isEnabled());
+    QVERIFY(companions->text().contains(QStringLiteral("harem_txt.safetensors (Text encoder)")));
+    QVERIFY(companions->text().contains(QStringLiteral("qwen_image_vae.safetensors (VAE)")));
+    // A companion's own row has none.
+    files->setCurrentItem(files->topLevelItem(2));
+    QVERIFY(!companions->isVisibleTo(&hub));
+    files->setCurrentItem(files->topLevelItem(1));
+    QPushButton *download = nullptr;
+    for (QPushButton *b : hub.findChildren<QPushButton *>()) {
+        if (b->text() == QLatin1String("Download"))
+            download = b;
+    }
+    QVERIFY(download);
+    download->click();
+    QTRY_VERIFY_WITH_TIMEOUT(studio.models()->find(hex(model)) && studio.models()->find(hex(encoder)) && studio.models()->find(hex(vae)), 20000);
+    const QString modelPath = studio.models()->find(hex(model))->path;
+    QCOMPARE(runtime::companionsOf(studio.models(), modelPath).size(), 2);
+    QCOMPARE(runtime::companionServerOptions(studio.models(), modelPath).value(QStringLiteral("vae")).toString(),
+             QDir::toNativeSeparators(studio.models()->find(hex(vae))->path));
+    // Everything is there now.
+    QTRY_VERIFY(companions->text().startsWith(QStringLiteral("The files it needs are in the library")));
+    hub.close();
+
+    // The VAE goes missing: the Models page says so and fetches it again.
+    studio.models()->trash(studio.models()->find(hex(vae))->path);
+    QVERIFY(!studio.models()->find(hex(vae)));
+    ModelsPage page(&studio);
+    page.resize(1000, 700);
+    page.show();
+    auto *list = page.findChild<QTreeWidget *>();
+    QVERIFY(list);
+    QTreeWidgetItem *row = nullptr;
+    QTRY_VERIFY([&] {
+        for (QTreeWidgetItemIterator it(list); *it; ++it) {
+            if (QDir::cleanPath((*it)->data(0, Qt::UserRole).toString()) == modelPath)
+                row = *it;
+        }
+        return row != nullptr;
+    }());
+    list->setCurrentItem(row);
+    QLabel *needs = nullptr;
+    QTRY_VERIFY((needs = page.findChild<QLabel *>(QStringLiteral("companions"))) != nullptr);
+    QVERIFY(needs->text().contains(QStringLiteral("missing")));
+    QVERIFY(needs->text().contains(QStringLiteral("required")));
+    auto *get = page.findChild<QPushButton *>(QStringLiteral("downloadCompanions"));
+    QVERIFY(get);
+    fetched.clear();
+    get->click();
+    QTRY_VERIFY_WITH_TIMEOUT(studio.models()->find(hex(vae)).has_value(), 20000);
+    QCOMPARE(fetched, QStringList{QStringLiteral("/dl/vae")});
+    const QString shots = qEnvironmentVariable("LUMEN_SCREENSHOT_DIR");
+    if (!shots.isEmpty()) {
+        list->setCurrentItem(nullptr);
+        list->setCurrentItem(row);
+        QTest::qWait(300);
+        page.grab().save(shots + QStringLiteral("/models-companions.png"));
+    }
 }
 
 QTEST_MAIN(TestCanvas)

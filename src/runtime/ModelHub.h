@@ -24,6 +24,7 @@ class HttpClient;
 namespace lumen::runtime {
 
 class ModelLibrary;
+struct ModelEntry;
 
 enum class HubSource { HuggingFace, Civitai };
 QString hubSourceKey(HubSource s);   // "huggingface", "civitai"
@@ -39,6 +40,8 @@ struct HubFile
     QString precision;       // "Q4_K_M", "fp16", … (from the name or the hub's metadata)
     ModelKind kind = ModelKind::Unknown; // a guess; the header decides after the download
     bool primary = false;
+    QString hubType;         // Civitai's file type: "Model", "Pruned Model", "VAE", "Text Encoder", …
+    bool required = false;   // Civitai: the creator marks the file as needed to use the model
 
     QString fileName() const;
     bool pickle() const { return format == QLatin1String("pickle"); }
@@ -111,9 +114,40 @@ struct HubDownload
     bool nsfw = false;
     QUrl page;
     bool allowPickle = false;
+    // Files the model needs (its VAE, text encoder), recorded in the sidecar (`companionFiles`).
+    QList<HubFile> companions;
 
     QString title() const;
 };
+
+// ---- Companion files (VAE, text encoder) ----
+// Some Civitai models are not complete checkpoints: their version carries the VAE and text
+// encoder as separate files, sometimes marked as required. They are downloaded with the model and
+// recorded with it ("companions" in its Civitai data), so the servers can load them together.
+
+// The companion files of a model file from the same version (none for a companion itself, and
+// none on Hugging Face, which has no file types).
+QList<HubFile> companionFiles(const QList<HubFile> &files, const HubFile &model);
+QJsonObject companionToJson(const HubFile &file);
+HubFile companionFromJson(const QJsonObject &o);
+// One file of a Civitai version ("files" of the REST API).
+HubFile civitaiFile(const QJsonObject &file, const QString &modelType);
+
+struct ModelCompanion
+{
+    HubFile file;
+    QString path;            // where it is on this computer; empty = missing
+    bool missing() const { return path.isEmpty(); }
+};
+// The companions recorded for a library model and whether each is on this computer.
+QList<ModelCompanion> companionsOf(const ModelLibrary *library, const QString &modelPath);
+// A download of a missing companion, with the model's Civitai data.
+HubDownload companionDownload(const ModelEntry &model, const HubFile &companion);
+// sd.cpp server options for the companions on this computer: "vae", and "llm" or "t5xxl" for a
+// text encoder of that type.
+QVariantMap companionServerOptions(const ModelLibrary *library, const QString &modelPath);
+// Adds companions to a downloaded model's sidecar (when they came later than the model).
+bool recordCompanions(const QString &modelPath, const QList<HubFile> &companions);
 
 // Starter models for "Set up local AI" (resources/models/starters.json): pinned Hugging Face files.
 struct StarterFile

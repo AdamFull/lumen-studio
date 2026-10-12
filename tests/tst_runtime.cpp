@@ -235,6 +235,7 @@ private slots:
     void hubNamesAndStarters();
     void hubSearch();
     void hubDownloads();
+    void hubCompanions();
     void trainerRecipes();
     void trainerAdopt();
     void trainerInstall();
@@ -1746,6 +1747,161 @@ void TestRuntime::hubDownloads()
     QTRY_VERIFY_WITH_TIMEOUT(denied->isFinished(), 10000);
     QCOMPARE(denied->state(), Job::State::Failed);
     QVERIFY2(denied->errorString().contains(QStringLiteral("API key")), qPrintable(denied->errorString()));
+}
+
+void TestRuntime::hubCompanions()
+{
+    // A Civitai version like MiaoMiao 3D Harem (Anima): the model plus its text encoder (marked
+    // required) and VAE as separate files.
+    const QByteArray padding(2 * 1024 * 1024, '\0'); // the scan skips files under 1 MB
+    const QByteArray model = makeSafetensors({{QStringLiteral("model.diffusion_model.input_blocks.0.0.weight"), {320, 4, 3, 3}},
+                                              {QStringLiteral("model.diffusion_model.label_emb.0.0.weight"), {1280, 2816}}}) + padding;
+    const QByteArray encoder = makeSafetensors({{QStringLiteral("model.layers.0.self_attn.q_proj.weight"), {1024, 1024}}}) + padding;
+    const QByteArray vae = makeSafetensors({{QStringLiteral("decoder.conv_in.weight"), {512, 16, 3, 3}},
+                                            {QStringLiteral("encoder.down.0.block.0.conv1.weight"), {128, 128, 3, 3}}}) + padding;
+    MockHttpServer civ;
+    serveFile(civ, QStringLiteral("/api/download/models/30"), model);
+    serveFile(civ, QStringLiteral("/api/download/models/30/te"), encoder);
+    serveFile(civ, QStringLiteral("/api/download/models/30/vae"), vae);
+    auto file = [&](const char *name, const char *type, const QByteArray &bytes, const QString &url, const QJsonObject &meta) {
+        return QJsonObject{{QStringLiteral("name"), QLatin1String(name)},
+                           {QStringLiteral("type"), QLatin1String(type)},
+                           {QStringLiteral("sizeKB"), bytes.size() / 1024.0},
+                           {QStringLiteral("metadata"), meta},
+                           {QStringLiteral("hashes"), QJsonObject{{QStringLiteral("SHA256"), sha256(bytes).toUpper()}}},
+                           {QStringLiteral("downloadUrl"), civ.baseUrl().toString() + url}};
+    };
+    const QJsonObject safe{{QStringLiteral("format"), QStringLiteral("SafeTensor")}, {QStringLiteral("fp"), QStringLiteral("bf16")}};
+    QJsonObject requiredMeta = safe;
+    requiredMeta.insert(QStringLiteral("isRequired"), true);
+    const QJsonArray versionFiles{file("harem_txt.safetensors", "Text Encoder", encoder, QStringLiteral("/api/download/models/30/te"), requiredMeta),
+                                  file("harem.safetensors", "Model", model, QStringLiteral("/api/download/models/30"), safe),
+                                  file("qwen_image_vae.safetensors", "VAE", vae, QStringLiteral("/api/download/models/30/vae"), safe),
+                                  file("qwen_image_vae_copy.safetensors", "VAE", vae, QStringLiteral("/api/download/models/30/vae"), safe)};
+    QList<HubFile> files;
+    for (const QJsonValue &v : versionFiles)
+        files << civitaiFile(v.toObject(), QStringLiteral("Checkpoint"));
+    QCOMPARE(files[0].kind, ModelKind::TextEncoder);
+    QCOMPARE(files[0].hubType, QStringLiteral("Text Encoder"));
+    QVERIFY(files[0].required);
+    QCOMPARE(files[1].kind, ModelKind::Checkpoint);
+    QVERIFY(!files[1].required);
+    QCOMPARE(files[2].kind, ModelKind::Vae);
+
+    // The model's companions: the encoder and one VAE (the copy has the same checksum); a
+    // companion has none, nor does a Hugging Face file.
+    const QList<HubFile> companions = companionFiles(files, files[1]);
+    QCOMPARE(companions.size(), 2);
+    QCOMPARE(companions[0].path, QStringLiteral("harem_txt.safetensors"));
+    QCOMPARE(companions[1].path, QStringLiteral("qwen_image_vae.safetensors"));
+    QVERIFY(companionFiles(files, files[2]).isEmpty());
+    HubFile hf = files[1];
+    hf.hubType.clear();
+    QVERIFY(companionFiles(files, hf).isEmpty());
+    const HubFile roundTrip = companionFromJson(companionToJson(companions[0]));
+    QCOMPARE(roundTrip.path, companions[0].path);
+    QCOMPARE(roundTrip.kind, ModelKind::TextEncoder);
+    QCOMPARE(roundTrip.sha256, sha256(encoder));
+    QCOMPARE(roundTrip.size, companions[0].size);
+    QVERIFY(roundTrip.required);
+
+    net::HttpClient http;
+    JobQueue jobs;
+    QTemporaryDir data;
+    ModelLibrary lib(&http);
+    lib.setDataDir(data.path());
+    lib.load();
+    lib.setCivitaiBase(civ.baseUrl().toString());
+    ModelHub hub(&http, &jobs, &lib);
+    hub.setBaseUrls(civ.baseUrl().toString(), civ.baseUrl().toString());
+    hub.tokenProvider = [](HubSource) { return QStringLiteral("civ_test"); };
+    auto request = [&](const HubFile &f) {
+        HubDownload d;
+        d.source = HubSource::Civitai;
+        d.modelId = QStringLiteral("3");
+        d.modelName = QStringLiteral("Harem");
+        d.versionId = QStringLiteral("30");
+        d.versionName = QStringLiteral("v1");
+        d.baseModel = QStringLiteral("Anima");
+        d.license = QStringLiteral("civitai");
+        d.page = QUrl(QStringLiteral("https://civitai.com/models/3"));
+        d.file = f;
+        return d;
+    };
+
+    // The model alone first: its companions are recorded but missing.
+    HubDownload main = request(files[1]);
+    main.companions = companions;
+    Job *mj = hub.download(main);
+    QTRY_VERIFY_WITH_TIMEOUT(mj->isFinished(), 20000);
+    QVERIFY2(mj->state() == Job::State::Succeeded, qPrintable(mj->errorString()));
+    const QString modelPath = mj->result().toString();
+    QList<ModelCompanion> recorded = companionsOf(&lib, modelPath);
+    QCOMPARE(recorded.size(), 2);
+    QVERIFY(recorded[0].missing() && recorded[1].missing());
+    QVERIFY(recorded[0].file.required);
+    QVERIFY(companionServerOptions(&lib, modelPath).isEmpty());
+
+    // Missing ones are fetched with the model's Civitai data; then the server options follow.
+    const ModelEntry entry = *lib.entry(modelPath);
+    QList<Job *> fetches;
+    for (const ModelCompanion &c : recorded) {
+        const HubDownload d = companionDownload(entry, c.file);
+        QCOMPARE(d.source, HubSource::Civitai);
+        QCOMPARE(d.modelId, QStringLiteral("3"));
+        QCOMPARE(d.versionId, QStringLiteral("30"));
+        QCOMPARE(d.license, QStringLiteral("civitai"));
+        fetches << hub.download(d);
+    }
+    QTRY_VERIFY_WITH_TIMEOUT(fetches[0]->isFinished() && fetches[1]->isFinished(), 20000);
+    QVERIFY2(fetches[0]->state() == Job::State::Succeeded, qPrintable(fetches[0]->errorString()));
+    QVERIFY2(fetches[1]->state() == Job::State::Succeeded, qPrintable(fetches[1]->errorString()));
+    QCOMPARE(QFileInfo(fetches[0]->result().toString()).absolutePath(), QDir::cleanPath(lib.defaultFolder() + QStringLiteral("/text_encoders")));
+    QCOMPARE(QFileInfo(fetches[1]->result().toString()).absolutePath(), QDir::cleanPath(lib.defaultFolder() + QStringLiteral("/vae")));
+    QCOMPARE(lib.entry(fetches[0]->result().toString())->info.family, QStringLiteral("LLM"));
+    recorded = companionsOf(&lib, modelPath);
+    QVERIFY(!recorded[0].missing() && !recorded[1].missing());
+    const QVariantMap options = companionServerOptions(&lib, modelPath);
+    QCOMPARE(options.value(QStringLiteral("llm")).toString(), QDir::toNativeSeparators(fetches[0]->result().toString()));
+    QCOMPARE(options.value(QStringLiteral("vae")).toString(), QDir::toNativeSeparators(fetches[1]->result().toString()));
+
+    // A model downloaded before companions were known learns them later.
+    QVERIFY(recordCompanions(fetches[1]->result().toString(), {companions[0]}));
+    lib.addFile(fetches[1]->result().toString());
+    QTRY_COMPARE(companionsOf(&lib, fetches[1]->result().toString()).size(), 1);
+
+    // A file that came from elsewhere (a ComfyUI folder): the Civitai lookup by checksum
+    // records its version's companions; the required mark of an earlier record stays.
+    QTemporaryDir comfy;
+    const QString local = comfy.filePath(QStringLiteral("harem_local.safetensors"));
+    {
+        QFile f(local);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write(model);
+    }
+    civ.route("GET", QStringLiteral("/api/v1/model-versions/by-hash/") + sha256(model).toUpper(), [&](const MockRequest &) {
+        QJsonArray plain;
+        for (const QJsonValue &v : versionFiles) {
+            QJsonObject o = v.toObject();
+            QJsonObject meta = o.value(QStringLiteral("metadata")).toObject();
+            meta.remove(QStringLiteral("isRequired")); // this endpoint does not say
+            o.insert(QStringLiteral("metadata"), meta);
+            plain.append(o);
+        }
+        return MockResponse::json({{QStringLiteral("id"), 30}, {QStringLiteral("modelId"), 3}, {QStringLiteral("name"), QStringLiteral("v1")},
+                                   {QStringLiteral("baseModel"), QStringLiteral("Anima")},
+                                   {QStringLiteral("model"), QJsonObject{{QStringLiteral("name"), QStringLiteral("Harem")}, {QStringLiteral("type"), QStringLiteral("Checkpoint")}}},
+                                   {QStringLiteral("files"), plain}});
+    });
+    QVERIFY(lib.addRoot(comfy.path()));
+    QTRY_VERIFY_WITH_TIMEOUT(lib.entry(local).has_value() && !lib.isScanning(), 20000);
+    auto looked = lib.lookupCivitai(local);
+    QTRY_VERIFY_WITH_TIMEOUT(looked.isFinished(), 20000);
+    QCOMPARE(looked.result().value(QStringLiteral("companions")).toArray().size(), 2);
+    const QList<ModelCompanion> found = companionsOf(&lib, local);
+    QCOMPARE(found.size(), 2);
+    QVERIFY(!found[0].file.required); // not known from this endpoint
+    QVERIFY(!found[0].missing() && !found[1].missing()); // downloaded above
 }
 
 void TestRuntime::trainerRecipes()

@@ -21,6 +21,7 @@
 #include <QPromise>
 #include <QRegularExpression>
 #include <QSaveFile>
+#include <QSet>
 #include <QStorageInfo>
 #include <QUrlQuery>
 
@@ -125,6 +126,8 @@ ModelKind civitaiKind(const QString &modelType, const QString &fileType)
 {
     if (fileType == QLatin1String("VAE"))
         return ModelKind::Vae;
+    if (fileType == QLatin1String("Text Encoder"))
+        return ModelKind::TextEncoder;
     const QString t = modelType.toLower();
     if (t == QLatin1String("checkpoint"))
         return ModelKind::Checkpoint;
@@ -276,23 +279,9 @@ HubModel civitaiModel(const QJsonObject &o, bool nsfw)
             v.trainedWords << w.toString().trimmed();
         v.published = QDateTime::fromString(vo.value(QStringLiteral("publishedAt")).toString(), Qt::ISODateWithMs);
         for (const QJsonValue &fv : vo.value(QStringLiteral("files")).toArray()) {
-            const QJsonObject fo = fv.toObject();
-            HubFile f;
-            f.path = fo.value(QStringLiteral("name")).toString();
-            if (!isModelFile(f.path) || f.path.contains(QLatin1Char('/')) || f.path.contains(QLatin1Char('\\')))
-                continue;
-            f.size = qRound64(fo.value(QStringLiteral("sizeKB")).toDouble() * 1024.0);
-            f.sha256 = fo.value(QStringLiteral("hashes")).toObject().value(QStringLiteral("SHA256")).toString().toLower();
-            f.url = QUrl(fo.value(QStringLiteral("downloadUrl")).toString());
-            const QJsonObject meta = fo.value(QStringLiteral("metadata")).toObject();
-            const QString format = meta.value(QStringLiteral("format")).toString();
-            f.format = format == QLatin1String("PickleTensor") ? QStringLiteral("pickle") : formatOf(f.path);
-            f.precision = meta.value(QStringLiteral("fp")).toString().toUpper();
-            if (f.precision.isEmpty())
-                f.precision = precisionFromName(f.path);
-            f.kind = civitaiKind(m.type, fo.value(QStringLiteral("type")).toString());
-            f.primary = fo.value(QStringLiteral("primary")).toBool();
-            v.files << f;
+            const HubFile f = civitaiFile(fv.toObject(), m.type);
+            if (!f.path.isEmpty())
+                v.files << f;
         }
         if (m.preview.isEmpty())
             m.preview = civitaiPreview(vo.value(QStringLiteral("images")).toArray(), nsfw);
@@ -327,15 +316,21 @@ QJsonObject sidecarFor(const HubDownload &d, const QString &digest, qint64 size)
         o.insert(QStringLiteral("permissions"), QJsonObject::fromVariantMap(d.permissions));
     if (d.source == HubSource::Civitai) {
         // Same shape as ModelLibrary::lookupCivitai, so the library shows it without a lookup.
-        o.insert(QStringLiteral("civitai"),
-                 QJsonObject{{QStringLiteral("modelId"), d.modelId.toDouble()},
-                             {QStringLiteral("versionId"), d.versionId.toDouble()},
-                             {QStringLiteral("name"), d.modelName},
-                             {QStringLiteral("version"), d.versionName},
-                             {QStringLiteral("nsfw"), d.nsfw},
-                             {QStringLiteral("baseModel"), d.baseModel},
-                             {QStringLiteral("trainedWords"), QJsonArray::fromStringList(d.trainedWords)},
-                             {QStringLiteral("page"), d.page.toString()}});
+        QJsonObject civitai{{QStringLiteral("modelId"), d.modelId.toDouble()},
+                            {QStringLiteral("versionId"), d.versionId.toDouble()},
+                            {QStringLiteral("name"), d.modelName},
+                            {QStringLiteral("version"), d.versionName},
+                            {QStringLiteral("nsfw"), d.nsfw},
+                            {QStringLiteral("baseModel"), d.baseModel},
+                            {QStringLiteral("trainedWords"), QJsonArray::fromStringList(d.trainedWords)},
+                            {QStringLiteral("page"), d.page.toString()}};
+        if (!d.companions.isEmpty()) {
+            QJsonArray companions;
+            for (const HubFile &c : d.companions)
+                companions.append(companionToJson(c));
+            civitai.insert(QStringLiteral("companions"), companions);
+        }
+        o.insert(QStringLiteral("civitai"), civitai);
     }
     return o;
 }
@@ -610,6 +605,165 @@ HubDownload starterDownload(const StarterFile &file, const QString &huggingFaceB
     d.license = file.license;
     d.page = QUrl(QStringLiteral("https://huggingface.co/") + file.repo);
     return d;
+}
+
+HubFile civitaiFile(const QJsonObject &fo, const QString &modelType)
+{
+    HubFile f;
+    const QString name = fo.value(QStringLiteral("name")).toString();
+    if (!isModelFile(name) || name.contains(QLatin1Char('/')) || name.contains(QLatin1Char('\\')))
+        return f;
+    f.path = name;
+    f.size = qRound64(fo.value(QStringLiteral("sizeKB")).toDouble() * 1024.0);
+    f.sha256 = fo.value(QStringLiteral("hashes")).toObject().value(QStringLiteral("SHA256")).toString().toLower();
+    f.url = QUrl(fo.value(QStringLiteral("downloadUrl")).toString());
+    const QJsonObject meta = fo.value(QStringLiteral("metadata")).toObject();
+    const QString format = meta.value(QStringLiteral("format")).toString();
+    f.format = format == QLatin1String("PickleTensor") ? QStringLiteral("pickle") : formatOf(f.path);
+    f.precision = meta.value(QStringLiteral("fp")).toString().toUpper();
+    if (f.precision.isEmpty())
+        f.precision = precisionFromName(f.path);
+    f.hubType = fo.value(QStringLiteral("type")).toString();
+    f.kind = civitaiKind(modelType, f.hubType);
+    f.primary = fo.value(QStringLiteral("primary")).toBool();
+    // Only the search results carry it (not /model-versions); absent = not marked.
+    f.required = meta.value(QStringLiteral("isRequired")).toBool();
+    return f;
+}
+
+namespace {
+
+bool isCompanionType(const QString &type)
+{
+    return type == QLatin1String("VAE") || type == QLatin1String("Text Encoder");
+}
+
+bool isModelType(const QString &type)
+{
+    return type == QLatin1String("Model") || type == QLatin1String("Pruned Model");
+}
+
+} // namespace
+
+QList<HubFile> companionFiles(const QList<HubFile> &files, const HubFile &model)
+{
+    if (model.hubType.isEmpty() || !isModelType(model.hubType))
+        return {};
+    QList<HubFile> out;
+    QSet<QString> seen;
+    for (const HubFile &f : files) {
+        if (f.path == model.path || !(isCompanionType(f.hubType) || (f.required && !isModelType(f.hubType))))
+            continue;
+        const QString key = f.sha256.isEmpty() ? f.path : f.sha256;
+        if (seen.contains(key))
+            continue;
+        seen.insert(key);
+        out << f;
+    }
+    return out;
+}
+
+QJsonObject companionToJson(const HubFile &f)
+{
+    return QJsonObject{{QStringLiteral("type"), f.hubType},
+                       {QStringLiteral("kind"), modelKindKey(f.kind)},
+                       {QStringLiteral("file"), f.path},
+                       {QStringLiteral("size"), double(f.size)},
+                       {QStringLiteral("sha256"), f.sha256},
+                       {QStringLiteral("url"), f.url.toString()},
+                       {QStringLiteral("format"), f.format},
+                       {QStringLiteral("precision"), f.precision},
+                       {QStringLiteral("required"), f.required}};
+}
+
+HubFile companionFromJson(const QJsonObject &o)
+{
+    HubFile f;
+    f.hubType = o.value(QStringLiteral("type")).toString();
+    f.kind = modelKindFromKey(o.value(QStringLiteral("kind")).toString());
+    f.path = o.value(QStringLiteral("file")).toString();
+    f.size = qint64(o.value(QStringLiteral("size")).toDouble(-1));
+    f.sha256 = o.value(QStringLiteral("sha256")).toString().toLower();
+    f.url = QUrl(o.value(QStringLiteral("url")).toString());
+    f.format = o.value(QStringLiteral("format")).toString(formatOf(f.path));
+    f.precision = o.value(QStringLiteral("precision")).toString();
+    f.required = o.value(QStringLiteral("required")).toBool();
+    return f;
+}
+
+QList<ModelCompanion> companionsOf(const ModelLibrary *library, const QString &modelPath)
+{
+    const std::optional<ModelEntry> e = library->entry(modelPath);
+    if (!e)
+        return {};
+    QList<ModelCompanion> out;
+    for (const QJsonValue &v : e->civitai.value(QStringLiteral("companions")).toArray()) {
+        ModelCompanion c;
+        c.file = companionFromJson(v.toObject());
+        if (c.file.path.isEmpty())
+            continue;
+        if (const auto local = library->find(c.file.sha256, c.file.fileName(), c.file.size))
+            c.path = local->path;
+        out << c;
+    }
+    return out;
+}
+
+HubDownload companionDownload(const ModelEntry &model, const HubFile &companion)
+{
+    const QJsonObject c = model.civitai;
+    HubDownload d;
+    d.source = HubSource::Civitai;
+    d.modelId = QString::number(qint64(c.value(QStringLiteral("modelId")).toDouble()));
+    d.modelName = c.value(QStringLiteral("name")).toString();
+    d.versionId = QString::number(qint64(c.value(QStringLiteral("versionId")).toDouble()));
+    d.versionName = c.value(QStringLiteral("version")).toString();
+    d.baseModel = c.value(QStringLiteral("baseModel")).toString();
+    d.nsfw = c.value(QStringLiteral("nsfw")).toBool();
+    d.page = QUrl(c.value(QStringLiteral("page")).toString());
+    d.file = companion;
+    if (!model.source.isEmpty()) {
+        d.license = model.source.value(QStringLiteral("license")).toString();
+        d.permissions = model.source.value(QStringLiteral("permissions")).toObject().toVariantMap();
+    }
+    return d;
+}
+
+QVariantMap companionServerOptions(const ModelLibrary *library, const QString &modelPath)
+{
+    QVariantMap out;
+    for (const ModelCompanion &c : companionsOf(library, modelPath)) {
+        if (c.missing())
+            continue;
+        const std::optional<ModelEntry> e = library->entry(c.path);
+        const ModelKind kind = e && e->info.kind != ModelKind::Unknown ? e->info.kind : c.file.kind;
+        const QString native = QDir::toNativeSeparators(c.path);
+        if (kind == ModelKind::Vae)
+            out.insert(QStringLiteral("vae"), native);
+        else if (kind == ModelKind::TextEncoder && e && e->info.family == QLatin1String("LLM"))
+            out.insert(QStringLiteral("llm"), native);
+        else if (kind == ModelKind::TextEncoder && e && e->info.family == QLatin1String("T5"))
+            out.insert(QStringLiteral("t5xxl"), native);
+    }
+    return out;
+}
+
+bool recordCompanions(const QString &modelPath, const QList<HubFile> &companions)
+{
+    QJsonObject sidecar = readSidecar(modelPath);
+    if (sidecar.isEmpty() || companions.isEmpty())
+        return false;
+    QJsonObject civitai = sidecar.value(QStringLiteral("civitai")).toObject();
+    QJsonArray list;
+    for (const HubFile &c : companions)
+        list.append(companionToJson(c));
+    civitai.insert(QStringLiteral("companions"), list);
+    sidecar.insert(QStringLiteral("civitai"), civitai);
+    QSaveFile f(sidecarPath(modelPath));
+    if (!f.open(QIODevice::WriteOnly))
+        return false;
+    f.write(QJsonDocument(sidecar).toJson());
+    return f.commit();
 }
 
 QList<HubFile> splitParts(const QList<HubFile> &files, const HubFile &file)

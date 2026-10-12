@@ -9,6 +9,7 @@
 #include "ui/Studio.h"
 #include "ui/Theme.h"
 #include "ui/dialogs/LocalServersPage.h"
+#include "runtime/ModelHub.h"
 #include "ui/dialogs/ModelHubDialog.h"
 #include "ui/widgets/Controls.h"
 
@@ -534,6 +535,45 @@ void ModelsPage::showDetails()
     } else {
         m_detailsLayout->addWidget(mutedLabel(tr("Looking a file up sends its SHA-256 checksum to civitai.com."), m_details));
     }
+    // The files the model needs from its Civitai version (VAE, text encoder).
+    const QList<runtime::ModelCompanion> companions = runtime::companionsOf(m_studio->models(), e.path);
+    if (!companions.isEmpty()) {
+        QStringList lines;
+        QList<runtime::HubFile> missing;
+        qint64 bytes = 0;
+        for (const runtime::ModelCompanion &comp : companions) {
+            QString line = QStringLiteral("%1 (%2%3)").arg(comp.file.fileName().toHtmlEscaped(), runtime::modelKindLabel(comp.file.kind),
+                                                         comp.file.required ? QStringLiteral(", ") + tr("required") : QString());
+            if (comp.missing()) {
+                missing << comp.file;
+                bytes += std::max<qint64>(0, comp.file.size);
+                line = QStringLiteral("<span style='color:%1'>%2 — %3</span>").arg(Theme::palette().warning.name(), line, tr("missing"));
+            } else {
+                line += QStringLiteral(" — ") + tr("in the library");
+            }
+            lines << line;
+        }
+        auto *needs = new QLabel(tr("Needs: %1").arg(lines.join(QStringLiteral("<br>"))), m_details);
+        needs->setObjectName(QStringLiteral("companions"));
+        needs->setWordWrap(true);
+        needs->setTextFormat(Qt::RichText);
+        m_detailsLayout->addWidget(needs);
+        if (!missing.isEmpty()) {
+            auto *get = new QPushButton(Icons::get(QStringLiteral("download")), tr("Download missing files (%1)").arg(runtime::formatBytes(bytes)), m_details);
+            get->setObjectName(QStringLiteral("downloadCompanions"));
+            Theme::setRole(get, QStringLiteral("primary"));
+            m_detailsLayout->addWidget(get, 0, Qt::AlignLeft);
+            connect(get, &QPushButton::clicked, this, [this, e, missing, get] {
+                QStringList names;
+                for (const runtime::HubFile &f : missing) {
+                    m_studio->hub()->download(runtime::companionDownload(e, f));
+                    names << f.fileName();
+                }
+                get->setEnabled(false);
+                m_studio->notify(tr("Downloading %1 — progress is shown in the Queue.").arg(names.join(QStringLiteral(", "))));
+            });
+        }
+    }
 
     auto *buttons = new QHBoxLayout;
     auto *lookup = new QPushButton(Icons::get(QStringLiteral("info")), c.isEmpty() ? tr("Look up on Civitai") : tr("Look up again"), m_details);
@@ -585,6 +625,19 @@ void ModelsPage::showDetails()
     });
 }
 
+void ModelsPage::warnMissingCompanions(const ModelEntry &e)
+{
+    QStringList missing;
+    for (const runtime::ModelCompanion &c : runtime::companionsOf(m_studio->models(), e.path)) {
+        if (c.missing())
+            missing << c.file.fileName();
+    }
+    if (!missing.isEmpty())
+        m_studio->notify(tr("%1 needs %2, which is not in the library yet: download it from the model's details.")
+                             .arg(e.name(), missing.join(QStringLiteral(", "))),
+                         QStringLiteral("warning"));
+}
+
 void ModelsPage::useWithServer(const ModelEntry &e)
 {
     // Offer servers of the matching kind, or a new one.
@@ -604,9 +657,22 @@ void ModelsPage::useWithServer(const ModelEntry &e)
                                     {QStringLiteral("mmproj"), QDir::toNativeSeparators(runtime::findProjector(e.path))}};
                 changed.options.insert(QStringLiteral("more_models"), more);
             } else {
+                // The previous model's VAE / text encoder go with it.
+                for (const QString &previousKey : {QStringLiteral("model"), QStringLiteral("diffusion_model")}) {
+                    const QString previous = changed.options.value(previousKey).toString();
+                    if (previous.isEmpty())
+                        continue;
+                    const QVariantMap old = runtime::companionServerOptions(m_studio->models(), QDir::fromNativeSeparators(previous));
+                    for (auto it = old.begin(); it != old.end(); ++it) {
+                        if (changed.options.value(it.key()).toString() == it.value().toString())
+                            changed.options.remove(it.key());
+                    }
+                }
                 changed.options.insert(key, QDir::toNativeSeparators(e.path));
                 if (key == QLatin1String("diffusion_model"))
                     changed.options.remove(QStringLiteral("model"));
+                changed.options.insert(runtime::companionServerOptions(m_studio->models(), e.path));
+                warnMissingCompanions(e);
             }
             m_studio->servers()->updateProfile(changed);
             m_studio->notify(m_studio->servers()->needsRestart(p.id) ? tr("%1 uses it after a restart.").arg(p.name) : tr("%1 updated.").arg(p.name),
@@ -617,8 +683,12 @@ void ModelsPage::useWithServer(const ModelEntry &e)
     QAction *create = menu.addAction(Icons::get(QStringLiteral("plus")), tr("New server with this model…"), this, [this, e, kind, key, runtimes] {
         runtime::ServerProfile p = m_studio->servers()->createProfile(runtimes.last().id, e.name());
         p.options.insert(key, QDir::toNativeSeparators(e.path));
-        if (kind == QLatin1String("llama.cpp"))
+        if (kind == QLatin1String("llama.cpp")) {
             p.options.insert(QStringLiteral("mmproj"), QDir::toNativeSeparators(runtime::findProjector(e.path)));
+        } else {
+            p.options.insert(runtime::companionServerOptions(m_studio->models(), e.path));
+            warnMissingCompanions(e);
+        }
         ServerProfileDialog dlg(m_studio, p, true, this);
         if (dlg.exec() == QDialog::Accepted)
             addServer(m_studio, dlg.profile(), dlg.createProvider());

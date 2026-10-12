@@ -100,6 +100,9 @@ public:
 
 private:
     void buildOptions();
+    // A model chosen for `key` ("model", "diffusion_model") brings its VAE / text encoder into
+    // the empty fields (Civitai companions in the library).
+    void fillCompanions(const QString &key, const QString &path);
     void updatePreview();
     void applyPreset();
     void updatePresetRow();

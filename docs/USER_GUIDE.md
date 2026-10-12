@@ -137,6 +137,15 @@ folders, Downloads, and the folders your servers already use. Files stay where t
   your GPU and also downloads the vision projector, so the model can see images.
 * Files go into Lumen's models folder, sorted by type, and are checked against the hub's checksum.
   Lumen remembers where each file came from, its version, licence and trigger words.
+* **Files a model needs:** some Civitai models are not complete checkpoints. Their page also
+  offers a VAE or a text encoder, which the model cannot work without. Lumen downloads those
+  together with the model, and skips any already in your library. Files the creator marks as
+  required always come along; for the others, untick *Also download the files that come with it*.
+  * The model's details on the Models page list these files and say if one is missing;
+    **Download missing files** fetches them.
+  * For a model you got elsewhere (for example in your ComfyUI folder), *Look up on Civitai*
+    finds the files of its version too.
+  * *Use with a server* and the server's model field fill in the model's VAE and text encoder.
 * **Accounts…** stores access tokens in the Windows Credential Manager. Hugging Face needs a token
   for gated models such as FLUX.1 dev (accept the terms on the model's page first); Civitai asks
   for an API key for most downloads. A token is only sent to its own site.

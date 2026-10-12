@@ -3421,7 +3421,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Vision-Projektor</translation>
     </message>
     <message>
-        <location line="+226"/>
+        <location line="+230"/>
         <source>Not a safetensors file.</source>
         <translation>Keine safetensors-Datei.</translation>
     </message>
@@ -3446,7 +3446,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::runtime::ModelHub</name>
     <message>
-        <location filename="../src/runtime/ModelHub.cpp" line="+67"/>
+        <location filename="../src/runtime/ModelHub.cpp" line="+68"/>
         <source>not found</source>
         <translation>nicht gefunden</translation>
     </message>
@@ -3461,7 +3461,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Unerwartete Antwort von %1.</translation>
     </message>
     <message>
-        <location line="+286"/>
+        <location line="+280"/>
         <source>%1 is a pickle file, which can run code when loaded. Lumen only downloads it when you allow it.</source>
         <translation>%1 ist eine Pickle-Datei, die beim Laden Code ausführen kann. Lumen lädt sie nur herunter, wenn Sie es erlauben.</translation>
     </message>
@@ -3498,13 +3498,13 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     <message>
         <location line="+9"/>
         <location line="+27"/>
-        <location line="+338"/>
+        <location line="+497"/>
         <location line="+45"/>
         <source>Shutting down.</source>
         <translation>Wird beendet.</translation>
     </message>
     <message>
-        <location line="-396"/>
+        <location line="-555"/>
         <source>Civitai requires an API key for this download. Add one under Settings → Models → Download.</source>
         <translation>Civitai verlangt für diesen Download einen API-Schlüssel. Fügen Sie einen unter Einstellungen → Modelle → Herunterladen hinzu.</translation>
     </message>
@@ -3529,7 +3529,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>%1 wird geprüft…</translation>
     </message>
     <message>
-        <location line="+321"/>
+        <location line="+480"/>
         <source>Invalid repository name: %1</source>
         <translation>Ungültiger Repository-Name: %1</translation>
     </message>
@@ -3547,7 +3547,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::runtime::ModelLibrary</name>
     <message>
-        <location filename="../src/runtime/ModelLibrary.cpp" line="+210"/>
+        <location filename="../src/runtime/ModelLibrary.cpp" line="+212"/>
         <source>Lumen models</source>
         <translation>Lumen-Modelle</translation>
     </message>
@@ -3557,7 +3557,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>%1 kann nicht gelesen werden.</translation>
     </message>
     <message>
-        <location line="+59"/>
+        <location line="+89"/>
         <source>Civitai lookup failed: %1</source>
         <translation>Civitai-Abfrage fehlgeschlagen: %1</translation>
     </message>
@@ -6934,7 +6934,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::HubAccountsDialog</name>
     <message>
-        <location filename="../src/ui/dialogs/ModelHubDialog.cpp" line="+637"/>
+        <location filename="../src/ui/dialogs/ModelHubDialog.cpp" line="+697"/>
         <source>Model hub accounts</source>
         <translation>Konten für Modell-Hubs</translation>
     </message>
@@ -6993,7 +6993,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::InstallRuntimeDialog</name>
     <message>
-        <location filename="../src/ui/dialogs/LocalServersPage.cpp" line="+642"/>
+        <location filename="../src/ui/dialogs/LocalServersPage.cpp" line="+643"/>
         <source>Download a server program</source>
         <translation>Serverprogramm herunterladen</translation>
     </message>
@@ -9360,7 +9360,7 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
 <context>
     <name>lumen::ui::ModelHubDialog</name>
     <message>
-        <location filename="../src/ui/dialogs/ModelHubDialog.cpp" line="-561"/>
+        <location filename="../src/ui/dialogs/ModelHubDialog.cpp" line="-621"/>
         <source>Download models</source>
         <translation>Modelle herunterladen</translation>
     </message>
@@ -9450,7 +9450,7 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         <translation>Auf diesem Computer</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+21"/>
         <source>Download</source>
         <translation>Herunterladen</translation>
     </message>
@@ -9465,7 +9465,7 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         <translation>Auch den Vision-Projektor herunterladen (%1), damit das Modell Bilder sehen kann</translation>
     </message>
     <message>
-        <location line="+46"/>
+        <location line="+47"/>
         <source>Language and vision (GGUF)</source>
         <translation>Sprache und Bildverständnis (GGUF)</translation>
     </message>
@@ -9599,7 +9599,7 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         <translation>Die Dateien können nicht aufgelistet werden: %1</translation>
     </message>
     <message>
-        <location line="+38"/>
+        <location line="+39"/>
         <source>Trigger words: %1</source>
         <translation>Auslösewörter: %1</translation>
     </message>
@@ -9614,7 +9614,32 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         <translation>Pickle-Format: kann Code enthalten, der beim Laden durch Python-Werkzeuge ausgeführt wird.</translation>
     </message>
     <message>
-        <location line="+26"/>
+        <location line="+40"/>
+        <source>The files it needs are in the library: %1</source>
+        <translation>Die benötigten Dateien sind in der Bibliothek: %1</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Also downloads the files it needs (%1): %2</source>
+        <translation>Lädt auch die benötigten Dateien herunter (%1): %2</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Also download the files that come with it (%1): %2</source>
+        <translation>Auch die mitgelieferten Dateien herunterladen (%1): %2</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The creator marks them as required: the model does not work without them.</source>
+        <translation>Der Ersteller kennzeichnet sie als erforderlich: Ohne sie funktioniert das Modell nicht.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The model&apos;s version includes them; it may need them to work.</source>
+        <translation>Die Version des Modells enthält sie; es braucht sie möglicherweise.</translation>
+    </message>
+    <message>
+        <location line="+15"/>
         <source>Pickle file</source>
         <translation>Pickle-Datei</translation>
     </message>
@@ -9628,7 +9653,7 @@ Download it anyway?</source>
 Trotzdem herunterladen?</translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location line="+50"/>
         <source>Already in the library.</source>
         <translation>Bereits in der Bibliothek.</translation>
     </message>
@@ -9646,7 +9671,7 @@ Trotzdem herunterladen?</translation>
 <context>
     <name>lumen::ui::ModelsPage</name>
     <message>
-        <location filename="../src/ui/dialogs/ModelsPage.cpp" line="+160"/>
+        <location filename="../src/ui/dialogs/ModelsPage.cpp" line="+161"/>
         <source>No matching models in the library</source>
         <translation>Keine passenden Modelle in der Bibliothek</translation>
     </message>
@@ -9887,7 +9912,37 @@ Trotzdem herunterladen?</translation>
         <translation>Beim Nachschlagen wird die SHA-256-Prüfsumme der Datei an civitai.com gesendet.</translation>
     </message>
     <message>
+        <location line="+10"/>
+        <source>required</source>
+        <translation>erforderlich</translation>
+    </message>
+    <message>
         <location line="+4"/>
+        <source>missing</source>
+        <translation>fehlt</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>in the library</source>
+        <translation>in der Bibliothek</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Needs: %1</source>
+        <translation>Benötigt: %1</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Download missing files (%1)</source>
+        <translation>Fehlende Dateien herunterladen (%1)</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Downloading %1 — progress is shown in the Queue.</source>
+        <translation>%1 wird heruntergeladen — der Fortschritt wird in der Warteschlange angezeigt.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
         <source>Look up on Civitai</source>
         <translation>Auf Civitai nachschlagen</translation>
     </message>
@@ -9929,12 +9984,17 @@ Trotzdem herunterladen?</translation>
         <translation>Es wird verwendet von: %1.</translation>
     </message>
     <message>
-        <location line="+19"/>
+        <location line="+17"/>
+        <source>%1 needs %2, which is not in the library yet: download it from the model&apos;s details.</source>
+        <translation>%1 benötigt %2, das noch nicht in der Bibliothek ist: Laden Sie es in den Details des Modells herunter.</translation>
+    </message>
+    <message>
+        <location line="+15"/>
         <source>Use in %1</source>
         <translation>In %1 verwenden</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+27"/>
         <source>%1 uses it after a restart.</source>
         <translation>%1 verwendet es nach einem Neustart.</translation>
     </message>
@@ -9949,7 +10009,7 @@ Trotzdem herunterladen?</translation>
         <translation>Neuer Server mit diesem Modell…</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+15"/>
         <source>Install or add %1 under Local servers first.</source>
         <translation>Installieren oder fügen Sie %1 zuerst unter Lokale Server hinzu.</translation>
     </message>
@@ -11999,7 +12059,7 @@ oder aus der Bibliothek ziehen</translation>
 <context>
     <name>lumen::ui::ServerLogDialog</name>
     <message>
-        <location filename="../src/ui/dialogs/LocalServersPage.cpp" line="+586"/>
+        <location filename="../src/ui/dialogs/LocalServersPage.cpp" line="+601"/>
         <source>Server log — %1</source>
         <translation>Serverprotokoll – %1</translation>
     </message>
@@ -12037,7 +12097,7 @@ oder aus der Bibliothek ziehen</translation>
 <context>
     <name>lumen::ui::ServerProfileDialog</name>
     <message>
-        <location line="-379"/>
+        <location line="-394"/>
         <source>New server</source>
         <translation>Neuer Server</translation>
     </message>
@@ -12193,8 +12253,8 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Aus der Modellbibliothek wählen</translation>
     </message>
     <message>
-        <location line="+17"/>
-        <location line="+56"/>
+        <location line="+20"/>
+        <location line="+57"/>
         <source>All files (*)</source>
         <translation>Alle Dateien (*)</translation>
     </message>
@@ -12209,7 +12269,7 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Lumen hat noch keinen Anbieter für %1.</translation>
     </message>
     <message>
-        <location line="+51"/>
+        <location line="+62"/>
         <source>Choose a program.</source>
         <translation>Wählen Sie ein Programm.</translation>
     </message>

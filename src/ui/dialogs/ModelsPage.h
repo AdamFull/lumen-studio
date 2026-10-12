@@ -40,6 +40,7 @@ private:
     QStringList serversUsing(const QString &path) const;
     QStringList usedFiles() const;
     void useWithServer(const runtime::ModelEntry &e);
+    void warnMissingCompanions(const runtime::ModelEntry &e);
 
     Studio *m_studio;
     std::optional<runtime::HardwareInfo> m_hardware;

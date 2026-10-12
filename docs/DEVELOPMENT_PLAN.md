@@ -857,6 +857,28 @@ Phase E — hub downloads
     Q4_K_M …);
   - a GGUF model offers its vision projector (`mmproj-*` and `*.mmproj-*` names, Q8_0 preferred);
   - split GGUF files are downloaded with all their parts.
+- [x] Companion files (added October 2026): Civitai versions of models that are not complete
+  checkpoints (Anima, Qwen-Image-based models…) carry their VAE and text encoder as separate
+  files ("VAE", "Text Encoder"), some with `metadata.isRequired` (only in the search results,
+  not in `/model-versions`; the site's own API is closed to clients).
+  - `HubFile` keeps Civitai's file type and the required mark; a "Text Encoder" file is a text
+    encoder, not a checkpoint. `companionFiles` gives a model file the VAE / text encoder files
+    of its version (deduplicated by checksum).
+  - The download dialog downloads them with the model unless already in the library (required
+    ones always; the others behind a ticked box). They are recorded as `companions` in the
+    model's Civitai data: in the sidecar of a download (added later with `recordCompanions`
+    when the model came first), and by *Look up on Civitai* for files from elsewhere, which keeps
+    an earlier required mark.
+  - Models page: the model's details list the companions with "missing" / "in the library";
+    **Download missing files** fetches them with the model's Civitai data (`companionDownload`).
+  - Servers: *Use with a server* and the sd.cpp profile's model fields fill `vae`, and `llm` or
+    `t5xxl` for a text encoder of that type (the header now tells LLM / T5 / CLIP text encoders),
+    when empty; switching models removes the previous model's companions. Missing ones are
+    reported.
+  - Tests: parsing, selection and JSON round trip; download with recorded companions, missing ones
+    fetched, server options, a later record, the lookup of a file from elsewhere; the dialog
+    (required box, a companion's own row, download of all three) and the Models page (a missing
+    VAE fetched again).
 - [x] Starter sets (`resources/models/starters.json`): compact (Qwen3-VL 4B Q4_K_M), standard
   (8B Q4_K_M, 8 GB GPUs) and large (8B Q8_0, 12 GB+). Each set adds Animagine XL 4.0 Opt, xinsir
   OpenPose ControlNet, IP-Adapter SDXL ViT-H, its CLIP ViT-H encoder and Real-ESRGAN x4plus.

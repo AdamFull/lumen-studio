@@ -232,6 +232,11 @@ ModelHubDialog::ModelHubDialog(Studio *studio, QWidget *parent)
     m_projector->setChecked(true);
     m_projector->setVisible(false);
     dv->addWidget(m_projector);
+    m_companions = new QCheckBox(m_details);
+    m_companions->setObjectName(QStringLiteral("companions"));
+    m_companions->setChecked(true);
+    m_companions->setVisible(false);
+    dv->addWidget(m_companions);
     auto *drow = new QHBoxLayout;
     drow->addStretch();
     m_download = new QPushButton(Icons::get(QStringLiteral("download")), tr("Download"), m_details);
@@ -276,6 +281,7 @@ ModelHubDialog::ModelHubDialog(Studio *studio, QWidget *parent)
             m_projector->setText(tr("Also download the vision projector (%1), so the model can see images").arg(runtime::formatBytes(proj->size)));
             m_projector->setToolTip(proj->path);
         }
+        showCompanions();
     });
     connect(m_files, &QTreeWidget::itemDoubleClicked, this, &ModelHubDialog::downloadSelected);
     connect(m_download, &QPushButton::clicked, this, &ModelHubDialog::downloadSelected);
@@ -492,6 +498,7 @@ void ModelHubDialog::showVersion()
     m_files->clear();
     m_download->setEnabled(false);
     m_projector->setVisible(false);
+    m_companions->setVisible(false);
     if (!v)
         return;
     if (!v->trainedWords.isEmpty())
@@ -528,6 +535,46 @@ void ModelHubDialog::showVersion()
     emit m_files->currentItemChanged(m_files->currentItem(), nullptr);
 }
 
+void ModelHubDialog::showCompanions()
+{
+    const HubVersion *v = currentVersion();
+    QTreeWidgetItem *item = m_files->currentItem();
+    const int index = item ? item->data(0, Qt::UserRole).toInt() : -1;
+    const QList<HubFile> companions = v && index >= 0 && index < v->files.size() ? runtime::companionFiles(v->files, v->files[index]) : QList<HubFile>{};
+    QStringList missing;
+    QStringList here;
+    bool required = false;
+    qint64 bytes = 0;
+    for (const HubFile &c : companions) {
+        const QString what = QStringLiteral("%1 (%2)").arg(c.fileName(), runtime::modelKindLabel(c.kind));
+        if (m_studio->models()->find(c.sha256, c.fileName(), c.size)) {
+            here << what;
+            continue;
+        }
+        missing << what;
+        required = required || c.required;
+        bytes += std::max<qint64>(0, c.size);
+    }
+    m_companions->setVisible(!companions.isEmpty());
+    if (companions.isEmpty())
+        return;
+    if (missing.isEmpty()) {
+        m_companions->setChecked(true);
+        m_companions->setEnabled(false);
+        m_companions->setText(tr("The files it needs are in the library: %1").arg(here.join(QStringLiteral(", "))));
+        m_companions->setToolTip(QString());
+        return;
+    }
+    // Files the creator marks as required always come along; the others are recommended.
+    m_companions->setEnabled(!required);
+    if (required)
+        m_companions->setChecked(true);
+    m_companions->setText(required ? tr("Also downloads the files it needs (%1): %2").arg(runtime::formatBytes(bytes), missing.join(QStringLiteral(", ")))
+                                   : tr("Also download the files that come with it (%1): %2").arg(runtime::formatBytes(bytes), missing.join(QStringLiteral(", "))));
+    m_companions->setToolTip(required ? tr("The creator marks them as required: the model does not work without them.")
+                                      : tr("The model's version includes them; it may need them to work."));
+}
+
 void ModelHubDialog::downloadSelected()
 {
     const HubVersion *v = currentVersion();
@@ -555,11 +602,22 @@ void ModelHubDialog::downloadSelected()
         if (const auto proj = runtime::projectorFor(v->files, file))
             files << *proj;
     }
+    // The model's VAE / text encoder: recorded with the model; downloaded when missing (always
+    // when required).
+    const QList<HubFile> companions = runtime::companionFiles(v->files, file);
+    for (const HubFile &c : companions) {
+        if (c.required || m_companions->isChecked())
+            files << c;
+    }
     const HubModel &m = *m_current;
     QStringList queued;
     for (const HubFile &f : std::as_const(files)) {
-        if (m_studio->models()->find(f.sha256, f.fileName(), f.size))
+        if (const auto local = m_studio->models()->find(f.sha256, f.fileName(), f.size)) {
+            // A model downloaded before its companions were known learns them now.
+            if (f.path == file.path && !companions.isEmpty() && runtime::recordCompanions(local->path, companions))
+                m_studio->models()->addFile(local->path);
             continue; // already here
+        }
         runtime::HubDownload d;
         d.source = m.source;
         d.modelId = m.id;
@@ -574,6 +632,8 @@ void ModelHubDialog::downloadSelected()
         d.nsfw = m.nsfw;
         d.page = m.page;
         d.allowPickle = allowPickle;
+        if (f.path == file.path)
+            d.companions = companions;
         m_studio->hub()->download(d);
         queued << f.fileName();
     }

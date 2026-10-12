@@ -63,6 +63,8 @@ private:
     QComboBox *m_version;
     QTreeWidget *m_files;
     QCheckBox *m_projector;
+    QCheckBox *m_companions;    // the model's VAE / text encoder (Civitai)
+    void showCompanions();
     QPushButton *m_download;
     QList<runtime::HubModel> m_models;
     std::optional<runtime::HubModel> m_current;
