@@ -879,6 +879,30 @@ Phase E — hub downloads
     fetched, server options, a later record, the lookup of a file from elsewhere; the dialog
     (required box, a companion's own row, download of all three) and the Models page (a missing
     VAE fetched again).
+- [x] Anima (October 2026). sd.cpp runs Anima since March 2026 (`--diffusion-model`, `--vae`
+  Qwen-Image VAE, `--llm` Qwen3-0.6B-Base; docs/anima.md); the installed master-951 does.
+  Measured with MiaoMiao Harem 2.9B (a bare DiT + LLM adapter, 5.6 GB bf16) on the RTX 4060
+  laptop: 1024², 30 steps, weights in RAM: 157 s sampling, 188 s in all; the full-size VAE decode
+  ran out of VRAM and sd.cpp tiled it by itself. Through Lumen with its defaults (q8_0: 3.8 GB of
+  weights instead of 7.0; VAE tiling): 832×1216, 28 steps, 87 s sampling, 99 s with the server
+  start; with "safe" the outfit stayed covered.
+  - Headers: Wan-layout VAEs (`decoder.conv1` 5D) get the family "Qwen-Image / Wan" (16
+    channels) or "Wan 2.2" (48); language-model text encoders get a variant ("Qwen3 0.6B",
+    "Qwen2.5 7B") from the q/k norms and the width. `kModelInspectorVersion` (2) makes the
+    library read files indexed by an older inspector again, keeping hashes and lookups.
+  - `familyCompanions("Anima")`: the VAE and text encoder pinned to circlestone-labs/Anima
+    (commit, SHA-256, size, non-commercial licence). A model without recorded companions gets its
+    family's; a library file with the same header family / variant stands in (a Qwen-named one
+    first), else it is offered for download from that repository.
+  - Prompt style "anima" (by the family Studio passes as `model_family`, or "anima" in the name,
+    not Animagine): tags, "masterpiece, best quality, score_7, " in front, the model card's
+    negative prompt; with *Safe for work* the "safe" rating tag goes after the quality tags.
+    Steps and CFG stay Lumen's defaults (28, 6; sd.cpp's own Anima example uses CFG 6, the model
+    card suggests 4–5).
+  - Tests: header families and variants, re-inspection; Anima companions with stand-ins under
+    other names, a missing one from Hugging Face, server options; the prompt style and the safe
+    tag; the safe tag reaching the server. Live (`animaServer`): the user's model through Lumen's
+    library, server and defaults.
 - [x] Starter sets (`resources/models/starters.json`): compact (Qwen3-VL 4B Q4_K_M), standard
   (8B Q4_K_M, 8 GB GPUs) and large (8B Q8_0, 12 GB+). Each set adds Animagine XL 4.0 Opt, xinsir
   OpenPose ControlNet, IP-Adapter SDXL ViT-H, its CLIP ViT-H encoder and Real-ESRGAN x4plus.

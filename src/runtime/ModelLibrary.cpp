@@ -112,7 +112,8 @@ QJsonObject modelInfoToJson(const ModelInfo &i)
                        {QStringLiteral("headDim"), i.headDim},
                        {QStringLiteral("triggers"), QJsonArray::fromStringList(i.triggerWords)},
                        {QStringLiteral("unsafe"), i.unsafeFormat},
-                       {QStringLiteral("error"), i.error}};
+                       {QStringLiteral("error"), i.error},
+                       {QStringLiteral("inspector"), i.inspector}};
 }
 
 ModelInfo modelInfoFromJson(const QJsonObject &o)
@@ -120,6 +121,7 @@ ModelInfo modelInfoFromJson(const QJsonObject &o)
     ModelInfo i;
     i.kind = modelKindFromKey(o.value(QStringLiteral("kind")).toString());
     i.format = o.value(QStringLiteral("format")).toString();
+    i.inspector = o.value(QStringLiteral("inspector")).toInt();
     i.family = o.value(QStringLiteral("family")).toString();
     i.variant = o.value(QStringLiteral("variant")).toString();
     i.precision = o.value(QStringLiteral("precision")).toString();
@@ -352,8 +354,16 @@ void ModelLibrary::rescan()
                 e.size = fi.size();
                 e.modified = fi.lastModified();
                 const auto old = known.constFind(path);
-                if (old != known.cend() && old->size == e.size && old->modified == e.modified) {
+                if (old != known.cend() && old->size == e.size && old->modified == e.modified
+                    && old->info.inspector >= kModelInspectorVersion) {
                     e = *old; // unchanged: keep header info, hash and lookups
+                } else if (old != known.cend() && old->size == e.size && old->modified == e.modified) {
+                    // Read by an older inspector: the header again, the hash and lookups stay.
+                    e = inspectEntry(path, fi);
+                    if (e.sha256.isEmpty())
+                        e.sha256 = old->sha256;
+                    if (e.civitai.isEmpty())
+                        e.civitai = old->civitai;
                 } else {
                     e = inspectEntry(path, fi);
                 }

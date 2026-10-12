@@ -217,6 +217,20 @@ void classifyDiffusion(const Tensors &t, const QVariantMap &meta, ModelInfo *inf
         info->family = t.hasPrefix(QStringLiteral("model.layers."))                                            ? QStringLiteral("LLM")
                        : t.hasPrefix(QStringLiteral("encoder.block.")) || t.hasPrefix(QStringLiteral("enc.blk.")) ? QStringLiteral("T5")
                                                                                                                   : QStringLiteral("CLIP");
+        if (info->family == QLatin1String("LLM")) {
+            // Which language model: Qwen3 has q/k norms, Qwen2.5 has not; the width tells the size.
+            // Image models need a particular one (Anima: Qwen3 0.6B; Qwen-Image: Qwen2.5-VL 7B).
+            const qint64 width = t.dim(QStringLiteral("model.embed_tokens.weight"), 1);
+            const bool qwen3 = t.has(QStringLiteral("self_attn.q_norm"));
+            static const QHash<qint64, QString> qwen3Sizes{{1024, QStringLiteral("0.6B")}, {2048, QStringLiteral("1.7B")},
+                                                           {2560, QStringLiteral("4B")},   {4096, QStringLiteral("8B")},
+                                                           {5120, QStringLiteral("14B")}};
+            static const QHash<qint64, QString> qwen25Sizes{{896, QStringLiteral("0.5B")}, {1536, QStringLiteral("1.5B")},
+                                                            {2048, QStringLiteral("3B")},  {3584, QStringLiteral("7B")}};
+            const QString size = (qwen3 ? qwen3Sizes : qwen25Sizes).value(width);
+            if (!size.isEmpty() && t.dim(QStringLiteral("model.embed_tokens.weight"), 0) > 150000) // Qwen's vocabulary
+                info->variant = (qwen3 ? QStringLiteral("Qwen3 ") : QStringLiteral("Qwen2.5 ")) + size;
+        }
         return;
     }
     // Autoencoders: 16 latent channels (FLUX / SD 3) or 4 (SD / SDXL).
@@ -229,6 +243,12 @@ void classifyDiffusion(const Tensors &t, const QVariantMap &meta, ModelInfo *inf
                                : channels == 16 ? QStringLiteral("FLUX / SD 3")
                                : channels == 4  ? QStringLiteral("SD / SDXL")
                                                 : QString();
+                break;
+            }
+            // Wan-style video VAE (3D convolutions), also used by Qwen-Image and Anima.
+            if (n == QLatin1String("decoder.conv1.weight") && t.shapes.value(n).size() == 5) {
+                const qint64 channels = t.dim(n, 1);
+                info->family = channels == 16 ? QStringLiteral("Qwen-Image / Wan") : channels == 48 ? QStringLiteral("Wan 2.2") : QString();
                 break;
             }
         }
@@ -583,6 +603,7 @@ ModelInfo inspectModel(const QString &path)
     }
     if (info.kind == ModelKind::Checkpoint || info.kind == ModelKind::Lora || info.kind == ModelKind::DiffusionModel || info.kind == ModelKind::ControlNet)
         info.variant = variantFromNames(path);
+    info.inspector = kModelInspectorVersion;
     return info;
 }
 

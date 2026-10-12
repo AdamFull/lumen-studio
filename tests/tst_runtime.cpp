@@ -236,6 +236,7 @@ private slots:
     void hubSearch();
     void hubDownloads();
     void hubCompanions();
+    void animaCompanions();
     void trainerRecipes();
     void trainerAdopt();
     void trainerInstall();
@@ -1229,6 +1230,32 @@ void TestRuntime::modelFormats()
                                                                        {QStringLiteral("net.llm_adapter.proj.weight"), {2048, 1024}}}));
     QCOMPARE(i.kind, ModelKind::DiffusionModel);
     QCOMPARE(i.family, QStringLiteral("Anima"));
+    QCOMPARE(i.inspector, kModelInspectorVersion);
+    // The Qwen-Image VAE (Wan layout, 3D convolutions, 16 latent channels) and Wan 2.2's (48).
+    auto wanVae = [](int channels) {
+        return makeSafetensors({{QStringLiteral("decoder.conv1.weight"), {384, channels, 3, 3, 3}},
+                                {QStringLiteral("decoder.upsamples.0.residual.2.weight"), {384, 384, 3, 3, 3}},
+                                {QStringLiteral("encoder.middle.0.residual.2.weight"), {384, 384, 3, 3, 3}}},
+                               {}, QStringLiteral("BF16"));
+    };
+    i = inspect(QStringLiteral("qwen_image_vae.safetensors"), wanVae(16));
+    QCOMPARE(i.kind, ModelKind::Vae);
+    QCOMPARE(i.family, QStringLiteral("Qwen-Image / Wan"));
+    QCOMPARE(inspect(QStringLiteral("wan2.2_vae.safetensors"), wanVae(48)).family, QStringLiteral("Wan 2.2"));
+    // Language-model text encoders: Qwen3 by its q/k norms, the size by the width.
+    auto qwen = [](int width, bool qwen3) {
+        QList<QPair<QString, QList<int>>> t{{QStringLiteral("model.embed_tokens.weight"), {151936, width}},
+                                            {QStringLiteral("model.layers.0.self_attn.q_proj.weight"), {width, width}}};
+        if (qwen3)
+            t.append({QStringLiteral("model.layers.0.self_attn.q_norm.weight"), {128}});
+        return makeSafetensors(t, {}, QStringLiteral("BF16"));
+    };
+    i = inspect(QStringLiteral("text_encoders/qwen_3_06b_base.safetensors"), qwen(1024, true));
+    QCOMPARE(i.kind, ModelKind::TextEncoder);
+    QCOMPARE(i.family, QStringLiteral("LLM"));
+    QCOMPARE(i.variant, QStringLiteral("Qwen3 0.6B"));
+    QCOMPARE(inspect(QStringLiteral("q8b.safetensors"), qwen(4096, true)).variant, QStringLiteral("Qwen3 8B"));
+    QCOMPARE(inspect(QStringLiteral("q25.safetensors"), qwen(3584, false)).variant, QStringLiteral("Qwen2.5 7B"));
     // Pickle files are never opened as pickles: their kind comes from the folder.
     i = inspect(QStringLiteral("upscale_models/RealESRGAN_x4plus_anime_6B.pth"), QByteArray("PK\x03\x04 pickle"));
     QCOMPARE(i.kind, ModelKind::Upscaler);
@@ -1902,6 +1929,106 @@ void TestRuntime::hubCompanions()
     QCOMPARE(found.size(), 2);
     QVERIFY(!found[0].file.required); // not known from this endpoint
     QVERIFY(!found[0].missing() && !found[1].missing()); // downloaded above
+}
+
+void TestRuntime::animaCompanions()
+{
+    // An Anima model from elsewhere, and VAEs / text encoders under other names: Lumen finds the
+    // ones that fit by their headers.
+    const QByteArray pad(2 * 1024 * 1024, '\0'); // the scan skips files under 1 MB
+    QTemporaryDir comfy;
+    auto put = [&](const QString &rel, const QByteArray &bytes) {
+        const QString path = QDir::cleanPath(comfy.filePath(rel));
+        writeFile(path, bytes + pad);
+        return path;
+    };
+    const QString anima = put(QStringLiteral("checkpoints/miaomiaoHarem_29BBETA11.safetensors"),
+                              makeSafetensors({{QStringLiteral("net.blocks.0.self_attn.q_proj.weight"), {2048, 2048}},
+                                               {QStringLiteral("net.llm_adapter.out_proj.weight"), {1024, 1024}}}));
+    const QString sdxl = put(QStringLiteral("checkpoints/wai.safetensors"),
+                             makeSafetensors({{QStringLiteral("model.diffusion_model.input_blocks.0.0.weight"), {320, 4, 3, 3}},
+                                              {QStringLiteral("model.diffusion_model.label_emb.0.0.weight"), {1280, 2816}},
+                                              {QStringLiteral("conditioner.embedders.1.model.ln_final.weight"), {1280}}}));
+    auto wanVae = makeSafetensors({{QStringLiteral("decoder.conv1.weight"), {384, 16, 3, 3, 3}},
+                                   {QStringLiteral("decoder.upsamples.0.residual.2.weight"), {384, 384, 3, 3, 3}}});
+    put(QStringLiteral("vae/wan_2.1_vae.safetensors"), wanVae + "a");
+    const QString qwenVae = put(QStringLiteral("vae/qwen_image_vae_fp8.safetensors"), wanVae + "b");
+    put(QStringLiteral("text_encoders/qwen_3_8b.safetensors"),
+        makeSafetensors({{QStringLiteral("model.embed_tokens.weight"), {151936, 4096}}, {QStringLiteral("model.layers.0.self_attn.q_norm.weight"), {128}}}));
+
+    net::HttpClient http;
+    JobQueue jobs;
+    QTemporaryDir data;
+    ModelLibrary lib(&http);
+    lib.setDataDir(data.path());
+    lib.load();
+    QSignalSpy scanned(&lib, &ModelLibrary::scanFinished);
+    QVERIFY(lib.addRoot(comfy.path()));
+    QTRY_VERIFY_WITH_TIMEOUT(scanned.size() >= 1 && !lib.isScanning(), 20000);
+    QCOMPARE(lib.entry(anima)->info.family, QStringLiteral("Anima"));
+
+    // Needed: the VAE (the Qwen-named one of the two that fit) and Qwen3 0.6B (missing: the 8B does not fit).
+    QList<ModelCompanion> needs = companionsOf(&lib, anima);
+    QCOMPARE(needs.size(), 2);
+    QCOMPARE(needs[0].file.kind, ModelKind::Vae);
+    QCOMPARE(needs[0].path, qwenVae);
+    QCOMPARE(needs[1].file.kind, ModelKind::TextEncoder);
+    QVERIFY(needs[1].missing());
+    QVERIFY(needs[1].file.required);
+    QVERIFY(companionsOf(&lib, sdxl).isEmpty());
+    QVariantMap options = companionServerOptions(&lib, anima);
+    QCOMPARE(options, (QVariantMap{{QStringLiteral("vae"), QDir::toNativeSeparators(qwenVae)}}));
+
+    // The missing one comes from the pinned Hugging Face repository.
+    const HubDownload d = companionDownload(*lib.entry(anima), needs[1].file);
+    QCOMPARE(d.source, HubSource::HuggingFace);
+    QCOMPARE(d.modelId, QStringLiteral("circlestone-labs/Anima"));
+    QCOMPARE(d.versionId.size(), 40);
+    QVERIFY(d.file.url.toString().startsWith(QStringLiteral("https://huggingface.co/circlestone-labs/Anima/resolve/") + d.versionId));
+    QCOMPARE(d.file.sha256.size(), 64);
+    QCOMPARE(d.license, QStringLiteral("circlestone-labs-non-commercial-license"));
+
+    // Once a Qwen3 0.6B is there, both fill the server.
+    const QString encoder = put(QStringLiteral("text_encoders/qwen3-0.6b.safetensors"),
+                                makeSafetensors({{QStringLiteral("model.embed_tokens.weight"), {151936, 1024}},
+                                                 {QStringLiteral("model.layers.0.self_attn.q_norm.weight"), {128}}}));
+    lib.rescan();
+    QTRY_VERIFY_WITH_TIMEOUT(scanned.size() >= 2 && !lib.isScanning(), 20000);
+    options = companionServerOptions(&lib, anima);
+    QCOMPARE(options.value(QStringLiteral("llm")).toString(), QDir::toNativeSeparators(encoder));
+    QCOMPARE(options.value(QStringLiteral("vae")).toString(), QDir::toNativeSeparators(qwenVae));
+
+    // An index written by an older inspector is read again (its hash stays).
+    {
+        QFile f(data.filePath(QStringLiteral("models.json")));
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        QJsonObject root = QJsonDocument::fromJson(f.readAll()).object();
+        f.close();
+        QJsonArray models = root.value(QStringLiteral("models")).toArray();
+        for (int k = 0; k < models.size(); ++k) {
+            QJsonObject m = models[k].toObject();
+            if (m.value(QStringLiteral("path")).toString() == encoder) {
+                QJsonObject info = m.value(QStringLiteral("info")).toObject();
+                info.remove(QStringLiteral("inspector"));
+                info.insert(QStringLiteral("variant"), QString());
+                m.insert(QStringLiteral("info"), info);
+                m.insert(QStringLiteral("sha256"), QStringLiteral("feed"));
+                models[k] = m;
+            }
+        }
+        root.insert(QStringLiteral("models"), models);
+        QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        f.write(QJsonDocument(root).toJson());
+    }
+    ModelLibrary again(&http);
+    again.setDataDir(data.path());
+    again.load();
+    QCOMPARE(again.entry(encoder)->info.variant, QString());
+    QSignalSpy rescanned(&again, &ModelLibrary::scanFinished);
+    again.rescan();
+    QTRY_VERIFY_WITH_TIMEOUT(rescanned.size() >= 1 && !again.isScanning(), 20000);
+    QCOMPARE(again.entry(encoder)->info.variant, QStringLiteral("Qwen3 0.6B"));
+    QCOMPARE(again.entry(encoder)->sha256, QStringLiteral("feed"));
 }
 
 void TestRuntime::trainerRecipes()

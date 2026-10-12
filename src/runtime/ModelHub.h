@@ -139,7 +139,22 @@ struct ModelCompanion
     QString path;            // where it is on this computer; empty = missing
     bool missing() const { return path.isEmpty(); }
 };
-// The companions recorded for a library model and whether each is on this computer.
+// Files a model family needs that its model files never carry (Anima: the Qwen-Image VAE and
+// the Qwen3 0.6B text encoder), pinned to a Hugging Face commit with their SHA-256. A file in
+// the library with the same header family / variant stands in for it.
+struct FamilyCompanion
+{
+    HubFile file;            // url, size, sha256, kind; required
+    QString repo;            // "circlestone-labs/Anima"
+    QString revision;
+    QString license;
+    QString family;          // ModelInfo::family a stand-in must have ("Qwen-Image / Wan", "LLM")
+    QString variant;         // and ModelInfo::variant, if set ("Qwen3 0.6B")
+};
+QList<FamilyCompanion> familyCompanions(const QString &modelFamily);
+
+// The companions of a library model and whether each is on this computer: the ones recorded
+// from Civitai, else those of its family.
 QList<ModelCompanion> companionsOf(const ModelLibrary *library, const QString &modelPath);
 // A download of a missing companion, with the model's Civitai data.
 HubDownload companionDownload(const ModelEntry &model, const HubFile &companion);

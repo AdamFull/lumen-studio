@@ -235,6 +235,8 @@ void GenerationService::execute(Job *job, const GenerationSpec &specIn, OutputHa
     const ImageCapabilities caps = provider->capabilitiesFor(specIn.request);
     if (m_safeContent && caps.negativePrompt)
         spec.request.negativePrompt = withSafeNegative(spec.request.negativePrompt);
+    if (m_safeContent)
+        spec.request.prompt = promptStyleFor(provider).withSafeTag(spec.request.prompt); // Anima: "safe"
     job->setProgress(-1.0, tr("Preparing..."));
 
     auto launch = [job, providerGuard, spec, onOutput](ImageRequest request, std::optional<RegionPlan> plan) {

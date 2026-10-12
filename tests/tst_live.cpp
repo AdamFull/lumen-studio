@@ -49,6 +49,7 @@
 #include "ui/assistant/AssistantPanel.h"
 #include "ui/pages/CreatePage.h"
 
+#include "ai/GenerationService.h"
 #include <QAction>
 #include <QCheckBox>
 #include <QDir>
@@ -109,6 +110,7 @@ private slots:
     void managedLlamaServer();
     void installRuntime();
     void managedSdServer();
+    void animaServer();
     void managedStudioScenario();
     void managedSdUpscale();
     void managedComfyUi();
@@ -667,6 +669,92 @@ void TestLive::managedSdServer()
     servers.stop(profile.id);
     QTRY_COMPARE_WITH_TIMEOUT(servers.state(profile.id), runtime::ServerState::Stopped, 30000);
 }
+
+// LUMEN_LIVE_SD_RUNTIMES=<runtimes folder with an installed sd.cpp>, LUMEN_LIVE_ANIMA_MODEL=<an Anima
+// diffusion model>, LUMEN_LIVE_MODEL_DIRS=<folders with its VAE and text encoder, ';'-separated>:
+// the library finds the model's family and companions from the headers, Lumen starts sd-server
+// with them and its 8 GB defaults, and draws an Anima-style prompt with "Safe for work".
+void TestLive::animaServer()
+{
+    const QString root = qEnvironmentVariable("LUMEN_LIVE_SD_RUNTIMES");
+    const QString model = QDir::cleanPath(qEnvironmentVariable("LUMEN_LIVE_ANIMA_MODEL"));
+    if (root.isEmpty() || qEnvironmentVariable("LUMEN_LIVE_ANIMA_MODEL").isEmpty())
+        QSKIP("LUMEN_LIVE_SD_RUNTIMES and LUMEN_LIVE_ANIMA_MODEL are needed");
+    QTemporaryDir tmp;
+    JobQueue jobs;
+    runtime::RuntimeStore store(&m_http, &jobs);
+    store.setRoot(root);
+    store.load();
+    const auto rt = store.latestManaged(QStringLiteral("sd.cpp"));
+    QVERIFY2(rt, "no managed sd.cpp install in LUMEN_LIVE_SD_RUNTIMES");
+
+    runtime::ModelLibrary lib(&m_http);
+    lib.setDataDir(tmp.filePath(QStringLiteral("library")));
+    lib.load();
+    QSignalSpy scanned(&lib, &runtime::ModelLibrary::scanFinished);
+    lib.addRoot(QFileInfo(model).absolutePath());
+    for (const QString &d : qEnvironmentVariable("LUMEN_LIVE_MODEL_DIRS").split(QLatin1Char(';'), Qt::SkipEmptyParts))
+        lib.addRoot(d);
+    QTRY_VERIFY_WITH_TIMEOUT(scanned.size() >= 1 && !lib.isScanning(), 120000);
+    const auto entry = lib.entry(model);
+    QVERIFY(entry);
+    QCOMPARE(entry->info.family, QStringLiteral("Anima"));
+    for (const runtime::ModelCompanion &c : runtime::companionsOf(&lib, model))
+        qInfo().noquote() << "companion" << c.file.fileName() << "->" << (c.missing() ? QStringLiteral("missing") : c.path);
+    const QVariantMap companions = runtime::companionServerOptions(&lib, model);
+    QVERIFY2(companions.contains(QStringLiteral("vae")) && companions.contains(QStringLiteral("llm")), "VAE or text encoder not found");
+
+    runtime::ServerSupervisor servers(&store, &m_http);
+    servers.setConfigPath(tmp.filePath(QStringLiteral("servers.json")));
+    servers.setLogDir(tmp.filePath(QStringLiteral("logs")));
+    runtime::ServerProfile profile = servers.createProfile(rt->id, QStringLiteral("Live Anima"));
+    profile.options.insert(QStringLiteral("diffusion_model"), QDir::toNativeSeparators(model));
+    profile.options.insert(companions);
+    profile.startupTimeoutSec = 300;
+    servers.addProfile(profile);
+    qInfo().noquote() << "command:" << servers.launchFor(profile.id).commandLine();
+
+    // As Studio configures it: the file name and the family from the header.
+    SdCppProvider sd(SdCppProvider::describe(), QStringLiteral("live-anima"), &m_http, nullptr);
+    sd.configure({{QStringLiteral("url"), runtime::providerUrl(rt->kind, profile.port)},
+                  {QStringLiteral("model"), QFileInfo(model).fileName()},
+                  {QStringLiteral("model_family"), entry->info.family}});
+    sd.setGate(std::make_shared<SupervisorGate>(&servers, profile.id));
+    const PromptStyle style = promptStyleFor(&sd);
+    QCOMPARE(style.family, QStringLiteral("anima"));
+
+    ImageRequest r; // Lumen's defaults: 28 steps, CFG 6
+    r.prompt = style.withSafeTag(style.apply(QStringLiteral("1girl, solo, red hair, long hair, green eyes, school uniform, smile, upper body, "
+                                                            "cherry blossoms, outdoors. A cheerful girl stands under blooming cherry trees on a "
+                                                            "sunny spring day.")));
+    r.negativePrompt = GenerationService::withSafeNegative(style.defaultNegative);
+    r.size = QSize(832, 1216);
+    r.seed = 42;
+    r.sampler = QStringLiteral("euler_a");
+    qInfo().noquote() << "prompt:" << r.prompt;
+    qInfo().noquote() << "negative:" << r.negativePrompt;
+
+    QElapsedTimer t;
+    t.start();
+    ImageOperation *op = gatedGenerate(&sd, r);
+    op->setAutoDelete(false);
+    QTRY_VERIFY_WITH_TIMEOUT(op->isFinished(), 900000);
+    if (op->state() != Operation::State::Succeeded)
+        qInfo().noquote() << servers.log(profile.id).mid(std::max<qsizetype>(0, servers.log(profile.id).size() - 40)).join(QLatin1Char('\n'));
+    QVERIFY2(op->state() == Operation::State::Succeeded, qPrintable(op->errorString()));
+    qInfo() << "image after" << t.elapsed() << "ms (includes server start)";
+    const QStringList log = servers.log(profile.id);
+    for (const QString &line : log) {
+        if (line.contains(QLatin1String("Version:")) || line.contains(QLatin1String("total params")) || line.contains(QLatin1String("sampling completed"))
+            || line.contains(QLatin1String("decode")) || line.contains(QLatin1String("[E]")))
+            qInfo().noquote() << "sd:" << line.trimmed();
+    }
+    save(op->result().images.value(0).image, QStringLiteral("anima_lumen.png"));
+    delete op;
+    servers.stop(profile.id);
+    QTRY_COMPARE_WITH_TIMEOUT(servers.state(profile.id), runtime::ServerState::Stopped, 30000);
+}
+
 
 // The reference scenario with both servers run by Lumen: LUMEN_LIVE_LLAMA_SERVER/_MODEL/_MMPROJ for the
 // language model, LUMEN_LIVE_SD_* for sd.cpp, LUMEN_LIVE_REFERENCE. Servers start on first use

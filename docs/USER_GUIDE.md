@@ -146,6 +146,15 @@ folders, Downloads, and the folders your servers already use. Files stay where t
   * For a model you got elsewhere (for example in your ComfyUI folder), *Look up on Civitai*
     finds the files of its version too.
   * *Use with a server* and the server's model field fill in the model's VAE and text encoder.
+* **Anima models** (anime models built on circlestone-labs' Anima) never contain their VAE and
+  text encoder, and Civitai often does not list them. Lumen recognises an Anima model from the
+  file itself, whatever its name. It then looks in your library for a Qwen-Image VAE and the
+  Qwen3 0.6B text encoder (by what the files are, not their names), or offers them from the
+  official Anima repository on Hugging Face (about 1.4 GB, non-commercial licence).
+  * The sd.cpp server runs Anima with the usual 8 GB settings; on an RTX 4060 laptop the first
+    image takes about a minute and a half, including starting the server.
+  * Prompts for Anima use its tag style with "masterpiece, best quality, score_7" in front and
+    its own negative prompt. With *Safe for work* on, Lumen also adds Anima's "safe" rating tag.
 * **Accounts…** stores access tokens in the Windows Credential Manager. Hugging Face needs a token
   for gated models such as FLUX.1 dev (accept the terms on the model's page first); Civitai asks
   for an API key for most downloads. A token is only sent to its own site.

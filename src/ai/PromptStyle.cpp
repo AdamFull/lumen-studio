@@ -2,6 +2,8 @@
 
 #include "ai/Provider.h"
 
+#include <QFileInfo>
+
 namespace lumen::ai {
 
 namespace {
@@ -15,6 +17,13 @@ const QString kPhotoNegative = QStringLiteral(
 
 QString PromptStyle::describeForLlm() const
 {
+    if (family == QLatin1String("anima")) {
+        return QStringLiteral("The image model is Anima, an anime model trained on Danbooru tags and natural language. Write prompts as "
+                              "comma-separated tags in lowercase with spaces instead of underscores, in this order: subject count "
+                              "(e.g. 1girl, solo), character name and series if any, character appearance, outfit, pose/action, "
+                              "expression, framing (full body, upper body...), background, lighting. Then add one or two plain "
+                              "sentences describing the scene. Do not include quality or rating tags; they are added automatically.");
+    }
     if (dialect == Dialect::Tags) {
         return QStringLiteral("The image model is an anime-style Stable Diffusion checkpoint (%1). Write prompts as comma-separated "
                               "Danbooru-style tags in order of importance: subject count (e.g. 1girl, solo), character appearance tags, "
@@ -32,6 +41,20 @@ QString PromptStyle::apply(const QString &prompt) const
     return qualityPrefix + prompt;
 }
 
+QString PromptStyle::withSafeTag(const QString &prompt) const
+{
+    if (safeTag.isEmpty())
+        return prompt;
+    for (const QString &tag : prompt.split(QLatin1Char(','))) {
+        const QString t = tag.trimmed().toLower();
+        if (t == QLatin1String("safe") || t == QLatin1String("sensitive") || t == QLatin1String("nsfw") || t == QLatin1String("explicit"))
+            return prompt; // a rating is there already
+    }
+    if (!qualityPrefix.isEmpty() && prompt.startsWith(qualityPrefix))
+        return qualityPrefix + safeTag + QStringLiteral(", ") + prompt.mid(qualityPrefix.size());
+    return safeTag + QStringLiteral(", ") + prompt;
+}
+
 PromptStyle promptStyleFor(const ImageProvider *provider, const QString &model)
 {
     PromptStyle s;
@@ -47,7 +70,19 @@ PromptStyle promptStyleFor(const ImageProvider *provider, const QString &model)
         return s;
     }
     const QString m = (model.isEmpty() ? provider->text(QStringLiteral("model")) : model).toLower();
-    if (m.contains(QLatin1String("pony"))) {
+    // The family read from the server's model file applies when the model asked about is that one.
+    const QString serverModel = QFileInfo(provider->text(QStringLiteral("model"))).completeBaseName();
+    const bool sameModel = model.isEmpty() || QFileInfo(model).completeBaseName().compare(serverModel, Qt::CaseInsensitive) == 0;
+    const QString fileFamily = sameModel ? provider->text(QStringLiteral("model_family")) : QString();
+    if (fileFamily == QLatin1String("Anima") || (m.contains(QLatin1String("anima")) && !m.contains(QLatin1String("animagine")))) {
+        // circlestone-labs/Anima's model card: quality tags, then a rating, then the rest.
+        s.family = QStringLiteral("anima");
+        s.dialect = PromptStyle::Dialect::Tags;
+        s.qualityPrefix = QStringLiteral("masterpiece, best quality, score_7, ");
+        s.defaultNegative = QStringLiteral("worst quality, low quality, score_1, score_2, score_3, artist name, blurry, jpeg artifacts, "
+                                           "chromatic aberration");
+        s.safeTag = QStringLiteral("safe");
+    } else if (m.contains(QLatin1String("pony"))) {
         s.family = QStringLiteral("pony");
         s.dialect = PromptStyle::Dialect::Tags;
         s.qualityPrefix = QStringLiteral("score_9, score_8_up, score_7_up, ");

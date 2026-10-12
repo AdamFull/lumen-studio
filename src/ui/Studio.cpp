@@ -163,6 +163,9 @@ void Studio::applyServerBindings()
             if (model.isEmpty())
                 model = profile->option(QStringLiteral("diffusion_model"), kind).toString().trimmed();
             wanted.insert(QStringLiteral("model"), QFileInfo(QDir::fromNativeSeparators(model)).fileName());
+            // Its family from the header, when the name does not tell (Anima models have any name).
+            const auto entry = m_models.entry(QDir::cleanPath(QDir::fromNativeSeparators(model)));
+            wanted.insert(QStringLiteral("model_family"), entry ? entry->info.family : QString());
         }
         QVariantMap settings = m_registry.settingsFor(p->instanceId());
         if (kind == QLatin1String("llama.cpp")) {

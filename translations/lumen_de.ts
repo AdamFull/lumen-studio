@@ -84,7 +84,7 @@
         <translation>20–32 abwechslungsreiche Bilder eines Charakters, um seine LoRA zu trainieren.</translation>
     </message>
     <message>
-        <location filename="../src/ai/GenerationService.cpp" line="+311"/>
+        <location filename="../src/ai/GenerationService.cpp" line="+313"/>
         <source>The selection is empty - paint a mask or make a selection first.</source>
         <translation>Die Auswahl ist leer – malen Sie zuerst eine Maske oder erstellen Sie eine Auswahl.</translation>
     </message>
@@ -1758,7 +1758,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ai::GenerationService</name>
     <message>
-        <location filename="../src/ai/GenerationService.cpp" line="-166"/>
+        <location filename="../src/ai/GenerationService.cpp" line="-168"/>
         <source>Image generation</source>
         <translation>Bildgenerierung</translation>
     </message>
@@ -1773,7 +1773,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Kein Bildanbieter konfiguriert. Fügen Sie unter Einstellungen → Anbieter einen hinzu.</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+11"/>
         <source>Preparing...</source>
         <translation>Wird vorbereitet...</translation>
     </message>
@@ -3421,7 +3421,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Vision-Projektor</translation>
     </message>
     <message>
-        <location line="+230"/>
+        <location line="+250"/>
         <source>Not a safetensors file.</source>
         <translation>Keine safetensors-Datei.</translation>
     </message>
@@ -3498,13 +3498,13 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     <message>
         <location line="+9"/>
         <location line="+27"/>
-        <location line="+497"/>
+        <location line="+584"/>
         <location line="+45"/>
         <source>Shutting down.</source>
         <translation>Wird beendet.</translation>
     </message>
     <message>
-        <location line="-555"/>
+        <location line="-642"/>
         <source>Civitai requires an API key for this download. Add one under Settings → Models → Download.</source>
         <translation>Civitai verlangt für diesen Download einen API-Schlüssel. Fügen Sie einen unter Einstellungen → Modelle → Herunterladen hinzu.</translation>
     </message>
@@ -3529,7 +3529,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>%1 wird geprüft…</translation>
     </message>
     <message>
-        <location line="+480"/>
+        <location line="+567"/>
         <source>Invalid repository name: %1</source>
         <translation>Ungültiger Repository-Name: %1</translation>
     </message>
@@ -3547,12 +3547,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::runtime::ModelLibrary</name>
     <message>
-        <location filename="../src/runtime/ModelLibrary.cpp" line="+212"/>
+        <location filename="../src/runtime/ModelLibrary.cpp" line="+214"/>
         <source>Lumen models</source>
         <translation>Lumen-Modelle</translation>
     </message>
     <message>
-        <location line="+227"/>
+        <location line="+235"/>
         <source>Cannot read %1.</source>
         <translation>%1 kann nicht gelesen werden.</translation>
     </message>
@@ -12681,7 +12681,7 @@ oder aus der Bibliothek ziehen</translation>
 <context>
     <name>lumen::ui::Studio</name>
     <message>
-        <location filename="../src/ui/Studio.cpp" line="+131"/>
+        <location filename="../src/ui/Studio.cpp" line="+134"/>
         <source>Could not open project %1: %2</source>
         <translation>Projekt %1 konnte nicht geöffnet werden: %2</translation>
     </message>

@@ -2454,6 +2454,19 @@ void TestCanvas::safeContent()
     Settings::instance().setValue(QStringLiteral("generation/safeContent"), false);
     QVERIFY(!shield->isChecked());
     QCOMPARE(generate(), QStringLiteral("lowres"));
+    QCOMPARE(generations.last().value(QStringLiteral("prompt")).toString(), QStringLiteral("1girl, beach"));
+
+    // An Anima model also gets its "safe" rating tag.
+    ai::Provider *sd = studio.providers()->providers().first();
+    QVariantMap settings = studio.providers()->settingsFor(sd->instanceId());
+    settings.insert(QStringLiteral("model_family"), QStringLiteral("Anima"));
+    studio.providers()->updateProvider(sd->instanceId(), sd->displayName(), settings);
+    shield->click();
+    QCOMPARE(generate(), QStringLiteral("lowres, ") + ai::GenerationService::safeNegativeTerms());
+    QCOMPARE(generations.last().value(QStringLiteral("prompt")).toString(), QStringLiteral("safe, 1girl, beach"));
+    Settings::instance().setValue(QStringLiteral("generation/safeContent"), false);
+    QCOMPARE(generate(), QStringLiteral("lowres"));
+    QCOMPARE(generations.last().value(QStringLiteral("prompt")).toString(), QStringLiteral("1girl, beach"));
 }
 
 void TestCanvas::cloudTrainingPage()

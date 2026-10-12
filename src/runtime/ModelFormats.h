@@ -43,6 +43,7 @@ struct ModelInfo
     QStringList triggerWords; // LoRAs (modelspec.trigger_phrase)
     bool unsafeFormat = false; // pickle: can run code when loaded by Python tools
     QString error;           // the header could not be read
+    int inspector = 0;       // kModelInspectorVersion of the code that read the header
 
     // Memory (bytes) needed to run it: weights plus, for LLMs, a KV cache for the context
     // (kvBytesPerValue: 2 = f16, 1.06 = q8_0).
@@ -52,6 +53,9 @@ struct ModelInfo
 // Reads the header of a .gguf / .safetensors file (blocking; call from a worker thread). Pickle
 // formats (.ckpt, .pt, .pth, .bin) are never unpickled: their kind comes from the file and
 // folder names.
+// Raised when the header inspection learns something new, so the library reads indexed files
+// again (2: Wan / Qwen-Image VAEs, text encoder type and size).
+constexpr int kModelInspectorVersion = 2;
 ModelInfo inspectModel(const QString &path);
 
 // File extensions Lumen treats as models.

@@ -691,6 +691,72 @@ HubFile companionFromJson(const QJsonObject &o)
     return f;
 }
 
+QList<FamilyCompanion> familyCompanions(const QString &modelFamily)
+{
+    if (modelFamily != QLatin1String("Anima"))
+        return {};
+    // circlestone-labs/Anima, as sd.cpp's docs/anima.md lists them.
+    const QString repo = QStringLiteral("circlestone-labs/Anima");
+    const QString revision = QStringLiteral("f973fc41ec7545364ac9776c2440285f43ff2a30");
+    const QString license = QStringLiteral("circlestone-labs-non-commercial-license");
+    auto make = [&](const QString &path, ModelKind kind, const QString &type, qint64 size, const QString &sha, const QString &family,
+                    const QString &variant) {
+        FamilyCompanion c;
+        c.file.path = QFileInfo(path).fileName();
+        c.file.url = QUrl(QStringLiteral("https://huggingface.co/%1/resolve/%2/%3").arg(repo, revision, path));
+        c.file.size = size;
+        c.file.sha256 = sha;
+        c.file.kind = kind;
+        c.file.hubType = type;
+        c.file.format = QStringLiteral("safetensors");
+        c.file.precision = QStringLiteral("BF16");
+        c.file.required = true;
+        c.repo = repo;
+        c.revision = revision;
+        c.license = license;
+        c.family = family;
+        c.variant = variant;
+        return c;
+    };
+    return {make(QStringLiteral("split_files/vae/qwen_image_vae.safetensors"), ModelKind::Vae, QStringLiteral("VAE"), 253806246,
+                 QStringLiteral("a70580f0213e67967ee9c95f05bb400e8fb08307e017a924bf3441223e023d1f"), QStringLiteral("Qwen-Image / Wan"), QString()),
+            make(QStringLiteral("split_files/text_encoders/qwen_3_06b_base.safetensors"), ModelKind::TextEncoder, QStringLiteral("Text Encoder"),
+                 1192135096, QStringLiteral("cd2a512003e2f9f3cd3c32a9c3573f820bb28c940f73c57b1ddaa983d9223eba"), QStringLiteral("LLM"),
+                 QStringLiteral("Qwen3 0.6B"))};
+}
+
+namespace {
+
+std::optional<FamilyCompanion> familyCompanionFor(const HubFile &file)
+{
+    for (const QString &family : {QStringLiteral("Anima")}) {
+        for (const FamilyCompanion &c : familyCompanions(family)) {
+            if (c.file.sha256 == file.sha256)
+                return c;
+        }
+    }
+    return std::nullopt;
+}
+
+// A library file that can stand in for a family companion: the same file, else one whose
+// header says it is the same kind of model (the name the file has does not matter).
+QString standIn(const ModelLibrary *library, const FamilyCompanion &c)
+{
+    if (const auto same = library->find(c.file.sha256, c.file.fileName(), c.file.size))
+        return same->path;
+    QString best;
+    for (const ModelEntry &e : library->entries(c.file.kind)) {
+        if (e.info.family != c.family || (!c.variant.isEmpty() && e.info.variant != c.variant))
+            continue;
+        // Prefer one named like the original (qwen_image_vae_fp8 over wan_2.1_vae).
+        if (best.isEmpty() || QFileInfo(e.path).fileName().startsWith(QFileInfo(c.file.path).completeBaseName(), Qt::CaseInsensitive))
+            best = e.path;
+    }
+    return best;
+}
+
+} // namespace
+
 QList<ModelCompanion> companionsOf(const ModelLibrary *library, const QString &modelPath)
 {
     const std::optional<ModelEntry> e = library->entry(modelPath);
@@ -706,11 +772,32 @@ QList<ModelCompanion> companionsOf(const ModelLibrary *library, const QString &m
             c.path = local->path;
         out << c;
     }
+    if (!out.isEmpty() || (e->info.kind != ModelKind::DiffusionModel && e->info.kind != ModelKind::Checkpoint))
+        return out;
+    for (const FamilyCompanion &f : familyCompanions(e->info.family)) {
+        ModelCompanion c;
+        c.file = f.file;
+        c.path = standIn(library, f);
+        out << c;
+    }
     return out;
 }
 
 HubDownload companionDownload(const ModelEntry &model, const HubFile &companion)
 {
+    if (const auto f = familyCompanionFor(companion)) {
+        // A family's file: from its pinned Hugging Face repository.
+        HubDownload d;
+        d.source = HubSource::HuggingFace;
+        d.modelId = f->repo;
+        d.modelName = f->repo.section(QLatin1Char('/'), 1);
+        d.versionId = f->revision;
+        d.versionName = f->revision.left(7);
+        d.license = f->license;
+        d.page = QUrl(QStringLiteral("https://huggingface.co/") + f->repo);
+        d.file = f->file;
+        return d;
+    }
     const QJsonObject c = model.civitai;
     HubDownload d;
     d.source = HubSource::Civitai;

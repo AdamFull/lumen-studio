@@ -555,6 +555,29 @@ void TestProviders::sdCppPromptStyle()
     QVERIFY(style.apply(QStringLiteral("1girl")).startsWith(QStringLiteral("masterpiece")));
     sd.configure({{QStringLiteral("url"), QStringLiteral("http://127.0.0.1:1")}});
     QVERIFY(promptStyleFor(&sd).family != QLatin1String("cloud"));
+
+    // Anima: by the family read from the file (any name), or by name; Animagine is not Anima.
+    sd.configure({{QStringLiteral("url"), QStringLiteral("http://127.0.0.1:1")},
+                  {QStringLiteral("model"), QStringLiteral("miaomiaoHarem_29BBETA11.safetensors")},
+                  {QStringLiteral("model_family"), QStringLiteral("Anima")}});
+    style = promptStyleFor(&sd);
+    QCOMPARE(style.family, QStringLiteral("anima"));
+    QVERIFY(style.dialect == PromptStyle::Dialect::Tags);
+    QVERIFY(style.describeForLlm().contains(QStringLiteral("spaces instead of underscores")));
+    QVERIFY(style.defaultNegative.startsWith(QStringLiteral("worst quality, low quality, score_1")));
+    const QString prompt = style.apply(QStringLiteral("1girl, red hair, smile"));
+    QCOMPARE(prompt, QStringLiteral("masterpiece, best quality, score_7, 1girl, red hair, smile"));
+    // "Safe for work": the rating tag after the quality tags, unless a rating is there.
+    QCOMPARE(style.withSafeTag(prompt), QStringLiteral("masterpiece, best quality, score_7, safe, 1girl, red hair, smile"));
+    QCOMPARE(style.withSafeTag(QStringLiteral("1girl")), QStringLiteral("safe, 1girl"));
+    QCOMPARE(style.withSafeTag(QStringLiteral("sensitive, 1girl")), QStringLiteral("sensitive, 1girl"));
+    // The server's model by its name from the Generate page: still Anima; another model is not.
+    QCOMPARE(promptStyleFor(&sd, QStringLiteral("miaomiaoHarem_29BBETA11")).family, QStringLiteral("anima"));
+    QCOMPARE(promptStyleFor(&sd, QStringLiteral("waiIllustriousSDXL_v170")).family, QStringLiteral("illustrious"));
+    QCOMPARE(promptStyleFor(&sd, QStringLiteral("anima-preview2.safetensors")).family, QStringLiteral("anima"));
+    QCOMPARE(promptStyleFor(&sd, QStringLiteral("animagine-xl-4.0-opt.safetensors")).family, QStringLiteral("illustrious"));
+    // Other models have no rating tag.
+    QVERIFY(promptStyleFor(&sd, QStringLiteral("waiIllustriousSDXL_v170")).withSafeTag(QStringLiteral("1girl")) == QStringLiteral("1girl"));
 }
 
 void TestProviders::lorasAcrossProviders()
