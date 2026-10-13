@@ -43,6 +43,8 @@ private:
     void generate();
     void enhancePrompt();
     void providerChanged();
+    // The CFG slider takes the recommended value when the model family changes.
+    void followRecommendedCfg();
     void updateSizeLabel();
     QSize requestedSize() const;
     void rerun(const QString &assetId);
@@ -55,6 +57,7 @@ private:
     Studio *m_studio;
     ProviderCombo *m_provider;
     QComboBox *m_model;
+    QString m_cfgFamily;        // the prompt style the CFG slider was last set for
     AutoTextEdit *m_prompt;
     AutoTextEdit *m_negative;
     QButtonGroup *m_aspects;

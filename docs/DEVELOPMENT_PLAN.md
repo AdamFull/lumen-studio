@@ -897,8 +897,11 @@ Phase E — hub downloads
   - Prompt style "anima" (by the family Studio passes as `model_family`, or "anima" in the name,
     not Animagine): tags, "masterpiece, best quality, score_7, " in front, the model card's
     negative prompt; with *Safe for work* the "safe" rating tag goes after the quality tags.
-    Steps and CFG stay Lumen's defaults (28, 6; sd.cpp's own Anima example uses CFG 6, the model
-    card suggests 4–5).
+    CFG 4.5 (the model card suggests 4–5): `PromptStyle::cfg` is the recommended guidance (6 for
+    other models, as before). `GenerationService` applies it unless the request says
+    `cfgChosen`, which only the Generate page sets; its CFG slider moves to the recommendation
+    when the model family changes and keeps the user's value otherwise (a re-run sets the model
+    before the image's CFG). Steps stay 28.
   - Tests: header families and variants, re-inspection; Anima companions with stand-ins under
     other names, a missing one from Hugging Face, server options; the prompt style and the safe
     tag; the safe tag reaching the server. Live (`animaServer`): the user's model through Lumen's

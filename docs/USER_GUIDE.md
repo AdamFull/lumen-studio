@@ -154,7 +154,9 @@ folders, Downloads, and the folders your servers already use. Files stay where t
   * The sd.cpp server runs Anima with the usual 8 GB settings; on an RTX 4060 laptop the first
     image takes about a minute and a half, including starting the server.
   * Prompts for Anima use its tag style with "masterpiece, best quality, score_7" in front and
-    its own negative prompt. With *Safe for work* on, Lumen also adds Anima's "safe" rating tag.
+    its own negative prompt, and CFG 4.5 (the Generate page's CFG slider moves there when you
+    switch to an Anima model; your own value then stays). With *Safe for work* on, Lumen also
+    adds Anima's "safe" rating tag.
 * **Accounts…** stores access tokens in the Windows Credential Manager. Hugging Face needs a token
   for gated models such as FLUX.1 dev (accept the terms on the model's page first); Civitai asks
   for an API key for most downloads. A token is only sent to its own site.

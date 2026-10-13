@@ -565,6 +565,8 @@ void TestProviders::sdCppPromptStyle()
     QVERIFY(style.dialect == PromptStyle::Dialect::Tags);
     QVERIFY(style.describeForLlm().contains(QStringLiteral("spaces instead of underscores")));
     QVERIFY(style.defaultNegative.startsWith(QStringLiteral("worst quality, low quality, score_1")));
+    QCOMPARE(style.cfg, 4.5);
+    QCOMPARE(promptStyleFor(&sd, QStringLiteral("waiIllustriousSDXL_v170")).cfg, 6.0);
     const QString prompt = style.apply(QStringLiteral("1girl, red hair, smile"));
     QCOMPARE(prompt, QStringLiteral("masterpiece, best quality, score_7, 1girl, red hair, smile"));
     // "Safe for work": the rating tag after the quality tags, unless a rating is there.

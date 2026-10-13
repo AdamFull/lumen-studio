@@ -91,6 +91,7 @@ GeneratePage::GeneratePage(Studio *studio, QWidget *parent)
     m_provider = new ProviderCombo(studio->providers(), ai::ProviderKind::Image, panel);
     m_model = new QComboBox(panel);
     m_model->setEditable(true);
+    m_model->setObjectName(QStringLiteral("model"));
     m_model->lineEdit()->setPlaceholderText(tr("default model"));
     auto *refreshModels = iconButton(QStringLiteral("refresh"), tr("Load models from the provider"), panel);
     provRow->addWidget(labeled(tr("Provider"), m_provider, panel), 1);
@@ -165,6 +166,7 @@ GeneratePage::GeneratePage(Studio *studio, QWidget *parent)
     sg->setVerticalSpacing(8);
     m_steps = new SliderField(tr("Steps"), 1, 150, 28, 0, QString(), m_samplingBox);
     m_cfg = new SliderField(tr("CFG"), 1, 20, 6, 1, QString(), m_samplingBox);
+    m_cfg->setObjectName(QStringLiteral("cfg"));
     m_sampler = new QComboBox(m_samplingBox);
     m_sampler->setEditable(true);
     m_sampler->lineEdit()->setPlaceholderText(tr("default"));
@@ -301,6 +303,7 @@ GeneratePage::GeneratePage(Studio *studio, QWidget *parent)
     connect(m_prompt, &AutoTextEdit::submitted, this, &GeneratePage::generate);
     connect(enhance, &QToolButton::clicked, this, &GeneratePage::enhancePrompt);
     connect(m_provider, &ProviderCombo::providerChanged, this, &GeneratePage::providerChanged);
+    connect(m_model, &QComboBox::currentTextChanged, this, &GeneratePage::followRecommendedCfg);
     connect(refreshModels, &QToolButton::clicked, this, [this] {
         ai::ImageProvider *p = m_provider->imageProvider();
         if (!p)
@@ -413,6 +416,15 @@ void GeneratePage::updateSizeLabel()
         setPose(m_pose);
 }
 
+void GeneratePage::followRecommendedCfg()
+{
+    const ai::PromptStyle style = ai::promptStyleFor(m_provider->imageProvider(), m_model->currentText());
+    if (style.family == m_cfgFamily)
+        return; // the user's value stays while the model family does
+    m_cfgFamily = style.family;
+    m_cfg->setValue(style.cfg);
+}
+
 void GeneratePage::providerChanged()
 {
     ai::ImageProvider *p = m_provider->imageProvider();
@@ -441,6 +453,7 @@ void GeneratePage::providerChanged()
         notes << tr("instruction edits");
     const ai::PromptStyle style = ai::promptStyleFor(p);
     notes << (style.dialect == ai::PromptStyle::Dialect::Tags ? tr("tag-style prompts") : tr("natural-language prompts"));
+    followRecommendedCfg();
     m_capsLabel->setText(tr("Supports: %1").arg(notes.join(QStringLiteral(", "))));
     updateSizeLabel();
 }
@@ -500,6 +513,7 @@ void GeneratePage::generate()
     r.seed = m_randomSeed->isChecked() ? qint64(QRandomGenerator::global()->bounded(2147483647)) : m_seed->value();
     r.steps = int(m_steps->value());
     r.cfg = m_cfg->value();
+    r.cfgChosen = true;
     r.sampler = m_sampler->currentText().trimmed();
     r.scheduler = m_scheduler->currentText().trimmed();
     if (caps.qualityTiers)
@@ -626,13 +640,14 @@ void GeneratePage::rerun(const QString &assetId)
         m_width->setValue(w);
         m_height->setValue(h);
     }
+    // The model first: its recommended CFG must not replace the image's.
+    m_model->setCurrentText(m.value(QStringLiteral("model")).toString());
     if (m.contains(QStringLiteral("steps")))
         m_steps->setValue(m.value(QStringLiteral("steps")).toDouble());
     if (m.contains(QStringLiteral("cfg")))
         m_cfg->setValue(m.value(QStringLiteral("cfg")).toDouble());
     m_sampler->setCurrentText(m.value(QStringLiteral("sampler")).toString());
     m_scheduler->setCurrentText(m.value(QStringLiteral("scheduler")).toString());
-    m_model->setCurrentText(m.value(QStringLiteral("model")).toString());
     const qint64 seed = qint64(m.value(QStringLiteral("seed")).toDouble(-1));
     if (seed >= 0) {
         m_randomSeed->setChecked(false);

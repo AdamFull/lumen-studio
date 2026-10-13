@@ -104,6 +104,9 @@ struct ImageRequest
     qint64 seed = -1;
     int steps = 28;
     double cfg = 6.0;
+    // The user chose `cfg` (Generate page); otherwise the model's recommended value applies
+    // (PromptStyle::cfg, set by GenerationService).
+    bool cfgChosen = false;
     QString sampler;
     QString scheduler;
     QString model;

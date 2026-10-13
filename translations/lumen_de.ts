@@ -84,7 +84,7 @@
         <translation>20–32 abwechslungsreiche Bilder eines Charakters, um seine LoRA zu trainieren.</translation>
     </message>
     <message>
-        <location filename="../src/ai/GenerationService.cpp" line="+313"/>
+        <location filename="../src/ai/GenerationService.cpp" line="+316"/>
         <source>The selection is empty - paint a mask or make a selection first.</source>
         <translation>Die Auswahl ist leer – malen Sie zuerst eine Maske oder erstellen Sie eine Auswahl.</translation>
     </message>
@@ -1758,7 +1758,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ai::GenerationService</name>
     <message>
-        <location filename="../src/ai/GenerationService.cpp" line="-168"/>
+        <location filename="../src/ai/GenerationService.cpp" line="-171"/>
         <source>Image generation</source>
         <translation>Bildgenerierung</translation>
     </message>
@@ -1773,7 +1773,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Kein Bildanbieter konfiguriert. Fügen Sie unter Einstellungen → Anbieter einen hinzu.</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+14"/>
         <source>Preparing...</source>
         <translation>Wird vorbereitet...</translation>
     </message>
@@ -6610,15 +6610,15 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     <name>lumen::ui::GeneratePage</name>
     <message>
         <location filename="../src/ui/pages/GeneratePage.cpp" line="+86"/>
-        <location line="+166"/>
+        <location line="+168"/>
         <location line="+3"/>
         <location line="+1"/>
-        <location line="+87"/>
+        <location line="+88"/>
         <source>Generate</source>
         <translation>Generieren</translation>
     </message>
     <message>
-        <location line="-249"/>
+        <location line="-251"/>
         <source>default model</source>
         <translation>Standardmodell</translation>
     </message>
@@ -6683,7 +6683,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>CFG</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+4"/>
         <location line="+3"/>
         <source>default</source>
         <translation>Standard</translation>
@@ -6762,13 +6762,13 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+216"/>
+        <location line="+227"/>
         <location line="+17"/>
         <source>none</source>
         <translation>keine</translation>
     </message>
     <message>
-        <location line="-227"/>
+        <location line="-238"/>
         <source>Choose…</source>
         <translation>Auswählen…</translation>
     </message>
@@ -6798,7 +6798,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Doppelklicken Sie auf ein Ergebnis, um es im Editor zu öffnen. Alle Ergebnisse werden in der Bibliothek gespeichert.</translation>
     </message>
     <message>
-        <location line="+55"/>
+        <location line="+56"/>
         <source>Start image</source>
         <translation>Startbild</translation>
     </message>
@@ -6843,7 +6843,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation> (der Anbieter verwendet das nächstliegende Seitenverhältnis)</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+20"/>
         <source>No image provider configured — add one in Settings.</source>
         <translation>Kein Bildanbieter konfiguriert – fügen Sie einen in den Einstellungen hinzu.</translation>
     </message>
@@ -6873,7 +6873,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Prompts in natürlicher Sprache</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>Supports: %1</source>
         <translation>Unterstützt: %1</translation>
     </message>
@@ -6888,7 +6888,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Schreiben Sie zuerst einen Prompt.</translation>
     </message>
     <message>
-        <location line="+102"/>
+        <location line="+103"/>
         <source>Write a short idea first, then enhance it.</source>
         <translation>Schreiben Sie zuerst eine kurze Idee und verbessern Sie sie dann.</translation>
     </message>
@@ -6898,7 +6898,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Wird verbessert…</translation>
     </message>
     <message>
-        <location line="+57"/>
+        <location line="+58"/>
         <source>The LoRA of %1 has changed since; the current one is used.</source>
         <translation>Die LoRA von %1 hat sich seitdem geändert; die aktuelle wird verwendet.</translation>
     </message>

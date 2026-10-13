@@ -82,6 +82,7 @@ PromptStyle promptStyleFor(const ImageProvider *provider, const QString &model)
         s.defaultNegative = QStringLiteral("worst quality, low quality, score_1, score_2, score_3, artist name, blurry, jpeg artifacts, "
                                            "chromatic aberration");
         s.safeTag = QStringLiteral("safe");
+        s.cfg = 4.5; // the model card: CFG 4-5
     } else if (m.contains(QLatin1String("pony"))) {
         s.family = QStringLiteral("pony");
         s.dialect = PromptStyle::Dialect::Tags;

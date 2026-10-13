@@ -2430,8 +2430,12 @@ void TestCanvas::safeContent()
         for (ai::Provider *p : studio.providers()->providers())
             studio.providers()->removeProvider(p->instanceId());
     });
-    auto generate = [&]() -> QString {
+    auto generate = [&](double chosenCfg = 0) -> QString {
         ai::GenerationSpec spec;
+        if (chosenCfg > 0) {
+            spec.request.cfg = chosenCfg;
+            spec.request.cfgChosen = true;
+        }
         spec.request.prompt = QStringLiteral("1girl, beach");
         spec.request.negativePrompt = QStringLiteral("lowres");
         spec.request.size = QSize(64, 64);
@@ -2442,6 +2446,11 @@ void TestCanvas::safeContent()
         return generations.last().value(QStringLiteral("negative_prompt")).toString();
     };
     QCOMPARE(generate(), QStringLiteral("lowres"));
+    auto cfgSent = [&] {
+        return generations.last().value(QStringLiteral("sample_params")).toObject().value(QStringLiteral("guidance")).toObject()
+            .value(QStringLiteral("txt_cfg")).toDouble();
+    };
+    QCOMPARE(cfgSent(), 6.0); // Lumen's usual guidance
 
     // The status bar button and the setting follow each other.
     MainWindow window(&studio);
@@ -2467,6 +2476,24 @@ void TestCanvas::safeContent()
     Settings::instance().setValue(QStringLiteral("generation/safeContent"), false);
     QCOMPARE(generate(), QStringLiteral("lowres"));
     QCOMPARE(generations.last().value(QStringLiteral("prompt")).toString(), QStringLiteral("1girl, beach"));
+    // Anima's recommended guidance, unless the user chose one.
+    QCOMPARE(cfgSent(), 4.5);
+    generate(7.0);
+    QCOMPARE(cfgSent(), 7.0);
+
+    // The Generate page's CFG slider shows the recommendation of the model's family and keeps
+    // the user's value while the family stays.
+    GeneratePage page(&studio);
+    auto *cfg = page.findChild<SliderField *>(QStringLiteral("cfg"));
+    QVERIFY(cfg);
+    QCOMPARE(cfg->value(), 4.5);
+    cfg->setValue(5.0);
+    auto *model = page.findChild<QComboBox *>(QStringLiteral("model"));
+    QVERIFY(model);
+    model->setCurrentText(QStringLiteral("anima-preview2"));
+    QCOMPARE(cfg->value(), 5.0);
+    model->setCurrentText(QStringLiteral("waiIllustriousSDXL_v170"));
+    QCOMPARE(cfg->value(), 6.0);
 }
 
 void TestCanvas::cloudTrainingPage()
