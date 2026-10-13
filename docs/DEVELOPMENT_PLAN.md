@@ -1741,9 +1741,28 @@ strategy: both references with their names, one request.
     text, tooltip, ticks and menu (add, replace, swap, remove), the per-page switch, reopening the
     project, the migration from `active_character`, a character removed from the library, the
     assistant tools (two ids, too many, one id).
-- [ ] Two-person layout: rig per person with side and scale presets (`solvePose` already takes
-  several), each person's region from the pose (grown bounds, scaled to the image), per-person
-  pose crops for the refine passes. Tests: regions for side by side, overlapping and one in front.
+- [x] Two-person layout (`pose/CastLayout`, no AI or UI dependencies):
+  - `arrangePeople(rigs, Arrangement)`: side by side (centres about 0.26 / 0.71, scale 0.82),
+    close (0.39 / 0.61, scale 0.88: shoulders and hands meet) and front and back (the first in
+    front, lower and bigger; the second behind, smaller). It sets position and scale only; the
+    poses stay. One person is left as it is. Keys for JSON: `side_by_side`, `close`,
+    `front_back`.
+  - `personSilhouette`: a person's body as a filled shape (limbs 0.7 head sizes thick, hands past
+    the wrists, the torso, the head with room for hair); the head size is nose to neck, or a
+    seventh of the body for a back view.
+  - `personRegions(pose, imageSize, grow)`: per person a box (keypoints, head and hair, grown by
+    `grow` of its height, clamped to the image) and a mask, in refine order from back to front
+    (lowest feet nearest). A mask leaves out the other people's bodies: all of a body in front,
+    and of a body behind whatever this person's own body does not cover, so neither refine pass
+    repaints the other character's arm; where bodies meet, the person in front has it.
+  - `onlyPerson(pose, i)`: the pose of one person, for that pass's control map; the region
+    pipeline already crops document-sized control maps.
+  - Test (`tst_pose castLayout`): order and separation side by side (each region holds its own
+    nose and ankles, not the other's neck), room for hair, close (overlap, the back region
+    without the front body, the front region without the arm behind, the meeting hands to the
+    front person), front and back (back first), the image edge, a back view's head, the
+    silhouette, `onlyPerson`. With `LUMEN_SCREENSHOT_DIR` it saves the close layout with both
+    regions tinted.
 - [ ] `ai/CastGeneration`: the compose-and-refine pipeline as one Queue job (base, then one refine
   per character, each a `RegionInput`), with `CharacterUse::Region` per character plus its
   appearance tags, the base prompt builder (sides, subject tags, no LoRA), and metadata for

@@ -1,3 +1,4 @@
+#include "pose/CastLayout.h"
 #include "pose/PoseEditing.h"
 #include "pose/PosePresets.h"
 #include "pose/PoseRenderer.h"
@@ -18,6 +19,7 @@ class TestPose : public QObject
     Q_OBJECT
 private slots:
     void openPoseJsonRoundTrip();
+    void castLayout();
     void normalisedJsonImport();
     void rotateKeepsBoneLength();
     void ikReachesTarget();
@@ -33,6 +35,114 @@ private slots:
 static double dist(const QPointF &a, const QPointF &b)
 {
     return std::hypot(a.x() - b.x(), a.y() - b.y());
+}
+
+void TestPose::castLayout()
+{
+    const QSize canvas(1024, 768);
+    const QSize image(1216, 832); // a different size than the pose canvas
+    auto whiteAt = [](const QImage &mask, const QPointF &p) {
+        const QPoint q = p.toPoint();
+        return mask.rect().contains(q) && qGray(mask.pixel(q)) > 127;
+    };
+    auto inImage = [&](const Pose &pose, int person, int joint) {
+        Pose scaled = pose;
+        scaled.resizeCanvas(image, true);
+        return scaled.people[person].body[static_cast<size_t>(joint)].pos;
+    };
+    RigParams base;
+    base.framing = QStringLiteral("full_body");
+
+    // One person stays where it is.
+    QCOMPARE(arrangePeople({base}, Arrangement::SideBySide).first().positionX, base.positionX);
+    QCOMPARE(arrangementFromKey(arrangementKey(Arrangement::FrontBack)), Arrangement::FrontBack);
+    QCOMPARE(arrangementFromKey(QStringLiteral("nonsense"), Arrangement::Close), Arrangement::Close);
+
+    // Side by side: the first on the left; separate regions, each holding its own person only.
+    Pose side = solvePose(arrangePeople({base, base}, Arrangement::SideBySide), canvas);
+    QVERIFY(side.people[0].bounds().center().x() < side.people[1].bounds().center().x());
+    QList<PersonRegion> regions = personRegions(side, image);
+    QCOMPARE(regions.size(), 2);
+    QVERIFY(!regions[0].box.intersects(regions[1].box));
+    for (const PersonRegion &r : regions) {
+        QCOMPARE(r.mask.size(), image);
+        const int other = 1 - r.person;
+        QVERIFY(whiteAt(r.mask, inImage(side, r.person, Nose)));
+        QVERIFY(whiteAt(r.mask, inImage(side, r.person, LAnkle)));
+        QVERIFY(!whiteAt(r.mask, inImage(side, other, Neck)));
+        // Room above the nose for hair.
+        QVERIFY(r.box.top() < inImage(side, r.person, Nose).y() - 40);
+    }
+
+    // Close: the regions overlap, and the back region leaves out the front person's body.
+    Pose close = solvePose(arrangePeople({base, base}, Arrangement::Close), canvas);
+    regions = personRegions(close, image, 0.15);
+    QVERIFY(regions[0].box.intersects(regions[1].box));
+    const PersonRegion &back = regions[0];
+    const PersonRegion &front = regions[1];
+    QVERIFY(!whiteAt(back.mask, inImage(close, front.person, Neck)));
+    QVERIFY(whiteAt(front.mask, inImage(close, front.person, Neck)));
+    QVERIFY(whiteAt(back.mask, inImage(close, back.person, Neck)));
+    // ...and the front region leaves out the arm the person behind reaches into it; where the two
+    // bodies meet (the hands), the person in front has it.
+    const QPointF backElbow = inImage(close, back.person, LElbow);
+    QVERIFY(front.box.contains(backElbow.toPoint()));
+    QVERIFY(!whiteAt(front.mask, backElbow));
+    QVERIFY(whiteAt(front.mask, inImage(close, front.person, RWrist)));
+    // The hand is part of the body: past the wrist along the forearm.
+    const QPointF wrist = inImage(close, back.person, LWrist), elbow = inImage(close, back.person, LElbow);
+    QVERIFY(whiteAt(personSilhouette(close, back.person, image), wrist + (wrist - elbow) * 0.25));
+
+    // Front and back: the person in front (lower and bigger) is drawn last.
+    Pose depth = solvePose(arrangePeople({base, base}, Arrangement::FrontBack), canvas);
+    QVERIFY(depth.people[0].bounds().height() > depth.people[1].bounds().height());
+    regions = personRegions(depth, image);
+    QCOMPARE(regions[0].person, 1);
+    QCOMPARE(regions[1].person, 0);
+    QVERIFY(!whiteAt(regions[0].mask, inImage(depth, 0, Neck)));
+
+    // A person at the edge: the box stays in the image.
+    RigParams edge = base;
+    edge.positionX = 0.02;
+    regions = personRegions(solvePose({edge}, canvas), image, 0.3);
+    QVERIFY(QRect(QPoint(0, 0), image).contains(regions[0].box));
+
+    // A back view hides the nose; the head is still in the region.
+    RigParams backView = base;
+    backView.yaw = 180;
+    Pose turned = solvePose({backView}, canvas);
+    regions = personRegions(turned, image);
+    QVERIFY(whiteAt(regions[0].mask, inImage(turned, 0, Neck) - QPointF(0, 30)));
+
+    // The silhouette covers the body, not the space between the legs' outsides.
+    const QImage body = personSilhouette(side, 0, image);
+    QVERIFY(whiteAt(body, inImage(side, 0, Neck)));
+    QVERIFY(whiteAt(body, (inImage(side, 0, RHip) + inImage(side, 0, LShoulder)) / 2));
+    QVERIFY(!whiteAt(body, inImage(side, 1, Neck)));
+
+    // One person's pose for a refine pass.
+    const Pose one = onlyPerson(side, 1);
+    QCOMPARE(one.people.size(), 1);
+    QCOMPARE(one.people[0], side.people[1]);
+    QCOMPARE(one.canvas, side.canvas);
+    QVERIFY(onlyPerson(side, 5).people.isEmpty());
+
+    const QString shots = qEnvironmentVariable("LUMEN_SCREENSHOT_DIR");
+    if (!shots.isEmpty()) {
+        QImage view = renderOpenPose(close, image);
+        QPainter painter(&view);
+        painter.setOpacity(0.35);
+        const QList<PersonRegion> all = personRegions(close, image, 0.15);
+        const QList<QColor> colours{Qt::red, Qt::cyan};
+        for (int k = 0; k < all.size(); ++k) {
+            QImage tint(image, QImage::Format_ARGB32);
+            tint.fill(colours[k]);
+            tint.setAlphaChannel(all[k].mask);
+            painter.drawImage(0, 0, tint);
+        }
+        painter.end();
+        view.save(shots + QStringLiteral("/cast-layout-close.png"));
+    }
 }
 
 void TestPose::openPoseJsonRoundTrip()
