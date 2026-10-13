@@ -1,6 +1,8 @@
 #include "MockHttpServer.h"
 
 #include "ai/Agent.h"
+#include "ai/CastGeneration.h"
+#include "ai/providers/SdCppProvider.h"
 #include "ai/CharacterContext.h"
 #include "ai/Director.h"
 #include "ai/Gate.h"
@@ -51,6 +53,7 @@ private slots:
     void loraCaptions();
     void identityChecklist();
     void characterContext();
+    void castGeneration();
     void cleanShotPrompts();
     void agentNativeTools();
     void agentJsonProtocol();
@@ -538,6 +541,193 @@ void TestServices::agentJsonProtocol()
     // The transcript ends with the plain reply.
     QCOMPARE(run->messages().last().text, QStringLiteral("It is 2."));
     delete run;
+}
+
+void TestServices::castGeneration()
+{
+    // A mock stable-diffusion.cpp server: the base image is grey; an inpaint keeps its input
+    // outside the mask and paints the mask red for Aki's LoRA, blue for Bo's (so the colour match
+    // of the region pipeline, which looks outside the mask, changes nothing).
+    MockHttpServer server;
+    QList<QJsonObject> requests;
+    QHash<QString, QImage> results;
+    server.route("GET", QStringLiteral("/sdcpp/v1/capabilities"), [](const MockRequest &) {
+        return MockResponse::json({{QStringLiteral("loras"), QJsonArray{QJsonObject{{QStringLiteral("name"), QStringLiteral("lmn_aki")},
+                                                                                    {QStringLiteral("path"), QStringLiteral("lmn_aki.safetensors")}},
+                                                                        QJsonObject{{QStringLiteral("name"), QStringLiteral("lmn_bo")},
+                                                                                    {QStringLiteral("path"), QStringLiteral("lmn_bo.safetensors")}}}}});
+    });
+    server.route("POST", QStringLiteral("/sdcpp/v1/img_gen"), [&](const MockRequest &req) {
+        const QJsonObject body = req.json();
+        requests << body;
+        const QSize size(body.value(QStringLiteral("width")).toInt(), body.value(QStringLiteral("height")).toInt());
+        QImage out(size, QImage::Format_ARGB32);
+        out.fill(QColor(128, 128, 128));
+        if (body.contains(QStringLiteral("mask_image"))) {
+            out = img::fromBase64(body.value(QStringLiteral("init_image")).toString().toLatin1()).convertToFormat(QImage::Format_ARGB32);
+            const QImage mask = img::fromBase64(body.value(QStringLiteral("mask_image")).toString().toLatin1()).convertToFormat(QImage::Format_Grayscale8);
+            const QString lora = body.value(QStringLiteral("lora")).toArray().first().toObject().value(QStringLiteral("path")).toString();
+            const QRgb colour = lora.contains(QStringLiteral("aki")) ? qRgb(255, 0, 0) : qRgb(0, 0, 255);
+            for (int y = 0; y < out.height(); ++y) {
+                auto *px = reinterpret_cast<QRgb *>(out.scanLine(y));
+                const uchar *m = mask.constScanLine(y);
+                for (int x = 0; x < out.width(); ++x)
+                    if (m[x] > 127)
+                        px[x] = colour;
+            }
+        }
+        const QString id = QStringLiteral("job_%1").arg(requests.size());
+        results.insert(id, out);
+        return MockResponse::json({{QStringLiteral("id"), id}}, 202);
+    });
+    for (int i = 1; i <= 4; ++i) {
+        const QString id = QStringLiteral("job_%1").arg(i);
+        server.route("GET", QStringLiteral("/sdcpp/v1/jobs/") + id, [&results, id](const MockRequest &) {
+            const QJsonArray images{QJsonObject{{QStringLiteral("index"), 0}, {QStringLiteral("b64_json"), QString::fromLatin1(img::encode(results.value(id)).toBase64())}}};
+            return MockResponse::json({{QStringLiteral("status"), QStringLiteral("completed")},
+                                       {QStringLiteral("result"), QJsonObject{{QStringLiteral("images"), images}}}});
+        });
+    }
+
+    QTemporaryDir dir;
+    doc::Project project;
+    auto opened = project.open(dir.filePath(QStringLiteral("cast.lumen")));
+    QTRY_VERIFY(opened.isFinished());
+    ProviderRegistry registry(&m_http);
+    registerBuiltInProviders(registry);
+    QFile::remove(registry.configPath());
+    Provider *sd = registry.addProvider(QStringLiteral("sdcpp"), QStringLiteral("SD"),
+                                        {{QStringLiteral("url"), server.baseUrl().toString()},
+                                         {QStringLiteral("model"), QStringLiteral("waiIllustriousSDXL_v170.safetensors")},
+                                         {QStringLiteral("control_net"), true}});
+    QVERIFY(sd);
+    qobject_cast<SdCppProvider *>(sd)->pollIntervalMs = 20;
+    auto cleanup = qScopeGuard([&] { QFile::remove(registry.configPath()); });
+    JobQueue queue;
+    GenerationService service(&registry, &queue);
+    service.setProject(&project);
+
+    auto character = [](const char *id, const char *name, const char *gender, const char *tags, const char *lora) {
+        CharacterContext c;
+        c.id = QLatin1String(id);
+        c.name = QLatin1String(name);
+        c.sheet = QJsonObject{{QStringLiteral("gender_presentation"), QLatin1String(gender)}, {QStringLiteral("tags"), QLatin1String(tags)}};
+        c.lora.file = QStringLiteral("C:/models/loras/%1.safetensors").arg(QLatin1String(lora));
+        c.lora.trigger = QLatin1String(lora);
+        c.lora.weight = 0.8;
+        c.lora.family = QStringLiteral("SDXL");
+        return c;
+    };
+    CastRequest request;
+    request.scene.prompt = QStringLiteral("sharing an umbrella in the rain");
+    request.scene.size = QSize(640, 448); // small: PNG coding dominates the test's time
+    request.scene.seed = 100;
+    request.cast = {character("aki", "Aki", "female", "1girl, solo, red hair, green eyes, school uniform", "lmn_aki"),
+                    character("bo", "Bo", "male", "1boy, black hair, blue eyes, hoodie", "lmn_bo")};
+    request.modelFamily = QStringLiteral("SDXL");
+    QCOMPARE(castCountTags(request.cast), QStringLiteral("1boy, 1girl"));
+    QCOMPARE(castSubject(request.cast[0].sheet), QStringLiteral("girl"));
+    QCOMPARE(castCountTags({request.cast[0], request.cast[0]}), QStringLiteral("2girls"));
+
+    Job *job = startCastGeneration(&service, request);
+    QTRY_VERIFY_WITH_TIMEOUT(job->isFinished(), 20000);
+    QVERIFY2(job->state() == Job::State::Succeeded, qPrintable(job->errorString()));
+    QCOMPARE(requests.size(), 3);
+
+    // The base: both people's pose, both appearances tied to their sides, the count tags; no LoRA.
+    const QJsonObject base = requests[0];
+    const QString basePrompt = base.value(QStringLiteral("prompt")).toString();
+    QVERIFY2(basePrompt.contains(QStringLiteral("1boy, 1girl, sharing an umbrella in the rain")), qPrintable(basePrompt));
+    QVERIFY(basePrompt.contains(QStringLiteral("on the left: red hair, green eyes, school uniform")));
+    QVERIFY(basePrompt.contains(QStringLiteral("on the right: black hair, blue eyes, hoodie")));
+    QVERIFY(!basePrompt.contains(QStringLiteral("solo")));
+    QVERIFY(!basePrompt.contains(QStringLiteral("lmn_")));
+    QVERIFY(!base.contains(QStringLiteral("lora")));
+    QVERIFY(!base.contains(QStringLiteral("mask_image")));
+    QCOMPARE(base.value(QStringLiteral("seed")).toDouble(), 100.0);
+    const QImage baseControl = img::fromBase64(base.value(QStringLiteral("control_image")).toString().toLatin1());
+    auto skeletonIn = [](const QImage &map, const QRect &area) {
+        for (int y = area.top(); y <= area.bottom(); y += 2)
+            for (int x = area.left(); x <= area.right(); x += 2)
+                if (qGray(map.pixel(x, y)) > 40)
+                    return true;
+        return false;
+    };
+    const int w = baseControl.width(), h = baseControl.height();
+    QVERIFY(skeletonIn(baseControl, QRect(0, 0, w / 2 - 1, h - 1)));
+    QVERIFY(skeletonIn(baseControl, QRect(w / 2, 0, w / 2 - 1, h - 1)));
+
+    // The refine passes: one character each, its LoRA and trigger, its look only, an inpaint with
+    // its own person's pose.
+    for (int k = 1; k <= 2; ++k) {
+        const QJsonObject r = requests[k];
+        const bool aki = k == 1; // side by side, same depth: in cast order
+        const QString prompt = r.value(QStringLiteral("prompt")).toString();
+        QVERIFY2(prompt.startsWith(aki ? QStringLiteral("lmn_aki") : QStringLiteral("lmn_bo")), qPrintable(prompt));
+        QVERIFY(prompt.contains(aki ? QStringLiteral("1girl, red hair, green eyes, school uniform, sharing an umbrella")
+                                    : QStringLiteral("1boy, black hair, blue eyes, hoodie, sharing an umbrella")));
+        QVERIFY(!prompt.contains(aki ? QStringLiteral("black hair") : QStringLiteral("red hair")));
+        const QJsonArray loras = r.value(QStringLiteral("lora")).toArray();
+        QCOMPARE(loras.size(), 1);
+        QCOMPARE(loras[0].toObject().value(QStringLiteral("path")).toString(), aki ? QStringLiteral("lmn_aki.safetensors") : QStringLiteral("lmn_bo.safetensors"));
+        QCOMPARE(loras[0].toObject().value(QStringLiteral("multiplier")).toDouble(), 0.8);
+        QVERIFY(r.contains(QStringLiteral("mask_image")));
+        QCOMPARE(r.value(QStringLiteral("strength")).toDouble(), 0.55);
+        QCOMPARE(r.value(QStringLiteral("seed")).toDouble(), aki ? 101.0 : 102.0);
+        QVERIFY(r.contains(QStringLiteral("control_image")));
+    }
+
+    // The result: each character's colour in its own region, the scene elsewhere.
+    const GenerationOutput out = GenerationService::outputOf(job);
+    QCOMPARE(out.images.size(), 1);
+    const QImage result = out.images.first();
+    QCOMPARE(result.size(), QSize(640, 448));
+    pose::Pose people = castPose(request, result.size());
+    auto colourAt = [&](int person, int joint) {
+        return result.pixelColor(people.people[person].body[static_cast<size_t>(joint)].pos.toPoint());
+    };
+    QCOMPARE(colourAt(0, pose::Neck), QColor(Qt::red));
+    QCOMPARE(colourAt(1, pose::Neck), QColor(Qt::blue));
+    QCOMPARE(colourAt(0, pose::Nose), QColor(Qt::red));
+    QCOMPARE(result.pixelColor(2, 2), QColor(128, 128, 128));
+
+    // Stored once, with the cast for Re-run.
+    QCOMPARE(out.assets.size(), 1);
+    QCOMPARE(project.assets().size(), 1);
+    const QJsonObject meta = project.assets()[0].metadata;
+    QCOMPARE(meta.value(QStringLiteral("user_prompt")).toString(), QStringLiteral("sharing an umbrella in the rain"));
+    const QJsonObject cast = meta.value(QStringLiteral("cast")).toObject();
+    QCOMPARE(cast.value(QStringLiteral("arrangement")).toString(), QStringLiteral("side_by_side"));
+    QCOMPARE(cast.value(QStringLiteral("refine_denoise")).toDouble(), 0.55);
+    QCOMPARE(cast.value(QStringLiteral("pose")).toObject().value(QStringLiteral("people")).toArray().size(), 2);
+    const QJsonArray members = cast.value(QStringLiteral("members")).toArray();
+    QCOMPARE(members.size(), 2);
+    QCOMPARE(members[0].toObject().value(QStringLiteral("character")).toString(), QStringLiteral("aki"));
+    QCOMPARE(members[0].toObject().value(QStringLiteral("applied")).toObject().value(QStringLiteral("lora")).toString(),
+             QStringLiteral("C:/models/loras/lmn_aki.safetensors"));
+    QCOMPARE(members[1].toObject().value(QStringLiteral("seed")).toDouble(), 102.0);
+    QCOMPARE(members[1].toObject().value(QStringLiteral("region")).toArray().size(), 4);
+
+    // One in front: the one behind (Bo) is drawn first, the one in front last.
+    requests.clear();
+    results.clear();
+    request.arrangement = pose::Arrangement::FrontBack;
+    request.saveAssets = false;
+    job = startCastGeneration(&service, request);
+    QTRY_VERIFY_WITH_TIMEOUT(job->isFinished(), 20000);
+    QVERIFY2(job->state() == Job::State::Succeeded, qPrintable(job->errorString()));
+    QCOMPARE(requests.size(), 3);
+    QVERIFY(requests[0].value(QStringLiteral("prompt")).toString().contains(QStringLiteral("in front: red hair")));
+    QVERIFY(requests[1].value(QStringLiteral("prompt")).toString().startsWith(QStringLiteral("lmn_bo")));
+    QVERIFY(requests[2].value(QStringLiteral("prompt")).toString().startsWith(QStringLiteral("lmn_aki")));
+    QCOMPARE(project.assets().size(), 1); // not stored
+
+    // A back-end that cannot inpaint cannot do this.
+    CastRequest none = request;
+    none.cast.clear();
+    job = startCastGeneration(&service, none);
+    QTRY_VERIFY_WITH_TIMEOUT(job->isFinished(), 5000);
+    QCOMPARE(job->state(), Job::State::Failed);
 }
 
 void TestServices::cleanShotPrompts()

@@ -72,6 +72,8 @@ public:
     GenerationService(ProviderRegistry *registry, JobQueue *queue, QObject *parent = nullptr);
 
     void setProject(doc::Project *project) { m_project = project; }
+    ProviderRegistry *registry() const { return m_registry; }
+    JobQueue *queue() const { return m_queue; }
     doc::Project *project() const { return m_project; }
 
     Job *submit(const GenerationSpec &spec);
@@ -95,6 +97,9 @@ public:
     ImageProvider *providerForUtility(Utility utility, const QString &preferredId = QString()) const;
 
     static GenerationOutput outputOf(const Job *job);
+    // Finishes a job the way submit() does: stores the output as assets with the spec's metadata
+    // (or only hands it over when `saveAssets` is off). For pipelines of several generations.
+    void storeOutput(Job *job, const GenerationSpec &spec, GenerationOutput output);
 
     // "Safe for work": every request to a provider that takes a negative prompt gets
     // safeNegativeTerms() added to it. Off by default; the Studio follows the setting.

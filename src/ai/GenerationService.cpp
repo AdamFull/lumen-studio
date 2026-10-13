@@ -321,6 +321,11 @@ void GenerationService::execute(Job *job, const GenerationSpec &specIn, OutputHa
         .onFailed(job, [job](const std::exception &e) { job->fail(describeException(e)); });
 }
 
+void GenerationService::storeOutput(Job *job, const GenerationSpec &spec, GenerationOutput output)
+{
+    finishWithAssets(job, spec, std::move(output), m_registry->imageProvider(spec.providerId));
+}
+
 void GenerationService::finishWithAssets(Job *job, const GenerationSpec &spec, GenerationOutput output, ImageProvider *provider)
 {
     if (output.images.isEmpty()) {

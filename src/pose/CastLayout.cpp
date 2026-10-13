@@ -1,5 +1,6 @@
 #include "pose/CastLayout.h"
 
+#include <QHash>
 #include <QPainter>
 #include <QPainterPath>
 #include <QtMath>
@@ -173,12 +174,19 @@ QList<PersonRegion> personRegions(const Pose &pose, const QSize &imageSize, doub
         r.box = regionBox(p, imageSize, grow);
         regions << r;
     }
-    // Back to front: the lower the feet (the box's bottom), the nearer; then the taller.
-    std::stable_sort(regions.begin(), regions.end(), [](const PersonRegion &a, const PersonRegion &b) {
-        const int ab = a.box.bottom(), bb = b.box.bottom();
-        if (std::abs(ab - bb) > 4)
-            return ab < bb;
-        return a.box.height() < b.box.height();
+    // Back to front: the bigger the head, the nearer (feet and box bottoms say nothing when the
+    // framing cuts the people off); for heads of about the same size, the lower feet.
+    QHash<int, std::pair<double, double>> depth; // person -> (head size, lowest keypoint)
+    for (const PersonRegion &r : std::as_const(regions)) {
+        const Person p = scaledPerson(pose, r.person, imageSize);
+        depth.insert(r.person, {headSize(p), p.bounds().bottom()});
+    }
+    std::stable_sort(regions.begin(), regions.end(), [&depth](const PersonRegion &a, const PersonRegion &b) {
+        const auto [ha, fa] = depth.value(a.person);
+        const auto [hb, fb] = depth.value(b.person);
+        if (std::abs(ha - hb) > 0.08 * std::max(ha, hb))
+            return ha < hb;
+        return fa + 4 < fb;
     });
     // The other people's bodies stay as they are: all of a body in front, and of a body behind
     // whatever this person's own body does not cover (a hand reaching into this region).

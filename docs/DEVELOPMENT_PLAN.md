@@ -1763,12 +1763,40 @@ strategy: both references with their names, one request.
     front person), front and back (back first), the image edge, a back view's head, the
     silhouette, `onlyPerson`. With `LUMEN_SCREENSHOT_DIR` it saves the close layout with both
     regions tinted.
-- [ ] `ai/CastGeneration`: the compose-and-refine pipeline as one Queue job (base, then one refine
-  per character, each a `RegionInput`), with `CharacterUse::Region` per character plus its
-  appearance tags, the base prompt builder (sides, subject tags, no LoRA), and metadata for
-  *Re-run* (cast, regions, seeds, what each pass applied). Tests against a mock sd.cpp server:
-  the base request (two skeletons, no LoRA, both descriptions), each refine request (its LoRA,
-  its trigger, its crop and control only), the composite, the metadata.
+- [x] `ai/CastGeneration`: the compose-and-refine pipeline.
+  - `CastRequest`: the scene (`ImageRequest` with the user's words and settings), the cast (one or
+    two `CharacterContext`, left or front first), the arrangement or a pose, the refine strength
+    (0.55), the checkpoint's family.
+  - Base request (`castBaseRequest`): count tags from the sheets' gender presentation ("1boy,
+    1girl", "2girls"; none when unknown), the scene, each member's appearance tied to its side
+    ("on the left: …", "in front: …"; a sentence per side for prose models) with subject and count
+    tags taken out of the appearance (`castAppearance`); the whole pose as OpenPose control; no
+    LoRA, no reference.
+  - Refine request per member (`castRefineRequest`): its subject tag, appearance and the scene,
+    then `applyCharacter(Region)` (LoRA and trigger, else its reference: sd.cpp's one IP-Adapter
+    slot is enough per pass); inpaint at the refine strength with that person's pose only
+    (`onlyPerson`); seed + 1 + index.
+  - `startCastGeneration`: one Queue job in the provider's group: the base through
+    `GenerationService::execute`, then each refine as a `RegionInput` (the image so far, the
+    region's mask, grow 2, feather 12, colour match) in refine order, each result laid over the
+    image; then `GenerationService::storeOutput` (new: `submit`'s way of storing, for pipelines;
+    `registry()` and `queue()` are public too). Metadata: `user_prompt` and `cast` (members with
+    what each pass applied, region and seed; arrangement; refine strength; the pose as OpenPose
+    JSON). A back-end that cannot inpaint fails with a message.
+  - Depth order fix found here: with framings that cut the people off, box bottoms do not tell
+    who is in front; `personRegions` now orders by head size (bigger is nearer), then the feet.
+  - Test (`tst_services castGeneration`, mock sd.cpp server that paints the mask red for one
+    LoRA and blue for the other): the base (count tags, both sides, no "solo", no LoRA, a skeleton
+    on each half), each refine (its trigger first, its look only, its LoRA at its weight, mask,
+    strength 0.55, seed, control), the result (each colour in its own region, the scene
+    elsewhere), the stored asset and metadata; front and back (the one behind drawn first);
+    an empty cast.
+  - Found on the way: `img::encode` passed zlib levels to Qt 6, which takes 0–100 and stores
+    anything up to 10 uncompressed, so every PNG Lumen wrote (assets, layers, thumbnails,
+    character library, training sets, exports, images sent to providers) had no compression: a
+    flat 2 MP image was 8 MB instead of 0.1 MB, and an sd.cpp inpaint request 11 MB. The level is
+    now scaled (1 → 12, 6 → 67, 9 → 100); `tst_core pngIsCompressed`. Existing projects keep
+    their large images until they are written again.
 - [ ] Per-character check and retry: crops by region, the checklist against the own sheet and the
   other's, a swap/blend flag, a refine retry of the failed character only. Tests with a mock
   vision model: a clean result, a swap, a blend, a retry.

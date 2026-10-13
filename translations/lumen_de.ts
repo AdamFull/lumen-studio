@@ -89,7 +89,7 @@
         <translation>Die Auswahl ist leer – malen Sie zuerst eine Maske oder erstellen Sie eine Auswahl.</translation>
     </message>
     <message>
-        <location line="+53"/>
+        <location line="+58"/>
         <source>Project closed</source>
         <translation>Projekt geschlossen</translation>
     </message>
@@ -1201,6 +1201,51 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
 </context>
 <context>
+    <name>lumen::ai::CastGeneration</name>
+    <message>
+        <location filename="../src/ai/CastGeneration.cpp" line="+193"/>
+        <source>%1: %2</source>
+        <translation>%1: %2</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <location line="+47"/>
+        <source>The generation service is no longer available</source>
+        <translation>Der Generierungsdienst ist nicht mehr verfügbar</translation>
+    </message>
+    <message>
+        <location line="-42"/>
+        <source>No image provider is configured. Add one in Settings → Providers.</source>
+        <translation>Kein Bildanbieter konfiguriert. Fügen Sie unter Einstellungen → Anbieter einen hinzu.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>No characters to draw.</source>
+        <translation>Keine Charaktere zum Zeichnen.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>%1 cannot repaint a region, which drawing two characters needs.</source>
+        <translation>%1 kann keinen Bereich neu malen, was zwei Charaktere in einem Bild erfordert.</translation>
+    </message>
+    <message>
+        <location line="+65"/>
+        <source>Drawing %1 (%2 of %3)…</source>
+        <translation>%1 wird gezeichnet (%2 von %3)…</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <location line="+11"/>
+        <source>The provider returned no images</source>
+        <translation>Der Anbieter hat keine Bilder zurückgegeben</translation>
+    </message>
+    <message>
+        <location line="-3"/>
+        <source>Drawing the scene (1 of %1)…</source>
+        <translation>Die Szene wird gezeichnet (1 von %1)…</translation>
+    </message>
+</context>
+<context>
     <name>lumen::ai::CharacterContext</name>
     <message>
         <location filename="../src/ai/CharacterContext.cpp" line="+105"/>
@@ -1763,7 +1808,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ai::GenerationService</name>
     <message>
-        <location filename="../src/ai/GenerationService.cpp" line="-171"/>
+        <location filename="../src/ai/GenerationService.cpp" line="-176"/>
         <source>Image generation</source>
         <translation>Bildgenerierung</translation>
     </message>
@@ -1793,7 +1838,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Ergebnis wird eingeblendet...</translation>
     </message>
     <message>
-        <location line="+42"/>
+        <location line="+47"/>
         <source>The provider returned no images</source>
         <translation>Der Anbieter hat keine Bilder zurückgegeben</translation>
     </message>
