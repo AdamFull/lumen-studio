@@ -10,6 +10,7 @@
 namespace lumen::img {
 
 // ---- Codecs ---------------------------------------------------------------------------------
+// `quality`: JPEG/WebP quality (0-100), or for PNG the zlib level (0-9; default 1).
 QByteArray encode(const QImage &image, const char *format = "PNG", int quality = -1);
 QImage decode(const QByteArray &data);
 QByteArray toBase64(const QImage &image, const char *format = "PNG", int quality = -1);

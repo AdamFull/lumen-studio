@@ -21,10 +21,15 @@ QByteArray encode(const QImage &image, const char *format, int quality)
     QBuffer buffer(&bytes);
     buffer.open(QIODevice::WriteOnly);
     QImageWriter writer(&buffer, format);
-    if (quality >= 0)
+    if (qstricmp(format, "PNG") == 0) {
+        // For PNG `quality` is a zlib level (0-9; default 1, fast enough for interactive use).
+        // Qt 6 takes a 0-100 scale and stores anything up to 10 without compression, so the
+        // level is scaled: 1 -> 12, 6 -> 67, 9 -> 100.
+        const int level = quality >= 0 ? std::clamp(quality, 0, 9) : 1;
+        writer.setCompression(level == 0 ? 0 : std::min(100, (level * 100 + 8) / 9));
+    } else if (quality >= 0) {
         writer.setQuality(quality);
-    if (qstricmp(format, "PNG") == 0)
-        writer.setCompression(quality >= 0 ? quality : 1); // fast compression for interactive use
+    }
     QImage toWrite = image;
     if (qstricmp(format, "JPG") == 0 || qstricmp(format, "JPEG") == 0) {
         if (image.hasAlphaChannel())

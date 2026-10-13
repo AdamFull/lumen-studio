@@ -22,6 +22,7 @@ private slots:
     void expandRegionAspect();
     void pixelBudget();
     void base64RoundTrip();
+    void pngIsCompressed();
     void compositeMasked();
     void colorMatchCorrectsShift();
     void fillTransparentFromEdges();
@@ -100,6 +101,20 @@ void TestCore::pixelBudget()
     QCOMPARE(s.width() % 64, 0);
     QCOMPARE(s.height() % 64, 0);
     QVERIFY(std::abs(double(s.width()) / s.height() - 1.5) < 0.1);
+}
+
+void TestCore::pngIsCompressed()
+{
+    // A flat 1216 x 1664 image: stored without compression it is about 8 MB.
+    QImage image(1216, 1664, QImage::Format_ARGB32_Premultiplied);
+    image.fill(QColor(128, 128, 128));
+    for (int level : {-1, 1, 3, 6, 9}) {
+        const QByteArray png = img::encode(image, "PNG", level);
+        QVERIFY2(png.size() < 200 * 1024, qPrintable(QStringLiteral("level %1: %2 bytes").arg(level).arg(png.size())));
+        QCOMPARE(img::decode(png).convertToFormat(QImage::Format_ARGB32), image.convertToFormat(QImage::Format_ARGB32));
+    }
+    QVERIFY(img::encode(image, "PNG", 0).size() > 4 * 1024 * 1024); // level 0 stores
+    QVERIFY(img::encode(image, "PNG", 9).size() <= img::encode(image, "PNG", 1).size());
 }
 
 void TestCore::base64RoundTrip()
