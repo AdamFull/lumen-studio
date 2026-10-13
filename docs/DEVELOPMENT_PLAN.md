@@ -1480,7 +1480,7 @@ Risks and open questions:
   measurements decide whether inpaint needs a lower weight.
 * LayerDiffuse with a LoRA is untested on 8 GB; it may not fit next to the transparency model.
 * Candidates for M15: cloud LoRA training (fal.ai, Replicate) for machines under 8 GB and for
-  FLUX / Qwen-Image LoRAs; two characters in one image.
+  FLUX / Qwen-Image LoRAs; two characters in one image (M16).
 
 ### M15 — Cloud LoRA training (RunPod)
 
@@ -1645,6 +1645,140 @@ Risks and open questions:
 * Civitai downloads need the user's Civitai token; passing it to a rented machine is a choice the
   user makes per run (off by default: upload instead).
 * GPU availability varies; the catalogue's availability and a fallback list of 24 GB GPUs help.
+
+
+### M16 — Two characters in one image
+
+Goal: draw two of the user's characters together ("Akane and Bo at a café") so that each keeps
+its own look, from the Generate page, the Create page, the editor and the assistant. Today a scene
+with two characters either loses one of them or blends them: both LoRAs and both descriptions go
+into one prompt and apply to the whole image.
+
+#### 16.1 What assumes one character today
+
+Survey of the code (October 2026):
+
+| Part | Today | For two characters |
+|---|---|---|
+| Active character (`Studio::activeCharacter`, `CharacterChip`) | one id, one chip | a cast of up to two |
+| `CharacterContext` / `applyCharacter` | one character per call; a second call would stack its LoRA and trigger on the whole prompt | per-character requests, each in its own region |
+| `ImageRequest::loras` | a list, but every back-end applies all LoRAs to the whole image | LoRA per region |
+| Poses (`pose::Pose::people`, `solvePose`, renderer, Pose page) | several people already; `Person::bounds()` | used as the layout |
+| Director (`PlanInput.character`, shot schema, `poseForShot`) | one sheet, one rig per shot; "1girl, solo" in prompts, "2girls" in the negative | two sheets, a rig per person, subject tags for two |
+| `GenerationService` regions (`RegionInput`, crop → generate → composite) | one region per spec | one refine pass per character |
+| Identity check (`checkIdentity`, checklist) | one character per image | per-character crops, plus a swap check |
+| Person regions | DetectPose returns several people (the Parts page keeps the largest); SegmentParts takes a text prompt | each character's mask in the image |
+
+#### 16.2 How each back-end can do it
+
+* **stable-diffusion.cpp** (the default local back-end) has no regional prompts or masked LoRAs.
+  sd-server's LoRAs, prompt, IP-Adapter and ControlNet all apply to the whole image (checked
+  upstream, October 2026: no feature, issue or code for regional conditioning).
+* **ComfyUI** core (0.18.5 installed here) has the pieces, marked experimental: `CreateHookLora`,
+  `SetClipHooks` and `ConditioningSetProperties` with a mask apply a LoRA and a prompt to one
+  region, in one pass. The cost is a model pass per region per step.
+* **SD WebUI / Forge**: only through extensions (Regional Prompter, Forge Couple); not planned.
+* **Cloud edit APIs** (Gemini, OpenAI images): no LoRAs, but up to 10–15 reference images; the
+  prompt can say which reference is which character.
+
+So the main method must work with inpainting alone: **compose, then refine each character**.
+1. **Layout.** Two people in the pose (rig per person, placed left and right by default; the Pose
+   page can move them). Each person's box (`Person::bounds()`, grown) is that character's region.
+2. **Base image.** One txt2img with both people's pose (one OpenPose map with two skeletons), the
+   subject tags for two ("2girls" / "1boy, 1girl"), each character's description tied to its side
+   ("on the left, red hair…; on the right, …"). No character LoRA: two global LoRAs blend the
+   faces. The base sets the scene, composition and colours.
+3. **Refine pass per character.** An inpaint of the character's region (the existing crop →
+   generate → composite pipeline), with that character's LoRA, trigger and appearance tags, its
+   pose crop as control, and its reference where the back-end takes one (sd.cpp's single
+   IP-Adapter slot works here, since each pass has one character). Denoise about 0.5–0.6 keeps
+   the composition. The second pass sees the first one's result.
+4. **Check.** Each character's crop goes through the identity checklist against its own sheet,
+   and against the other's (a swap or blend scores high on both). A failed character gets its
+   refine pass again (Critic retries, M9), not the whole image.
+
+On ComfyUI a **regional** strategy (one pass, masked hook LoRAs and prompts) is tried next to it;
+the measurements decide which is the default there. Cloud edit APIs get a **multi-reference**
+strategy: both references with their names, one request.
+
+#### 16.3 The cast
+
+* The active character becomes a **cast**: one or two characters, an order (left, right), stored
+  as the project record `active_cast` (the old `active_character` is read as a cast of one).
+* The character chip gets a "+" for a second character and shows both; its menu can swap the
+  order and remove one. Pages without two-character support (Parts) use the first.
+* The editor's AI panel with a cast of two: *Fill selection* asks which character the selection
+  belongs to (preselected: the one whose region overlaps it most in an image made by Lumen).
+* The assistant: `set_active_character` takes one or two ids; `generate_image` draws the cast.
+
+#### 16.4 Director with two characters
+
+* `PlanInput` takes a cast; the shot schema gets `people`: per person the character, a rig and a
+  short action. The LLM is told which character is which and that every shot shows both (or says
+  which one is alone, as a one-person shot of that character).
+* Prompts: subject tags for the cast ("2girls", "1boy, 1girl"); "2girls" leaves the default
+  negative when the cast has two.
+* Shot cards show both poses; the pose editor edits both people.
+
+#### 16.5 Implementation steps
+- [ ] Cast model and UI: `Studio` cast (record `active_cast`, migration from `active_character`),
+  the chip with a second character, swap and remove; assistant state and
+  `set_active_character` with one or two ids. Tests: the chip, reopening the project, migration,
+  the assistant tools.
+- [ ] Two-person layout: rig per person with side and scale presets (`solvePose` already takes
+  several), each person's region from the pose (grown bounds, scaled to the image), per-person
+  pose crops for the refine passes. Tests: regions for side by side, overlapping and one in front.
+- [ ] `ai/CastGeneration`: the compose-and-refine pipeline as one Queue job (base, then one refine
+  per character, each a `RegionInput`), with `CharacterUse::Region` per character plus its
+  appearance tags, the base prompt builder (sides, subject tags, no LoRA), and metadata for
+  *Re-run* (cast, regions, seeds, what each pass applied). Tests against a mock sd.cpp server:
+  the base request (two skeletons, no LoRA, both descriptions), each refine request (its LoRA,
+  its trigger, its crop and control only), the composite, the metadata.
+- [ ] Per-character check and retry: crops by region, the checklist against the own sheet and the
+  other's, a swap/blend flag, a refine retry of the failed character only. Tests with a mock
+  vision model: a clean result, a swap, a blend, a retry.
+- [ ] Generate page and *Re-run* with a cast of two; editor *Fill selection* with the character
+  choice. Tests against the mock server.
+- [ ] Director and Create page: cast in `PlanInput`, `people` in the shot schema, two-person poses
+  on the shot cards and in the pose editor, shots generated through `CastGeneration`. Tests:
+  schema, prompts, a planned shot end to end with mocks.
+- [ ] ComfyUI regional strategy: a graph with `CreateHookLora` → `ConditioningSetProperties`
+  (mask per character) → combined conditioning, built per request like the standard graph.
+  Contract test of the graph; the live step decides whether it becomes ComfyUI's default.
+- [ ] Cloud multi-reference strategy (Gemini, OpenAI images): both references with their names in
+  one edit request. Contract tests.
+- [ ] Live measurements (RTX 4060 8 GB, WAI-Illustrious, sd.cpp): Akane and a second trained
+  character, 8 scene prompts, same seeds. Compared: (a) both LoRAs on the whole image,
+  (b) compose and refine, (c) on ComfyUI, regional. Per character: checklist identity on its
+  crop; swaps and blends; time.
+
+**AC**:
+1. With a cast of two trained characters, a Generate-page prompt that names neither ("two friends
+   sharing an umbrella in the rain") produces both: each character's crop scores at least 2
+   checklist points higher than with both LoRAs on the whole image, and no image swaps or blends
+   them (each crop scores at least 4 points lower against the other character).
+2. A two-character image takes at most 2.5 times as long as a one-character image of the same size
+   on the same back-end (8 GB GPU).
+3. The Create page plans and draws shots of both characters with a pose per person; the pose editor
+   moves either.
+4. In the editor, *Fill selection* on one character of a two-character image keeps the other
+   unchanged and uses the chosen character.
+5. "Draw Akane and Bo at the beach" in the assistant uses both characters.
+6. On a cloud edit API without LoRAs, the same prompt uses both references and says so.
+
+Risks and open questions:
+* A second character with a trained LoRA is needed for the live step: train one locally (about two
+  hours on 8 GB), in the cloud (M15, about $0.50), or test with a public character LoRA of the
+  same family.
+* Characters that touch or overlap (holding hands, a hug): the regions overlap, and the second
+  refine pass can repaint the first character's arm. Masks from the pose limbs, or SegmentParts
+  ("person") inside the region, may be needed; start with the pose boxes and measure.
+* The base image without LoRAs may get hair or outfit colours wrong enough that a refine at 0.5–0.6
+  cannot fix them; a higher denoise loses the composition. The live step finds the range; the
+  ComfyUI regional strategy avoids the question.
+* Three or more characters: the design takes a list, but the UI and the measurements stop at two.
+* ComfyUI's hooks are experimental; a ComfyUI update may change them. The graph is built in one
+  place and has a contract test.
 
 ---
 
