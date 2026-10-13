@@ -34,6 +34,10 @@ public:
         bool cloud = false;
         QString gpuId;
         bool community = false;
+        // Where the pod downloads the base model instead (a Hugging Face copy with the same
+        // SHA-256); empty = `checkpointSource`, else upload.
+        QString checkpointUrl;
+        QString checkpointSha256;
     };
 
     // Where a cloud pod can download the base model itself: a public Hugging Face file with its

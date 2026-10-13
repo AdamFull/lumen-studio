@@ -30,6 +30,8 @@
 #include "pose/Rig.h"
 #include "runtime/ModelHub.h"
 #include "runtime/ModelLibrary.h"
+#include "runtime/CloudTraining.h"
+#include "runtime/RunPod.h"
 #include "runtime/LoraTraining.h"
 #include "runtime/ModelFormats.h"
 #include "runtime/RuntimeStore.h"
@@ -122,6 +124,7 @@ private slots:
     void trainLora();
     void evaluateLora();
     void characterLoraEndToEnd();
+    void cloudLora();
     void characterEverywhere();
 
 private:
@@ -1591,6 +1594,102 @@ void TestLive::evaluateLora()
 // Train tab (LUMEN_LIVE_FULL_EPOCHS, default 10) → Test the LoRA → attach the recommended epoch.
 // LUMEN_LIVE_FULL_CHARACTER=<library id> starts at the Train tab with that character's training set
 // (from an earlier run of this test).
+// M15 step 5: a character LoRA trained on a rented RunPod GPU through CharacterTraining (as the
+// Train tab does). It costs money: LUMEN_LIVE_RUNPOD=1 and a RunPod key in the credential store.
+// LUMEN_LIVE_CLOUD_CHARACTER=<character id with a training set>, LUMEN_LIVE_CLOUD_CHECKPOINT=<base
+// model>, optional LUMEN_LIVE_CLOUD_CHECKPOINT_URL + _SHA256 (a Hugging Face copy the pod fetches),
+// LUMEN_LIVE_CLOUD_GPU (default: an RTX 4090 in Secure cloud), LUMEN_LIVE_CLOUD_EPOCHS (10).
+void TestLive::cloudLora()
+{
+    if (qEnvironmentVariableIntValue("LUMEN_LIVE_RUNPOD") != 1)
+        QSKIP("LUMEN_LIVE_RUNPOD=1 is needed (rents a GPU)");
+    const QString characterId = qEnvironmentVariable("LUMEN_LIVE_CLOUD_CHARACTER");
+    const QString checkpoint = QDir::cleanPath(qEnvironmentVariable("LUMEN_LIVE_CLOUD_CHECKPOINT"));
+    if (characterId.isEmpty() || qEnvironmentVariable("LUMEN_LIVE_CLOUD_CHECKPOINT").isEmpty())
+        QSKIP("LUMEN_LIVE_CLOUD_CHARACTER and LUMEN_LIVE_CLOUD_CHECKPOINT are needed");
+    Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
+    ui::Studio studio;
+    QVERIFY2(studio.runPod()->hasKey(), "no RunPod API key in the credential store");
+    QVERIFY(studio.characters()->entry(characterId));
+
+    // The GPU: the one asked for, else an RTX 4090 in Secure cloud, else the cheapest with 24 GB.
+    auto gpus = studio.runPod()->gpus();
+    QTRY_VERIFY_WITH_TIMEOUT(gpus.isFinished(), 60000);
+    const QString wanted = qEnvironmentVariable("LUMEN_LIVE_CLOUD_GPU");
+    std::optional<runtime::RunPodGpu> gpu;
+    for (const runtime::RunPodGpu &g : gpus.result()) {
+        if (g.memoryGb < runtime::kCloudTrainingMinGpuGb || !g.offered(false))
+            continue;
+        const bool match = wanted.isEmpty() ? g.name.contains(QLatin1String("4090")) : (g.id == wanted || g.name == wanted);
+        if (match || (!gpu && wanted.isEmpty()) || (gpu && wanted.isEmpty() && !gpu->name.contains(QLatin1String("4090")) && g.price(false) < gpu->price(false)))
+            gpu = g;
+        if (match)
+            break;
+    }
+    QVERIFY2(gpu, "no fitting GPU offered");
+    qInfo().noquote() << "GPU:" << gpu->name << gpu->memoryGb << "GB, $" << gpu->price(false) << "/h (Secure)";
+
+    ui::CharacterTraining::Settings s;
+    s.characterId = characterId;
+    s.checkpoint = checkpoint;
+    s.epochs = qEnvironmentVariableIntValue("LUMEN_LIVE_CLOUD_EPOCHS") > 0 ? qEnvironmentVariableIntValue("LUMEN_LIVE_CLOUD_EPOCHS") : 10;
+    s.cloud = true;
+    s.gpuId = gpu->id;
+    s.checkpointUrl = qEnvironmentVariable("LUMEN_LIVE_CLOUD_CHECKPOINT_URL");
+    s.checkpointSha256 = qEnvironmentVariable("LUMEN_LIVE_CLOUD_CHECKPOINT_SHA256");
+    QString error;
+    ui::CharacterTraining *t = ui::CharacterTraining::start(&studio, s, &error);
+    QVERIFY2(t, qPrintable(error));
+
+    // Every change of stage with its time, for the plan's numbers.
+    QElapsedTimer clock;
+    clock.start();
+    QPointer<Job> job;
+    QString lastStage;
+    QVariantMap result;
+    connect(t, &ui::CharacterTraining::started, this, [&](Job *j) {
+        job = j;
+        connect(j, &Job::progressChanged, this, [&, j] {
+            const QString stage = j->statusText().section(QLatin1Char(':'), 0, 0).section(QStringLiteral(" · "), 0, 0).left(60);
+            if (stage != lastStage) {
+                lastStage = stage;
+                qInfo().noquote() << QStringLiteral("%1 s").arg(clock.elapsed() / 1000, 5) << j->statusText().left(140);
+            }
+        });
+        connect(j, &Job::stateChanged, this, [&, j] {
+            if (j->isFinished())
+                result = j->result().toMap();
+        });
+    });
+    bool ok = false;
+    QString message;
+    QString lora;
+    bool done = false;
+    connect(t, &ui::CharacterTraining::finished, this, [&](bool success, const QString &m, const QString &file) {
+        ok = success;
+        message = m;
+        lora = file;
+        done = true;
+    });
+    QTRY_VERIFY_WITH_TIMEOUT(done, 3 * 3600 * 1000);
+    const double hours = clock.elapsed() / 3600000.0;
+    const double perHour = result.value(QStringLiteral("costPerHour")).toDouble();
+    qInfo().noquote() << QStringLiteral("finished after %1 min: %2").arg(clock.elapsed() / 60000.0, 0, 'f', 1).arg(message);
+    qInfo().noquote() << QStringLiteral("pod %1, $%2/h, about $%3 in all").arg(result.value(QStringLiteral("pod")).toString()).arg(perHour, 0, 'f', 2).arg(hours * perHour, 0, 'f', 2);
+    if (job && !ok)
+        qInfo().noquote() << "job error:" << job->errorString();
+    QVERIFY2(ok, qPrintable(message));
+    QVERIFY(QFileInfo::exists(lora));
+    QCOMPARE(QDir::cleanPath(ai::CharacterLora::fromJson(studio.characters()->entry(characterId)->lora).file), QDir::cleanPath(lora));
+    QCOMPARE(studio.models()->entry(lora)->source.value(QStringLiteral("where")).toString(), QStringLiteral("cloud"));
+    const QString run = ui::CharacterTraining::lastRun(studio.characters()->datasetDirectory(characterId));
+    qInfo().noquote() << "epochs:" << QDir(run + QStringLiteral("/output")).entryList({QStringLiteral("*.safetensors")}).join(QStringLiteral(", "));
+    // No pod is left behind.
+    auto leftovers = runtime::leftoverCloudPods(studio.runPod());
+    QTRY_VERIFY_WITH_TIMEOUT(leftovers.isFinished(), 60000);
+    QVERIFY2(leftovers.result().isEmpty(), "a pod is still rented");
+}
+
 void TestLive::characterLoraEndToEnd()
 {
     const int shotCount = qEnvironmentVariableIntValue("LUMEN_LIVE_FULL_LORA");

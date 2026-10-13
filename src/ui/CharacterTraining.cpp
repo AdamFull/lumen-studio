@@ -271,8 +271,8 @@ void CharacterTraining::launch(const QString &resumeState)
         co.gpuId = m_settings.gpuId;
         co.community = m_settings.community;
         const auto [url, sha] = checkpointSource(m_studio, m_settings.checkpoint);
-        co.checkpointUrl = url;
-        co.checkpointSha256 = sha;
+        co.checkpointUrl = m_settings.checkpointUrl.isEmpty() ? url : m_settings.checkpointUrl;
+        co.checkpointSha256 = m_settings.checkpointUrl.isEmpty() ? sha : m_settings.checkpointSha256;
         m_job = runtime::startCloudTraining(m_studio->runPod(), m_studio->http(), m_studio->jobs(), co);
     } else {
         m_job = runtime::startTraining(m_studio->runtimes(), m_studio->servers(), m_studio->jobs(), o);
