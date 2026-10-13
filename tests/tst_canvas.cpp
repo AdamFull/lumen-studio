@@ -129,6 +129,7 @@ private slots:
     void cloudTrainingPage();
     void cloudTrainingTab();
     void hubCompanionFiles();
+    void activeCast();
 
 private:
     ToolEvent at(double x, double y, Qt::KeyboardModifiers mods = Qt::NoModifier) const
@@ -2886,6 +2887,153 @@ void TestCanvas::hubCompanionFiles()
         list->setCurrentItem(row);
         QTest::qWait(300);
         page.grab().save(shots + QStringLiteral("/models-companions.png"));
+    }
+}
+
+void TestCanvas::activeCast()
+{
+    Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
+    QTemporaryDir dir;
+    Studio studio;
+    studio.openProject(dir.filePath(QStringLiteral("cast.lumen")));
+    QTRY_VERIFY_WITH_TIMEOUT(studio.isProjectOpen(), 5000);
+    QImage ref(64, 96, QImage::Format_ARGB32);
+    ref.fill(Qt::red);
+    const QJsonObject loraJson{{QStringLiteral("file"), dir.filePath(QStringLiteral("lmn_aki.safetensors"))},
+                               {QStringLiteral("trigger"), QStringLiteral("lmn_aki")},
+                               {QStringLiteral("family"), QStringLiteral("SDXL")}};
+    auto a = studio.characters()->save(QStringLiteral("Aki (cast test)"), {}, {ref}, QString(), QString(), loraJson);
+    auto b = studio.characters()->save(QStringLiteral("Bo (cast test)"), {}, {ref});
+    auto c = studio.characters()->save(QStringLiteral("Cy (cast test)"), {}, {ref});
+    QTRY_VERIFY(a.isFinished() && b.isFinished() && c.isFinished());
+    const QString aki = a.result().id, bo = b.result().id, cy = c.result().id;
+    auto cleanup = qScopeGuard([&] {
+        Settings::instance().setValue(QStringLiteral("character/use/cast"), true);
+        for (const QString &id : {aki, bo, cy})
+            studio.characters()->remove(id);
+    });
+
+    // Up to two, in order; duplicates, unknown ids and a third are dropped.
+    QSignalSpy changed(&studio, &Studio::activeCharacterChanged);
+    studio.setActiveCast({aki, aki, QStringLiteral("nope"), bo, cy});
+    QCOMPARE(studio.activeCast(), (QStringList{aki, bo}));
+    QCOMPARE(studio.activeCharacter(), aki);
+    QCOMPARE(changed.size(), 1);
+    studio.setActiveCast({aki, bo});
+    QCOMPARE(changed.size(), 1); // no change, no signal
+    // One character for the pages that draw one (Create page, Re-run, Parts): a cast of one.
+    studio.setActiveCharacter(bo);
+    QCOMPARE(studio.activeCast(), QStringList{bo});
+
+    // The chip: both names, the first on the left; the menu adds, swaps and removes.
+    CharacterChip chip(&studio, QStringLiteral("cast"));
+    chip.setUsedHere(true);
+    auto menuAction = [&chip](const QString &text) -> QAction * {
+        emit chip.menu()->aboutToShow();
+        for (QAction *act : chip.menu()->actions()) {
+            if (act->text() == text)
+                return act;
+            if (act->menu()) {
+                for (QAction *sub : act->menu()->actions()) {
+                    if (act->text() + QStringLiteral(" > ") + sub->text() == text)
+                        return sub;
+                }
+            }
+        }
+        return nullptr;
+    };
+    QAction *add = menuAction(QStringLiteral("Add a second character > Aki (cast test) · LoRA"));
+    QVERIFY(add);
+    QVERIFY(!menuAction(QStringLiteral("Add a second character > Bo (cast test)"))); // already in the cast
+    add->trigger();
+    QCOMPARE(studio.activeCast(), (QStringList{bo, aki}));
+    QCOMPARE(chip.text(), QStringLiteral("Bo (cast test) & Aki (cast test)"));
+    QCOMPARE(chip.characterId(), bo);
+    QCOMPARE(chip.castIds(), (QStringList{bo, aki}));
+    QVERIFY(chip.toolTip().contains(QStringLiteral("Aki (cast test) (LoRA) on the right")));
+    // Both members are ticked in the list.
+    emit chip.menu()->aboutToShow();
+    int ticked = 0;
+    for (QAction *act : chip.menu()->actions())
+        ticked += act->isChecked() && act->text().contains(QStringLiteral("(cast test)")) ? 1 : 0;
+    QCOMPARE(ticked, 2);
+    QVERIFY(menuAction(QStringLiteral("Use the characters on this page")));
+    menuAction(QStringLiteral("Swap left and right"))->trigger();
+    QCOMPARE(studio.activeCast(), (QStringList{aki, bo}));
+    QVERIFY(menuAction(QStringLiteral("Replace the second character > Cy (cast test)")));
+    menuAction(QStringLiteral("Replace the second character > Cy (cast test)"))->trigger();
+    QCOMPARE(studio.activeCast(), (QStringList{aki, cy}));
+    menuAction(QStringLiteral("Remove Aki (cast test)"))->trigger();
+    QCOMPARE(studio.activeCast(), QStringList{cy});
+    QCOMPARE(chip.text(), QStringLiteral("Cy (cast test)"));
+    // Switched off on this page: no cast here, the project keeps it.
+    studio.setActiveCast({aki, bo});
+    chip.setUsedHere(false);
+    QVERIFY(chip.castIds().isEmpty());
+    QCOMPARE(studio.activeCast().size(), 2);
+    chip.setUsedHere(true);
+
+    // Stored in the project: reopening it restores both, in order.
+    QTest::qWait(200);
+    studio.openProject(dir.filePath(QStringLiteral("other.lumen")));
+    QTRY_VERIFY_WITH_TIMEOUT(studio.isProjectOpen() && studio.project()->path().endsWith(QStringLiteral("other.lumen")), 5000);
+    QTRY_VERIFY(studio.activeCast().isEmpty());
+    studio.openProject(dir.filePath(QStringLiteral("cast.lumen")));
+    QTRY_VERIFY_WITH_TIMEOUT(studio.isProjectOpen() && studio.project()->path().endsWith(QStringLiteral("cast.lumen")), 5000);
+    QTRY_COMPARE(studio.activeCast(), (QStringList{aki, bo}));
+
+    // A project from before M16 has an "active_character" record: read as a cast of one.
+    studio.openProject(dir.filePath(QStringLiteral("old.lumen")));
+    QTRY_VERIFY_WITH_TIMEOUT(studio.isProjectOpen() && studio.project()->path().endsWith(QStringLiteral("old.lumen")), 5000);
+    {
+        doc::Record record;
+        record.id = QStringLiteral("active_character");
+        record.type = QStringLiteral("active_character");
+        record.json = QJsonObject{{QStringLiteral("character"), bo}};
+        auto saved = studio.project()->saveRecord(record);
+        QTRY_VERIFY(saved.isFinished());
+    }
+    studio.openProject(dir.filePath(QStringLiteral("other.lumen")));
+    QTRY_VERIFY_WITH_TIMEOUT(studio.isProjectOpen() && studio.project()->path().endsWith(QStringLiteral("other.lumen")), 5000);
+    studio.openProject(dir.filePath(QStringLiteral("old.lumen")));
+    QTRY_VERIFY_WITH_TIMEOUT(studio.isProjectOpen() && studio.project()->path().endsWith(QStringLiteral("old.lumen")), 5000);
+    QTRY_COMPARE(studio.activeCast(), QStringList{bo});
+    // Saving the cast replaces the old record.
+    studio.setActiveCast({bo, aki});
+    auto old = studio.project()->records(QStringLiteral("active_character"));
+    QTRY_VERIFY(old.isFinished());
+    QVERIFY(old.result().isEmpty());
+
+    // A character removed from the library leaves the cast.
+    studio.characters()->remove(aki);
+    QTRY_COMPARE(studio.activeCast(), QStringList{bo});
+
+    // The assistant: the cast in the state, set with two ids, at most two.
+    studio.setActiveCast({bo, cy});
+    const ai::ToolSet tools = assistantTools(&studio);
+    auto state = tools.run(QStringLiteral("get_state"), {});
+    QTRY_VERIFY(state.isFinished());
+    const QJsonArray cast = state.result().data.value(QStringLiteral("active_cast")).toArray();
+    QCOMPARE(cast.size(), 2);
+    QCOMPARE(cast[1].toObject().value(QStringLiteral("name")).toString(), QStringLiteral("Cy (cast test)"));
+    auto set = tools.run(QStringLiteral("set_active_character"), {{QStringLiteral("character_ids"), QJsonArray{cy, bo}}});
+    QTRY_VERIFY(set.isFinished());
+    QVERIFY(set.result().error.isEmpty());
+    QCOMPARE(studio.activeCast(), (QStringList{cy, bo}));
+    auto tooMany = tools.run(QStringLiteral("set_active_character"), {{QStringLiteral("character_ids"), QJsonArray{cy, bo, QStringLiteral("x")}}});
+    QTRY_VERIFY(tooMany.isFinished());
+    QVERIFY(tooMany.result().error.contains(QStringLiteral("at most 2")));
+    auto one = tools.run(QStringLiteral("set_active_character"), {{QStringLiteral("character_id"), bo}});
+    QTRY_VERIFY(one.isFinished());
+    QCOMPARE(studio.activeCast(), QStringList{bo});
+    auto listed = tools.run(QStringLiteral("list_characters"), {});
+    QTRY_VERIFY(listed.isFinished());
+    QCOMPARE(listed.result().data.value(QStringLiteral("cast")).toArray(), QJsonArray{bo});
+    const QString shots = qEnvironmentVariable("LUMEN_SCREENSHOT_DIR");
+    if (!shots.isEmpty()) {
+        studio.setActiveCast({bo, cy});
+        chip.resize(chip.sizeHint());
+        chip.grab().save(shots + QStringLiteral("/cast-chip.png"));
     }
 }
 

@@ -997,18 +997,23 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+99"/>
-        <location line="+40"/>
-        <location line="+16"/>
+        <location line="+52"/>
+        <location line="+29"/>
         <source>No project is open.</source>
         <translation>Es ist kein Projekt geöffnet.</translation>
     </message>
     <message>
-        <location line="-13"/>
+        <location line="-18"/>
+        <source>A cast has at most %1 characters.</source>
+        <translation>Eine Besetzung hat höchstens %1 Charaktere.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
         <source>There is no character %1 in the library; use list_characters.</source>
         <translation>Es gibt keinen Charakter %1 in der Bibliothek; siehe list_characters.</translation>
     </message>
     <message>
-        <location line="+47"/>
+        <location line="+49"/>
         <location line="+58"/>
         <source>No image provider is configured.</source>
         <translation>Es ist kein Bildanbieter konfiguriert.</translation>
@@ -1054,8 +1059,8 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Die Regie ist nicht verfügbar.</translation>
     </message>
     <message>
-        <location line="-305"/>
-        <location filename="../src/ui/Studio.cpp" line="+96"/>
+        <location line="-322"/>
+        <location filename="../src/ui/Studio.cpp" line="+98"/>
         <location line="+17"/>
         <source>Lumen is shutting down.</source>
         <translation>Lumen wird beendet.</translation>
@@ -5064,24 +5069,44 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::CharacterChip</name>
     <message>
-        <location filename="../src/ui/widgets/CharacterChip.cpp" line="+97"/>
-        <location line="+34"/>
+        <location filename="../src/ui/widgets/CharacterChip.cpp" line="+116"/>
+        <source>%1 (LoRA)</source>
+        <translation>%1 (LoRA)</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>%1 &amp; %2</source>
+        <translation>%1 &amp; %2</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The cast: %1 on the left, %2 on the right</source>
+        <translation>Die Besetzung: %1 links, %2 rechts</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1 and %2 are the project&apos;s cast, but switched off on this page</source>
+        <translation>%1 und %2 sind die Besetzung des Projekts, auf dieser Seite aber ausgeschaltet</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <location line="+67"/>
         <source>No character</source>
         <translation>Kein Charakter</translation>
     </message>
     <message>
-        <location line="-33"/>
+        <location line="-66"/>
         <source>Choose a character from the character library; image tools then draw it without repeating it in every prompt</source>
         <translation>Wählen Sie einen Charakter aus der Charakterbibliothek; die Bildwerkzeuge zeichnen ihn dann, ohne dass er in jedem Prompt wiederholt werden muss</translation>
     </message>
     <message>
         <location line="+5"/>
-        <location line="+16"/>
+        <location line="+17"/>
         <source>%1 · LoRA</source>
         <translation>%1 · LoRA</translation>
     </message>
     <message>
-        <location line="-15"/>
+        <location line="-16"/>
         <source>Images here draw %1 with the character&apos;s LoRA when the image generator can load it, else with the character&apos;s reference image or description</source>
         <translation>Bilder hier zeichnen %1 mit der LoRA des Charakters, wenn der Bildgenerator sie laden kann, sonst mit dem Referenzbild oder der Beschreibung des Charakters</translation>
     </message>
@@ -5096,14 +5121,39 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>%1 ist der Charakter des Projekts, auf dieser Seite aber ausgeschaltet</translation>
     </message>
     <message>
-        <location line="+19"/>
+        <location line="+23"/>
         <source>No characters in the library yet. Save one on the Create page.</source>
         <translation>Noch keine Charaktere in der Bibliothek. Speichern Sie einen auf der Seite Erstellen.</translation>
     </message>
     <message>
+        <location line="+6"/>
+        <source>Add a second character</source>
+        <translation>Zweiten Charakter hinzufügen</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Replace the second character</source>
+        <translation>Zweiten Charakter ersetzen</translation>
+    </message>
+    <message>
         <location line="+10"/>
+        <source>Swap left and right</source>
+        <translation>Links und rechts tauschen</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Remove %1</source>
+        <translation>%1 entfernen</translation>
+    </message>
+    <message>
+        <location line="+16"/>
         <source>Use the character on this page</source>
         <translation>Den Charakter auf dieser Seite verwenden</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Use the characters on this page</source>
+        <translation>Die Charaktere auf dieser Seite verwenden</translation>
     </message>
 </context>
 <context>
@@ -12691,12 +12741,12 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Dokumente öffnen</translation>
     </message>
     <message>
-        <location line="+15"/>
-        <source>Active character</source>
-        <translation>Aktiver Charakter</translation>
+        <location line="+30"/>
+        <source>Cast</source>
+        <translation>Besetzung</translation>
     </message>
     <message>
-        <location line="+130"/>
+        <location line="+150"/>
         <source>Background</source>
         <translation>Hintergrund</translation>
     </message>

@@ -238,9 +238,15 @@ editor's AI panel and on the Parts page. Its menu picks another character or non
   clears it.
 * **Use the character on this page** in the menu switches it off for one page; the name is then
   struck through.
+* **A second character** (*Add a second character* in the menu) makes a cast of two, shown as
+  "Akane & Bo": the first stands on the left, the second on the right. *Swap left and right*
+  changes the order, *Remove* takes one out, and picking a character in the list makes it the
+  only one again. The cast is stored in the project. Drawing both in one image is being built
+  (M16); until then the pages draw the first character.
 * **Re-run** (Library) brings back the words you wrote and the character. If the image was drawn
   without one, the character is switched off on the Generate page.
-* The assistant knows the active character and can switch it ("use Akane"). Its images, edits and
+* The assistant knows the active character (and a cast of two) and can switch it ("use Akane",
+  "use Akane and Bo"). Its images, edits and
   region fixes draw the character the same way as the pages do, so "draw her at the beach" is
   enough; it says what it used (LoRA, reference image or description).
 

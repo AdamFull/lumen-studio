@@ -64,9 +64,15 @@ public:
     }
     // Characters shared by all projects.
     doc::CharacterLibrary *characters() { return &m_characters; }
-    // The project's active character (M14 §14.2): a character library id, or empty. Image tools
-    // draw it unless their page switches it off. Stored in the project.
-    QString activeCharacter() const { return m_activeCharacter; }
+    // The project's cast (M16 §16.3): one or two character library ids in order (left, right),
+    // or none. Stored in the project. Image tools draw it unless their page switches it off;
+    // pages that draw one character use the first, the active character (M14 §14.2).
+    static constexpr int kMaxCast = 2;
+    QStringList activeCast() const { return m_cast; }
+    // Empty ids, duplicates, ids not in the library and any beyond kMaxCast are dropped.
+    void setActiveCast(const QStringList &ids);
+    QString activeCharacter() const { return m_cast.value(0); }
+    // A cast of one (or none for an empty id).
     void setActiveCharacter(const QString &id);
     // A library character as image requests use it (sheet, references, LoRA). Resolves with an
     // empty context when the character does not exist.
@@ -132,6 +138,7 @@ signals:
     void sliceRequested(const QString &assetId);
     void notification(const QString &message, const QString &level);
     void sessionRestored();
+    // The cast changed: a member, the order, or none.
     void activeCharacterChanged();
 
 private:
@@ -166,7 +173,7 @@ private:
     QTimer m_sessionSave;
     bool m_restoring = false;
     bool m_switching = false;
-    QString m_activeCharacter;
+    QStringList m_cast;
 };
 
 } // namespace lumen::ui

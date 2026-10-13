@@ -246,6 +246,14 @@ ai::ToolSet assistantTools(Studio *studio)
                       r.data.insert(QStringLiteral("image_provider"), p->displayName());
                   if (const auto c = s->characters()->entry(s->activeCharacter()))
                       r.data.insert(QStringLiteral("active_character"), characterJson(*c));
+                  if (s->activeCast().size() > 1) {
+                      QJsonArray cast;
+                      for (const QString &id : s->activeCast()) {
+                          if (const auto c = s->characters()->entry(id))
+                              cast.append(characterJson(*c));
+                      }
+                      r.data.insert(QStringLiteral("active_cast"), cast);
+                  }
                   return ready(r);
               });
 
@@ -259,21 +267,38 @@ ai::ToolSet assistantTools(Studio *studio)
                   ToolResult r;
                   r.data.insert(QStringLiteral("characters"), list);
                   r.data.insert(QStringLiteral("active"), s->activeCharacter());
+                  r.data.insert(QStringLiteral("cast"), QJsonArray::fromStringList(s->activeCast()));
                   return ready(r);
               });
 
-    tools.add(tool("set_active_character", "Makes a library character the project's active character, which image tools then draw. "
-                                           "An empty id clears it.",
-                   schema({{QStringLiteral("character_id"), prop("string", "id from list_characters, or empty for none")}}, {QStringLiteral("character_id")})),
+    tools.add(tool("set_active_character", "Sets the project's cast, which image tools then draw: one library character, or two "
+                                           "(character_ids, the first on the left). An empty character_id clears it.",
+                   schema({{QStringLiteral("character_id"), prop("string", "id from list_characters, or empty for none")},
+                           {QStringLiteral("character_ids"), QJsonObject{{QStringLiteral("type"), QStringLiteral("array")},
+                                                                         {QStringLiteral("items"), QJsonObject{{QStringLiteral("type"), QStringLiteral("string")}}},
+                                                                         {QStringLiteral("description"), QStringLiteral("instead of character_id: one or two ids, left first")}}}})),
               [s](const QJsonObject &args) {
                   if (!s || !s->project())
                       return fail(QObject::tr("No project is open."));
-                  const QString id = args.value(QStringLiteral("character_id")).toString().trimmed();
-                  if (!id.isEmpty() && !s->characters()->entry(id))
-                      return fail(QObject::tr("There is no character %1 in the library; use list_characters.").arg(id));
-                  s->setActiveCharacter(id);
+                  QStringList ids;
+                  if (args.contains(QStringLiteral("character_ids"))) {
+                      for (const QJsonValue &v : args.value(QStringLiteral("character_ids")).toArray())
+                          ids << v.toString().trimmed();
+                  } else {
+                      ids << args.value(QStringLiteral("character_id")).toString().trimmed();
+                  }
+                  ids.removeAll(QString());
+                  ids.removeDuplicates();
+                  if (ids.size() > Studio::kMaxCast)
+                      return fail(QObject::tr("A cast has at most %1 characters.").arg(Studio::kMaxCast));
+                  for (const QString &id : std::as_const(ids)) {
+                      if (!s->characters()->entry(id))
+                          return fail(QObject::tr("There is no character %1 in the library; use list_characters.").arg(id));
+                  }
+                  s->setActiveCast(ids);
                   ToolResult r;
-                  r.data.insert(QStringLiteral("active"), id);
+                  r.data.insert(QStringLiteral("active"), s->activeCharacter());
+                  r.data.insert(QStringLiteral("cast"), QJsonArray::fromStringList(s->activeCast()));
                   return ready(r);
               });
 

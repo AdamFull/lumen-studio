@@ -58,15 +58,17 @@ Studio::Studio(QObject *parent)
         restoreActiveCharacter();
     });
     connect(this, &Studio::projectClosed, this, [this] {
-        if (!m_activeCharacter.isEmpty()) {
-            m_activeCharacter.clear();
+        if (!m_cast.isEmpty()) {
+            m_cast.clear();
             emit activeCharacterChanged();
         }
     });
-    // A character removed from the library stops being active.
+    // A character removed from the library leaves the cast.
     connect(&m_characters, &doc::CharacterLibrary::changed, this, [this] {
-        if (!m_activeCharacter.isEmpty() && !m_characters.entry(m_activeCharacter))
-            setActiveCharacter(QString());
+        QStringList kept = m_cast;
+        kept.removeIf([this](const QString &id) { return !m_characters.entry(id); });
+        if (kept != m_cast)
+            setActiveCast(kept);
     });
     m_generation.setSafeContent(Settings::instance().value(QStringLiteral("generation/safeContent"), false).toBool());
     connect(&Settings::instance(), &Settings::changed, this, [this](const QString &key) {
@@ -306,20 +308,41 @@ QFuture<void> Studio::saveSession()
     return m_project->saveRecord(record).then([](doc::Record) {});
 }
 
-void Studio::setActiveCharacter(const QString &id)
+namespace {
+
+QStringList cleanCast(const QStringList &ids, const doc::CharacterLibrary &library)
 {
-    if (id == m_activeCharacter)
+    QStringList out;
+    for (const QString &id : ids) {
+        if (!id.isEmpty() && !out.contains(id) && library.entry(id) && out.size() < Studio::kMaxCast)
+            out << id;
+    }
+    return out;
+}
+
+} // namespace
+
+void Studio::setActiveCast(const QStringList &ids)
+{
+    const QStringList cast = cleanCast(ids, m_characters);
+    if (cast == m_cast)
         return;
-    m_activeCharacter = id;
+    m_cast = cast;
     if (m_project && m_project->isOpen()) {
         doc::Record record;
-        record.id = QStringLiteral("active_character");
-        record.type = QStringLiteral("active_character");
-        record.name = tr("Active character");
-        record.json = QJsonObject{{QStringLiteral("character"), id}};
+        record.id = QStringLiteral("active_cast");
+        record.type = QStringLiteral("active_cast");
+        record.name = tr("Cast");
+        record.json = QJsonObject{{QStringLiteral("characters"), QJsonArray::fromStringList(m_cast)}};
         m_project->saveRecord(record);
+        m_project->removeRecord(QStringLiteral("active_character"), QStringLiteral("active_character")); // before M16
     }
     emit activeCharacterChanged();
+}
+
+void Studio::setActiveCharacter(const QString &id)
+{
+    setActiveCast(id.isEmpty() ? QStringList() : QStringList{id});
 }
 
 void Studio::restoreActiveCharacter()
@@ -327,14 +350,28 @@ void Studio::restoreActiveCharacter()
     QPointer<doc::Project> project = m_project;
     if (!project)
         return;
-    project->records(QStringLiteral("active_character")).then(this, [this, project](QList<doc::Record> records) {
-        if (project != m_project || records.isEmpty())
-            return;
-        const QString id = records.first().json.value(QStringLiteral("character")).toString();
-        if (id != m_activeCharacter && (id.isEmpty() || m_characters.entry(id))) {
-            m_activeCharacter = id;
+    auto adopt = [this, project](const QStringList &ids) {
+        const QStringList cast = cleanCast(ids, m_characters);
+        if (project == m_project && cast != m_cast) {
+            m_cast = cast;
             emit activeCharacterChanged();
         }
+    };
+    project->records(QStringLiteral("active_cast")).then(this, [this, project, adopt](QList<doc::Record> records) {
+        if (project != m_project)
+            return;
+        if (!records.isEmpty()) {
+            QStringList ids;
+            for (const QJsonValue &v : records.first().json.value(QStringLiteral("characters")).toArray())
+                ids << v.toString();
+            adopt(ids);
+            return;
+        }
+        // A project from before M16: its one active character.
+        project->records(QStringLiteral("active_character")).then(this, [project, adopt](QList<doc::Record> old) {
+            if (!old.isEmpty())
+                adopt({old.first().json.value(QStringLiteral("character")).toString()});
+        });
     });
 }
 

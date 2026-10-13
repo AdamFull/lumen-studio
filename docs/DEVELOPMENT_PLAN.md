@@ -1721,10 +1721,26 @@ strategy: both references with their names, one request.
 * Shot cards show both poses; the pose editor edits both people.
 
 #### 16.5 Implementation steps
-- [ ] Cast model and UI: `Studio` cast (record `active_cast`, migration from `active_character`),
-  the chip with a second character, swap and remove; assistant state and
-  `set_active_character` with one or two ids. Tests: the chip, reopening the project, migration,
-  the assistant tools.
+- [x] Cast model and UI:
+  - `Studio::activeCast()` / `setActiveCast()` (`kMaxCast` 2; empty, duplicate and unknown ids and
+    a third are dropped); `activeCharacter()` is the first, so every page that draws one
+    character works unchanged; `setActiveCharacter(id)` makes a cast of one (Create page,
+    *Re-run* of a one-character image, Parts page). `activeCharacterChanged` fires for any change
+    of the cast.
+  - Stored as the project record `active_cast` (`characters`: ids in order). A project from before
+    M16 is read from its `active_character` record, which the first save of a cast removes.
+    A character removed from the library leaves the cast.
+  - `CharacterChip`: two overlapping round thumbnails and "Akane & Bo"; the tooltip says who is
+    left and right and who has a LoRA. The menu ticks both, and has *Add a second character* (a
+    submenu; *Replace the second character* once there are two), *Swap left and right*, *Remove
+    …* per member; choosing a character in the list still makes a cast of one. `castIds()` gives
+    the pages the cast (step 5 uses it); `characterId()` stays the first.
+  - Assistant: `get_state` has `active_cast` when there are two; `list_characters` returns `cast`;
+    `set_active_character` takes `character_ids` (one or two, left first) besides `character_id`.
+  - Test (`activeCast`): limits and order, no signal without a change, a cast of one, the chip's
+    text, tooltip, ticks and menu (add, replace, swap, remove), the per-page switch, reopening the
+    project, the migration from `active_character`, a character removed from the library, the
+    assistant tools (two ids, too many, one id).
 - [ ] Two-person layout: rig per person with side and scale presets (`solvePose` already takes
   several), each person's region from the pose (grown bounds, scaled to the image), per-person
   pose crops for the refine passes. Tests: regions for side by side, overlapping and one in front.

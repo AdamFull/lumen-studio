@@ -9,9 +9,9 @@ namespace lumen::ui {
 
 class Studio;
 
-// The project's active character on an image page (M14 §14.2): thumbnail, name and a LoRA badge.
-// Its menu makes a library character active (or none) and switches the character off for this
-// page only; the switch is remembered per page.
+// The project's cast on an image page (M14 §14.2, M16 §16.3): thumbnails, names and a LoRA badge.
+// Its menu makes a library character active (or none), adds a second character, swaps or removes
+// one, and switches the cast off for this page only; the switch is remembered per page.
 class CharacterChip : public QToolButton
 {
     Q_OBJECT
@@ -19,8 +19,10 @@ public:
     // `pageKey` names the page for its switch ("generate", "editor", "parts").
     CharacterChip(Studio *studio, const QString &pageKey, QWidget *parent = nullptr);
 
-    // The character this page draws: the active one unless switched off here; empty otherwise.
+    // The character this page draws: the first of the cast unless switched off here; empty otherwise.
     QString characterId() const;
+    // The whole cast this page draws (one or two), unless switched off here.
+    QStringList castIds() const;
     bool isUsedHere() const;
     void setUsedHere(bool used);
 
