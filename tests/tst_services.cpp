@@ -54,6 +54,7 @@ private slots:
     void identityChecklist();
     void characterContext();
     void castGeneration();
+    void castCheck();
     void cleanShotPrompts();
     void agentNativeTools();
     void agentJsonProtocol();
@@ -728,6 +729,191 @@ void TestServices::castGeneration()
     job = startCastGeneration(&service, none);
     QTRY_VERIFY_WITH_TIMEOUT(job->isFinished(), 5000);
     QCOMPARE(job->state(), Job::State::Failed);
+}
+
+void TestServices::castCheck()
+{
+    // Verdicts from the two scores.
+    QCOMPARE(castVerdict(9, 1, 6), QStringLiteral("ok"));
+    QCOMPARE(castVerdict(5, 0, 6), QStringLiteral("weak"));
+    QCOMPARE(castVerdict(2, 8, 6), QStringLiteral("swap"));
+    QCOMPARE(castVerdict(9, 8, 6), QStringLiteral("blend"));
+    QCOMPARE(castVerdict(-1, 8, 6), QStringLiteral("unchecked"));
+    QCOMPARE(castVerdict(9, -1, 6), QStringLiteral("ok")); // one member: no other
+    // What sets a member apart: shared tags (the uniform) and subject tags go.
+    const QJsonObject akiSheet{{QStringLiteral("gender_presentation"), QStringLiteral("female")},
+                               {QStringLiteral("tags"), QStringLiteral("1girl, red hair, green eyes, school_uniform")}};
+    const QJsonObject boSheet{{QStringLiteral("gender_presentation"), QStringLiteral("male")},
+                              {QStringLiteral("tags"), QStringLiteral("1boy, solo, black hair, blue eyes, school uniform")}};
+    QCOMPARE(castDistinguishingSheet(boSheet, akiSheet).value(QStringLiteral("tags")).toString(), QStringLiteral("black hair, blue eyes"));
+    QCOMPARE(castDistinguishingSheet(akiSheet, boSheet).value(QStringLiteral("tags")).toString(), QStringLiteral("red hair, green eyes"));
+
+    // Mock sd.cpp: an inpaint paints the mask in the colour the scenario gives the LoRA.
+    MockHttpServer sdServer;
+    QList<QJsonObject> sdRequests;
+    QHash<QString, QImage> results;
+    std::function<QRgb(const QString &lora, int akiPass)> paint;
+    int akiPasses = 0;
+    sdServer.route("GET", QStringLiteral("/sdcpp/v1/capabilities"), [](const MockRequest &) {
+        return MockResponse::json({{QStringLiteral("loras"), QJsonArray{QJsonObject{{QStringLiteral("name"), QStringLiteral("lmn_aki")},
+                                                                                    {QStringLiteral("path"), QStringLiteral("lmn_aki.safetensors")}},
+                                                                        QJsonObject{{QStringLiteral("name"), QStringLiteral("lmn_bo")},
+                                                                                    {QStringLiteral("path"), QStringLiteral("lmn_bo.safetensors")}}}}});
+    });
+    sdServer.route("POST", QStringLiteral("/sdcpp/v1/img_gen"), [&](const MockRequest &req) {
+        const QJsonObject body = req.json();
+        sdRequests << body;
+        const QSize size(body.value(QStringLiteral("width")).toInt(), body.value(QStringLiteral("height")).toInt());
+        QImage out(size, QImage::Format_ARGB32);
+        out.fill(QColor(128, 128, 128));
+        if (body.contains(QStringLiteral("mask_image"))) {
+            out = img::fromBase64(body.value(QStringLiteral("init_image")).toString().toLatin1()).convertToFormat(QImage::Format_ARGB32);
+            const QImage mask = img::fromBase64(body.value(QStringLiteral("mask_image")).toString().toLatin1()).convertToFormat(QImage::Format_Grayscale8);
+            const QString lora = body.value(QStringLiteral("lora")).toArray().first().toObject().value(QStringLiteral("path")).toString();
+            const QRgb colour = paint(lora, lora.contains(QStringLiteral("aki")) ? ++akiPasses : 0);
+            for (int y = 0; y < out.height(); ++y) {
+                auto *px = reinterpret_cast<QRgb *>(out.scanLine(y));
+                const uchar *m = mask.constScanLine(y);
+                for (int x = 0; x < out.width(); ++x)
+                    if (m[x] > 127)
+                        px[x] = colour;
+            }
+        }
+        const QString id = QStringLiteral("job_%1").arg(sdRequests.size());
+        results.insert(id, out);
+        return MockResponse::json({{QStringLiteral("id"), id}}, 202);
+    });
+    for (int i = 1; i <= 12; ++i) {
+        const QString id = QStringLiteral("job_%1").arg(i);
+        sdServer.route("GET", QStringLiteral("/sdcpp/v1/jobs/") + id, [&results, id](const MockRequest &) {
+            const QJsonArray images{QJsonObject{{QStringLiteral("index"), 0}, {QStringLiteral("b64_json"), QString::fromLatin1(img::encode(results.value(id)).toBase64())}}};
+            return MockResponse::json({{QStringLiteral("status"), QStringLiteral("completed")},
+                                       {QStringLiteral("result"), QJsonObject{{QStringLiteral("images"), images}}}});
+        });
+    }
+
+    // Mock vision model: a feature matches when the crop's colour is the colour of the character
+    // the checklist describes (red: Aki, blue: Bo, magenta: both).
+    MockHttpServer llm;
+    QStringList checks; // "<checklist owner>:<crop colour>"
+    llm.route("POST", QStringLiteral("/v1/chat/completions"), [&](const MockRequest &req) {
+        const QJsonArray parts = req.json().value(QStringLiteral("messages")).toArray().last().toObject().value(QStringLiteral("content")).toArray();
+        QString text;
+        QImage crop;
+        for (const QJsonValue &p : parts) {
+            const QJsonObject o = p.toObject();
+            if (o.value(QStringLiteral("type")).toString() == QLatin1String("text"))
+                text += o.value(QStringLiteral("text")).toString();
+            else if (crop.isNull())
+                crop = img::fromBase64(o.value(QStringLiteral("image_url")).toObject().value(QStringLiteral("url")).toString().section(QLatin1Char(','), 1).toLatin1());
+        }
+        const QColor c = crop.pixelColor(crop.width() / 2, crop.height() / 2);
+        const QString colour = c.red() > 200 && c.blue() > 200 ? QStringLiteral("both") : c.red() > 200 ? QStringLiteral("aki") : c.blue() > 200 ? QStringLiteral("bo") : QStringLiteral("none");
+        const QString owner = text.contains(QStringLiteral("red hair")) ? QStringLiteral("aki") : QStringLiteral("bo");
+        checks << owner + QLatin1Char(':') + colour;
+        const bool match = colour == owner || colour == QLatin1String("both");
+        QJsonObject features;
+        static const QRegularExpression line(QStringLiteral("\\nf(\\d+): "));
+        auto it = line.globalMatch(text);
+        while (it.hasNext())
+            features.insert(QStringLiteral("f") + it.next().captured(1), match ? QStringLiteral("match") : QStringLiteral("different"));
+        const QJsonObject answer{{QStringLiteral("features"), features}, {QStringLiteral("pose"), 8}, {QStringLiteral("issues"), QJsonArray{}}};
+        return MockResponse::json({{QStringLiteral("choices"), QJsonArray{QJsonObject{
+                                       {QStringLiteral("message"), QJsonObject{{QStringLiteral("content"), QString::fromUtf8(QJsonDocument(answer).toJson(QJsonDocument::Compact))}}},
+                                       {QStringLiteral("finish_reason"), QStringLiteral("stop")}}}}});
+    });
+
+    ProviderRegistry registry(&m_http);
+    registerBuiltInProviders(registry);
+    QFile::remove(registry.configPath());
+    Provider *sd = registry.addProvider(QStringLiteral("sdcpp"), QStringLiteral("SD"),
+                                        {{QStringLiteral("url"), sdServer.baseUrl().toString()},
+                                         {QStringLiteral("model"), QStringLiteral("waiIllustriousSDXL_v170.safetensors")},
+                                         {QStringLiteral("control_net"), true}});
+    QVERIFY(sd);
+    qobject_cast<SdCppProvider *>(sd)->pollIntervalMs = 20;
+    Provider *vision = registry.addProvider(QStringLiteral("llamacpp"), QStringLiteral("Vision"),
+                                            {{QStringLiteral("url"), llm.baseUrl().toString() + QStringLiteral("/v1")}});
+    QVERIFY(vision);
+    auto cleanup = qScopeGuard([&] { QFile::remove(registry.configPath()); });
+    JobQueue queue;
+    GenerationService service(&registry, &queue);
+
+    auto character = [](const char *id, const char *name, const QJsonObject &sheet, const char *lora, QColor colour) {
+        CharacterContext c;
+        c.id = QLatin1String(id);
+        c.name = QLatin1String(name);
+        c.sheet = sheet;
+        QImage ref(64, 96, QImage::Format_ARGB32);
+        ref.fill(colour);
+        c.references = {ref};
+        c.lora.file = QStringLiteral("C:/models/loras/%1.safetensors").arg(QLatin1String(lora));
+        c.lora.trigger = QLatin1String(lora);
+        c.lora.weight = 0.8;
+        c.lora.family = QStringLiteral("SDXL");
+        return c;
+    };
+    CastRequest request;
+    request.scene.prompt = QStringLiteral("walking home after school");
+    request.scene.size = QSize(640, 448);
+    request.scene.seed = 100;
+    request.cast = {character("aki", "Aki", akiSheet, "lmn_aki", Qt::red), character("bo", "Bo", boSheet, "lmn_bo", Qt::blue)};
+    request.modelFamily = QStringLiteral("SDXL");
+    request.check = true;
+    request.saveAssets = false;
+    // 1. Clean: each crop is its own character; four checks, no retry.
+    QJsonArray m;
+    Job *job = nullptr;
+    auto start = [&](std::function<QRgb(const QString &, int)> painter) {
+        paint = std::move(painter);
+        akiPasses = 0;
+        sdRequests.clear();
+        results.clear();
+        checks.clear();
+        job = startCastGeneration(&service, request);
+        QVERIFY(QTest::qWaitFor([&] { return job->isFinished(); }, 30000));
+        QVERIFY2(job->state() == Job::State::Succeeded, qPrintable(job->errorString()));
+        m = job->metadata().value(QStringLiteral("cast_members")).toJsonArray();
+    };
+    auto byLora = [](const QString &lora, int) { return lora.contains(QStringLiteral("aki")) ? qRgb(255, 0, 0) : qRgb(0, 0, 255); };
+    start(byLora);
+    QCOMPARE(sdRequests.size(), 3);
+    QCOMPARE(checks, (QStringList{QStringLiteral("aki:aki"), QStringLiteral("bo:aki"), QStringLiteral("bo:bo"), QStringLiteral("aki:bo")}));
+    QCOMPARE(m.size(), 2);
+    for (const QJsonValue &v : m) {
+        const QJsonObject check = v.toObject().value(QStringLiteral("check")).toObject();
+        QCOMPARE(check.value(QStringLiteral("verdict")).toString(), QStringLiteral("ok"));
+        QCOMPARE(check.value(QStringLiteral("own")).toDouble(), 10.0);
+        QCOMPARE(check.value(QStringLiteral("other")).toDouble(), 0.0);
+        QCOMPARE(check.value(QStringLiteral("attempts")).toInt(), 1);
+    }
+
+    // 2. Aki's first pass comes out as Bo: a swap; only Aki is drawn and checked again.
+    start([](const QString &lora, int akiPass) {
+        if (lora.contains(QStringLiteral("aki")))
+            return akiPass == 1 ? qRgb(0, 0, 255) : qRgb(255, 0, 0);
+        return qRgb(0, 0, 255);
+    });
+    QCOMPARE(sdRequests.size(), 4);
+    QVERIFY(sdRequests[3].value(QStringLiteral("prompt")).toString().startsWith(QStringLiteral("lmn_aki")));
+    QCOMPARE(sdRequests[3].value(QStringLiteral("seed")).toDouble(), 1101.0); // a new seed
+    QCOMPARE(checks.mid(4), (QStringList{QStringLiteral("aki:aki"), QStringLiteral("bo:aki")}));
+    QCOMPARE(m[0].toObject().value(QStringLiteral("check")).toObject().value(QStringLiteral("verdict")).toString(), QStringLiteral("ok"));
+    QCOMPARE(m[0].toObject().value(QStringLiteral("check")).toObject().value(QStringLiteral("attempts")).toInt(), 2);
+    QCOMPARE(m[1].toObject().value(QStringLiteral("check")).toObject().value(QStringLiteral("attempts")).toInt(), 1);
+
+    // 3. Aki keeps coming out with both looks: a blend, retried once, then kept with its verdict.
+    start([](const QString &lora, int) { return lora.contains(QStringLiteral("aki")) ? qRgb(255, 0, 255) : qRgb(0, 0, 255); });
+    QCOMPARE(sdRequests.size(), 4);
+    const QJsonObject blend = m[0].toObject().value(QStringLiteral("check")).toObject();
+    QCOMPARE(blend.value(QStringLiteral("verdict")).toString(), QStringLiteral("blend"));
+    QCOMPARE(blend.value(QStringLiteral("attempts")).toInt(), 2);
+
+    // 4. No vision model: the image stands as drawn, marked unchecked.
+    registry.removeProvider(vision->instanceId());
+    start(byLora);
+    QCOMPARE(sdRequests.size(), 3);
+    QCOMPARE(m[0].toObject().value(QStringLiteral("check")).toObject().value(QStringLiteral("verdict")).toString(), QStringLiteral("unchecked"));
 }
 
 void TestServices::cleanShotPrompts()

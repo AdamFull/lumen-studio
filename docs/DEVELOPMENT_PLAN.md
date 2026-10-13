@@ -1797,9 +1797,26 @@ strategy: both references with their names, one request.
     flat 2 MP image was 8 MB instead of 0.1 MB, and an sd.cpp inpaint request 11 MB. The level is
     now scaled (1 → 12, 6 → 67, 9 → 100); `tst_core pngIsCompressed`. Existing projects keep
     their large images until they are written again.
-- [ ] Per-character check and retry: crops by region, the checklist against the own sheet and the
-  other's, a swap/blend flag, a refine retry of the failed character only. Tests with a mock
-  vision model: a clean result, a swap, a blend, a retry.
+- [x] Per-character check and retry (in `CastGeneration`, `CastRequest::check`, off by default;
+  the pages switch it on with the Critic in step 5):
+  - After the repaints each member's crop (its region box) goes through `checkIdentity` twice:
+    against its own sheet and references, and against the other member's distinguishing features
+    (`castDistinguishingSheet`: its look without the tags both share, so a uniform both wear does
+    not count) and references. Four vision calls for two members.
+  - `castVerdict`: "swap" when the other score is at least 2 above the own one, "blend" when the
+    other score is 5 or more and the own one less than 3 above it, "weak" below `minScore` (6),
+    "ok", or "unchecked" when nothing showed.
+  - A member that fails is repainted (seed + 1000 per retry, on the image so far) and checked
+    again, up to `maxRetries` (1); the other member stays as it is. A member that still fails is
+    kept with its verdict. Without a vision model (or when the check fails) the image stands as
+    drawn, marked "unchecked".
+  - Metadata per member: `check` {own, other, verdict, attempts, issues}; the members are also on
+    the job (`cast_members`) when the result is not stored.
+  - Test (`tst_services castCheck`, mock sd.cpp painting the region per LoRA, mock vision model
+    matching the crop's colour against the checklist's character): the verdicts, the
+    distinguishing sheet, a clean result (four checks), a swap of the first pass (only that
+    member repainted with a new seed and checked again), a blend kept after one retry, and no
+    vision model.
 - [ ] Generate page and *Re-run* with a cast of two; editor *Fill selection* with the character
   choice. Tests against the mock server.
 - [ ] Director and Create page: cast in `PlanInput`, `people` in the shot schema, two-person poses

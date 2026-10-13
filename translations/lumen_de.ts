@@ -1203,18 +1203,19 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ai::CastGeneration</name>
     <message>
-        <location filename="../src/ai/CastGeneration.cpp" line="+193"/>
+        <location filename="../src/ai/CastGeneration.cpp" line="+226"/>
         <source>%1: %2</source>
         <translation>%1: %2</translation>
     </message>
     <message>
         <location line="+4"/>
-        <location line="+47"/>
+        <location line="+80"/>
+        <location line="+73"/>
         <source>The generation service is no longer available</source>
         <translation>Der Generierungsdienst ist nicht mehr verfügbar</translation>
     </message>
     <message>
-        <location line="-42"/>
+        <location line="-148"/>
         <source>No image provider is configured. Add one in Settings → Providers.</source>
         <translation>Kein Bildanbieter konfiguriert. Fügen Sie unter Einstellungen → Anbieter einen hinzu.</translation>
     </message>
@@ -1229,7 +1230,17 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>%1 kann keinen Bereich neu malen, was zwei Charaktere in einem Bild erfordert.</translation>
     </message>
     <message>
-        <location line="+65"/>
+        <location line="+91"/>
+        <source>Checking %1…</source>
+        <translation>%1 wird geprüft…</translation>
+    </message>
+    <message>
+        <location line="+79"/>
+        <source>Drawing %1 again…</source>
+        <translation>%1 wird erneut gezeichnet…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Drawing %1 (%2 of %3)…</source>
         <translation>%1 wird gezeichnet (%2 von %3)…</translation>
     </message>
