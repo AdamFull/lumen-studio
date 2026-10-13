@@ -31,6 +31,11 @@ struct RunPodGpu
 
     double price(bool community) const { return community ? communityPrice : securePrice; }
     bool offered(bool community) const { return price(community) > 0 && (community ? maxCommunity : maxSecure) > 0; }
+    // The trainer is a CUDA build: AMD GPUs (MI300X, MI350X) cannot run it.
+    bool runsTrainer() const
+    {
+        return !id.contains(QLatin1String("AMD"), Qt::CaseInsensitive) && !name.contains(QLatin1String("AMD"), Qt::CaseInsensitive);
+    }
 };
 
 // What a new pod runs.

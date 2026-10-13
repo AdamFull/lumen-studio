@@ -147,7 +147,7 @@ void CloudTrainingPage::refreshGpus()
                   const QString saved = Settings::instance().value(QStringLiteral("cloud/runpod/gpu")).toString();
                   self->m_gpu->clear();
                   for (const runtime::RunPodGpu &g : gpus) {
-                      if (g.memoryGb < kMinGpuMemoryGb || !g.offered(community))
+                      if (g.memoryGb < kMinGpuMemoryGb || !g.offered(community) || !g.runsTrainer())
                           continue;
                       self->m_gpu->addItem(tr("%1 · %2 GB · $%3/h").arg(g.name).arg(g.memoryGb).arg(g.price(community), 0, 'f', 2), g.id);
                   }

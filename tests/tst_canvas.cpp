@@ -2511,7 +2511,8 @@ void TestCanvas::cloudTrainingPage()
                                                                         {QStringLiteral("community"), community > 0 ? 4 : 0}}}};
         };
         return MockResponse::json({{QStringLiteral("gpus"), QJsonArray{gpu("RTX A4000", 16, 0.17, 0.09), gpu("RTX 4090", 24, 0.69, 0.34),
-                                                                       gpu("A100 80GB", 80, 1.64, 0.0), gpu("RTX 6000 Ada", 48, 0.0, 0.0)}}});
+                                                                       gpu("A100 80GB", 80, 1.64, 0.0), gpu("RTX 6000 Ada", 48, 0.0, 0.0),
+                                                                       gpu("AMD Instinct MI300X OAM", 192, 2.39, 0.5)}}});
     });
     Settings::instance().setValue(QStringLiteral("cloud/runpod/gpu"), QString());
     Settings::instance().setValue(QStringLiteral("cloud/runpod/community"), false);

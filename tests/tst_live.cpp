@@ -125,6 +125,7 @@ private slots:
     void evaluateLora();
     void characterLoraEndToEnd();
     void cloudLora();
+    void runPodPrices();
     void characterEverywhere();
 
 private:
@@ -1618,7 +1619,7 @@ void TestLive::cloudLora()
     const QString wanted = qEnvironmentVariable("LUMEN_LIVE_CLOUD_GPU");
     std::optional<runtime::RunPodGpu> gpu;
     for (const runtime::RunPodGpu &g : gpus.result()) {
-        if (g.memoryGb < runtime::kCloudTrainingMinGpuGb || !g.offered(false))
+        if (g.memoryGb < runtime::kCloudTrainingMinGpuGb || !g.offered(false) || !g.runsTrainer())
             continue;
         const bool match = wanted.isEmpty() ? g.name.contains(QLatin1String("4090")) : (g.id == wanted || g.name == wanted);
         if (match || (!gpu && wanted.isEmpty()) || (gpu && wanted.isEmpty() && !gpu->name.contains(QLatin1String("4090")) && g.price(false) < gpu->price(false)))
@@ -1688,6 +1689,34 @@ void TestLive::cloudLora()
     auto leftovers = runtime::leftoverCloudPods(studio.runPod());
     QTRY_VERIFY_WITH_TIMEOUT(leftovers.isFinished(), 60000);
     QVERIFY2(leftovers.result().isEmpty(), "a pod is still rented");
+}
+
+// RunPod's GPUs for training (24 GB or more) with their prices; read-only, rents nothing.
+// LUMEN_LIVE_RUNPOD_PRICES=1 and a RunPod key in the credential store.
+void TestLive::runPodPrices()
+{
+    if (qEnvironmentVariableIntValue("LUMEN_LIVE_RUNPOD_PRICES") != 1)
+        QSKIP("LUMEN_LIVE_RUNPOD_PRICES=1 is needed");
+    ui::Studio studio;
+    QVERIFY2(studio.runPod()->hasKey(), "no RunPod API key in the credential store");
+    auto gpus = studio.runPod()->gpus();
+    QTRY_VERIFY_WITH_TIMEOUT(gpus.isFinished(), 60000);
+    for (const runtime::RunPodGpu &g : gpus.result()) {
+        if (g.memoryGb < runtime::kCloudTrainingMinGpuGb)
+            continue;
+        qInfo().noquote() << QStringLiteral("%1 | %2 | %3 GB | secure %4 (max %5) | community %6 (max %7)")
+                                 .arg(g.name, -28)
+                                 .arg(g.id, -32)
+                                 .arg(g.memoryGb)
+                                 .arg(g.securePrice, 0, 'f', 2)
+                                 .arg(g.maxSecure)
+                                 .arg(g.communityPrice, 0, 'f', 2)
+                                 .arg(g.maxCommunity);
+    }
+    // Lumen's own pods, if any are left.
+    auto pods = runtime::leftoverCloudPods(studio.runPod());
+    QTRY_VERIFY_WITH_TIMEOUT(pods.isFinished(), 60000);
+    qInfo() << "Lumen pods still rented:" << pods.result().size();
 }
 
 void TestLive::characterLoraEndToEnd()

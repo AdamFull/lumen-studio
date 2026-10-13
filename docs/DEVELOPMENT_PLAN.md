@@ -1613,6 +1613,21 @@ Every request carries a random token generated for this pod (passed in the pod's
     confirmation (text, Cancel rents nothing), the pod request (GPU, Secure cloud, name prefix),
     RunPod's refusal shown on the tab, `run.json`; the leftover-pod offer and the shutdown.
 - [ ] One short live run on RunPod (the user's account): the 29-image Akane set, 10 epochs.
+  **Postponed (13 October 2026)** at the user's request; everything is ready:
+  - The key is saved and the live catalogue matches the client (`tst_live runPodPrices`,
+    read-only): RTX 4090 $0.89/h Secure, $0.34/h Community; RTX 3090 $0.50 / $0.22;
+    L40S $1.09 / $0.79. The estimate for the run: about 1,015 steps, 30–35 min with setup,
+    about $0.50 on a Secure 4090.
+  - The base model (WAI-Illustrious v17, 6.9 GB) has a byte-identical Hugging Face copy,
+    `LyliaEngine/waiIllustriousSDXL_v170` (SHA-256 f116b0c7…), so the pod fetches it instead of
+    an upload (`CharacterTraining::Settings::checkpointUrl`).
+  - To run: `LUMEN_LIVE_RUNPOD=1 LUMEN_LIVE_CLOUD_CHARACTER=07de8f46f4dd4d41
+    LUMEN_LIVE_CLOUD_CHECKPOINT=<…/waiIllustriousSDXL_v170.safetensors>
+    LUMEN_LIVE_CLOUD_CHECKPOINT_URL=https://huggingface.co/LyliaEngine/waiIllustriousSDXL_v170/resolve/main/waiIllustriousSDXL_v170.safetensors
+    LUMEN_LIVE_CLOUD_CHECKPOINT_SHA256=f116b0c78ff441467b0cdc8f1936e1ed18ea31e9997c7b132b1b8db533f0bd04
+    tst_live cloudLora` (in the tst_live data folder).
+  - Found with the live catalogue: it lists AMD GPUs (MI300X, MI350X), which cannot run the CUDA
+    trainer; the GPU lists now leave them out (`RunPodGpu::runsTrainer`).
 
 **AC**:
 1. With a RunPod API key, a user trains the character LoRA from the Train tab on a cloud GPU; it

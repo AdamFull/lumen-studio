@@ -584,7 +584,7 @@ void LoraDatasetDialog::loadCloudGpus()
                   self->m_cloudGpus.clear();
                   self->m_cloudGpu->clear();
                   for (runtime::RunPodGpu g : gpus) {
-                      if (g.memoryGb < runtime::kCloudTrainingMinGpuGb || !g.offered(community))
+                      if (g.memoryGb < runtime::kCloudTrainingMinGpuGb || !g.offered(community) || !g.runsTrainer())
                           continue;
                       // The price of the chosen cloud is the one that counts.
                       g.securePrice = g.communityPrice = g.price(community);
