@@ -1742,7 +1742,7 @@ strategy: both references with their names, one request.
     project, the migration from `active_character`, a character removed from the library, the
     assistant tools (two ids, too many, one id).
 - [x] Two-person layout (`pose/CastLayout`, no AI or UI dependencies):
-  - `arrangePeople(rigs, Arrangement)`: side by side (centres about 0.26 / 0.71, scale 0.82),
+  - `arrangePeople(rigs, Arrangement)`: side by side (centres about 0.29 / 0.71, scale 0.82),
     close (0.39 / 0.61, scale 0.88: shoulders and hands meet) and front and back (the first in
     front, lower and bigger; the second behind, smaller). It sets position and scale only; the
     poses stay. One person is left as it is. Keys for JSON: `side_by_side`, `close`,
