@@ -2121,8 +2121,58 @@ Survey of the code, the app log and user testing (October 2026):
     tensors, such as `flux-2-klein-4b-fp8`) load and edit correctly in the pinned sd.cpp with the
     8 GB tier's `--type q8_0` (checked live, see the live check below); with `file` precision they
     are untested.
-- [ ] Models folder: the visible default, ComfyUI subfolders, moving it, the one-time move from
+- [x] Models folder: the visible default, ComfyUI subfolders, moving it, the one-time move from
   `%LOCALAPPDATA%`, extra roots.
+  * `paths::defaultModels()`: `Documents\Lumen\Models`; with relocated data (`LUMEN_DATA_DIR`, the
+    portable ZIP) or in Qt's test mode `<data root>/models`, so tests and the portable ZIP stay
+    self-contained. `ModelLibrary::defaultFolder()` is the folder in effect: the chosen one
+    (`setFolder`; Studio keeps it in the setting `models/folder` on `folderChanged`) or
+    `standardFolder()` (next to a test's data after `setDataDir`). Downloads (`destinationFor`,
+    companions, starters), LoRA training output and the setup dialog all go through it.
+  * Sub-folders keep ComfyUI's names (`ModelLibrary::subfolders()`); language models and their
+    vision projectors share Lumen's own `llm`, because `findProjector` looks next to the model.
+  * `runtime/ModelsFolder`: `planModelsFolderMove` takes model files with their `.lumen.json`
+    sidecars and unfinished `.part` downloads (other files stay) and refuses no target, the same
+    folder, a folder inside it, a file, files of the same names there, or too little space on
+    another drive. `moveModelFiles` renames on the same drive (`MoveFileExW` without copying, so a
+    file in use is an error), and across drives copies in chunks under a temporary name, keeping
+    the modification time (the index still knows the file), deleting the originals once every
+    copy is complete. On an error or a cancel everything moved goes back; folders left empty are
+    removed. `relocatePath` / `relocateOptions` rewrite file and folder options, the llama.cpp
+    model list and paths in the extra arguments, in either separator style.
+  * `moveModelsFolder` is a Queue job ("Move models folder", one at a time). It is refused while
+    models download into the folder (downloads are refused while it runs) and, with files to move,
+    while the GPU is reserved (training writes into `loras`). It reserves the GPU, so running
+    servers stop (they hold files open) and none starts meanwhile; then it rewrites the server
+    profiles, calls `ModelLibrary::relocate` (entries keep their checksums and Civitai lookups,
+    also from a scan that ran meanwhile) and `setFolder`, and starts the stopped servers again.
+    Characters' LoRA files follow (`ModelLibrary::relocated`, in Studio).
+  * First start: `legacyModelsToAsk` finds model files (1 MB or more) in `<app data>/models` while
+    no folder is chosen and that is not the standard folder. Studio keeps using it, unsaved, until
+    `MainWindow::offerModelsFolderMove` (called by `main` at start-up, never by the tests; the
+    question is a callback) has asked once through `settleLegacyModels`: the old folder becomes
+    the choice, then *Move models* runs the move to the standard folder and *Keep them where they
+    are* stays; a move that cannot be done says why and keeps the old folder.
+  * UI: Settings → Models shows the folder with *Open folder* and *Move…* (a confirmation with the
+    number and size of the files; the result as a toast); *Help → Open models folder*; the local
+    setup dialog says where models are saved. Extra roots (ComfyUI, WebUI, LM Studio) stay as they
+    were: scanned in place, never moved or written; one that becomes the chosen folder is listed
+    once.
+  * Tests: `tst_runtime modelsFolderDefaults` (the default with relocated data and in test mode,
+    `setDataDir`, a chosen folder and its sub-folders, back to the standard one, an added folder
+    as the folder), `modelsFolderMove` (the plan with the sidecar and the `.part` file, refusals,
+    no move during a download or a GPU reservation, a file in use undoes the move and the server
+    runs again; the move: files, a note that stays, empty folders removed, a running and a stopped
+    profile rewritten in every form, the server restarted with the new path, checksums kept
+    through the next scan, a download landing in the moved folder), `modelsFolderCopies` (a copy
+    across drives, forced on one: cancelled half-way leaves nothing, keeps the modification time,
+    reports progress; path rewriting in options and text), `legacyModelsFirstStart` (three cases
+    without a question, keep, move with a server profile, a refused move); `tst_canvas
+    modelsFolderSettings` (the page shows the folder; a refused and a cancelled move; the move
+    through the page updates the setting, the label, a profile, a character's LoRA and where
+    downloads go; and back; the Help action; no question without an old folder).
+  * Not yet: *Open models folder* in the setup wizard (§17.5); a move stops every running server,
+    also those that use no file in the folder; the German translation of the new texts.
 - [x] Sampling defaults from presets (CFG, guidance, image CFG, negative prompt) through
   `PromptStyle` and the request; sd.cpp instruction edit (§17.4) with a mock-server contract test.
   * `ai::ModelDefaults`: the preset as the image back-end sees it; Studio passes it to the provider

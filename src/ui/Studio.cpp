@@ -20,6 +20,10 @@
 
 namespace lumen::ui {
 
+namespace {
+const QString kModelsFolderKey = QStringLiteral("models/folder");
+} // namespace
+
 Studio::Studio(QObject *parent)
     : QObject(parent)
     , m_registry(&m_http)
@@ -51,8 +55,30 @@ Studio::Studio(QObject *parent)
     connect(&m_registry, &ai::ProviderRegistry::providersChanged, this, &Studio::applyServerBindings);
     connect(&m_servers, &runtime::ServerSupervisor::profilesChanged, this, &Studio::applyServerBindings);
     QTimer::singleShot(0, &m_servers, &runtime::ServerSupervisor::startAutoStartServers);
+    // Lumen's models folder: the one chosen in Settings → Models, else Documents\Lumen\Models.
+    m_models.setFolder(Settings::instance().value(kModelsFolderKey).toString());
+    // Models in an earlier version's folder stay in use (not saved as the choice) until MainWindow
+    // has asked once whether to move them.
+    m_legacyModels = runtime::legacyModelsToAsk(&m_models);
+    if (!m_legacyModels.isEmpty())
+        m_models.setFolder(m_legacyModels);
     m_models.load();
     QTimer::singleShot(0, &m_models, &runtime::ModelLibrary::rescan); // new or changed files since the last run
+    connect(&m_models, &runtime::ModelLibrary::folderChanged, this, [this] {
+        Settings::instance().setValue(kModelsFolderKey, m_models.chosenFolder());
+    });
+    // Characters' LoRA files moved with the folder.
+    connect(&m_models, &runtime::ModelLibrary::relocated, this, [this](const QString &from, const QString &to) {
+        for (const doc::CharacterEntry &c : m_characters.entries()) {
+            QJsonObject lora = c.lora;
+            const QString file = lora.value(QStringLiteral("file")).toString();
+            const QString moved = runtime::relocatePath(file, from, to);
+            if (moved != file) {
+                lora.insert(QStringLiteral("file"), moved);
+                m_characters.setLora(c.id, lora);
+            }
+        }
+    });
 
     m_autosave.setInterval(std::max(10, Settings::instance().autosaveIntervalSec()) * 1000);
     connect(&m_autosave, &QTimer::timeout, this, &Studio::autosave);
@@ -140,7 +166,37 @@ private:
     QString m_profileId;
 };
 
+// Says how a move of the models folder ended; the Queue shows its progress.
+Job *reportFolderMove(Studio *studio, Job *job)
+{
+    if (!job)
+        return nullptr;
+    QObject::connect(job, &Job::finished, studio, [studio](Job *j) {
+        if (j->state() == Job::State::Succeeded)
+            studio->notify(Studio::tr("The models are now in %1.").arg(QDir::toNativeSeparators(j->result().toString())), QStringLiteral("success"));
+        else if (j->state() == Job::State::Failed)
+            studio->notify(Studio::tr("The models folder was not moved: %1").arg(j->errorString()), QStringLiteral("error"));
+    });
+    return job;
+}
+
 } // namespace
+
+Job *Studio::moveModelsFolder(const QString &to)
+{
+    return reportFolderMove(this, runtime::moveModelsFolder(&m_jobs, &m_models, &m_servers, to));
+}
+
+Job *Studio::settleLegacyModels(const std::function<bool(const runtime::FolderMovePlan &plan)> &moveThem)
+{
+    const QString legacy = std::exchange(m_legacyModels, QString());
+    if (legacy.isEmpty())
+        return nullptr;
+    // Asked once: the old folder is the choice until its files are in the new one (a successful
+    // move changes the folder, and the setting with it).
+    Settings::instance().setValue(kModelsFolderKey, legacy);
+    return reportFolderMove(this, runtime::settleLegacyModels(&m_jobs, &m_models, &m_servers, legacy, moveThem));
+}
 
 ai::Provider *Studio::providerForServer(const QString &profileId) const
 {

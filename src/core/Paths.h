@@ -16,6 +16,10 @@ QString logs();
 QString userPresets();
 // Default location for new projects.
 QString defaultProjects();
+// Default folder for Lumen's own models: <Documents>/Lumen/Models, where people find it. While
+// writable data is relocated (LUMEN_DATA_DIR, the portable ZIP, Qt's test mode) it is
+// <data root>/models, so those stay self-contained.
+QString defaultModels();
 // Directory with bundled read-only resources shipped next to the executable (optional).
 QString bundledData();
 

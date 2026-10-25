@@ -8,6 +8,7 @@ add_library(lumen_runtime STATIC
     Supervisor.h Supervisor.cpp
     ModelFormats.h ModelFormats.cpp
     ModelLibrary.h ModelLibrary.cpp
+    ModelsFolder.h ModelsFolder.cpp
     ModelHub.h ModelHub.cpp
     ModelPresets.h ModelPresets.cpp
     CloudTraining.h CloudTraining.cpp

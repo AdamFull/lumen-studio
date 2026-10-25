@@ -3,6 +3,7 @@
 #include "core/Async.h"
 #include "core/Job.h"
 #include "core/JobQueue.h"
+#include "core/Paths.h"
 #include "net/HttpClient.h"
 #include "runtime/Catalog.h"
 #include "runtime/Download.h"
@@ -12,6 +13,7 @@
 #include "runtime/ModelHub.h"
 #include "runtime/ModelPresets.h"
 #include "runtime/ModelLibrary.h"
+#include "runtime/ModelsFolder.h"
 #include "runtime/CloudTraining.h"
 #include "runtime/PodAgent.h"
 #include "runtime/RunPod.h"
@@ -233,6 +235,10 @@ private slots:
     void inspectRealModels();
     void modelFormats();
     void modelLibrary();
+    void modelsFolderDefaults();
+    void modelsFolderMove();
+    void modelsFolderCopies();
+    void legacyModelsFirstStart();
     void hubNamesAndStarters();
     void hubSearch();
     void hubDownloads();
@@ -1411,6 +1417,441 @@ void TestRuntime::modelLibrary()
     QVERIFY(!QFileInfo::exists(gguf));
     QCOMPARE(trashed, QStringList{gguf});
     QVERIFY(lib.entries().isEmpty());
+}
+
+void TestRuntime::modelsFolderDefaults()
+{
+    // With relocated data (LUMEN_DATA_DIR, the portable ZIP) or in Qt's test mode the standard
+    // folder stays next to the data, which is also where earlier versions kept it.
+    QStandardPaths::setTestModeEnabled(true);
+    auto restore = qScopeGuard([] { QStandardPaths::setTestModeEnabled(false); });
+    const QString dataModels = QDir::cleanPath(paths::appData() + QStringLiteral("/models"));
+    QCOMPARE(QDir::cleanPath(paths::defaultModels()), dataModels);
+    QCOMPARE(legacyModelsFolder(), dataModels);
+    net::HttpClient http;
+    {
+        ModelLibrary lib(&http);
+        QCOMPARE(lib.standardFolder(), dataModels);
+        QCOMPARE(lib.defaultFolder(), dataModels);
+        QVERIFY(legacyModelsToAsk(&lib).isEmpty()); // the old and the new default are one folder here
+    }
+
+    QTemporaryDir data;
+    QTemporaryDir chosen;
+    ModelLibrary lib(&http);
+    lib.setDataDir(data.path());
+    const QString standard = QDir::cleanPath(data.filePath(QStringLiteral("models")));
+    QCOMPARE(lib.standardFolder(), standard);
+    QCOMPARE(lib.defaultFolder(), standard);
+    // ComfyUI's names, plus Lumen's own for language models and their vision projectors.
+    QCOMPARE(ModelLibrary::subfolders(), (QStringList{QStringLiteral("checkpoints"), QStringLiteral("diffusion_models"), QStringLiteral("loras"),
+                                                      QStringLiteral("controlnet"), QStringLiteral("ipadapter"), QStringLiteral("clip_vision"),
+                                                      QStringLiteral("vae"), QStringLiteral("text_encoders"), QStringLiteral("upscale_models"),
+                                                      QStringLiteral("embeddings"), QStringLiteral("llm")}));
+    QCOMPARE(ModelLibrary::subfolderFor(ModelKind::Projector), QStringLiteral("llm"));
+
+    // The chosen folder (the setting) is the library's own, with its sub-folders.
+    QSignalSpy folderChanged(&lib, &ModelLibrary::folderChanged);
+    lib.setFolder(QDir::toNativeSeparators(chosen.path()));
+    QCOMPARE(folderChanged.size(), 1);
+    lib.setFolder(chosen.path() + QStringLiteral("/"));
+    QCOMPARE(folderChanged.size(), 1); // the same folder
+    QCOMPARE(lib.chosenFolder(), QDir::cleanPath(chosen.path()));
+    QCOMPARE(lib.defaultFolder(), QDir::cleanPath(chosen.path()));
+    lib.load();
+    QCOMPARE(lib.roots().size(), 1);
+    QVERIFY(lib.roots().first().builtin);
+    QCOMPARE(lib.roots().first().path, QDir::cleanPath(chosen.path()));
+    for (const QString &sub : ModelLibrary::subfolders())
+        QVERIFY2(QFileInfo(chosen.filePath(sub)).isDir(), qPrintable(sub));
+    QVERIFY(!QFileInfo::exists(standard)); // not created while another folder is used
+
+    // Back to the standard folder.
+    lib.setFolder(QString());
+    QCOMPARE(folderChanged.size(), 2);
+    QVERIFY(lib.chosenFolder().isEmpty());
+    QCOMPARE(lib.roots().first().path, standard);
+    QVERIFY(QFileInfo(standard + QStringLiteral("/diffusion_models")).isDir());
+    // An added folder that becomes Lumen's own is listed once.
+    QTemporaryDir comfy;
+    QVERIFY(lib.addRoot(comfy.path(), QStringLiteral("ComfyUI")));
+    QCOMPARE(lib.roots().size(), 2);
+    lib.setFolder(comfy.path());
+    QCOMPARE(lib.roots().size(), 1);
+    QCOMPARE(lib.roots().first().path, QDir::cleanPath(comfy.path()));
+    QVERIFY(lib.roots().first().builtin);
+    QTRY_VERIFY_WITH_TIMEOUT(!lib.isScanning(), 10000);
+}
+
+void TestRuntime::modelsFolderMove()
+{
+    FakeRuntime fx;
+    QTemporaryDir data;
+    QTemporaryDir elsewhere;
+    ModelLibrary lib(&fx.http);
+    lib.setDataDir(data.path());
+    lib.load();
+    const QString from = lib.defaultFolder();
+    const QString to = QDir::cleanPath(elsewhere.filePath(QStringLiteral("Lumen/Models")));
+    const QByteArray padding(2 * 1024 * 1024, '\0');
+    const QByteArray ckpt = makeSafetensors({{QStringLiteral("model.diffusion_model.input_blocks.0.0.weight"), {320, 4, 3, 3}},
+                                             {QStringLiteral("model.diffusion_model.label_emb.0.0.weight"), {1280, 2816}},
+                                             {QStringLiteral("conditioner.embedders.1.model.ln_final.weight"), {1280}}}) + padding;
+    const QByteArray lora = makeSafetensors({{QStringLiteral("lora_unet_a.lora_down.weight"), {8, 640}}},
+                                            {{QStringLiteral("ss_base_model_version"), QStringLiteral("sdxl_base_v1-0")}}) + padding;
+    const QByteArray gguf = makeGguf(QStringLiteral("qwen3"), 15, {{QStringLiteral("blk.0.attn_q.weight"), {4096, 4096}}}) + padding;
+    QVERIFY(writeFile(from + QStringLiteral("/checkpoints/wai.safetensors"), ckpt));
+    QVERIFY(writeFile(sidecarPath(from + QStringLiteral("/checkpoints/wai.safetensors")),
+                      QJsonDocument(QJsonObject{{QStringLiteral("source"), QStringLiteral("huggingface")},
+                                                {QStringLiteral("sha256"), sha256(ckpt)},
+                                                {QStringLiteral("size"), ckpt.size()}})
+                          .toJson()));
+    QVERIFY(writeFile(from + QStringLiteral("/loras/style.safetensors"), lora));
+    QVERIFY(writeFile(from + QStringLiteral("/llm/Model-Q4_K_M.gguf"), gguf));
+    QVERIFY(writeFile(from + QStringLiteral("/loras/half.safetensors.part"), "an unfinished download"));
+    QVERIFY(writeFile(from + QStringLiteral("/notes.txt"), "not a model: stays"));
+    QSignalSpy scanned(&lib, &ModelLibrary::scanFinished);
+    lib.rescan();
+    QVERIFY(scanned.wait(10000));
+    QCOMPARE(lib.entries().size(), 3);
+    QFuture<QString> hash = lib.computeHash(from + QStringLiteral("/loras/style.safetensors"));
+    QTRY_VERIFY_WITH_TIMEOUT(hash.isFinished(), 10000);
+
+    // A running server and a stopped one, with paths into the folder in several forms.
+    const QString nativeGguf = QDir::toNativeSeparators(from + QStringLiteral("/llm/Model-Q4_K_M.gguf"));
+    const QString nativeLoras = QDir::toNativeSeparators(from + QStringLiteral("/loras"));
+    ServerProfile running = fx.supervisor.createProfile(QStringLiteral("adopted/fake"), QStringLiteral("Running"));
+    running.options = {{QStringLiteral("model"), nativeGguf},
+                       {QStringLiteral("extra_args"), QStringLiteral("--fake-ready-ms 100 --lora-dir \"%1\"").arg(nativeLoras)}};
+    running.startupTimeoutSec = 20;
+    fx.supervisor.addProfile(running);
+    ServerProfile stopped = fx.supervisor.createProfile(QStringLiteral("adopted/fake"), QStringLiteral("Stopped"));
+    stopped.options = {{QStringLiteral("model"), fx.model}, // outside the folder
+                       {QStringLiteral("lora_dir"), nativeLoras},
+                       {QStringLiteral("vae"), from + QStringLiteral("2/vae.safetensors")}, // a folder with a similar name
+                       {QStringLiteral("more_models"), QVariantList{QVariantMap{{QStringLiteral("name"), QStringLiteral("Second")},
+                                                                                {QStringLiteral("model"), from + QStringLiteral("/llm/Model-Q4_K_M.gguf")},
+                                                                                {QStringLiteral("mmproj"), QString()}}}}};
+    fx.supervisor.addProfile(stopped);
+
+    // Refused plans.
+    const FolderMovePlan plan = planModelsFolderMove(from, to);
+    QVERIFY2(plan.ok(), qPrintable(plan.error));
+    QCOMPARE(plan.models, 3);
+    QVERIFY(plan.sameVolume);
+    QStringList files = plan.files;
+    files.sort();
+    QCOMPARE(files, (QStringList{QStringLiteral("checkpoints/wai.safetensors"), QStringLiteral("checkpoints/wai.safetensors.lumen.json"),
+                                 QStringLiteral("llm/Model-Q4_K_M.gguf"), QStringLiteral("loras/half.safetensors.part"),
+                                 QStringLiteral("loras/style.safetensors")}));
+    QVERIFY(!planModelsFolderMove(from, QString()).ok());
+    QVERIFY(!planModelsFolderMove(from, QDir::toNativeSeparators(from)).ok());
+    QVERIFY(!planModelsFolderMove(from, from + QStringLiteral("/loras/inside")).ok());
+    QVERIFY(writeFile(elsewhere.filePath(QStringLiteral("file.txt")), "x"));
+    QVERIFY(!planModelsFolderMove(from, elsewhere.filePath(QStringLiteral("file.txt"))).ok());
+    QVERIFY(writeFile(elsewhere.filePath(QStringLiteral("taken/loras/style.safetensors")), "another file"));
+    const FolderMovePlan taken = planModelsFolderMove(from, elsewhere.filePath(QStringLiteral("taken")));
+    QVERIFY(!taken.ok());
+    QCOMPARE(taken.conflicts, QStringList{QStringLiteral("loras/style.safetensors")});
+    QVERIFY2(taken.error.contains(QStringLiteral("style.safetensors")), qPrintable(taken.error));
+
+    auto moveTo = [&](const QString &target) {
+        Job *job = moveModelsFolder(&fx.jobs, &lib, &fx.supervisor, target);
+        QElapsedTimer t;
+        t.start();
+        while (!job->isFinished() && t.elapsed() < 30000)
+            QTest::qWait(20);
+        return job;
+    };
+    auto allInPlace = [&] {
+        return readAll(from + QStringLiteral("/checkpoints/wai.safetensors")) == ckpt && readAll(from + QStringLiteral("/loras/style.safetensors")) == lora
+               && readAll(from + QStringLiteral("/llm/Model-Q4_K_M.gguf")) == gguf
+               && QFileInfo::exists(sidecarPath(from + QStringLiteral("/checkpoints/wai.safetensors")))
+               && !QFileInfo::exists(to + QStringLiteral("/checkpoints/wai.safetensors"));
+    };
+    // Not while models are downloaded into the folder, nor while the GPU is reserved (training).
+    Job *download = fx.jobs.submit(QStringLiteral("Download"), QStringLiteral("model-download"), [](Job *) {});
+    QTRY_VERIFY(download->isActive());
+    Job *refused = moveTo(to);
+    QCOMPARE(refused->state(), Job::State::Failed);
+    QVERIFY2(refused->errorString().contains(QStringLiteral("downloaded")), qPrintable(refused->errorString()));
+    download->cancel();
+    fx.supervisor.reserveGpu(QStringLiteral("A LoRA is being trained."));
+    refused = moveTo(to);
+    QCOMPARE(refused->state(), Job::State::Failed);
+    QVERIFY2(refused->errorString().contains(QStringLiteral("A LoRA is being trained.")), qPrintable(refused->errorString()));
+    fx.supervisor.releaseGpu();
+    QVERIFY(allInPlace());
+    QCOMPARE(lib.defaultFolder(), from);
+
+    QCOMPARE(await(fx.supervisor.start(running.id)), QString());
+#ifdef Q_OS_WIN
+    // A file in use cannot move: what moved already goes back, and the server runs again.
+    {
+        QFile busy(from + QStringLiteral("/loras/style.safetensors"));
+        QVERIFY(busy.open(QIODevice::ReadOnly));
+        Job *failed = moveTo(to);
+        QCOMPARE(failed->state(), Job::State::Failed);
+        QVERIFY2(failed->errorString().contains(QStringLiteral("style.safetensors")), qPrintable(failed->errorString()));
+    }
+    QVERIFY(allInPlace());
+    QCOMPARE(lib.defaultFolder(), from);
+    QCOMPARE(fx.supervisor.profile(running.id)->options.value(QStringLiteral("model")).toString(), nativeGguf);
+    QTRY_COMPARE_WITH_TIMEOUT(fx.supervisor.state(running.id), ServerState::Ready, 20000);
+#endif
+
+    // The move: files with their sidecars, the profiles, the library.
+    QSignalSpy folderChanged(&lib, &ModelLibrary::folderChanged);
+    QSignalSpy relocated(&lib, &ModelLibrary::relocated);
+    Job *job = moveTo(to);
+    QVERIFY2(job->state() == Job::State::Succeeded, qPrintable(job->errorString()));
+    QCOMPARE(job->result().toString(), to);
+    QCOMPARE(readAll(to + QStringLiteral("/checkpoints/wai.safetensors")), ckpt);
+    QCOMPARE(readSidecar(to + QStringLiteral("/checkpoints/wai.safetensors")).value(QStringLiteral("sha256")).toString(), sha256(ckpt));
+    QCOMPARE(readAll(to + QStringLiteral("/loras/style.safetensors")), lora);
+    QCOMPARE(readAll(to + QStringLiteral("/llm/Model-Q4_K_M.gguf")), gguf);
+    QVERIFY(QFileInfo::exists(to + QStringLiteral("/loras/half.safetensors.part")));
+    QVERIFY(!QFileInfo::exists(from + QStringLiteral("/checkpoints/wai.safetensors")));
+    QVERIFY(!QFileInfo::exists(from + QStringLiteral("/checkpoints"))); // left empty: removed
+    QCOMPARE(readAll(from + QStringLiteral("/notes.txt")), QByteArray("not a model: stays"));
+
+    const QString movedGguf = QDir::toNativeSeparators(to + QStringLiteral("/llm/Model-Q4_K_M.gguf"));
+    const QString movedLoras = QDir::toNativeSeparators(to + QStringLiteral("/loras"));
+    const ServerProfile r = *fx.supervisor.profile(running.id);
+    QCOMPARE(r.options.value(QStringLiteral("model")).toString(), movedGguf);
+    QCOMPARE(r.options.value(QStringLiteral("extra_args")).toString(), QStringLiteral("--fake-ready-ms 100 --lora-dir \"%1\"").arg(movedLoras));
+    const ServerProfile s = *fx.supervisor.profile(stopped.id);
+    QCOMPARE(s.options.value(QStringLiteral("model")).toString(), fx.model);
+    QCOMPARE(s.options.value(QStringLiteral("lora_dir")).toString(), movedLoras);
+    QCOMPARE(s.options.value(QStringLiteral("vae")).toString(), from + QStringLiteral("2/vae.safetensors"));
+    QCOMPARE(s.options.value(QStringLiteral("more_models")).toList().value(0).toMap().value(QStringLiteral("model")).toString(),
+             to + QStringLiteral("/llm/Model-Q4_K_M.gguf"));
+    // The server that ran starts again with the new paths.
+    QTRY_COMPARE_WITH_TIMEOUT(fx.supervisor.state(running.id), ServerState::Ready, 20000);
+    const LaunchCommand launch = fx.supervisor.launchFor(running.id);
+    QVERIFY2(launch.error.isEmpty(), qPrintable(launch.error));
+    QVERIFY(launch.signature().contains((to + QStringLiteral("/llm/Model-Q4_K_M.gguf")).toUtf8()));
+    QVERIFY(!fx.supervisor.needsRestart(running.id));
+    QCOMPARE(fx.supervisor.state(stopped.id), ServerState::Stopped);
+
+    QCOMPARE(folderChanged.size(), 1);
+    QCOMPARE(relocated.size(), 1);
+    QCOMPARE(relocated.first().at(0).toString(), from);
+    QCOMPARE(relocated.first().at(1).toString(), to);
+    QCOMPARE(lib.chosenFolder(), to);
+    QCOMPARE(lib.roots().first().path, to);
+    QVERIFY(lib.roots().first().builtin);
+    QVERIFY(!lib.entry(from + QStringLiteral("/loras/style.safetensors")));
+    QCOMPARE(lib.entry(to + QStringLiteral("/loras/style.safetensors"))->sha256, hash.result()); // not hashed again
+    QTRY_VERIFY_WITH_TIMEOUT(!lib.isScanning(), 10000);
+    QCOMPARE(lib.entries().size(), 3);
+    QCOMPARE(lib.entry(to + QStringLiteral("/loras/style.safetensors"))->sha256, hash.result());
+    QCOMPARE(lib.entry(to + QStringLiteral("/checkpoints/wai.safetensors"))->info.family, QStringLiteral("SDXL"));
+
+    // Downloads land in the moved folder.
+    MockHttpServer hf;
+    const QByteArray lora2 = lora + "2";
+    const QString revision = QStringLiteral("0123456789abcdef0123456789abcdef01234567");
+    serveFile(hf, QStringLiteral("/org/repo/resolve/%1/second.safetensors").arg(revision), lora2);
+    ModelHub hub(&fx.http, &fx.jobs, &lib);
+    HubDownload d;
+    d.source = HubSource::HuggingFace;
+    d.modelId = QStringLiteral("org/repo");
+    d.versionId = revision;
+    d.file.path = QStringLiteral("second.safetensors");
+    d.file.format = QStringLiteral("safetensors");
+    d.file.kind = ModelKind::Lora;
+    d.file.size = lora2.size();
+    d.file.sha256 = sha256(lora2);
+    d.file.url = QUrl(hf.baseUrl().toString() + QStringLiteral("/org/repo/resolve/%1/second.safetensors").arg(revision));
+    QCOMPARE(hub.destinationFor(d), to + QStringLiteral("/loras/second.safetensors"));
+    Job *fetched = hub.download(d);
+    QTRY_VERIFY_WITH_TIMEOUT(fetched->isFinished(), 20000);
+    QVERIFY2(fetched->state() == Job::State::Succeeded, qPrintable(fetched->errorString()));
+    QCOMPARE(fetched->result().toString(), to + QStringLiteral("/loras/second.safetensors"));
+    QCOMPARE(readAll(to + QStringLiteral("/loras/second.safetensors")), lora2);
+
+    fx.supervisor.stop(running.id);
+    QTRY_COMPARE_WITH_TIMEOUT(fx.supervisor.state(running.id), ServerState::Stopped, 10000);
+}
+
+void TestRuntime::modelsFolderCopies()
+{
+    // Across drives files are copied, then the originals deleted. Forced on one drive here.
+    QTemporaryDir dir;
+    const QString from = dir.filePath(QStringLiteral("old"));
+    const QByteArray big(20 * 1024 * 1024, 'a'); // several chunks
+    QVERIFY(writeFile(from + QStringLiteral("/checkpoints/big.safetensors"), big));
+    QVERIFY(writeFile(sidecarPath(from + QStringLiteral("/checkpoints/big.safetensors")), "{}"));
+    QVERIFY(writeFile(from + QStringLiteral("/vae/small.safetensors"), "vae"));
+    const QDateTime modified = QFileInfo(from + QStringLiteral("/checkpoints/big.safetensors")).lastModified();
+    QTest::qWait(1100); // a copy made now would get a newer time
+
+    // Cancelled half-way: nothing is left in the target, everything is still in place.
+    FolderMovePlan plan = planModelsFolderMove(from, dir.filePath(QStringLiteral("cancelled")));
+    QVERIFY2(plan.ok(), qPrintable(plan.error));
+    plan.sameVolume = false;
+    const QString cancelled = moveModelFiles(plan, [](qint64 done, qint64) { return done < 10 * 1024 * 1024; });
+    QVERIFY(!cancelled.isEmpty());
+    QCOMPARE(readAll(from + QStringLiteral("/checkpoints/big.safetensors")), big);
+    QDirIterator leftovers(plan.to, QDir::Files, QDirIterator::Subdirectories);
+    QVERIFY2(!leftovers.hasNext(), qPrintable(leftovers.hasNext() ? leftovers.next() : QString()));
+
+    plan = planModelsFolderMove(from, dir.filePath(QStringLiteral("new")));
+    QVERIFY2(plan.ok(), qPrintable(plan.error));
+    plan.sameVolume = false;
+    qint64 lastDone = -1;
+    qint64 lastTotal = -1;
+    int calls = 0;
+    const QString error = moveModelFiles(plan, [&](qint64 done, qint64 total) {
+        lastDone = done;
+        lastTotal = total;
+        ++calls;
+        return true;
+    });
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    QCOMPARE(readAll(plan.to + QStringLiteral("/checkpoints/big.safetensors")), big);
+    QVERIFY(QFileInfo::exists(sidecarPath(plan.to + QStringLiteral("/checkpoints/big.safetensors"))));
+    QCOMPARE(readAll(plan.to + QStringLiteral("/vae/small.safetensors")), QByteArray("vae"));
+    // The same modification time: the library's index still knows the file.
+    QCOMPARE(QFileInfo(plan.to + QStringLiteral("/checkpoints/big.safetensors")).lastModified(), modified);
+    QVERIFY(!QFileInfo::exists(from)); // empty afterwards: removed
+    QVERIFY(calls > 3);
+    QCOMPARE(lastTotal, plan.bytes);
+    QCOMPARE(lastDone, plan.bytes);
+    QDirIterator temp(plan.to, {QStringLiteral("*.moving")}, QDir::Files, QDirIterator::Subdirectories);
+    QVERIFY(!temp.hasNext());
+
+    // Paths in options and text.
+    const QString to = QStringLiteral("D:/Models");
+    QCOMPARE(relocatePath(QStringLiteral("C:\\Old\\loras\\a.safetensors"), QStringLiteral("C:/Old"), to), QStringLiteral("D:\\Models\\loras\\a.safetensors"));
+    QCOMPARE(relocatePath(QStringLiteral("C:/Old"), QStringLiteral("C:/Old"), to), to);
+    QCOMPARE(relocatePath(QStringLiteral("C:/Older/a.gguf"), QStringLiteral("C:/Old"), to), QStringLiteral("C:/Older/a.gguf"));
+#ifdef Q_OS_WIN
+    QCOMPARE(relocatePath(QStringLiteral("c:/old/vae/x.sft"), QStringLiteral("C:/Old"), to), QStringLiteral("D:/Models/vae/x.sft"));
+#endif
+    QVariantMap options{{QStringLiteral("extra_args"), QStringLiteral("--a C:\\Old\\x.gguf --b=C:/Old/y --c C:/Olden")},
+                        {QStringLiteral("threads"), 4}};
+    QVERIFY(relocateOptions(options, QStringLiteral("C:/Old"), to));
+    QCOMPARE(options.value(QStringLiteral("extra_args")).toString(), QStringLiteral("--a D:\\Models\\x.gguf --b=D:/Models/y --c C:/Olden"));
+    QCOMPARE(options.value(QStringLiteral("threads")).toInt(), 4);
+    QVERIFY(!relocateOptions(options, QStringLiteral("E:/Elsewhere"), to));
+}
+
+void TestRuntime::legacyModelsFirstStart()
+{
+    const QByteArray ckpt = makeSafetensors({{QStringLiteral("model.diffusion_model.input_blocks.0.0.weight"), {320, 4, 3, 3}},
+                                             {QStringLiteral("cond_stage_model.transformer.text_model.x.weight"), {768}}})
+                            + QByteArray(2 * 1024 * 1024, '\0');
+    // An earlier version's folder: a model with its sidecar, and a note that is not a model.
+    auto fillLegacy = [&](const QString &dir) {
+        return writeFile(dir + QStringLiteral("/checkpoints/old.safetensors"), ckpt) && writeFile(sidecarPath(dir + QStringLiteral("/checkpoints/old.safetensors")), "{}")
+               && writeFile(dir + QStringLiteral("/loras/put_loras_here"), "");
+    };
+    net::HttpClient http;
+    JobQueue jobs;
+
+    // Nothing to ask: no real model files, the folder is the standard one, or a folder is chosen.
+    {
+        QTemporaryDir data;
+        QTemporaryDir legacy;
+        ModelLibrary lib(&http);
+        lib.setDataDir(data.path());
+        lib.load();
+        QVERIFY(writeFile(legacy.filePath(QStringLiteral("loras/placeholder.safetensors")), "x"));
+        QVERIFY(legacyModelsToAsk(&lib, legacy.path()).isEmpty());
+        QVERIFY(fillLegacy(legacy.path()));
+        QCOMPARE(legacyModelsToAsk(&lib, legacy.path()), QDir::cleanPath(legacy.path()));
+        QVERIFY(writeFile(lib.standardFolder() + QStringLiteral("/checkpoints/new.safetensors"), ckpt));
+        QVERIFY(legacyModelsToAsk(&lib, lib.standardFolder()).isEmpty());
+        lib.setFolder(data.filePath(QStringLiteral("mine")));
+        QVERIFY(legacyModelsToAsk(&lib, legacy.path()).isEmpty());
+        QVERIFY(!settleLegacyModels(&jobs, &lib, nullptr, QString(), [](const FolderMovePlan &) {
+            [] { QFAIL("asked without a folder"); }();
+            return true;
+        }));
+        QTRY_VERIFY_WITH_TIMEOUT(!lib.isScanning(), 10000);
+    }
+
+    // Keep: the old folder becomes the chosen one, so the question does not come again.
+    {
+        QTemporaryDir data;
+        QTemporaryDir legacy;
+        QVERIFY(fillLegacy(legacy.path()));
+        ModelLibrary lib(&http);
+        lib.setDataDir(data.path());
+        lib.load();
+        QSignalSpy chosen(&lib, &ModelLibrary::folderChanged);
+        int asked = 0;
+        FolderMovePlan seen;
+        const QString ask = legacyModelsToAsk(&lib, legacy.path());
+        QVERIFY(!settleLegacyModels(&jobs, &lib, nullptr, ask, [&](const FolderMovePlan &plan) {
+            ++asked;
+            seen = plan;
+            return false;
+        }));
+        QCOMPARE(asked, 1);
+        QVERIFY2(seen.ok(), qPrintable(seen.error));
+        QCOMPARE(seen.from, QDir::cleanPath(legacy.path()));
+        QCOMPARE(seen.to, lib.standardFolder());
+        QCOMPARE(seen.models, 1);
+        QCOMPARE(chosen.size(), 1);
+        QCOMPARE(lib.chosenFolder(), QDir::cleanPath(legacy.path()));
+        QVERIFY(legacyModelsToAsk(&lib, legacy.path()).isEmpty());
+        QCOMPARE(readAll(legacy.filePath(QStringLiteral("checkpoints/old.safetensors"))), ckpt);
+        QTRY_VERIFY_WITH_TIMEOUT(!lib.isScanning() && !lib.entries().isEmpty(), 10000);
+        QCOMPARE(lib.entries().first().path, QDir::cleanPath(legacy.filePath(QStringLiteral("checkpoints/old.safetensors"))));
+    }
+
+    // Move: the files go to the standard folder, which then is the chosen one; profiles follow.
+    {
+        FakeRuntime fx;
+        QTemporaryDir data;
+        QTemporaryDir legacy;
+        QVERIFY(fillLegacy(legacy.path()));
+        ModelLibrary lib(&fx.http);
+        lib.setDataDir(data.path());
+        lib.load();
+        ServerProfile p = fx.supervisor.createProfile(QStringLiteral("adopted/fake"), QStringLiteral("Images"));
+        p.options = {{QStringLiteral("model"), QDir::toNativeSeparators(legacy.filePath(QStringLiteral("checkpoints/old.safetensors")))}};
+        fx.supervisor.addProfile(p);
+        QSignalSpy chosen(&lib, &ModelLibrary::folderChanged);
+        Job *job = settleLegacyModels(&fx.jobs, &lib, &fx.supervisor, legacyModelsToAsk(&lib, legacy.path()), [](const FolderMovePlan &) { return true; });
+        QVERIFY(job);
+        QTRY_VERIFY_WITH_TIMEOUT(job->isFinished(), 30000);
+        QVERIFY2(job->state() == Job::State::Succeeded, qPrintable(job->errorString()));
+        QCOMPARE(chosen.size(), 2); // the old folder while asking, then the new one
+        QCOMPARE(lib.chosenFolder(), lib.standardFolder());
+        const QString moved = lib.standardFolder() + QStringLiteral("/checkpoints/old.safetensors");
+        QCOMPARE(readAll(moved), ckpt);
+        QVERIFY(QFileInfo::exists(sidecarPath(moved)));
+        QVERIFY(!QFileInfo::exists(legacy.filePath(QStringLiteral("checkpoints/old.safetensors"))));
+        QVERIFY(QFileInfo::exists(legacy.filePath(QStringLiteral("loras/put_loras_here")))); // not a model: stays
+        QCOMPARE(fx.supervisor.profile(p.id)->options.value(QStringLiteral("model")).toString(), QDir::toNativeSeparators(moved));
+        QTRY_VERIFY_WITH_TIMEOUT(!lib.isScanning(), 10000);
+        QCOMPARE(lib.entries().size(), 1);
+        QCOMPARE(lib.entries().first().path, moved);
+    }
+
+    // A move that cannot be done (a file of that name in the new folder) keeps the old folder.
+    {
+        QTemporaryDir data;
+        QTemporaryDir legacy;
+        QVERIFY(fillLegacy(legacy.path()));
+        ModelLibrary lib(&http);
+        lib.setDataDir(data.path());
+        lib.load();
+        QVERIFY(writeFile(lib.standardFolder() + QStringLiteral("/checkpoints/old.safetensors"), "another"));
+        QString why;
+        QVERIFY(!settleLegacyModels(&jobs, &lib, nullptr, legacyModelsToAsk(&lib, legacy.path()), [&](const FolderMovePlan &plan) {
+            why = plan.error;
+            return true;
+        }));
+        QVERIFY2(why.contains(QStringLiteral("old.safetensors")), qPrintable(why));
+        QCOMPARE(lib.chosenFolder(), QDir::cleanPath(legacy.path()));
+        QCOMPARE(readAll(legacy.filePath(QStringLiteral("checkpoints/old.safetensors"))), ckpt);
+        QTRY_VERIFY_WITH_TIMEOUT(!lib.isScanning(), 10000);
+    }
 }
 
 // LUMEN_TEST_MODEL_DIRS=<dir>;<dir>: prints how every model file found there is classified.

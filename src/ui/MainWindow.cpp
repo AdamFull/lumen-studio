@@ -5,6 +5,7 @@
 #include "core/Paths.h"
 #include "core/Settings.h"
 #include "runtime/CloudTraining.h"
+#include "runtime/Hardware.h"
 #include "ui/Studio.h"
 #include "ui/Icons.h"
 #include "ui/PageFactory.h"
@@ -30,6 +31,7 @@
 #include <QLabel>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QPushButton>
 #include <QScreen>
 #include <QScrollArea>
 #include <QStackedWidget>
@@ -322,6 +324,12 @@ void MainWindow::buildMenus()
     });
 
     QMenu *help = menuBar()->addMenu(tr("&Help"));
+    QAction *models = help->addAction(Icons::get(QStringLiteral("folder")), tr("Open models folder"), this, [this] {
+        const QString folder = m_studio->models()->defaultFolder();
+        QDir().mkpath(folder);
+        QDesktopServices::openUrl(QUrl::fromLocalFile(folder));
+    });
+    models->setObjectName(QStringLiteral("openModelsFolder"));
     help->addAction(Icons::get(QStringLiteral("folder")), tr("Open log folder"), this, [] {
         QDesktopServices::openUrl(QUrl::fromLocalFile(paths::logs()));
     });
@@ -522,9 +530,50 @@ void MainWindow::maybeShowOnboarding()
 {
     if (!m_studio->providers()->providers().isEmpty() || Settings::instance().value(QStringLiteral("app/onboarded")).toBool())
         return;
+    // Not on top of another question (the models folder at start-up); once that is answered.
+    if (QApplication::activeModalWidget()) {
+        QTimer::singleShot(400, this, &MainWindow::maybeShowOnboarding);
+        return;
+    }
     OnboardingDialog dlg(m_studio, this);
     dlg.exec();
     Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
+}
+
+Job *MainWindow::offerModelsFolderMove(const std::function<bool(const runtime::FolderMovePlan &plan)> &ask)
+{
+    if (m_studio->legacyModelsFolder().isEmpty())
+        return nullptr;
+    // Not on top of another dialog (the first-run welcome); once that is closed.
+    if (!ask && QApplication::activeModalWidget()) {
+        QTimer::singleShot(400, this, [this] { offerModelsFolderMove(); });
+        return nullptr;
+    }
+    const QString title = tr("Models folder");
+    auto question = [this, title](const runtime::FolderMovePlan &plan) {
+        if (!plan.ok()) {
+            QMessageBox::information(this, title,
+                                     tr("Lumen keeps using %1 for models: %2\n\nYou can move them later in Settings → Models.")
+                                         .arg(QDir::toNativeSeparators(plan.from), plan.error));
+            return false;
+        }
+        QMessageBox box(QMessageBox::Question, title,
+                        tr("Lumen now keeps models in a folder that is easy to find: %1\n\nThe models of the earlier version are in %2 "
+                           "(%n file(s), %3). Move them to the new folder?",
+                           nullptr, plan.models)
+                            .arg(QDir::toNativeSeparators(plan.to), QDir::toNativeSeparators(plan.from), runtime::formatBytes(plan.bytes)),
+                        QMessageBox::NoButton, this);
+        box.setInformativeText(tr("Server settings that use them are updated. You can move the folder later in Settings → Models."));
+        QPushButton *move = box.addButton(tr("Move models"), QMessageBox::AcceptRole);
+        box.addButton(tr("Keep them where they are"), QMessageBox::RejectRole);
+        box.setDefaultButton(move);
+        box.exec();
+        return box.clickedButton() == move;
+    };
+    Job *job = m_studio->settleLegacyModels(ask ? ask : std::function<bool(const runtime::FolderMovePlan &)>(question));
+    if (job)
+        m_studio->notify(tr("Moving the models — progress is shown in the Queue."));
+    return job;
 }
 
 void MainWindow::checkLeftoverCloudPods()

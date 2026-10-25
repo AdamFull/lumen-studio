@@ -1,4 +1,5 @@
 #include "core/ImageOps.h"
+#include "core/Paths.h"
 #include "doc/Document.h"
 #include "ui/canvas/CanvasView.h"
 #include "ui/canvas/ContextBar.h"
@@ -139,6 +140,7 @@ private slots:
     void pluginsOff();
     void legacyPageSetting();
     void presetServerDialog();
+    void modelsFolderSettings();
 
 private:
     ToolEvent at(double x, double y, Qt::KeyboardModifiers mods = Qt::NoModifier) const
@@ -3317,6 +3319,135 @@ void TestCanvas::presetServerDialog()
     auto *download = dlg.findChild<QPushButton *>(QStringLiteral("downloadMissing"));
     QVERIFY(download && download->isVisible());
     QVERIFY2(download->text().contains(QLatin1String("GB")), qPrintable(download->text()));
+}
+
+void TestCanvas::modelsFolderSettings()
+{
+    Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
+    Settings::instance().remove(QStringLiteral("models/folder"));
+    QTemporaryDir dir;
+    Studio studio;
+    runtime::ModelLibrary *lib = studio.models();
+    const QString standard = lib->defaultFolder();
+    // Relocated test data keeps the standard folder next to it, so nothing is asked at start-up.
+    QCOMPARE(standard, QDir::cleanPath(paths::defaultModels()));
+    QVERIFY(studio.legacyModelsFolder().isEmpty());
+    const QString model = standard + QStringLiteral("/checkpoints/folder-test.safetensors");
+    const QString lora = standard + QStringLiteral("/loras/folder-test-lora.safetensors");
+    for (const QString &path : {model, lora}) {
+        QDir().mkpath(QFileInfo(path).absolutePath());
+        QFile f(path);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write(fakeSafetensors({QStringLiteral("model.diffusion_model.input_blocks.0.0.weight")}));
+    }
+    runtime::ServerProfile profile = studio.servers()->createProfile(QStringLiteral("adopted/none"), QStringLiteral("Folder test"));
+    profile.options = {{QStringLiteral("model"), QDir::toNativeSeparators(model)},
+                       {QStringLiteral("lora_dir"), QDir::toNativeSeparators(standard + QStringLiteral("/loras"))}};
+    studio.servers()->addProfile(profile);
+    QImage ref(32, 32, QImage::Format_ARGB32);
+    ref.fill(Qt::red);
+    auto saved = studio.characters()->save(QStringLiteral("Mira (folder test)"), {{QStringLiteral("tags"), QStringLiteral("red hair")}}, {ref}, QString(),
+                                           QString(), QJsonObject{{QStringLiteral("file"), lora}, {QStringLiteral("trigger"), QStringLiteral("lmn_mira")}});
+    QTRY_VERIFY(saved.isFinished());
+    const QString characterId = saved.result().id;
+    const QString target = QDir::cleanPath(dir.filePath(QStringLiteral("Big drive/Models")));
+    // Leaves the shared test data as it found it, also when a check fails.
+    auto cleanup = qScopeGuard([&] {
+        studio.servers()->removeProfile(profile.id);
+        studio.characters()->remove(characterId);
+        for (const QString &path : {model, lora})
+            QFile::remove(path);
+        lib->setFolder(QString());
+        Settings::instance().remove(QStringLiteral("models/folder"));
+    });
+    auto lastMove = [&studio]() -> Job * {
+        Job *found = nullptr;
+        for (Job *j : studio.jobs()->jobs()) {
+            if (j->kind() == QLatin1String("models-folder"))
+                found = j;
+        }
+        return found;
+    };
+
+    // Help → Open models folder; no question at start-up without models in an old folder.
+    MainWindow window(&studio);
+    QAction *open = window.findChild<QAction *>(QStringLiteral("openModelsFolder"));
+    QVERIFY(open && open->isEnabled());
+    QVERIFY(!window.offerModelsFolderMove([](const runtime::FolderMovePlan &) {
+        [] { QFAIL("asked without models in an old folder"); }();
+        return true;
+    }));
+
+    // Settings → Models shows the folder.
+    SettingsDialog dlg(&studio, &window);
+    dlg.showTab(QStringLiteral("models"));
+    dlg.show();
+    auto *page = dlg.findChild<ModelsPage *>();
+    QVERIFY(page);
+    auto *shown = page->findChild<ElidedLabel *>(QStringLiteral("modelsFolder"));
+    QVERIFY(shown);
+    QCOMPARE(shown->fullText(), QDir::toNativeSeparators(standard));
+    QVERIFY(page->findChild<QPushButton *>(QStringLiteral("moveModelsFolder")));
+
+    QString message;
+    auto answer = [&message](bool accept) {
+        QTimer::singleShot(200, [&message, accept] {
+            if (auto *box = qobject_cast<QMessageBox *>(QApplication::activeModalWidget())) {
+                message = box->text() + u'|' + box->informativeText();
+                if (accept)
+                    box->defaultButton()->click();
+                else
+                    box->reject();
+            }
+        });
+    };
+    // Into itself: refused with the reason.
+    answer(true);
+    page->moveFolder(standard + QStringLiteral("/loras/sub"));
+    QVERIFY2(message.contains(QStringLiteral("inside the current models folder")), qPrintable(message));
+    QVERIFY(!lastMove());
+    // Cancelled: nothing moves.
+    const runtime::FolderMovePlan plan = runtime::planModelsFolderMove(standard, target);
+    QVERIFY2(plan.ok(), qPrintable(plan.error));
+    message.clear();
+    answer(false);
+    page->moveFolder(target);
+    QVERIFY2(message.startsWith(QStringLiteral("Move %1 model(s)").arg(plan.models)), qPrintable(message));
+    QVERIFY(!lastMove());
+    QVERIFY(QFileInfo::exists(model));
+
+    // Moved: a Queue job; the setting, the page, the server and the character's LoRA follow.
+    answer(true);
+    page->moveFolder(target);
+    Job *job = lastMove();
+    QVERIFY(job);
+    QTRY_VERIFY_WITH_TIMEOUT(job->isFinished(), 20000);
+    QVERIFY2(job->state() == Job::State::Succeeded, qPrintable(job->errorString()));
+    QCOMPARE(lib->defaultFolder(), target);
+    QCOMPARE(Settings::instance().value(QStringLiteral("models/folder")).toString(), target);
+    QCOMPARE(shown->fullText(), QDir::toNativeSeparators(target));
+    const QString movedModel = target + QStringLiteral("/checkpoints/folder-test.safetensors");
+    QVERIFY(QFileInfo::exists(movedModel));
+    QVERIFY(!QFileInfo::exists(model));
+    QCOMPARE(studio.servers()->profile(profile.id)->options.value(QStringLiteral("model")).toString(), QDir::toNativeSeparators(movedModel));
+    QCOMPARE(studio.servers()->profile(profile.id)->options.value(QStringLiteral("lora_dir")).toString(),
+             QDir::toNativeSeparators(target + QStringLiteral("/loras")));
+    QCOMPARE(studio.characters()->entry(characterId)->lora.value(QStringLiteral("file")).toString(),
+             target + QStringLiteral("/loras/folder-test-lora.safetensors"));
+    // Downloads go there now.
+    runtime::HubDownload d;
+    d.file.path = QStringLiteral("next.safetensors");
+    d.file.kind = runtime::ModelKind::Lora;
+    QCOMPARE(studio.hub()->destinationFor(d), target + QStringLiteral("/loras/next.safetensors"));
+
+    // And back, so the shared test data keeps its files.
+    Job *back = studio.moveModelsFolder(standard);
+    QTRY_VERIFY_WITH_TIMEOUT(back->isFinished(), 20000);
+    QVERIFY2(back->state() == Job::State::Succeeded, qPrintable(back->errorString()));
+    QVERIFY(QFileInfo::exists(model));
+    QCOMPARE(studio.characters()->entry(characterId)->lora.value(QStringLiteral("file")).toString(), lora);
+    QCOMPARE(lib->defaultFolder(), standard);
+    dlg.close();
 }
 
 QTEST_MAIN(TestCanvas)

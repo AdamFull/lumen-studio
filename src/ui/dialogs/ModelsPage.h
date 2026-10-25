@@ -17,10 +17,12 @@ class QVBoxLayout;
 
 namespace lumen::ui {
 
+class ElidedLabel;
 class Studio;
 
-// Settings → Models: every model file Lumen knows (its own folder plus folders the user adds),
-// with what each file is, whether it fits the GPU, Civitai details and which servers use it.
+// Settings → Models: Lumen's models folder (open, move), and every model file Lumen knows (its own
+// folder plus folders the user adds), with what each file is, whether it fits the GPU, Civitai
+// details and which servers use it.
 class ModelsPage : public QWidget
 {
     Q_OBJECT
@@ -32,7 +34,11 @@ public:
     static QString fitText(const QString &key);
     static QColor fitColor(const QString &key);
 
+    // Moves Lumen's models folder to `target` after asking (Move… picks the folder first).
+    void moveFolder(const QString &target);
+
 private:
+    void showFolder();
     void reload();
     void showDetails();
     void buildFoldersMenu();
@@ -49,6 +55,7 @@ private:
     QTreeWidget *m_list;
     QLabel *m_status;
     QPushButton *m_folders;
+    ElidedLabel *m_folder;
     QWidget *m_details;
     QVBoxLayout *m_detailsLayout;
 };

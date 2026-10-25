@@ -14,6 +14,7 @@
 #include "pose/Skeleton.h"
 #include "runtime/ModelHub.h"
 #include "runtime/ModelLibrary.h"
+#include "runtime/ModelsFolder.h"
 #include "runtime/RunPod.h"
 #include "runtime/RuntimeStore.h"
 #include "runtime/Supervisor.h"
@@ -57,6 +58,16 @@ public:
     runtime::ModelLibrary *models() { return &m_models; }
     // Hugging Face / Civitai search and downloads into the library.
     runtime::ModelHub *hub() { return &m_hub; }
+    // Moves Lumen's models folder (Settings → Models → Move…), see runtime::moveModelsFolder. The
+    // chosen folder is kept in the "models/folder" setting; characters' LoRA files follow it.
+    Job *moveModelsFolder(const QString &to);
+    // An earlier version's models folder (<app data>/models) with models in it while no folder is
+    // chosen; "" when there is nothing to ask. The library uses it until MainWindow has asked, once,
+    // at start-up.
+    QString legacyModelsFolder() const { return m_legacyModels; }
+    // Settles that question (runtime::settleLegacyModels): moveThem(plan) decides. Returns the
+    // move job, if any.
+    Job *settleLegacyModels(const std::function<bool(const runtime::FolderMovePlan &plan)> &moveThem);
     // RunPod API (cloud LoRA training, M15).
     runtime::RunPodClient *runPod() { return &m_runPod; }
     // Provider of a managed server (bound through its "managed_server" setting), if any.
@@ -174,6 +185,7 @@ private:
     bool m_restoring = false;
     bool m_switching = false;
     QStringList m_cast;
+    QString m_legacyModels;
 };
 
 } // namespace lumen::ui

@@ -7,6 +7,7 @@
 #include "net/HttpClient.h"
 #include "runtime/Download.h"
 #include "runtime/ModelHub.h"
+#include "runtime/ModelsFolder.h"
 #include "runtime/RuntimeStore.h"
 
 #include <QCoreApplication>
@@ -142,12 +143,14 @@ ModelLibrary::ModelLibrary(net::HttpClient *http, QObject *parent)
     : QObject(parent)
     , m_http(http)
     , m_dataDir(paths::appData())
+    , m_standardFolder(paths::defaultModels())
 {
 }
 
 void ModelLibrary::setDataDir(const QString &dir)
 {
     m_dataDir = dir;
+    m_standardFolder = QDir(dir).filePath(QStringLiteral("models"));
 }
 
 QString ModelLibrary::indexPath() const
@@ -157,7 +160,65 @@ QString ModelLibrary::indexPath() const
 
 QString ModelLibrary::defaultFolder() const
 {
-    return QDir(m_dataDir).filePath(QStringLiteral("models"));
+    return QDir::cleanPath(m_folder.isEmpty() ? m_standardFolder : m_folder);
+}
+
+QString ModelLibrary::standardFolder() const
+{
+    return QDir::cleanPath(m_standardFolder);
+}
+
+void ModelLibrary::setFolder(const QString &path)
+{
+    const QString typed = QDir::fromNativeSeparators(path.trimmed());
+    const QString clean = typed.isEmpty() ? QString() : QDir::cleanPath(QFileInfo(typed).absoluteFilePath());
+    if (clean == m_folder)
+        return;
+    const QString before = defaultFolder();
+    m_folder = clean;
+    if (m_loaded && !sameFile(before, defaultFolder())) {
+        useOwnFolder();
+        save();
+        emit changed();
+        rescan();
+    }
+    emit folderChanged();
+}
+
+void ModelLibrary::useOwnFolder()
+{
+    const QString own = defaultFolder();
+    for (const QString &sub : subfolders())
+        QDir().mkpath(QDir(own).filePath(sub));
+    // A folder that was added and is now Lumen's own is not listed twice.
+    m_roots.removeIf([&own](const ModelRoot &r) { return r.builtin || sameFile(r.path, own); });
+    m_roots.prepend({own, Text::tr("Lumen models"), true});
+}
+
+void ModelLibrary::relocate(const QString &from, const QString &to)
+{
+    QList<ModelEntry> moved;
+    for (auto it = m_entries.begin(); it != m_entries.end();) {
+        const QString path = relocatePath(it.key(), from, to);
+        if (path == it.key()) {
+            ++it;
+            continue;
+        }
+        ModelEntry e = it.value();
+        e.path = QDir::cleanPath(path);
+        moved << e;
+        it = m_entries.erase(it);
+    }
+    for (const ModelEntry &e : std::as_const(moved))
+        m_entries.insert(e.path, e);
+    for (ModelRoot &r : m_roots) {
+        if (!r.builtin)
+            r.path = QDir::cleanPath(relocatePath(r.path, from, to));
+    }
+    m_relocations.append({from, to});
+    save();
+    emit changed();
+    emit relocated(QDir::cleanPath(from), QDir::cleanPath(to));
 }
 
 QString ModelLibrary::subfolderFor(ModelKind kind)
@@ -178,6 +239,15 @@ QString ModelLibrary::subfolderFor(ModelKind kind)
     case ModelKind::Unknown: break;
     }
     return QStringLiteral("other");
+}
+
+QStringList ModelLibrary::subfolders()
+{
+    QStringList out;
+    for (ModelKind kind : {ModelKind::Checkpoint, ModelKind::DiffusionModel, ModelKind::Lora, ModelKind::ControlNet, ModelKind::IpAdapter,
+                           ModelKind::ClipVision, ModelKind::Vae, ModelKind::TextEncoder, ModelKind::Upscaler, ModelKind::Embedding, ModelKind::Llm})
+        out << subfolderFor(kind);
+    return out;
 }
 
 void ModelLibrary::load()
@@ -206,12 +276,8 @@ void ModelLibrary::load()
         }
     }
     // Lumen's own folder, with the usual sub-folders, is always scanned first.
-    const QString own = defaultFolder();
-    for (ModelKind kind : {ModelKind::Checkpoint, ModelKind::DiffusionModel, ModelKind::Lora, ModelKind::ControlNet, ModelKind::IpAdapter,
-                           ModelKind::ClipVision, ModelKind::Vae, ModelKind::TextEncoder, ModelKind::Upscaler, ModelKind::Embedding, ModelKind::Llm})
-        QDir().mkpath(QDir(own).filePath(subfolderFor(kind)));
-    m_roots.removeIf([&own](const ModelRoot &r) { return sameFile(r.path, own); });
-    m_roots.prepend({QDir::cleanPath(own), Text::tr("Lumen models"), true});
+    useOwnFolder();
+    m_loaded = true;
     emit changed();
 }
 
@@ -337,6 +403,7 @@ void ModelLibrary::rescan()
     for (const ModelRoot &r : std::as_const(m_roots))
         roots << r.path;
     const QHash<QString, ModelEntry> known = m_entries;
+    const qsizetype relocations = m_relocations.size();
     QPointer<ModelLibrary> self(this);
     async::run([roots, known]() {
         QHash<QString, ModelEntry> found;
@@ -371,9 +438,19 @@ void ModelLibrary::rescan()
             }
         }
         return found;
-    }).then(this, [self](QHash<QString, ModelEntry> found) {
+    }).then(this, [self, relocations](QHash<QString, ModelEntry> found) {
         if (!self)
             return;
+        // Files that moved while this scan ran (relocate) keep their entries under the new paths.
+        for (qsizetype i = relocations; i < self->m_relocations.size(); ++i) {
+            const auto &[from, to] = self->m_relocations.at(i);
+            QHash<QString, ModelEntry> moved;
+            for (ModelEntry e : std::as_const(found)) {
+                e.path = QDir::cleanPath(relocatePath(e.path, from, to));
+                moved.insert(e.path, e);
+            }
+            found = moved;
+        }
         self->m_entries = found;
         self->m_scanning = false;
         self->save();

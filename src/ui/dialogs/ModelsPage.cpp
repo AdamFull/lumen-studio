@@ -217,6 +217,31 @@ ModelsPage::ModelsPage(Studio *studio, QWidget *parent)
     v->addWidget(mutedLabel(tr("Model files on this computer: Lumen's models folder and the folders you add (ComfyUI, WebUI, LM Studio, "
                                "Downloads…). Files stay where they are; Lumen reads their headers to tell what they are."),
                             this));
+    // Lumen's own folder: where downloads and trained LoRAs go.
+    auto *folderRow = new QHBoxLayout;
+    auto *folderLabel = new QLabel(tr("Models folder:"), this);
+    m_folder = new ElidedLabel(QString(), this);
+    m_folder->setObjectName(QStringLiteral("modelsFolder"));
+    m_folder->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    auto *openFolder = new QPushButton(Icons::get(QStringLiteral("folder")), tr("Open folder"), this);
+    auto *moveFolderButton = new QPushButton(tr("Move…"), this);
+    moveFolderButton->setObjectName(QStringLiteral("moveModelsFolder"));
+    moveFolderButton->setToolTip(tr("Moves the models in this folder to another folder, for example on a larger drive"));
+    folderRow->addWidget(folderLabel);
+    folderRow->addWidget(m_folder, 1);
+    folderRow->addWidget(openFolder);
+    folderRow->addWidget(moveFolderButton);
+    v->addLayout(folderRow);
+    connect(openFolder, &QPushButton::clicked, this, [this] {
+        const QString folder = m_studio->models()->defaultFolder();
+        QDir().mkpath(folder);
+        QDesktopServices::openUrl(QUrl::fromLocalFile(folder));
+    });
+    connect(moveFolderButton, &QPushButton::clicked, this, [this] {
+        const QString target = QFileDialog::getExistingDirectory(this, tr("Move the models to"), QFileInfo(m_studio->models()->defaultFolder()).absolutePath());
+        if (!target.isEmpty())
+            moveFolder(target);
+    });
     auto *bar = new QHBoxLayout;
     m_search = new QLineEdit(this);
     m_search->setPlaceholderText(tr("Search models…"));
@@ -266,6 +291,7 @@ ModelsPage::ModelsPage(Studio *studio, QWidget *parent)
     v->addWidget(m_status);
 
     runtime::ModelLibrary *lib = m_studio->models();
+    connect(lib, &runtime::ModelLibrary::folderChanged, this, &ModelsPage::showFolder);
     connect(lib, &runtime::ModelLibrary::changed, this, &ModelsPage::reload);
     connect(lib, &runtime::ModelLibrary::scanFinished, this, &ModelsPage::reload);
     connect(rescan, &QPushButton::clicked, lib, &runtime::ModelLibrary::rescan);
@@ -279,8 +305,42 @@ ModelsPage::ModelsPage(Studio *studio, QWidget *parent)
         self->m_hardware = hw;
         self->reload();
     });
+    showFolder();
     reload();
     showDetails();
+}
+
+void ModelsPage::showFolder()
+{
+    m_folder->setFullText(QDir::toNativeSeparators(m_studio->models()->defaultFolder()));
+    m_folder->setToolTip(tr("%1\nDownloads and trained LoRAs go here, in sub-folders named like ComfyUI's (checkpoints, loras, vae…), so "
+                            "ComfyUI can use the same folder.")
+                             .arg(QDir::toNativeSeparators(m_studio->models()->defaultFolder())));
+}
+
+void ModelsPage::moveFolder(const QString &target)
+{
+    const QString title = tr("Move models folder");
+    const runtime::FolderMovePlan plan = runtime::planModelsFolderMove(m_studio->models()->defaultFolder(), target);
+    if (!plan.ok()) {
+        QMessageBox::warning(this, title, plan.error);
+        return;
+    }
+    const QString question =
+        plan.models > 0 ? tr("Move %n model(s) (%1) from %2 to %3?", nullptr, plan.models)
+                              .arg(runtime::formatBytes(plan.bytes), QDir::toNativeSeparators(plan.from), QDir::toNativeSeparators(plan.to))
+                        : tr("Use %1 as the models folder? There are no models to move.").arg(QDir::toNativeSeparators(plan.to));
+    QMessageBox box(QMessageBox::Question, title, question, QMessageBox::NoButton, this);
+    box.setInformativeText(tr("Servers that are running stop while the files move and start again afterwards. Server settings and "
+                              "characters' LoRAs that use these files are updated. Other folders you added stay where they are."));
+    QPushButton *move = box.addButton(tr("Move"), QMessageBox::AcceptRole);
+    box.addButton(QMessageBox::Cancel);
+    box.setDefaultButton(move);
+    box.exec();
+    if (box.clickedButton() != move)
+        return;
+    m_studio->moveModelsFolder(plan.to);
+    m_studio->notify(tr("Moving the models folder — progress is shown in the Queue."));
 }
 
 QString ModelsPage::selectedPath() const

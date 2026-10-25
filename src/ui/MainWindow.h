@@ -34,6 +34,10 @@ public:
     // Cloud GPUs of earlier trainings that are still rented (after a crash or a failed shutdown):
     // offers to shut them down. Done once at start-up when a RunPod key is saved.
     void checkLeftoverCloudPods();
+    // Models in an earlier version's folder (Studio::legacyModelsFolder): asks once whether to move
+    // them to the new models folder (ask replaces the question, for tests). Called at start-up by
+    // main. Returns the move job, if any.
+    Job *offerModelsFolderMove(const std::function<bool(const runtime::FolderMovePlan &plan)> &ask = {});
     // Renders the window into a PNG (used by automated UI checks).
     bool saveScreenshot(const QString &path);
 

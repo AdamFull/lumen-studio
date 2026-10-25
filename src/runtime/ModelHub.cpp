@@ -1042,6 +1042,11 @@ Job *ModelHub::download(const HubDownload &d)
     return m_jobs->submit(Text::tr("Download %1").arg(d.title()), QStringLiteral("model-download"), [self, d](Job *job) {
         if (!self)
             return job->fail(Text::tr("Shutting down."));
+        // Its file would land in the folder that is being emptied (moveModelsFolder).
+        for (Job *other : self->m_jobs->jobs()) {
+            if (other->kind() == QLatin1String("models-folder") && other->isActive())
+                return job->fail(Text::tr("The models folder is being moved. Download again when that is done."));
+        }
         auto *fetcher = new Fetcher(self, d, job);
         job->setCancelHandler([fetcher = QPointer<Fetcher>(fetcher)] {
             if (fetcher)

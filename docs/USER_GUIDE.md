@@ -151,6 +151,26 @@ folders, Downloads, and the folders your servers already use. Files stay where t
 * **Pickle files:** files in pickle formats (.ckpt, .pt, .pth, .bin) are marked; prefer
   .safetensors.
 
+**The models folder.** Models that Lumen downloads, and LoRAs it trains, go into
+`Documents\Lumen\Models` (in the portable version `userdata\models`). Its sub-folders have
+ComfyUI's names (`checkpoints`, `diffusion_models`, `vae`, `text_encoders`, `loras`, `controlnet`,
+`ipadapter`, `clip_vision`, `upscale_models`, `embeddings`), plus `llm` for language models and
+their vision projectors, so ComfyUI can use the same folder. You can put model files there yourself.
+* **Open folder** at the top of the Models page, or *Help → Open models folder*, opens it.
+* **Move…** moves it to another folder, for example on a larger drive. The model files move with
+  what Lumen knows about them, as a job in the Queue: on the same drive in a moment, to another
+  drive by copying (the originals are deleted once every copy is complete). Running servers stop
+  meanwhile and start again afterwards. Server settings and characters' LoRAs that use the files
+  are updated, and new downloads go to the new folder. Other files in the folder stay where they
+  are. Lumen does not move into a folder inside the current one, or into one that already has
+  files of the same names; if something goes wrong, the files go back.
+* Folders you add (ComfyUI, WebUI, LM Studio…) are only read: Lumen never moves or changes files
+  there.
+* **Earlier versions** kept the models in `%LOCALAPPDATA%\Lumen\Lumen Studio\models`. If that
+  folder has models, Lumen asks once at start: **Move models** moves them to the new folder (with
+  the server settings), **Keep them where they are** keeps using the old folder. You can move it
+  later with *Move…*.
+
 **Downloading models.** **Download…** on the Models page searches Hugging Face and Civitai:
 * Pick a model, then a file. For language models Lumen suggests the best quantisation that fits
   your GPU and also downloads the vision projector, so the model can see images.
@@ -525,15 +545,15 @@ LumenStudio [--project file.lumen] [--page editor|generate|create|poses|parts|li
 | What | Installed | Portable |
 |---|---|---|
 | Settings, provider configuration, logs, character library | `%LOCALAPPDATA%\Lumen\Lumen Studio` | `userdata\` |
-| Server programs downloaded by Lumen, server settings | `…\Lumen Studio
-untimes`, `servers.json` | `userdata
-untimes` |
+| Server programs downloaded by Lumen, server settings | `…\Lumen Studio\runtimes`, `servers.json` | `userdata\runtimes` |
 | Server logs | `…\Lumen Studio\logs\servers` | `userdata\logs\servers` |
 | Cache (thumbnails) | `%LOCALAPPDATA%\Lumen\Lumen Studio\cache` | `userdata\cache` |
 | Projects | `Documents\Lumen Studio` | `userdata\projects` |
+| Models (downloads, trained LoRAs) | `Documents\Lumen\Models` (Settings → Models can move it) | `userdata\models` |
 | API keys | Windows Credential Manager | Windows Credential Manager |
 
-The environment variable `LUMEN_DATA_DIR` overrides both (useful for separate profiles).
+The environment variable `LUMEN_DATA_DIR` overrides both (useful for separate profiles); the models
+folder is then `<that folder>\models`.
 
 ## 13. Troubleshooting
 

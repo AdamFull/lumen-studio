@@ -55,14 +55,31 @@ class ModelLibrary : public QObject
 public:
     explicit ModelLibrary(net::HttpClient *http, QObject *parent = nullptr);
 
-    // <app data> by default (models.json, models/); tests use a temporary folder.
+    // <app data> by default (models.json); tests use a temporary folder, which then also holds the
+    // standard models folder (<dir>/models).
     void setDataDir(const QString &dir);
     void load();
     void save() const;
 
-    // Lumen's own folder with typed sub-folders (checkpoints, loras, llm, …).
+    // Lumen's own folder with typed sub-folders (checkpoints, loras, llm, …), where downloads and
+    // trained LoRAs go: the folder chosen in Settings → Models, else the standard one.
     QString defaultFolder() const;
+    // The folder when none is chosen: paths::defaultModels(), or <data dir>/models after setDataDir.
+    QString standardFolder() const;
+    QString chosenFolder() const { return m_folder; }
+    // Chooses the folder ("" = the standard one); the caller keeps the choice (folderChanged).
+    // Files stay where they are (moveModelsFolder moves them). Once loaded, the folder gets its
+    // sub-folders, becomes the built-in root and is scanned.
+    void setFolder(const QString &path);
+    // After the files under `from` moved to `to` (moveModelsFolder): their entries, with checksums
+    // and lookups, and added folders inside `from` follow them.
+    void relocate(const QString &from, const QString &to);
+    // Sub-folders by kind. ComfyUI's names, so a ComfyUI install can use the same tree; language
+    // models and their vision projectors share Lumen's own "llm" (findProjector looks next to the
+    // model).
     static QString subfolderFor(ModelKind kind);
+    // The sub-folders created in Lumen's folder.
+    static QStringList subfolders();
 
     QList<ModelRoot> roots() const { return m_roots; }
     bool addRoot(const QString &path, const QString &label = QString());
@@ -96,12 +113,21 @@ public:
 signals:
     void changed();
     void scanFinished();
+    // chosenFolder() changed.
+    void folderChanged();
+    void relocated(const QString &from, const QString &to);
 
 private:
     QString indexPath() const;
+    // Makes defaultFolder() the built-in root, with its sub-folders.
+    void useOwnFolder();
 
     net::HttpClient *m_http;
     QString m_dataDir;
+    QString m_standardFolder;
+    QString m_folder; // chosen; empty = the standard one
+    bool m_loaded = false;
+    QList<QPair<QString, QString>> m_relocations; // (from, to), applied to scans that were running
     QString m_civitaiBase{QStringLiteral("https://civitai.com")};
     QList<ModelRoot> m_roots;
     QHash<QString, ModelEntry> m_entries; // by path

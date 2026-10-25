@@ -60,6 +60,16 @@ QString defaultProjects()
     return QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + QStringLiteral("/Lumen Studio");
 }
 
+QString defaultModels()
+{
+    if (!overrideRoot().isEmpty())
+        return overrideRoot() + QStringLiteral("/models");
+    // Test mode moves app data but not Documents.
+    if (QStandardPaths::isTestModeEnabled())
+        return appData() + QStringLiteral("/models");
+    return QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + QStringLiteral("/Lumen/Models");
+}
+
 QString bundledData()
 {
     return QCoreApplication::applicationDirPath() + QStringLiteral("/data");

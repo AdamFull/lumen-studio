@@ -508,6 +508,9 @@ void LocalSetupDialog::refreshPlan()
     QString text = download > 0 ? tr("To download: <b>%1</b>").arg(runtime::formatBytes(download)) : tr("Nothing to download.");
     if (storage.isValid())
         text += QStringLiteral(" · ") + tr("free on %1: %2").arg(storage.rootPath(), runtime::formatBytes(storage.bytesAvailable()));
+    if (download > 0)
+        text += QStringLiteral("<br>") + tr("Models are saved in %1 (Settings → Models can move the folder).")
+                                             .arg(QDir::toNativeSeparators(m_studio->models()->defaultFolder()).toHtmlEscaped());
     if (storage.isValid() && storage.bytesAvailable() < download + (1LL << 30)) {
         text += QStringLiteral("<br><span style='color:%1'>%2</span>").arg(Theme::palette().danger.name(), tr("Not enough disk space."));
         blocked = true;
