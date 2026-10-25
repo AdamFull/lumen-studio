@@ -179,6 +179,8 @@ lumen/
     runtime/     lumen_runtime   (M12) runtime installer, server supervisor, model library, downloads
     ai/          lumen_ai        provider interfaces + registry, request model, providers/*,
                                  comfy workflow templates, director pipeline, prompt templates
+    filters/     lumen_filters   (M17) node filter graphs: model, .lumenfilter files, evaluation,
+                                 classic image nodes
     ui/          lumen_ui        main window, theme, canvas, tools, panels, dialogs, chat, pose editor
     app/         lumen (exe)     main.cpp, resources, icons, translations
   resources/     icons (SVG), QSS theme, presets, comfy workflows, prompt templates
@@ -186,7 +188,8 @@ lumen/
   docs/          plan, architecture notes, provider guides, user guide
 ```
 
-Dependency direction: `app → ui → ai, doc, pose → net, core`. No module depends on `ui` except `app`.
+Dependency direction: `app → ui → ai, doc, pose, filters → net, core` (`filters` needs only `core`).
+No module depends on `ui` except `app`.
 
 ### 3.2 Threading model
 
@@ -2241,7 +2244,96 @@ Survey of the code, the app log and user testing (October 2026):
   results as masked layers. Test with the mock server: a selection edit leaves every pixel
   outside the feathered mask unchanged.
 - [ ] Setup wizard and Settings → AI (§17.5).
-- [ ] Filter graph core and classic nodes; golden-image tests per node.
+- [x] Filter graph core and classic nodes; golden-image tests per node.
+  * `src/filters` (`lumen_filters`, `lumen::filters`): on `lumen_core` (`ImageOps`, `Async`) and Qt
+    Gui only, no UI, AI, document or runtime code; `lumen_ui` links it. No UI yet.
+  * Model (`NodeType.h`, `Registry.h`, `Graph.h`): port types image (ARGB32 premultiplied), mask
+    (Grayscale8), number, colour, text, choice; a mask may feed an image input (as grey), nothing
+    else converts. `NodeTypeInfo`: stable id, name, category, description, input and output ports
+    (inputs optional or required), parameters (default, range, decimals, unit, choices, an editor
+    hint such as `curve`, and `pixels` for lengths that follow the preview scale), and the flags
+    `readsSource` (input), `isOutput` and `expensive` (AI steps). `NodeRegistry` is thread-safe
+    and keyed by id; `global()` adds the classic nodes on first use and other libraries `add()`
+    theirs at start (the AI nodes from the ai layer). A graph's nodes hold their type, so
+    evaluation never looks types up, and tests use a copy of the registry with their own types.
+  * `Graph`: nodes (`n1`, `n2`…, parameter values coerced to their spec when set, values of
+    unknown parameters from newer files kept and saved again, an editor position), links (one per
+    input; `connect()` replaces it and refuses missing ports, types that do not fit and loops, with
+    a message), published parameters (node, parameter, label, slider range). `validate()` gives
+    errors for no output or several, loops, ports that do not fit (with a hint: “Put a ‘Mask from
+    image’ node between them.”), unconnected required inputs of nodes that feed the output and
+    published parameters that do not exist or have no range, and a warning for nodes that do not
+    feed the output, so a half-built graph still previews.
+  * Files: `.lumenfilter` JSON (`format`, `version` 1, name, description, nodes with type, position
+    and the parameters that were set, links, published). A newer version, an unknown node type
+    (“It may come from a plugin that is turned off.”) and links or ids that do not fit are load
+    errors in plain words; type, loop and missing-link problems load and are left to `validate()`.
+    `Library(folder)` lists a folder's filters by name, with the error of each one that does not
+    load, and names new files after the filter; the folder is chosen by the caller.
+  * Evaluation interface (the AI nodes and the node editor build on it):
+    * `NodeType::evaluate(const NodeArgs &, EvalContext &)` returns a `NodeResult`: the outputs, or
+      a `QFuture<Values>` that delivers them later. An AI node submits its Queue job (a queued call
+      to the GUI thread) and returns the job's future at once; the evaluation then gives up its
+      worker thread and continues on the pool when the future finishes (`then(pool)`, and
+      `onCanceled` for a cancelled job). A node fails by throwing `lumen::Error`, or through its
+      future; the message reads ““Blur”: …”. One type object serves every node of its type on
+      several threads, so node types keep no mutable state.
+    * `NodeArgs`: the connected inputs in their canonical formats (sizes may differ: nodes stretch
+      a mask or a second image to the first image) and the parameters, coerced, with pixel lengths
+      already multiplied by the preview scale; a connected value input overrides the parameter of
+      the same id. `EvalContext`: node id, scale, `isCancelled()` (long loops check it; `Ops` takes
+      it as `cancelCheck()`), `onCancel(handler)` (an AI node cancels its job), and the source and
+      selection at the evaluation's scale for the input node.
+    * `Evaluator::evaluate(graph, {image, selection}, {scale, target, runExpensive})` returns a
+      `QFuture<EvalResult>` (the output's image and mask, the target node's outputs, the nodes that
+      ran, `needsRun`). It validates first (only what the target needs when one node is previewed)
+      and runs the nodes in order on `async::pool()`.
+    * Cache: each node keeps its last outputs under a SHA-1 key of its type, its parameter values,
+      the scale and the keys of the nodes feeding it; the input node's key covers the source and
+      the selection by `QImage::cacheKey()`. A parameter change re-runs that node and what follows
+      it; moving a node re-runs nothing; entries of removed nodes go at the next evaluation.
+    * Preview: the source and selection are scaled once and pixel parameters with them, so a
+      preview looks like the result. With `runExpensive` off (previews of a graph with AI steps),
+      the evaluation stops with `needsRun` before an expensive node that is not cached; once it has
+      run, sliders after it preview live from its cached result.
+    * Cancellation: `Evaluator::cancel()` (and the evaluator's destructor) stops the running node
+      at its next check, cancels a pending future and runs its `onCancel` handlers, and finishes the
+      evaluation's future as cancelled at once; cancelling the future itself is seen at the same
+      checks but does not reach a pending future. Results of interrupted nodes are not cached. `evaluateNode()` runs one node
+      synchronously (tests, tools).
+  * Classic nodes (`ClassicNodes.cpp` over the pure functions of `Ops.h`): input, output; levels
+    (gamma, per channel), curves (a monotone cubic through “x y” points, no overshoot),
+    brightness / contrast (GIMP's formula), hue / saturation / lightness (HSL), colour balance (per
+    tone range, keeping the HSL lightness by default), invert, black and white (luminosity,
+    average, lightness), threshold (Rec. 601 luminosity), posterize: lookup tables on
+    unpremultiplied colours, alpha kept. Blur (Gaussian: exact kernel up to radius 3, three box
+    passes above), sharpen (4-neighbour Laplacian), unsharp mask (with threshold), median (sliding
+    histograms): on premultiplied float planes with the edge extended. Noise from a stateless hash
+    of seed and position (the same seed gives the same grain), Gaussian or even, coloured or grey.
+    Blend: the 13 layer modes in `doc::BlendMode`'s order with the same QPainter composition modes
+    as `doc::flatten` (mirrored, `filters` does not link `doc`), opacity, optional mask; mix by
+    mask. Mask from brightness or opacity, grow / shrink / feather, invert mask (`core/ImageOps`).
+    Resize (percent or pixels), crop, flip, rotate clockwise (exact for multiples of 90°, the canvas
+    grows otherwise).
+  * Tests (`tst_filters`, 33 functions): each node on small synthetic images, exactly where the formula is
+    exact (invert, levels, posterize, threshold, curves through a line, flips, rotations by 90°,
+    180° and 270°, crop, nearest-pixel resize, mix, blend modes at black and white, grow / shrink,
+    invert mask, hue 180° turning red into cyan) and by properties where it is not (a blur keeps
+    the mean and the symmetry and blurs premultiplied, sharpening overshoots at an edge and leaves
+    flat areas, noise is the same per seed and keeps the mean, the median removes salt and pepper
+    and keeps a straight edge, colour balance and brightness / contrast at their extremes). Graph
+    tests: validation messages, refused links, a JSON round-trip with every parameter type, file
+    errors, the library listing, the cache (counted evaluations: after one parameter change only
+    that node and the nodes after it run), the preview scale (equal to the full-size operation on
+    the scaled image with half the radius; crop rectangles scale), cancellation (by the evaluator,
+    by the future, by destruction), an asynchronous node (the only worker thread stays free while
+    it waits; failure; cancel), expensive nodes, and a whole-graph golden image
+    (`tests/data/filters/golden.lumenfilter` → `golden.png`, at most one level of difference;
+    regenerated with `LUMEN_UPDATE_GOLDEN=1 tst_filters goldenImage`).
+  * Not yet: the node editor, the Filters panel and the filters folder next to the models folder
+    (next step); applying a result as one undo step onto a new layer; the AI nodes. The cache keeps
+    one result per node with no memory limit (switching between preview and full scale computes
+    again), the nodes of one evaluation run one after another, and each node uses one thread.
 - [ ] Node editor window, saved filters, the Filters panel.
 - [ ] AI nodes.
 - [ ] Fix the layout checklist (§17.9); screenshots after; then the audit runs strict in CI.

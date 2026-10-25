@@ -1,0 +1,31 @@
+{
+    "format": "lumen-filter",
+    "version": 1,
+    "name": "Golden test",
+    "description": "Levels, hue and saturation, blur, overlay with the original and posterize, mixed in through the feathered selection.",
+    "nodes": [
+        {"id": "in", "type": "input", "x": 0, "y": 0},
+        {"id": "levels", "type": "levels", "x": 200, "y": 0, "params": {"inBlack": 20, "inWhite": 235, "gamma": 1.3}},
+        {"id": "hue", "type": "hue-saturation", "x": 400, "y": 0, "params": {"hue": 30, "saturation": 20}},
+        {"id": "blur", "type": "gaussian-blur", "x": 600, "y": 0, "params": {"radius": 1.5}},
+        {"id": "overlay", "type": "blend", "x": 800, "y": 0, "params": {"mode": "overlay", "opacity": 60}},
+        {"id": "poster", "type": "posterize", "x": 1000, "y": 0, "params": {"levels": 6}},
+        {"id": "feather", "type": "grow-shrink-feather", "x": 800, "y": 200, "params": {"grow": -2, "feather": 3}},
+        {"id": "mix", "type": "mix", "x": 1200, "y": 0},
+        {"id": "out", "type": "output", "x": 1400, "y": 0}
+    ],
+    "links": [
+        {"from": "in", "output": "image", "to": "levels", "input": "image"},
+        {"from": "levels", "output": "image", "to": "hue", "input": "image"},
+        {"from": "hue", "output": "image", "to": "blur", "input": "image"},
+        {"from": "blur", "output": "image", "to": "overlay", "input": "base"},
+        {"from": "in", "output": "image", "to": "overlay", "input": "top"},
+        {"from": "overlay", "output": "image", "to": "poster", "input": "image"},
+        {"from": "in", "output": "selection", "to": "feather", "input": "mask"},
+        {"from": "in", "output": "image", "to": "mix", "input": "outside"},
+        {"from": "poster", "output": "image", "to": "mix", "input": "inside"},
+        {"from": "feather", "output": "mask", "to": "mix", "input": "mask"},
+        {"from": "mix", "output": "image", "to": "out", "input": "image"}
+    ],
+    "published": [{"node": "levels", "param": "gamma", "label": "Midtones", "min": 0.5, "max": 2}]
+}

@@ -109,6 +109,7 @@ LumenStudio --cubism path/to/model.model3.json
 | `src/doc` | projects (SQLite), assets, layered documents, undo |
 | `src/ai` | provider framework, provider adapters, director pipeline, part slicing |
 | `src/live2d` | Cubism Core runtime binding, model/motion loading, motion/expression/pose playback, physics, software renderer |
+| `src/filters` | node filter graphs: graph model, `.lumenfilter` files, evaluation with a result cache, classic image nodes |
 | `src/ui` | main window, canvas, tools, panels, dialogs |
 | `src/app` | executable entry point |
 | `tests` | unit and contract tests (mock HTTP server) |
