@@ -47,6 +47,7 @@
 #include "ui/widgets/CharacterChip.h"
 #include "ui/widgets/Controls.h"
 #include "plugins/characters/training/LoraDatasetDialog.h"
+#include "runtime/ModelPresets.h"
 #include "ui/Studio.h"
 #include "plugins/BuiltInPlugins.h"
 #include "plugins/characters/assistant/AssistantPanel.h"
@@ -119,6 +120,7 @@ private slots:
     void installRuntime();
     void managedSdServer();
     void animaServer();
+    void kleinEditServer();
     void managedStudioScenario();
     void managedSdUpscale();
     void managedComfyUi();
@@ -765,6 +767,185 @@ void TestLive::animaServer()
     QTRY_COMPARE_WITH_TIMEOUT(servers.state(profile.id), runtime::ServerState::Stopped, 30000);
 }
 
+
+// FLUX.2 klein edits a selection through stable-diffusion.cpp, the way the editor does it
+// (plan M17 §17.4): LUMEN_LIVE_SD_RUNTIMES, LUMEN_LIVE_KLEIN_MODEL (a FLUX.2 klein 4B file) and
+// LUMEN_LIVE_MODEL_DIRS (folders with its VAE and text encoder, e.g. ComfyUI's models). The
+// profile comes from the model preset, the request from the region pipeline; 4 steps at CFG 1.
+void TestLive::kleinEditServer()
+{
+    const QString root = qEnvironmentVariable("LUMEN_LIVE_SD_RUNTIMES");
+    const QString model = QDir::cleanPath(qEnvironmentVariable("LUMEN_LIVE_KLEIN_MODEL"));
+    if (root.isEmpty() || qEnvironmentVariable("LUMEN_LIVE_KLEIN_MODEL").isEmpty())
+        QSKIP("LUMEN_LIVE_SD_RUNTIMES and LUMEN_LIVE_KLEIN_MODEL are needed");
+    QTemporaryDir tmp;
+    JobQueue jobs;
+    runtime::RuntimeStore store(&m_http, &jobs);
+    store.setRoot(root);
+    store.load();
+    const auto rt = store.latestManaged(QStringLiteral("sd.cpp"));
+    QVERIFY2(rt, "no managed sd.cpp install in LUMEN_LIVE_SD_RUNTIMES");
+
+    // The library finds the model's VAE and text encoder by their headers.
+    runtime::ModelLibrary lib(&m_http);
+    lib.setDataDir(tmp.filePath(QStringLiteral("library")));
+    lib.load();
+    QSignalSpy scanned(&lib, &runtime::ModelLibrary::scanFinished);
+    lib.addRoot(QFileInfo(model).absolutePath());
+    for (const QString &d : qEnvironmentVariable("LUMEN_LIVE_MODEL_DIRS").split(QLatin1Char(';'), Qt::SkipEmptyParts))
+        lib.addRoot(d);
+    QTRY_VERIFY_WITH_TIMEOUT(scanned.size() >= 1 && !lib.isScanning(), 120000);
+    const auto entry = lib.entry(model);
+    QVERIFY(entry);
+    qInfo().noquote() << "model:" << entry->info.family << entry->info.variant << runtime::modelKindKey(entry->info.kind) << entry->info.precision;
+    const runtime::ModelPreset *preset = runtime::presetFor(entry->info, model);
+    QVERIFY2(preset, "no model preset for the file");
+    qInfo().noquote() << "preset:" << preset->id;
+
+    runtime::ServerSupervisor servers(&store, &m_http);
+    servers.setConfigPath(tmp.filePath(QStringLiteral("servers.json")));
+    servers.setLogDir(tmp.filePath(QStringLiteral("logs")));
+    runtime::ServerProfile profile = servers.createProfile(rt->id, QStringLiteral("Live klein"));
+    profile.options.insert(runtime::presetOptions(QStringLiteral("sd.cpp"), runtime::VramTier::Small));
+    const QVariantMap options = runtime::modelServerOptions(&lib, model, runtime::VramTier::Small);
+    for (auto it = options.begin(); it != options.end(); ++it) {
+        if (it.value().typeId() == QMetaType::QString && it.value().toString().isEmpty())
+            profile.options.remove(it.key());
+        else
+            profile.options.insert(it.key(), it.value());
+    }
+    profile.startupTimeoutSec = 300;
+    QStringList problems;
+    for (const runtime::ProfileProblem &pp : runtime::checkSdProfile(&lib, profile))
+        problems << pp.message;
+    QVERIFY2(problems.isEmpty(), qPrintable(problems.join(QLatin1Char('\n'))));
+    servers.addProfile(profile);
+    servers.preflight = [&lib](const runtime::ServerProfile &p, const QString &) {
+        QStringList m;
+        for (const runtime::ProfileProblem &pp : runtime::checkSdProfile(&lib, p))
+            m << pp.message;
+        return m.join(QLatin1Char(' '));
+    };
+    qInfo().noquote() << "command:" << servers.launchFor(profile.id).commandLine();
+
+    // As the studio configures it.
+    SdCppProvider sd(SdCppProvider::describe(), QStringLiteral("live-klein"), &m_http, nullptr);
+    sd.configure({{QStringLiteral("url"), runtime::providerUrl(rt->kind, profile.port)},
+                  {QStringLiteral("model"), QFileInfo(model).fileName()},
+                  {QStringLiteral("model_family"), entry->info.family},
+                  {QStringLiteral("model_preset"), ui::modelDefaultsFor(&lib, model).toVariant()}});
+    sd.setGate(std::make_shared<SupervisorGate>(&servers, profile.id));
+    const ImageCapabilities caps = sd.capabilities();
+    QVERIFY(caps.edit && caps.regionEdit);
+    const PromptStyle style = promptStyleFor(&sd);
+    QCOMPARE(style.steps, 4);
+    QCOMPARE(style.cfg, 1.0);
+
+    // A simple scene: sky, grass, a red ball in the middle, a yellow sun.
+    QImage source(1024, 768, QImage::Format_ARGB32_Premultiplied);
+    {
+        QPainter p(&source);
+        QLinearGradient sky(0, 0, 0, 500);
+        sky.setColorAt(0, QColor(110, 160, 230));
+        sky.setColorAt(1, QColor(190, 215, 245));
+        p.fillRect(QRect(0, 0, 1024, 500), sky);
+        p.fillRect(QRect(0, 500, 1024, 268), QColor(80, 150, 70));
+        p.setRenderHint(QPainter::Antialiasing);
+        p.setPen(Qt::NoPen);
+        p.setBrush(QColor(250, 220, 60));
+        p.drawEllipse(QPoint(860, 120), 60, 60);
+        QRadialGradient ball(QPointF(490, 470), 110);
+        ball.setColorAt(0, QColor(255, 90, 80));
+        ball.setColorAt(1, QColor(170, 20, 20));
+        p.setBrush(ball);
+        p.drawEllipse(QPoint(512, 500), 100, 100);
+    }
+    QImage mask = img::createMask(source.size());
+    {
+        QPainter p(&mask);
+        p.setPen(Qt::NoPen);
+        p.setBrush(Qt::white);
+        p.drawEllipse(QPoint(512, 500), 120, 120);
+    }
+    const RegionInput region{source, mask, 64, 6, 12, true};
+    const RegionPlan plan = planRegion(img::maskBounds(mask), source.size(), region.padding, caps);
+    ImageRequest base;
+    base.mode = GenMode::Edit;
+    base.prompt = QStringLiteral("make the red ball blue, keep everything else the same");
+    base.seed = 42;
+    base.cfg = style.cfg;
+    base.steps = style.steps;
+    const ImageRequest req = prepareRegionRequest(base, region, plan, caps);
+    QCOMPARE(req.mode, GenMode::Edit);
+    qInfo() << "region" << plan.rect << "model size" << plan.modelSize;
+
+    QElapsedTimer t;
+    t.start();
+    ImageOperation *op = gatedGenerate(&sd, req);
+    op->setAutoDelete(false);
+    QTRY_VERIFY_WITH_TIMEOUT(op->isFinished(), 900000);
+    const QStringList log = servers.log(profile.id);
+    for (const QString &line : log) {
+        if (line.contains(QLatin1String("Version:")) || line.contains(QLatin1String("total params")) || line.contains(QLatin1String("sampling completed"))
+            || line.contains(QLatin1String("ref_image")) || line.contains(QLatin1String("decode")) || line.contains(QLatin1String("[E]"))
+            || line.contains(QLatin1String("[W]")))
+            qInfo().noquote() << "sd:" << line.trimmed();
+    }
+    QVERIFY2(op->state() == Operation::State::Succeeded, qPrintable(op->errorString()));
+    qInfo() << "edit after" << t.elapsed() << "ms (includes the server start)";
+    const QImage generated = op->result().images.value(0).image;
+    delete op;
+    QCOMPARE(generated.size(), plan.modelSize);
+    const QImage layer = compositeRegionResult(generated, region, plan);
+    QImage result = source;
+    {
+        QPainter p(&result);
+        p.drawImage(0, 0, layer);
+    }
+    save(source, QStringLiteral("klein_edit_source.png"));
+    save(generated, QStringLiteral("klein_edit_crop.png"));
+    save(result, QStringLiteral("klein_edit_result.png"));
+
+    // The ball: mean colour before and after (reported; the model decides how blue).
+    auto mean = [](const QImage &im) {
+        double r = 0, g = 0, b = 0;
+        int n = 0;
+        for (int y = 460; y < 540; ++y)
+            for (int x = 472; x < 552; ++x, ++n) {
+                const QColor c = im.pixelColor(x, y);
+                r += c.red();
+                g += c.green();
+                b += c.blue();
+            }
+        return QColor(int(r / n), int(g / n), int(b / n));
+    };
+    qInfo() << "ball before" << mean(source) << "after" << mean(result);
+    // A halo: how far the blended edge around the ball (outside it, inside the selection's reach)
+    // differs from the original background, per channel.
+    double ring = 0;
+    int ringPixels = 0;
+    for (int y = 350; y < 650; ++y)
+        for (int x = 362; x < 662; ++x) {
+            const double d = std::hypot(x - 512, y - 500);
+            if (d <= 104 || d >= 150)
+                continue;
+            const QColor a = result.pixelColor(x, y), b = source.pixelColor(x, y);
+            ring += (std::abs(a.red() - b.red()) + std::abs(a.green() - b.green()) + std::abs(a.blue() - b.blue())) / 3.0;
+            ++ringPixels;
+        }
+    qInfo() << "edge difference around the ball" << ring / ringPixels;
+    QVERIFY2(mean(result).blue() > mean(result).red(), "the ball did not turn blue");
+    // Outside the selection's reach, the image is unchanged.
+    const QRect reach = img::maskBounds(mask).adjusted(-30, -30, 30, 30);
+    int changed = 0;
+    for (int y = 0; y < result.height(); ++y)
+        for (int x = 0; x < result.width(); ++x)
+            if (!reach.contains(x, y) && result.pixel(x, y) != source.pixel(x, y))
+                ++changed;
+    QCOMPARE(changed, 0);
+    servers.stop(profile.id);
+    QTRY_COMPARE_WITH_TIMEOUT(servers.state(profile.id), runtime::ServerState::Stopped, 30000);
+}
 
 // The reference scenario with both servers run by Lumen: LUMEN_LIVE_LLAMA_SERVER/_MODEL/_MMPROJ for the
 // language model, LUMEN_LIVE_SD_* for sd.cpp, LUMEN_LIVE_REFERENCE. Servers start on first use

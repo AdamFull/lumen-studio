@@ -550,6 +550,96 @@ QImage colorMatch(const QImage &generated, const QImage &reference, const QImage
     return out.convertToFormat(generated.format());
 }
 
+namespace {
+
+// Three box passes (about a Gaussian) over a float plane, edges clamped.
+void blurPlane(std::vector<float> &plane, int w, int h, int r)
+{
+    if (r <= 0 || w <= 0 || h <= 0)
+        return;
+    std::vector<float> line(static_cast<size_t>(std::max(w, h)));
+    const float norm = 1.0f / float(2 * r + 1);
+    auto pass = [&](int n, auto at, auto set) {
+        double sum = 0;
+        for (int i = -r; i <= r; ++i)
+            sum += at(std::clamp(i, 0, n - 1));
+        for (int i = 0; i < n; ++i) {
+            line[static_cast<size_t>(i)] = float(sum) * norm;
+            sum += at(std::clamp(i + r + 1, 0, n - 1)) - at(std::clamp(i - r, 0, n - 1));
+        }
+        for (int i = 0; i < n; ++i)
+            set(i, line[static_cast<size_t>(i)]);
+    };
+    for (int k = 0; k < 3; ++k) {
+        for (int y = 0; y < h; ++y) {
+            float *row = plane.data() + static_cast<size_t>(y) * w;
+            pass(w, [row](int i) { return double(row[i]); }, [row](int i, float v) { row[i] = v; });
+        }
+        for (int x = 0; x < w; ++x) {
+            float *col = plane.data() + x;
+            pass(h, [col, w](int i) { return double(col[static_cast<size_t>(i) * w]); },
+                 [col, w](int i, float v) { col[static_cast<size_t>(i) * w] = v; });
+        }
+    }
+}
+
+} // namespace
+
+QImage matchEdgeColors(const QImage &generated, const QImage &reference, const QImage &mask, int radius, int inner)
+{
+    const QImage g = generated.convertToFormat(QImage::Format_ARGB32);
+    const QImage r = scaled(reference.convertToFormat(QImage::Format_ARGB32), g.size(), true);
+    const QImage m = scaled(mask.convertToFormat(QImage::Format_Grayscale8), g.size(), true);
+    const int w = g.width();
+    const int h = g.height();
+    if (w == 0 || h == 0 || radius <= 0)
+        return generated;
+    // Normalised convolution: the context's difference, smoothed, divided by the smoothed weight.
+    const size_t n = static_cast<size_t>(w) * h;
+    std::vector<float> weight(n), diff[3] = {std::vector<float>(n), std::vector<float>(n), std::vector<float>(n)};
+    size_t context = 0;
+    for (int y = 0; y < h; ++y) {
+        const auto *gp = reinterpret_cast<const QRgb *>(g.constScanLine(y));
+        const auto *rp = reinterpret_cast<const QRgb *>(r.constScanLine(y));
+        const uchar *mp = m.constScanLine(y);
+        for (int x = 0; x < w; ++x) {
+            const size_t i = static_cast<size_t>(y) * w + x;
+            if (mp[x] >= 128 || qAlpha(rp[x]) < 128)
+                continue;
+            weight[i] = 1.0f;
+            diff[0][i] = float(qRed(rp[x]) - qRed(gp[x]));
+            diff[1][i] = float(qGreen(rp[x]) - qGreen(gp[x]));
+            diff[2][i] = float(qBlue(rp[x]) - qBlue(gp[x]));
+            ++context;
+        }
+    }
+    if (context < 64)
+        return generated;
+    blurPlane(weight, w, h, radius);
+    for (auto &d : diff)
+        blurPlane(d, w, h, radius);
+    // Full correction in the context and at the mask's edge, none `inner` pixels inside it.
+    const QImage core = inner > 0 ? blurMask(erodeMask(m, inner), std::max(2, inner / 3) * 2) : QImage();
+    QImage out = g;
+    for (int y = 0; y < h; ++y) {
+        auto *px = reinterpret_cast<QRgb *>(out.scanLine(y));
+        const uchar *cp = core.isNull() ? nullptr : core.constScanLine(y);
+        for (int x = 0; x < w; ++x) {
+            const size_t i = static_cast<size_t>(y) * w + x;
+            if (weight[i] < 1e-3f)
+                continue;
+            const float fade = cp ? 1.0f - cp[x] / 255.0f : 1.0f;
+            const QRgb p = px[x];
+            const int v[3] = {qRed(p), qGreen(p), qBlue(p)};
+            int o[3];
+            for (int c = 0; c < 3; ++c)
+                o[c] = std::clamp(static_cast<int>(std::lround(v[c] + fade * diff[c][i] / weight[i])), 0, 255);
+            px[x] = qRgba(o[0], o[1], o[2], qAlpha(p));
+        }
+    }
+    return out.convertToFormat(generated.format());
+}
+
 QImage fillTransparentFromEdges(const QImage &image)
 {
     // Push-pull fill: build a mip pyramid of premultiplied colour (ignoring transparent pixels),

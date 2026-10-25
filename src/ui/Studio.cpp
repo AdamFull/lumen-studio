@@ -151,9 +151,6 @@ ai::Provider *Studio::providerForServer(const QString &profileId) const
     return nullptr;
 }
 
-namespace {
-
-// The preset of a server's model file, as the provider sees it.
 ai::ModelDefaults modelDefaultsFor(const runtime::ModelLibrary *library, const QString &file)
 {
     const QString path = QDir::cleanPath(QDir::fromNativeSeparators(file));
@@ -179,8 +176,6 @@ ai::ModelDefaults modelDefaultsFor(const runtime::ModelLibrary *library, const Q
     d.negativePrompt = p->negativePrompt;
     return d;
 }
-
-} // namespace
 
 void Studio::applyServerBindings()
 {

@@ -64,6 +64,12 @@ QImage compositeMasked(const QImage &base, const QImage &overlay, const QImage &
 // Linear per-channel colour transfer so `generated` matches `reference` statistics in pixels where
 // `mask` < 128 (the unchanged context area). Returns corrected copy of `generated`.
 QImage colorMatch(const QImage &generated, const QImage &reference, const QImage &mask);
+// Removes smooth colour drift that varies across `generated` (a model redrawing the context of an
+// edit paler here, greener there): the difference to `reference` in the context (`mask` < 128) is
+// smoothed over `radius` and spread into the masked area, fully at its edge and fading out
+// `inner` pixels inside it, so a blended-in edit shows no halo while the edited content keeps the
+// model's colours. Returns a corrected copy of `generated`.
+QImage matchEdgeColors(const QImage &generated, const QImage &reference, const QImage &mask, int radius, int inner);
 // Fills the transparent/new area of an outpaint canvas by smearing edge pixels (gives models context).
 QImage fillTransparentFromEdges(const QImage &image);
 // Flattens onto a solid colour (removes alpha).

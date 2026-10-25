@@ -126,8 +126,14 @@ QImage compositeRegionResult(const QImage &generated, const RegionInput &region,
 {
     QImage g = img::normalized(img::scaled(generated, plan.rect.size(), true));
     const QImage maskCrop = region.mask.copy(plan.rect);
-    if (region.colorMatch)
-        g = img::normalized(img::colorMatch(g, region.source.copy(plan.rect), img::dilateMask(maskCrop, region.grow + region.feather)));
+    if (region.colorMatch) {
+        // A global per-channel match, then the drift that varies across the crop (a model redrawing
+        // the context paler or greener), which would show as a halo along the feathered edge.
+        const QImage sourceCrop = region.source.copy(plan.rect);
+        const QImage context = img::dilateMask(maskCrop, region.grow + region.feather);
+        g = img::colorMatch(g, sourceCrop, context);
+        g = img::normalized(img::matchEdgeColors(g, sourceCrop, context, std::max(8, region.feather * 2), std::max(12, region.feather * 3)));
+    }
     const QImage blend = img::blurMask(img::dilateMask(maskCrop, region.grow + region.feather / 2), region.feather);
     QImage layer(region.source.size(), QImage::Format_ARGB32_Premultiplied);
     layer.fill(Qt::transparent);

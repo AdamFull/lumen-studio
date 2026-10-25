@@ -50,6 +50,7 @@ private slots:
     void packBitsRoundTrip();
     void psdRoundTrip();
     void psdComponentsPerformance();
+    void edgeColorsRemoveDrift();
 };
 
 void TestMasks::components()
@@ -270,6 +271,53 @@ void TestMasks::psdComponentsPerformance()
                                                   QPolygonF{QPointF(1000, 950), QPointF(1010, 1050)});
     QCOMPARE(cut.size(), 2);
     qInfo() << "components + cut on 2048^2:" << t.elapsed() << "ms";
+}
+
+// A model redrew the context of an edit with a drift that changes across the image (brighter on
+// the left, darker on the right) and put a new object in the selection: matchEdgeColors removes
+// the drift at the selection's edge (no halo once blended) and leaves the object as it is.
+void TestMasks::edgeColorsRemoveDrift()
+{
+    const QSize size(400, 400);
+    QImage reference(size, QImage::Format_ARGB32);
+    QImage generated(size, QImage::Format_ARGB32);
+    QImage mask(size, QImage::Format_Grayscale8);
+    mask.fill(0);
+    const QPoint centre(200, 200);
+    for (int y = 0; y < size.height(); ++y) {
+        for (int x = 0; x < size.width(); ++x) {
+            const QColor ref(60 + x / 4, 120, 200 - y / 4);
+            reference.setPixelColor(x, y, ref);
+            const int drift = 40 - x / 5; // +40 on the left to -40 on the right
+            const double d = std::hypot(x - centre.x(), y - centre.y());
+            QColor gen = d < 60 ? QColor(20, 40, 230) // the edited object
+                                : QColor(std::clamp(ref.red() + drift, 0, 255), std::clamp(ref.green() + drift, 0, 255),
+                                         std::clamp(ref.blue() + drift, 0, 255));
+            generated.setPixelColor(x, y, gen);
+            if (d < 110)
+                mask.scanLine(y)[x] = 255;
+        }
+    }
+    const QImage fixed = img::matchEdgeColors(generated, reference, mask, 24, 36);
+    QCOMPARE(fixed.size(), size);
+    // Just inside the selection's edge (where the feathered blend shows it), on both sides.
+    auto error = [&](const QImage &im, int x, int y) {
+        const QColor a = im.pixelColor(x, y), b = reference.pixelColor(x, y);
+        return std::abs(a.red() - b.red()) + std::abs(a.green() - b.green()) + std::abs(a.blue() - b.blue());
+    };
+    // At least 70 % of the drift goes (context lies on one side only there, so not all of it).
+    for (const QPoint p : {QPoint(95, 200), QPoint(305, 200), QPoint(130, 130)}) {
+        const int before = error(generated, p.x(), p.y());
+        const int after = error(fixed, p.x(), p.y());
+        QVERIFY2(before >= 30, "the test drift is there");
+        QVERIFY2(after * 10 <= before * 3, qPrintable(QStringLiteral("drift at %1,%2: %3 -> %4").arg(p.x()).arg(p.y()).arg(before).arg(after)));
+    }
+    // The object keeps the model's colour.
+    QCOMPARE(fixed.pixelColor(200, 200), QColor(20, 40, 230));
+    // Nothing to correct without context.
+    QImage all(size, QImage::Format_Grayscale8);
+    all.fill(255);
+    QCOMPARE(img::matchEdgeColors(generated, reference, all, 24, 36), generated);
 }
 
 QTEST_MAIN(TestMasks)

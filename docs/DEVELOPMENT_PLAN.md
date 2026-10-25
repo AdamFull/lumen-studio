@@ -2118,8 +2118,9 @@ Survey of the code, the app log and user testing (October 2026):
   * Not yet: FLUX.2 dev (Mistral Small 3.2 24B encoder), Z-Image, SD 3 and split SDXL presets;
     *Use with a server* does not know the GPU size, so it applies no VRAM overrides; sampling
     defaults reach requests in the next step. ComfyUI's "mixed" fp8 files (with `weight_scale`
-    tensors, such as `flux-2-klein-4b-fp8`) may not load in sd.cpp: the short live check at the end
-    of M17 tries one; GGUF files are the safe choice.
+    tensors, such as `flux-2-klein-4b-fp8`) load and edit correctly in the pinned sd.cpp with the
+    8 GB tier's `--type q8_0` (checked live, see the live check below); with `file` precision they
+    are untested.
 - [ ] Models folder: the visible default, ComfyUI subfolders, moving it, the one-time move from
   `%LOCALAPPDATA%`, extra roots.
 - [x] Sampling defaults from presets (CFG, guidance, image CFG, negative prompt) through
@@ -2159,6 +2160,20 @@ Survey of the code, the app log and user testing (October 2026):
 - [ ] User guide and README rewritten around the editor; plugins documented separately.
 - [ ] Short live check (RTX 4060 8 GB, FLUX.2 klein 4B through sd.cpp): one selection edit, one
   whole-image colorize, one new image. Everything before this step uses mock servers.
+  * Done early for the selection edit (October 2026, `tst_live kleinEditServer`): the user's
+    ComfyUI folder, the profile from the preset (`--diffusion-model`, `flux2-vae`, Qwen3 4B
+    `qwen_3_4b`, found by their headers), the region pipeline, 4 steps at CFG 1 on a 1024 × 1024
+    crop. "Make the red ball blue": blue, the rest unchanged; 38–45 s including the server start
+    (sampling 21 s from the GGUF Q8_0 file, 28 s from the fp8 file converted to q8_0; weights in
+    RAM). The ref_images request of the pinned sd-server works as mocked.
+  * Found: the model redraws the crop's context with a drift that varies across it (paler sky,
+    greener grass), which the global colour match cannot remove and which showed as a glow along
+    the feathered edge. `img::matchEdgeColors` (after `colorMatch` in `compositeRegionResult`)
+    spreads the smoothed context difference into the selection, fading out inside it: the edge
+    difference around the ball fell from 5.5 to 4.1 per channel, the ball unchanged
+    (`tst_masks edgeColorsRemoveDrift`). Left: light the model adds next to the new object, and a
+    new shadow fading out at the selection's edge.
+  * Still to check: a whole-image colorize and a new image, with the new shell.
 
 Acceptance:
 1. A new user installs Lumen, chooses *Run on this computer*, and edits a selected area with a

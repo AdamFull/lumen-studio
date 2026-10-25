@@ -3,6 +3,7 @@
 #include "ai/CharacterContext.h"
 #include "ai/Director.h"
 #include "ai/GenerationService.h"
+#include "ai/ModelDefaults.h"
 #include "ai/PartService.h"
 #include "ai/ProviderRegistry.h"
 #include "core/JobQueue.h"
@@ -30,6 +31,9 @@ inline constexpr QLatin1StringView Generate{"generate"};
 inline constexpr QLatin1StringView Editor{"editor"};
 inline constexpr QLatin1StringView Library{"library"};
 } // namespace pages
+
+// The model preset of a server's model file, as its provider sees it ("model_preset").
+ai::ModelDefaults modelDefaultsFor(const runtime::ModelLibrary *library, const QString &file);
 
 // Application context shared by all UI components: services, the open project, open documents
 // and cross-page actions ("open this image in the editor", "use this pose for generation"...).
