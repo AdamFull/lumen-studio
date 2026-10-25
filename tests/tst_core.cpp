@@ -267,6 +267,29 @@ void TestCore::jobCancelQueued()
     queue.retry(b);
     QCOMPARE(b->state(), Job::State::Queued);
     queue.remove(b);
+
+    // Work past its commit (a moved models folder): a cancel that came before is dropped, later
+    // ones do nothing, and it still succeeds.
+    Job *c = queue.submit(QStringLiteral("c"), QStringLiteral("h"), [](Job *job) { job->setCancelHandler([] {}); });
+    QTRY_COMPARE(c->state(), Job::State::Running);
+    c->cancel();
+    QVERIFY(c->isCancelRequested());
+    c->ignoreCancel();
+    QVERIFY(!c->isCancelRequested());
+    c->cancel();
+    QVERIFY(!c->isCancelRequested());
+    c->succeed(7);
+    QCOMPARE(c->state(), Job::State::Succeeded);
+    QCOMPARE(c->result().toInt(), 7);
+    // A retry can be cancelled again.
+    Job *d = queue.submit(QStringLiteral("d"), QStringLiteral("h"), [](Job *) {});
+    QTRY_COMPARE(d->state(), Job::State::Running);
+    d->ignoreCancel();
+    d->fail(QStringLiteral("x"));
+    queue.retry(d);
+    QCOMPARE(d->state(), Job::State::Queued);
+    d->cancel();
+    QCOMPARE(d->state(), Job::State::Cancelled);
 }
 
 void TestCore::sessionLockDetectsCrash()

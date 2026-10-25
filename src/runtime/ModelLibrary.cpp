@@ -32,15 +32,6 @@ class Text
     Q_DECLARE_TR_FUNCTIONS(lumen::runtime::ModelLibrary)
 };
 
-bool sameFile(const QString &a, const QString &b)
-{
-#ifdef Q_OS_WIN
-    return QDir::cleanPath(a).compare(QDir::cleanPath(b), Qt::CaseInsensitive) == 0;
-#else
-    return QDir::cleanPath(a) == QDir::cleanPath(b);
-#endif
-}
-
 bool hasModelFiles(const QString &dir, int depth = 2)
 {
     QDirIterator it(dir, modelFileFilters(), QDir::Files, QDirIterator::Subdirectories);
@@ -171,12 +162,16 @@ QString ModelLibrary::standardFolder() const
 void ModelLibrary::setFolder(const QString &path)
 {
     const QString typed = QDir::fromNativeSeparators(path.trimmed());
-    const QString clean = typed.isEmpty() ? QString() : QDir::cleanPath(QFileInfo(typed).absoluteFilePath());
+    QString clean = typed.isEmpty() ? QString() : QDir::cleanPath(QFileInfo(typed).absoluteFilePath());
+    // The standard folder is no choice: it stays the standard one when that changes (the portable
+    // ZIP on another drive letter).
+    if (samePath(clean, standardFolder()))
+        clean.clear();
     if (clean == m_folder)
         return;
     const QString before = defaultFolder();
     m_folder = clean;
-    if (m_loaded && !sameFile(before, defaultFolder())) {
+    if (m_loaded && !samePath(before, defaultFolder())) {
         useOwnFolder();
         save();
         emit changed();
@@ -191,7 +186,7 @@ void ModelLibrary::useOwnFolder()
     for (const QString &sub : subfolders())
         QDir().mkpath(QDir(own).filePath(sub));
     // A folder that was added and is now Lumen's own is not listed twice.
-    m_roots.removeIf([&own](const ModelRoot &r) { return r.builtin || sameFile(r.path, own); });
+    m_roots.removeIf([&own](const ModelRoot &r) { return r.builtin || samePath(r.path, own); });
     m_roots.prepend({own, Text::tr("Lumen models"), true});
 }
 
@@ -199,7 +194,8 @@ void ModelLibrary::relocate(const QString &from, const QString &to)
 {
     QList<ModelEntry> moved;
     for (auto it = m_entries.begin(); it != m_entries.end();) {
-        const QString path = relocatePath(it.key(), from, to);
+        // Files that stayed (in an added folder, or not moved) keep their entries where they are.
+        const QString path = movedPath(it.key(), from, to);
         if (path == it.key()) {
             ++it;
             continue;
@@ -211,11 +207,8 @@ void ModelLibrary::relocate(const QString &from, const QString &to)
     }
     for (const ModelEntry &e : std::as_const(moved))
         m_entries.insert(e.path, e);
-    for (ModelRoot &r : m_roots) {
-        if (!r.builtin)
-            r.path = QDir::cleanPath(relocatePath(r.path, from, to));
-    }
-    m_relocations.append({from, to});
+    // A scan that is still running saw the old paths; it is done again.
+    ++m_generation;
     save();
     emit changed();
     emit relocated(QDir::cleanPath(from), QDir::cleanPath(to));
@@ -313,7 +306,7 @@ bool ModelLibrary::addRoot(const QString &path, const QString &label)
     if (!QFileInfo(clean).isDir())
         return false;
     for (const ModelRoot &r : std::as_const(m_roots)) {
-        if (sameFile(r.path, clean))
+        if (samePath(r.path, clean))
             return false;
     }
     m_roots.append({clean, label.isEmpty() ? QFileInfo(clean).fileName() : label, false});
@@ -326,7 +319,7 @@ bool ModelLibrary::addRoot(const QString &path, const QString &label)
 void ModelLibrary::removeRoot(const QString &path)
 {
     for (int i = 0; i < m_roots.size(); ++i) {
-        if (!m_roots[i].builtin && sameFile(m_roots[i].path, path)) {
+        if (!m_roots[i].builtin && samePath(m_roots[i].path, path)) {
             const QString root = m_roots[i].path + QLatin1Char('/');
             m_roots.removeAt(i);
             // Forget its files unless another root still contains them.
@@ -382,19 +375,32 @@ QStringList ModelLibrary::suggestedRoots(const RuntimeStore *runtimes, const QSt
     for (const QString &c : std::as_const(candidates)) {
         bool covered = false;
         for (const ModelRoot &r : m_roots)
-            covered |= sameFile(r.path, c) || c.startsWith(r.path + QLatin1Char('/'), Qt::CaseInsensitive);
+            covered |= samePath(r.path, c) || c.startsWith(r.path + QLatin1Char('/'), Qt::CaseInsensitive);
         bool dup = false;
         for (const QString &o : std::as_const(out))
-            dup |= sameFile(o, c);
+            dup |= samePath(o, c);
         if (!covered && !dup && hasModelFiles(c))
             out << c;
     }
     return out;
 }
 
+void ModelLibrary::beginMove()
+{
+    m_moving = true;
+    ++m_generation; // a scan that runs now would see half of the files
+}
+
+void ModelLibrary::endMove()
+{
+    m_moving = false;
+    if (std::exchange(m_rescanPending, false))
+        rescan();
+}
+
 void ModelLibrary::rescan()
 {
-    if (m_scanning) {
+    if (m_scanning || m_moving) {
         m_rescanPending = true;
         return;
     }
@@ -403,7 +409,7 @@ void ModelLibrary::rescan()
     for (const ModelRoot &r : std::as_const(m_roots))
         roots << r.path;
     const QHash<QString, ModelEntry> known = m_entries;
-    const qsizetype relocations = m_relocations.size();
+    const int generation = m_generation;
     QPointer<ModelLibrary> self(this);
     async::run([roots, known]() {
         QHash<QString, ModelEntry> found;
@@ -438,21 +444,18 @@ void ModelLibrary::rescan()
             }
         }
         return found;
-    }).then(this, [self, relocations](QHash<QString, ModelEntry> found) {
+    }).then(this, [self, generation](QHash<QString, ModelEntry> found) {
         if (!self)
             return;
-        // Files that moved while this scan ran (relocate) keep their entries under the new paths.
-        for (qsizetype i = relocations; i < self->m_relocations.size(); ++i) {
-            const auto &[from, to] = self->m_relocations.at(i);
-            QHash<QString, ModelEntry> moved;
-            for (ModelEntry e : std::as_const(found)) {
-                e.path = QDir::cleanPath(relocatePath(e.path, from, to));
-                moved.insert(e.path, e);
-            }
-            found = moved;
+        self->m_scanning = false;
+        // The folder moved while this scan ran: its result would drop the entries (checksums,
+        // lookups) of files it did not reach. Scanned again, from the moved entries.
+        if (generation != self->m_generation) {
+            self->m_rescanPending = false;
+            self->rescan();
+            return;
         }
         self->m_entries = found;
-        self->m_scanning = false;
         self->save();
         emit self->changed();
         emit self->scanFinished();

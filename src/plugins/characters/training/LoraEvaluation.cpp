@@ -101,6 +101,9 @@ bool LoraEvaluation::begin(QString *error)
     const auto entry = m_studio->characters()->entry(m_characterId);
     if (!entry)
         return failNow(tr("The character is not in the character library."));
+    // The test copies go into the server's LoRA folder, which is usually in the models folder.
+    if (m_studio->models()->isMoving())
+        return failNow(tr("The models folder is being moved. Test the LoRA when that is done."));
     m_sheet = entry->sheet;
     m_trigger = readJson(QDir(m_runDir).filePath(QStringLiteral("run.json"))).value(QStringLiteral("trigger")).toString();
     const QList<QPair<int, QString>> all = epochFiles(m_runDir);
@@ -413,6 +416,11 @@ QString LoraEvaluation::apply(Studio *studio, const QString &characterId, const 
         return {};
     }
     runtime::ModelLibrary *library = studio->models();
+    if (library->isMoving()) {
+        if (error)
+            *error = tr("The models folder is being moved. Try again when that is done.");
+        return {};
+    }
     const QString folder = QDir(library->defaultFolder()).filePath(runtime::ModelLibrary::subfolderFor(runtime::ModelKind::Lora));
     QDir().mkpath(folder);
     const QString target = QDir(folder).filePath(QStringLiteral("%1-e%2.safetensors").arg(trigger).arg(epoch, 2, 10, QLatin1Char('0')));

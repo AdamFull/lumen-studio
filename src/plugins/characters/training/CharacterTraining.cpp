@@ -7,6 +7,7 @@
 #include "runtime/CloudTraining.h"
 #include "runtime/LoraTraining.h"
 #include "runtime/ModelLibrary.h"
+#include "runtime/ModelsFolder.h"
 #include "runtime/Trainer.h"
 #include "ui/Studio.h"
 #include "ui/dialogs/CharacterLoraDialog.h"
@@ -147,6 +148,22 @@ QPair<QString, QString> CharacterTraining::checkpointSource(Studio *studio, cons
     return {url, sha};
 }
 
+QString CharacterTraining::findCheckpoint(Studio *studio, const QString &checkpoint)
+{
+    if (checkpoint.isEmpty() || QFileInfo::exists(checkpoint))
+        return checkpoint;
+    const QString name = QFileInfo(checkpoint).fileName();
+    const QString own = studio->models()->defaultFolder();
+    QString found;
+    for (const runtime::ModelEntry &e : studio->models()->entries()) {
+        if (QFileInfo(e.path).fileName().compare(name, Qt::CaseInsensitive) != 0 || !QFileInfo::exists(e.path))
+            continue;
+        if (found.isEmpty() || runtime::isInsideFolder(e.path, own))
+            found = e.path;
+    }
+    return found.isEmpty() ? checkpoint : found;
+}
+
 CharacterTraining::CharacterTraining(Studio *studio, const Settings &settings)
     : QObject(studio)
     , m_studio(studio)
@@ -170,6 +187,10 @@ bool CharacterTraining::begin(QString *error)
     dataset.load();
     m_images = dataset.keptCount();
     m_trigger = dataset.settings().trigger;
+    // The finished LoRA is copied into the models folder, and a local training reads its base
+    // model from there.
+    if (m_studio->models()->isMoving())
+        return failNow(tr("The models folder is being moved. Start the training when that is done."));
     if (m_images == 0)
         return failNow(tr("Keep some images in the training set first."));
     if (m_trigger.isEmpty())
@@ -196,7 +217,7 @@ bool CharacterTraining::begin(QString *error)
         if (!canResume(m_runDir))
             return failNow(tr("There is no stopped training to continue."));
         const QJsonObject run = readJson(QDir(m_runDir).filePath(QStringLiteral("run.json")));
-        m_settings.checkpoint = run.value(QStringLiteral("checkpoint")).toString(m_settings.checkpoint);
+        m_settings.checkpoint = findCheckpoint(m_studio, run.value(QStringLiteral("checkpoint")).toString(m_settings.checkpoint));
         m_settings.epochs = run.value(QStringLiteral("epochs")).toInt(m_settings.epochs);
         m_settings.tier = runtime::VramTier(run.value(QStringLiteral("tier")).toInt(int(m_settings.tier)));
         m_trigger = run.value(QStringLiteral("trigger")).toString(m_trigger);
@@ -252,6 +273,9 @@ bool CharacterTraining::begin(QString *error)
 
 void CharacterTraining::launch(const QString &resumeState)
 {
+    // A move may have begun while the images were exported.
+    if (m_studio->models()->isMoving())
+        return fail(tr("The models folder is being moved. Start the training when that is done."));
     runtime::TrainingOptions o;
     o.runtimeId = m_settings.runtimeId;
     o.checkpoint = m_settings.checkpoint;

@@ -40,6 +40,10 @@ public:
     // Where a cloud pod can download the base model itself: a public Hugging Face file with its
     // SHA-256, from the model's library sidecar. Empty when the file must be uploaded.
     static QPair<QString, QString> checkpointSource(Studio *studio, const QString &checkpoint);
+    // The base model of a stopped run: `checkpoint` (from its run.json), or when that file is gone
+    // (the models folder was moved since) the library's file of the same name, preferring one in
+    // Lumen's own folder. `checkpoint` when there is none.
+    static QString findCheckpoint(Studio *studio, const QString &checkpoint);
 
     // Starts a training; nullptr (and *error) when it cannot start.
     static CharacterTraining *start(Studio *studio, const Settings &settings, QString *error = nullptr);

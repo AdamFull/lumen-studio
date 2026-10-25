@@ -67,13 +67,18 @@ public:
     // The folder when none is chosen: paths::defaultModels(), or <data dir>/models after setDataDir.
     QString standardFolder() const;
     QString chosenFolder() const { return m_folder; }
-    // Chooses the folder ("" = the standard one); the caller keeps the choice (folderChanged).
-    // Files stay where they are (moveModelsFolder moves them). Once loaded, the folder gets its
-    // sub-folders, becomes the built-in root and is scanned.
+    // Chooses the folder ("" or the standard folder = the standard one); the caller keeps the
+    // choice (folderChanged). Files stay where they are (moveModelsFolder moves them). Once loaded,
+    // the folder gets its sub-folders, becomes the built-in root and is scanned.
     void setFolder(const QString &path);
-    // After the files under `from` moved to `to` (moveModelsFolder): their entries, with checksums
-    // and lookups, and added folders inside `from` follow them.
+    // After the files under `from` moved to `to` (moveModelsFolder): their entries follow them with
+    // checksums and lookups. Files that stayed (in added folders, which never move) keep theirs.
     void relocate(const QString &from, const QString &to);
+    // While moveModelsFolder moves the files: scans wait (they would see half of them), and what
+    // writes into the folder (downloads, trained LoRAs) refuses. endMove() also after a failed move.
+    void beginMove();
+    void endMove();
+    bool isMoving() const { return m_moving; }
     // Sub-folders by kind. ComfyUI's names, so a ComfyUI install can use the same tree; language
     // models and their vision projectors share Lumen's own "llm" (findProjector looks next to the
     // model).
@@ -127,7 +132,8 @@ private:
     QString m_standardFolder;
     QString m_folder; // chosen; empty = the standard one
     bool m_loaded = false;
-    QList<QPair<QString, QString>> m_relocations; // (from, to), applied to scans that were running
+    bool m_moving = false;
+    int m_generation = 0; // changes when files move; a scan that started before is done again
     QString m_civitaiBase{QStringLiteral("https://civitai.com")};
     QList<ModelRoot> m_roots;
     QHash<QString, ModelEntry> m_entries; // by path

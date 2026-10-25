@@ -63,6 +63,9 @@ public:
     void fail(const QString &error);
     void reportCancelled();
     bool isCancelRequested() const { return m_cancelRequested; }
+    // The work is past the point where it could stop (it committed its changes): a cancel that was
+    // requested is dropped, so it can still succeed, and later ones are ignored.
+    void ignoreCancel();
 
     // Control API.
     void cancel();
@@ -97,6 +100,7 @@ private:
     QDateTime m_finished;
     int m_attempt = 0;
     bool m_cancelRequested = false;
+    bool m_ignoreCancel = false;
     QVariantMap m_metadata;
 };
 

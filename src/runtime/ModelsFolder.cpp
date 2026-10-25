@@ -5,6 +5,7 @@
 #include "core/JobQueue.h"
 #include "core/Log.h"
 #include "core/Paths.h"
+#include "runtime/Download.h"
 #include "runtime/Hardware.h"
 #include "runtime/ModelFormats.h"
 #include "runtime/ModelLibrary.h"
@@ -38,12 +39,13 @@ class Text
     Q_DECLARE_TR_FUNCTIONS(lumen::runtime::ModelsFolder)
 };
 
-const QString kSidecarSuffix = QStringLiteral(".lumen.json");
-const QString kPartSuffix = QStringLiteral(".part");
+const QString kPartSuffix = FileDownload::partPath(QString()); // unfinished downloads
 const QString kCopySuffix = QStringLiteral(".moving");
-// Queue groups: one move at a time; downloads write into the folder.
+// Queue groups (the first also the move's kind): one move at a time; downloads write into the
+// folder, and a training copies its LoRA into it when it ends (ModelHub, LoraTraining, CloudTraining).
 const QString kMoveGroup = QStringLiteral("models-folder");
 const QString kDownloadGroup = QStringLiteral("model-download");
+const QStringList kTrainingGroups{QStringLiteral("lora-training"), QStringLiteral("cloud-training")};
 
 Qt::CaseSensitivity pathCase()
 {
@@ -121,74 +123,197 @@ QString copyFile(const QString &from, const QString &to, const std::function<boo
     return {};
 }
 
-// Removes the folders left empty under `root`, deepest first, and `root` itself when empty.
-// Links to folders are left alone.
-void removeEmptyFolders(const QString &root)
+// A symbolic link or a junction: moved as itself, never gone into (it may be ComfyUI's folder).
+bool isLink(const QFileInfo &fi)
 {
-    QStringList dirs;
-    QDirIterator it(root, QDir::Dirs | QDir::NoDotAndDotDot | QDir::Hidden, QDirIterator::Subdirectories);
-    while (it.hasNext()) {
-        const QString dir = it.next();
-        const QFileInfo fi(dir);
-        if (!fi.isSymLink() && !fi.isJunction())
-            dirs << dir;
-    }
-    std::sort(dirs.begin(), dirs.end(), [](const QString &a, const QString &b) { return a.count(QLatin1Char('/')) > b.count(QLatin1Char('/')); });
-    for (const QString &dir : std::as_const(dirs))
-        QDir().rmdir(dir); // only empty ones go
-    QDir().rmdir(root);
+    return fi.isSymbolicLink() || fi.isJunction();
 }
 
-bool hasModelFiles(const QString &dir)
+bool isModelName(const QString &name)
 {
-    QDirIterator it(dir, modelFileFilters(), QDir::Files, QDirIterator::Subdirectories);
-    while (it.hasNext()) {
-        if (QFileInfo(it.next()).size() >= 1024 * 1024) // as the library's scan: placeholders do not count
+    return QDir::match(modelFileFilters(), name);
+}
+
+QFileInfoList entriesOf(const QString &dir)
+{
+    return QDir(dir).entryInfoList(QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden | QDir::System, QDir::Name);
+}
+
+bool isKept(const QString &dir, const QStringList &keep)
+{
+    for (const QString &k : keep) {
+        if (samePath(dir, k))
             return true;
     }
     return false;
 }
 
-bool pathBoundary(QChar c)
+// Removes the folders left empty under `root`, deepest first, and `root` itself when empty. Links
+// and the folders in `keep` are left alone, and so is everything under them.
+void removeEmptyFolders(const QString &root, const QStringList &keep, bool isRoot = true)
+{
+    for (const QFileInfo &fi : entriesOf(root)) {
+        if (fi.isDir() && !isLink(fi) && !isKept(fi.absoluteFilePath(), keep))
+            removeEmptyFolders(fi.absoluteFilePath(), keep, false);
+    }
+    // A linked root is someone else's folder; removing the link would only hide what is left.
+    if (!isRoot || !isLink(QFileInfo(root)))
+        QDir().rmdir(root); // only an empty one goes
+}
+
+// Model files under `dir`, also through links, as the library's scan finds them.
+int countModels(const QString &dir)
+{
+    int n = 0;
+    QDirIterator it(dir, modelFileFilters(), QDir::Files | QDir::Hidden, QDirIterator::Subdirectories | QDirIterator::FollowSymlinks);
+    while (it.hasNext()) {
+        it.next();
+        ++n;
+    }
+    return n;
+}
+
+// Model files of 1 MB or more under `dir` (as the library's scan: placeholders do not count).
+bool holdsModels(const QString &dir)
+{
+    QDirIterator it(dir, modelFileFilters(), QDir::Files, QDirIterator::Subdirectories | QDirIterator::FollowSymlinks);
+    while (it.hasNext()) {
+        if (QFileInfo(it.next()).size() >= 1024 * 1024)
+            return true;
+    }
+    return false;
+}
+
+// What the move takes from `dir` (`plan->from` or a folder in it) into plan->files and
+// plan->links: model files with their sidecars, unfinished downloads, and links that lead to
+// models. The folders in plan->keep stay, and nothing inside a link is taken on its own.
+void collect(const QString &dir, FolderMovePlan *plan)
+{
+    const QDir source(plan->from);
+    for (const QFileInfo &fi : entriesOf(dir)) {
+        const QString path = QDir::cleanPath(fi.absoluteFilePath());
+        if (isLink(fi)) {
+            const int models = fi.isDir() ? countModels(path) : (isModelName(fi.fileName()) ? 1 : 0);
+            if (models > 0) {
+                plan->links << source.relativeFilePath(path);
+                plan->models += models;
+            }
+            continue; // a link without models stays, as other files do
+        }
+        if (fi.isDir()) {
+            if (!isKept(path, plan->keep))
+                collect(path, plan);
+            continue;
+        }
+        const QString name = fi.fileName();
+        const bool model = isModelName(name);
+        const bool partial = name.endsWith(kPartSuffix, Qt::CaseInsensitive) && isModelName(name.chopped(kPartSuffix.size()));
+        if (!model && !partial)
+            continue; // sidecars go with their model; anything else stays
+        plan->files << source.relativeFilePath(path);
+        plan->bytes += fi.size();
+        if (model) {
+            ++plan->models;
+            const QFileInfo sidecar(sidecarPath(path));
+            if (sidecar.exists()) {
+                plan->files << source.relativeFilePath(sidecar.absoluteFilePath());
+                plan->bytes += sidecar.size();
+            }
+        }
+    }
+}
+
+QString linksAcrossDrives(const FolderMovePlan &plan)
+{
+    if (plan.links.isEmpty() || plan.sameVolume)
+        return {};
+    return Text::tr("%1 is a link to another place. Links can only move to a folder on the same drive: choose one there, or remove "
+                    "the link first.")
+        .arg(native(QDir(plan.from).filePath(plan.links.first())));
+}
+
+// mkpath that notes the folders it made, parents first, so an undo can remove them again.
+bool makeFolder(const QString &dir, QStringList *created)
+{
+    QStringList missing;
+    for (QString d = QDir::cleanPath(dir); !QFileInfo::exists(d);) {
+        missing.prepend(d);
+        const QString up = QFileInfo(d).absolutePath();
+        if (up == d)
+            break;
+        d = up;
+    }
+    if (!QDir().mkpath(dir))
+        return false;
+    *created << missing;
+    return true;
+}
+
+bool pathStart(QChar c)
 {
     return c.isSpace() || c == QLatin1Char('"') || c == QLatin1Char('\'') || c == QLatin1Char('=') || c == QLatin1Char(',') || c == QLatin1Char(';');
 }
 
-// Paths into `from` inside free text (extra command-line arguments), in either separator style.
+// Paths into `from` inside free text (extra command-line arguments), in either separator style. A
+// path starts at the start of the text or after a space, a quote, '=', ',' or ';'. A quoted path
+// ends at its closing quote, any other at the next space, ',' or ';'. Only `from` itself or a path
+// that goes on into it counts: "D:/Models 2/x" and "D:/Models backup" are not in D:/Models.
 QString relocateInText(const QString &text, const QString &from, const QString &to)
 {
-    QString out = text;
     const QString cleanFrom = QDir::cleanPath(QDir::fromNativeSeparators(from));
-    const QString cleanTo = QDir::cleanPath(QDir::fromNativeSeparators(to));
+    if (cleanFrom.isEmpty())
+        return text;
     QStringList forms{cleanFrom};
     if (native(cleanFrom) != cleanFrom)
-        forms.prepend(native(cleanFrom));
-    for (const QString &f : std::as_const(forms)) {
-        const QString t = f == cleanFrom ? cleanTo : native(cleanTo);
-        qsizetype i = 0;
-        while ((i = out.indexOf(f, i, pathCase())) >= 0) {
-            const qsizetype end = i + f.size();
-            const QChar before = i > 0 ? out.at(i - 1) : QChar(QLatin1Char(' '));
-            const QChar after = end < out.size() ? out.at(end) : QChar(QLatin1Char(' '));
-            if (pathBoundary(before) && (pathBoundary(after) || after == QLatin1Char('/') || after == QLatin1Char('\\'))) {
-                out.replace(i, f.size(), t);
-                i += t.size();
-            } else {
-                i = end;
+        forms << native(cleanFrom);
+    QString out = text;
+    qsizetype i = 0;
+    for (;;) {
+        qsizetype start = -1;
+        qsizetype length = 0;
+        for (const QString &f : std::as_const(forms)) {
+            const qsizetype at = out.indexOf(f, i, pathCase());
+            if (at >= 0 && (start < 0 || at < start)) {
+                start = at;
+                length = f.size();
             }
         }
+        if (start < 0)
+            return out;
+        const qsizetype matched = start + length;
+        const QChar before = start > 0 ? out.at(start - 1) : QChar(QLatin1Char(' '));
+        if (!pathStart(before)) {
+            i = matched;
+            continue;
+        }
+        qsizetype end = matched;
+        if (before == QLatin1Char('"') || before == QLatin1Char('\'')) {
+            end = out.indexOf(before, matched);
+            if (end < 0)
+                end = out.size();
+        } else {
+            while (end < out.size() && !out.at(end).isSpace() && out.at(end) != QLatin1Char(',') && out.at(end) != QLatin1Char(';'))
+                ++end;
+        }
+        const bool inside = end == matched || out.at(matched) == QLatin1Char('/') || out.at(matched) == QLatin1Char('\\');
+        if (!inside) {
+            i = matched;
+            continue;
+        }
+        const QString path = out.mid(start, end - start);
+        const QString moved = movedPath(path, from, to);
+        out.replace(start, path.size(), moved);
+        i = start + moved.size();
     }
-    return out;
 }
 
+// File and folder options, also inside lists and maps (a llama.cpp server's further models).
 QVariant relocateValue(const QVariant &value, const QString &from, const QString &to, bool *changed)
 {
     switch (value.typeId()) {
     case QMetaType::QString: {
         const QString s = value.toString();
-        QString moved = relocatePath(s, from, to);
-        if (moved == s)
-            moved = relocateInText(s, from, to);
+        const QString moved = movedPath(s, from, to);
         if (moved == s)
             return value;
         *changed = true;
@@ -230,21 +355,25 @@ public:
         , m_to(std::move(to))
     {
     }
-    // A job removed while it runs must not leave the servers blocked.
+    // A job removed while it runs must not leave the servers blocked or the library moving.
     ~FolderMover() override { release(); }
 
     void run()
     {
         if (!m_library)
             return m_job->fail(Text::tr("Shutting down."));
-        m_plan = planModelsFolderMove(m_library->defaultFolder(), m_to);
+        for (Job *other : m_jobs->jobs()) {
+            if (other->isFinished())
+                continue;
+            if (other->group() == kDownloadGroup)
+                return m_job->fail(Text::tr("Models are being downloaded into the folder. Move it when the downloads are done."));
+            if (kTrainingGroups.contains(other->group()))
+                return m_job->fail(Text::tr("A LoRA is being trained; it is saved into the folder when it is done. Move the folder after that."));
+        }
+        m_plan = planModelsFolderMove(m_library, m_to);
         if (!m_plan.ok())
             return m_job->fail(m_plan.error);
-        for (Job *other : m_jobs->jobs()) {
-            if (other->group() == kDownloadGroup && !other->isFinished())
-                return m_job->fail(Text::tr("Models are being downloaded into the folder. Move it when the downloads are done."));
-        }
-        if (m_servers && !m_plan.files.isEmpty()) {
+        if (m_servers && !m_plan.isEmpty()) {
             if (!m_servers->gpuReservation().isEmpty())
                 return m_job->fail(Text::tr("The models folder cannot be moved now: %1").arg(m_servers->gpuReservation()));
             // Running servers hold model files open; they also must not start meanwhile.
@@ -253,7 +382,12 @@ public:
             if (!m_restart.isEmpty())
                 m_job->setProgress(-1, Text::tr("Stopping servers…"));
         }
+        // From here on downloads and trainings refuse, and scans wait.
+        m_library->beginMove();
+        m_moving = true;
         m_job->setCancelHandler([token = m_token] { token.cancel(); });
+        if (!m_reserved)
+            return moveFiles(); // no server was stopped, so none to wait for
         m_waiting.start();
         waitForServers();
     }
@@ -314,6 +448,9 @@ private:
                 return m_job->reportCancelled();
             return m_job->fail(error);
         }
+        // The files are in the new folder and the originals are gone: a cancel that came after the
+        // last file cannot undo that any more.
+        m_job->ignoreCancel();
         const QString from = m_plan.from;
         const QString to = m_plan.to;
         if (m_servers) {
@@ -327,7 +464,19 @@ private:
             m_library->setFolder(to);
         }
         release();
-        m_job->setProgress(1.0, Text::tr("%n model(s) moved to %1", nullptr, m_plan.models).arg(native(to)));
+        QString status = Text::tr("%n model(s) moved to %1", nullptr, m_plan.models).arg(native(to));
+        // Files that appeared in the old folder while the others moved (nothing Lumen writes does
+        // that while the folder moves); paths to them were left as they were.
+        FolderMovePlan rest;
+        rest.from = from;
+        rest.keep = m_plan.keep;
+        if (QFileInfo::exists(from))
+            collect(from, &rest);
+        if (!rest.isEmpty()) {
+            qCWarning(lcApp) << "models folder move: files added meanwhile stayed in" << from << rest.files << rest.links;
+            status += QLatin1Char(' ') + Text::tr("%n file(s) added meanwhile stayed in %1.", nullptr, int(rest.files.size() + rest.links.size())).arg(native(from));
+        }
+        m_job->setProgress(1.0, status);
         m_job->succeed(to);
     }
 
@@ -335,6 +484,8 @@ private:
     {
         if (m_servers && std::exchange(m_reserved, false))
             m_servers->releaseGpu(m_restart);
+        if (m_library && std::exchange(m_moving, false))
+            m_library->endMove();
     }
 
     Job *m_job;
@@ -345,6 +496,7 @@ private:
     FolderMovePlan m_plan;
     QStringList m_restart;
     bool m_reserved = false;
+    bool m_moving = false;
     async::CancelToken m_token;
     QElapsedTimer m_waiting;
 };
@@ -372,7 +524,7 @@ bool isInsideFolder(const QString &path, const QString &folder)
     return p.size() > f.size() && p.startsWith(f, pathCase());
 }
 
-FolderMovePlan planModelsFolderMove(const QString &from, const QString &to)
+FolderMovePlan planModelsFolderMove(const QString &from, const QString &to, const QStringList &keep)
 {
     FolderMovePlan plan;
     plan.from = cleanAbsolute(from);
@@ -393,29 +545,13 @@ FolderMovePlan planModelsFolderMove(const QString &from, const QString &to)
         plan.error = Text::tr("%1 is a file, not a folder.").arg(native(plan.to));
         return plan;
     }
-    const QStringList filters = modelFileFilters();
-    const QDir source(plan.from);
-    QDirIterator it(plan.from, QDir::Files | QDir::Hidden, QDirIterator::Subdirectories);
-    QStringList files;
-    while (it.hasNext()) {
-        const QString path = it.next();
-        const QString name = QFileInfo(path).fileName();
-        const bool model = QDir::match(filters, name);
-        const bool partial = name.endsWith(kPartSuffix, Qt::CaseInsensitive) && QDir::match(filters, name.chopped(kPartSuffix.size()));
-        if (!model && !partial)
-            continue; // sidecars go with their model; anything else stays
-        files << source.relativeFilePath(path);
-        plan.bytes += QFileInfo(path).size();
-        if (model) {
-            ++plan.models;
-            if (QFileInfo::exists(sidecarPath(path))) {
-                files << source.relativeFilePath(sidecarPath(path));
-                plan.bytes += QFileInfo(sidecarPath(path)).size();
-            }
-        }
+    for (const QString &k : keep) {
+        if (isInsideFolder(k, plan.from))
+            plan.keep << cleanAbsolute(k);
     }
-    plan.files = files;
-    for (const QString &rel : std::as_const(plan.files)) {
+    if (QFileInfo::exists(plan.from))
+        collect(plan.from, &plan);
+    for (const QString &rel : plan.files + plan.links) {
         if (QFileInfo::exists(QDir(plan.to).filePath(rel)))
             plan.conflicts << rel;
     }
@@ -439,6 +575,9 @@ FolderMovePlan planModelsFolderMove(const QString &from, const QString &to)
     const QStorageInfo here(plan.from);
     plan.sameVolume = target.isValid() && here.isValid()
                       && (!target.device().isEmpty() && !here.device().isEmpty() ? target.device() == here.device() : target.rootPath() == here.rootPath());
+    plan.error = linksAcrossDrives(plan);
+    if (!plan.ok())
+        return plan;
     const qint64 needed = plan.bytes + 256LL * 1024 * 1024;
     if (!plan.sameVolume && plan.bytes > 0 && target.isValid() && target.bytesAvailable() < needed)
         plan.error = Text::tr("Not enough free space on %1: %2 needed, %3 free.")
@@ -446,11 +585,24 @@ FolderMovePlan planModelsFolderMove(const QString &from, const QString &to)
     return plan;
 }
 
+FolderMovePlan planModelsFolderMove(const ModelLibrary *library, const QString &to)
+{
+    QStringList added;
+    for (const ModelRoot &r : library->roots()) {
+        if (!r.builtin)
+            added << r.path;
+    }
+    return planModelsFolderMove(library->defaultFolder(), to, added);
+}
+
 QString moveModelFiles(const FolderMovePlan &plan, const std::function<bool(qint64 done, qint64 total)> &progress)
 {
     if (!plan.ok())
         return plan.error;
-    if (!QDir().mkpath(plan.to))
+    if (const QString links = linksAcrossDrives(plan); !links.isEmpty())
+        return links;
+    QStringList created; // folders made in the target, removed again on an undo
+    if (!makeFolder(plan.to, &created))
         return Text::tr("Cannot create %1.").arg(native(plan.to));
     struct Moved
     {
@@ -463,7 +615,10 @@ QString moveModelFiles(const FolderMovePlan &plan, const std::function<bool(qint
     bool stopped = false;
     QString error;
     auto report = [&](qint64 n) { return !progress || progress(n, plan.bytes); };
-    for (const QString &rel : plan.files) {
+    const QStringList items = plan.files + plan.links;
+    for (qsizetype i = 0; i < items.size(); ++i) {
+        const QString &rel = items.at(i);
+        const bool link = i >= plan.files.size();
         if (!report(bytesDone)) {
             stopped = true;
             error = Text::tr("The move was cancelled.");
@@ -471,18 +626,20 @@ QString moveModelFiles(const FolderMovePlan &plan, const std::function<bool(qint
         }
         const QString src = QDir(plan.from).filePath(rel);
         const QString dst = QDir(plan.to).filePath(rel);
-        const qint64 size = QFileInfo(src).size();
-        if (!QFileInfo::exists(src))
+        const QFileInfo srcInfo(src);
+        if (!srcInfo.exists() && !isLink(srcInfo))
             continue; // gone since the plan (an unfinished download that was cleaned up)
+        const qint64 size = link ? 0 : srcInfo.size();
         if (QFileInfo::exists(dst)) {
             error = Text::tr("%1 exists already.").arg(native(dst));
             break;
         }
-        if (!QDir().mkpath(QFileInfo(dst).absolutePath())) {
+        if (!makeFolder(QFileInfo(dst).absolutePath(), &created)) {
             error = Text::tr("Cannot create %1.").arg(native(QFileInfo(dst).absolutePath()));
             break;
         }
         if (plan.sameVolume) {
+            // A link is renamed as itself, whatever it leads to (links never move across drives).
             QString why;
             if (!renameFile(src, dst, &why)) {
                 error = Text::tr("Cannot move %1: %2").arg(native(src), why);
@@ -503,17 +660,21 @@ QString moveModelFiles(const FolderMovePlan &plan, const std::function<bool(qint
         }
         bytesDone += size;
     }
+    // The last chance to cancel: after this the originals go.
+    if (error.isEmpty() && !report(bytesDone)) {
+        stopped = true;
+        error = Text::tr("The move was cancelled.");
+    }
     if (error.isEmpty()) {
-        report(bytesDone);
         // Copies: the originals go once every file is complete in the new folder.
         for (const Moved &m : std::as_const(moved)) {
             if (m.copied && !QFile::remove(m.from))
                 qCWarning(lcApp) << "models folder move: could not delete" << m.from;
         }
-        removeEmptyFolders(plan.from);
+        removeEmptyFolders(plan.from, plan.keep);
         return {};
     }
-    // Back to how it was: renamed files return, copies are deleted.
+    // Back to how it was: renamed files return, copies are deleted, new folders removed.
     for (auto it = moved.crbegin(); it != moved.crend(); ++it) {
         QString why;
         if (it->copied)
@@ -521,6 +682,8 @@ QString moveModelFiles(const FolderMovePlan &plan, const std::function<bool(qint
         else if (!renameFile(it->to, it->from, &why))
             qCWarning(lcApp) << "models folder move: could not move back" << it->to << why;
     }
+    for (auto it = created.crbegin(); it != created.crend(); ++it)
+        QDir().rmdir(*it); // only empty ones: a file that could not move back stays visible
     return error;
 }
 
@@ -544,11 +707,33 @@ QString relocatePath(const QString &path, const QString &from, const QString &to
     return path.contains(QLatin1Char('\\')) ? native(out) : out;
 }
 
+QString movedPath(const QString &path, const QString &from, const QString &to)
+{
+    const QString moved = relocatePath(path, from, to);
+    if (moved == path)
+        return path;
+    const QString old = QDir::fromNativeSeparators(path.trimmed());
+    if (QFileInfo::exists(old) && !QFileInfo::exists(moved))
+        return path; // stayed behind: the old path still leads to it
+    return moved;
+}
+
 bool relocateOptions(QVariantMap &options, const QString &from, const QString &to)
 {
     bool changed = false;
-    for (auto it = options.begin(); it != options.end(); ++it)
-        it.value() = relocateValue(it.value(), from, to, &changed);
+    for (auto it = options.begin(); it != options.end(); ++it) {
+        // The only free text: paths are found in it; every other option is a path or a list of them.
+        if (it.key() == QLatin1String("extra_args") && it.value().typeId() == QMetaType::QString) {
+            const QString text = it.value().toString();
+            const QString moved = relocateInText(text, from, to);
+            if (moved != text) {
+                it.value() = moved;
+                changed = true;
+            }
+        } else {
+            it.value() = relocateValue(it.value(), from, to, &changed);
+        }
+    }
     return changed;
 }
 
@@ -563,14 +748,14 @@ Job *moveModelsFolder(JobQueue *jobs, ModelLibrary *library, ServerSupervisor *s
             return job->fail(Text::tr("Shutting down."));
         auto *mover = new FolderMover(job, queue, lib, sup, to);
         mover->run();
-    }, QStringLiteral("models-folder"));
+    }, kMoveGroup);
 }
 
 QString legacyModelsToAsk(const ModelLibrary *library, const QString &legacy)
 {
     if (!library || legacy.isEmpty() || !library->chosenFolder().isEmpty() || samePath(legacy, library->standardFolder()))
         return {};
-    return hasModelFiles(legacy) ? QDir::cleanPath(QDir::fromNativeSeparators(legacy)) : QString();
+    return holdsModels(legacy) ? QDir::cleanPath(QDir::fromNativeSeparators(legacy)) : QString();
 }
 
 Job *settleLegacyModels(JobQueue *jobs, ModelLibrary *library, ServerSupervisor *servers, const QString &legacy,
@@ -579,7 +764,7 @@ Job *settleLegacyModels(JobQueue *jobs, ModelLibrary *library, ServerSupervisor 
     if (!library || legacy.isEmpty())
         return nullptr;
     library->setFolder(legacy);
-    const FolderMovePlan plan = planModelsFolderMove(legacy, library->standardFolder());
+    const FolderMovePlan plan = planModelsFolderMove(library, library->standardFolder());
     const bool move = moveThem && moveThem(plan);
     if (!move || !plan.ok())
         return nullptr;

@@ -3439,6 +3439,21 @@ void TestCanvas::modelsFolderSettings()
     d.file.path = QStringLiteral("next.safetensors");
     d.file.kind = runtime::ModelKind::Lora;
     QCOMPARE(studio.hub()->destinationFor(d), target + QStringLiteral("/loras/next.safetensors"));
+    // A stopped training continues with its base model where it is now.
+    QFuture<runtime::ModelEntry> added = lib->addFile(movedModel);
+    QTRY_VERIFY(added.isFinished() && lib->entry(movedModel));
+    QCOMPARE(CharacterTraining::findCheckpoint(&studio, model), movedModel);
+    QCOMPARE(CharacterTraining::findCheckpoint(&studio, movedModel), movedModel);
+    const QString elsewhere = dir.filePath(QStringLiteral("other.safetensors"));
+    QCOMPARE(CharacterTraining::findCheckpoint(&studio, elsewhere), elsewhere); // unknown: as it was
+    // While a move runs, no training starts (its LoRA is copied into the folder at the end).
+    lib->beginMove();
+    CharacterTraining::Settings training;
+    training.characterId = characterId;
+    QString why;
+    QVERIFY(!CharacterTraining::start(&studio, training, &why));
+    QVERIFY2(why.contains(QStringLiteral("being moved")), qPrintable(why));
+    lib->endMove();
 
     // And back, so the shared test data keeps its files.
     Job *back = studio.moveModelsFolder(standard);
@@ -3447,6 +3462,9 @@ void TestCanvas::modelsFolderSettings()
     QVERIFY(QFileInfo::exists(model));
     QCOMPARE(studio.characters()->entry(characterId)->lora.value(QStringLiteral("file")).toString(), lora);
     QCOMPARE(lib->defaultFolder(), standard);
+    // The standard folder is no choice: the setting is gone, not a path to it.
+    QVERIFY(lib->chosenFolder().isEmpty());
+    QVERIFY(!Settings::instance().contains(QStringLiteral("models/folder")));
     dlg.close();
 }
 

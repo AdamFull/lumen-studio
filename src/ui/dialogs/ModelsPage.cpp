@@ -321,7 +321,7 @@ void ModelsPage::showFolder()
 void ModelsPage::moveFolder(const QString &target)
 {
     const QString title = tr("Move models folder");
-    const runtime::FolderMovePlan plan = runtime::planModelsFolderMove(m_studio->models()->defaultFolder(), target);
+    const runtime::FolderMovePlan plan = runtime::planModelsFolderMove(m_studio->models(), target);
     if (!plan.ok()) {
         QMessageBox::warning(this, title, plan.error);
         return;

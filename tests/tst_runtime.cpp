@@ -238,6 +238,7 @@ private slots:
     void modelsFolderDefaults();
     void modelsFolderMove();
     void modelsFolderCopies();
+    void modelsFolderLinks();
     void legacyModelsFirstStart();
     void hubNamesAndStarters();
     void hubSearch();
@@ -1510,10 +1511,14 @@ void TestRuntime::modelsFolderMove()
     QVERIFY(writeFile(from + QStringLiteral("/llm/Model-Q4_K_M.gguf"), gguf));
     QVERIFY(writeFile(from + QStringLiteral("/loras/half.safetensors.part"), "an unfinished download"));
     QVERIFY(writeFile(from + QStringLiteral("/notes.txt"), "not a model: stays"));
-    QSignalSpy scanned(&lib, &ModelLibrary::scanFinished);
+    QVERIFY(writeFile(from + QStringLiteral("/llm/chat.jinja"), "a template a server uses: stays"));
+    // A folder added to the library that lies inside Lumen's folder (ComfyUI's): it never moves.
+    const QString comfy = from + QStringLiteral("/ComfyUI/models");
+    QVERIFY(writeFile(comfy + QStringLiteral("/checkpoints/comfy.safetensors"), ckpt));
+    QVERIFY(QDir().mkpath(comfy + QStringLiteral("/upscale_models")));
+    QVERIFY(lib.addRoot(comfy, QStringLiteral("ComfyUI")));
     lib.rescan();
-    QVERIFY(scanned.wait(10000));
-    QCOMPARE(lib.entries().size(), 3);
+    QTRY_VERIFY_WITH_TIMEOUT(!lib.isScanning() && lib.entries().size() == 4, 10000);
     QFuture<QString> hash = lib.computeHash(from + QStringLiteral("/loras/style.safetensors"));
     QTRY_VERIFY_WITH_TIMEOUT(hash.isFinished(), 10000);
 
@@ -1526,17 +1531,25 @@ void TestRuntime::modelsFolderMove()
     running.startupTimeoutSec = 20;
     fx.supervisor.addProfile(running);
     ServerProfile stopped = fx.supervisor.createProfile(QStringLiteral("adopted/fake"), QStringLiteral("Stopped"));
+    const QString nativeTemplate = QDir::toNativeSeparators(from + QStringLiteral("/llm/chat.jinja"));
+    const QString siblings = QStringLiteral("--chat-template-file \"%1\" --lora-dir \"%2 backup\\loras\" --x %3/ComfyUI/models/checkpoints")
+                                 .arg(nativeTemplate, QDir::toNativeSeparators(from), from);
     stopped.options = {{QStringLiteral("model"), fx.model}, // outside the folder
                        {QStringLiteral("lora_dir"), nativeLoras},
                        {QStringLiteral("vae"), from + QStringLiteral("2/vae.safetensors")}, // a folder with a similar name
+                       {QStringLiteral("clip_vision"), from + QStringLiteral(" 2/clip.safetensors")},
+                       {QStringLiteral("ip_adapter"), comfy + QStringLiteral("/checkpoints/comfy.safetensors")}, // in the added folder
+                       {QStringLiteral("extra_args"), siblings},
                        {QStringLiteral("more_models"), QVariantList{QVariantMap{{QStringLiteral("name"), QStringLiteral("Second")},
                                                                                 {QStringLiteral("model"), from + QStringLiteral("/llm/Model-Q4_K_M.gguf")},
                                                                                 {QStringLiteral("mmproj"), QString()}}}}};
     fx.supervisor.addProfile(stopped);
 
     // Refused plans.
-    const FolderMovePlan plan = planModelsFolderMove(from, to);
+    const FolderMovePlan plan = planModelsFolderMove(&lib, to);
     QVERIFY2(plan.ok(), qPrintable(plan.error));
+    QCOMPARE(plan.keep, QStringList{comfy});
+    QVERIFY(plan.links.isEmpty());
     QCOMPARE(plan.models, 3);
     QVERIFY(plan.sameVolume);
     QStringList files = plan.files;
@@ -1569,13 +1582,22 @@ void TestRuntime::modelsFolderMove()
                && QFileInfo::exists(sidecarPath(from + QStringLiteral("/checkpoints/wai.safetensors")))
                && !QFileInfo::exists(to + QStringLiteral("/checkpoints/wai.safetensors"));
     };
-    // Not while models are downloaded into the folder, nor while the GPU is reserved (training).
+    // Not while models are downloaded into the folder or a LoRA is trained (also a queued one, and in
+    // the cloud: it is copied into the folder when it ends), nor while the GPU is reserved.
     Job *download = fx.jobs.submit(QStringLiteral("Download"), QStringLiteral("model-download"), [](Job *) {});
     QTRY_VERIFY(download->isActive());
     Job *refused = moveTo(to);
     QCOMPARE(refused->state(), Job::State::Failed);
     QVERIFY2(refused->errorString().contains(QStringLiteral("downloaded")), qPrintable(refused->errorString()));
     download->cancel();
+    for (const QString &group : {QStringLiteral("lora-training"), QStringLiteral("cloud-training")}) {
+        Job *training = fx.jobs.submit(QStringLiteral("Train"), group, [](Job *) {});
+        refused = moveTo(to);
+        QCOMPARE(refused->state(), Job::State::Failed);
+        QVERIFY2(refused->errorString().contains(QStringLiteral("trained")), qPrintable(refused->errorString()));
+        training->cancel();
+    }
+    QVERIFY(!lib.isMoving());
     fx.supervisor.reserveGpu(QStringLiteral("A LoRA is being trained."));
     refused = moveTo(to);
     QCOMPARE(refused->state(), Job::State::Failed);
@@ -1614,6 +1636,12 @@ void TestRuntime::modelsFolderMove()
     QVERIFY(!QFileInfo::exists(from + QStringLiteral("/checkpoints/wai.safetensors")));
     QVERIFY(!QFileInfo::exists(from + QStringLiteral("/checkpoints"))); // left empty: removed
     QCOMPARE(readAll(from + QStringLiteral("/notes.txt")), QByteArray("not a model: stays"));
+    QVERIFY(QFileInfo::exists(from + QStringLiteral("/llm/chat.jinja")));
+    // The added folder stays with its files and its empty sub-folders.
+    QCOMPARE(readAll(comfy + QStringLiteral("/checkpoints/comfy.safetensors")), ckpt);
+    QVERIFY(QFileInfo(comfy + QStringLiteral("/upscale_models")).isDir());
+    QVERIFY(!QFileInfo::exists(to + QStringLiteral("/ComfyUI")));
+    QVERIFY(!lib.isMoving());
 
     const QString movedGguf = QDir::toNativeSeparators(to + QStringLiteral("/llm/Model-Q4_K_M.gguf"));
     const QString movedLoras = QDir::toNativeSeparators(to + QStringLiteral("/loras"));
@@ -1624,6 +1652,10 @@ void TestRuntime::modelsFolderMove()
     QCOMPARE(s.options.value(QStringLiteral("model")).toString(), fx.model);
     QCOMPARE(s.options.value(QStringLiteral("lora_dir")).toString(), movedLoras);
     QCOMPARE(s.options.value(QStringLiteral("vae")).toString(), from + QStringLiteral("2/vae.safetensors"));
+    QCOMPARE(s.options.value(QStringLiteral("clip_vision")).toString(), from + QStringLiteral(" 2/clip.safetensors"));
+    // What stayed keeps its path: the added folder's file, the template, a folder with a similar name.
+    QCOMPARE(s.options.value(QStringLiteral("ip_adapter")).toString(), comfy + QStringLiteral("/checkpoints/comfy.safetensors"));
+    QCOMPARE(s.options.value(QStringLiteral("extra_args")).toString(), siblings);
     QCOMPARE(s.options.value(QStringLiteral("more_models")).toList().value(0).toMap().value(QStringLiteral("model")).toString(),
              to + QStringLiteral("/llm/Model-Q4_K_M.gguf"));
     // The server that ran starts again with the new paths.
@@ -1639,12 +1671,15 @@ void TestRuntime::modelsFolderMove()
     QCOMPARE(relocated.first().at(0).toString(), from);
     QCOMPARE(relocated.first().at(1).toString(), to);
     QCOMPARE(lib.chosenFolder(), to);
+    QCOMPARE(lib.roots().size(), 2);
     QCOMPARE(lib.roots().first().path, to);
     QVERIFY(lib.roots().first().builtin);
+    QCOMPARE(lib.roots().last().path, comfy);
     QVERIFY(!lib.entry(from + QStringLiteral("/loras/style.safetensors")));
+    QVERIFY(lib.entry(comfy + QStringLiteral("/checkpoints/comfy.safetensors")));
     QCOMPARE(lib.entry(to + QStringLiteral("/loras/style.safetensors"))->sha256, hash.result()); // not hashed again
     QTRY_VERIFY_WITH_TIMEOUT(!lib.isScanning(), 10000);
-    QCOMPARE(lib.entries().size(), 3);
+    QCOMPARE(lib.entries().size(), 4);
     QCOMPARE(lib.entry(to + QStringLiteral("/loras/style.safetensors"))->sha256, hash.result());
     QCOMPARE(lib.entry(to + QStringLiteral("/checkpoints/wai.safetensors"))->info.family, QStringLiteral("SDXL"));
 
@@ -1665,11 +1700,36 @@ void TestRuntime::modelsFolderMove()
     d.file.sha256 = sha256(lora2);
     d.file.url = QUrl(hf.baseUrl().toString() + QStringLiteral("/org/repo/resolve/%1/second.safetensors").arg(revision));
     QCOMPARE(hub.destinationFor(d), to + QStringLiteral("/loras/second.safetensors"));
+    // Not while the folder moves.
+    lib.beginMove();
+    Job *waiting = hub.download(d);
+    QTRY_VERIFY_WITH_TIMEOUT(waiting->isFinished(), 10000);
+    QCOMPARE(waiting->state(), Job::State::Failed);
+    QVERIFY2(waiting->errorString().contains(QStringLiteral("being moved")), qPrintable(waiting->errorString()));
+    lib.endMove();
+    QVERIFY(!QFileInfo::exists(to + QStringLiteral("/loras/second.safetensors")));
     Job *fetched = hub.download(d);
     QTRY_VERIFY_WITH_TIMEOUT(fetched->isFinished(), 20000);
     QVERIFY2(fetched->state() == Job::State::Succeeded, qPrintable(fetched->errorString()));
     QCOMPARE(fetched->result().toString(), to + QStringLiteral("/loras/second.safetensors"));
     QCOMPARE(readAll(to + QStringLiteral("/loras/second.safetensors")), lora2);
+
+    // With nothing to move the running server is neither stopped nor waited for.
+    {
+        QTemporaryDir otherData;
+        ModelLibrary empty(&fx.http);
+        empty.setDataDir(otherData.path());
+        empty.load();
+        QTRY_COMPARE_WITH_TIMEOUT(fx.supervisor.state(running.id), ServerState::Ready, 20000);
+        QElapsedTimer t;
+        t.start();
+        Job *quick = moveModelsFolder(&fx.jobs, &empty, &fx.supervisor, otherData.filePath(QStringLiteral("elsewhere")));
+        QTRY_VERIFY_WITH_TIMEOUT(quick->isFinished(), 30000);
+        QVERIFY2(quick->state() == Job::State::Succeeded, qPrintable(quick->errorString()));
+        QVERIFY2(t.elapsed() < 5000, qPrintable(QString::number(t.elapsed())));
+        QCOMPARE(fx.supervisor.state(running.id), ServerState::Ready);
+        QTRY_VERIFY_WITH_TIMEOUT(!empty.isScanning(), 10000);
+    }
 
     fx.supervisor.stop(running.id);
     QTRY_COMPARE_WITH_TIMEOUT(fx.supervisor.state(running.id), ServerState::Stopped, 10000);
@@ -1687,15 +1747,26 @@ void TestRuntime::modelsFolderCopies()
     const QDateTime modified = QFileInfo(from + QStringLiteral("/checkpoints/big.safetensors")).lastModified();
     QTest::qWait(1100); // a copy made now would get a newer time
 
-    // Cancelled half-way: nothing is left in the target, everything is still in place.
-    FolderMovePlan plan = planModelsFolderMove(from, dir.filePath(QStringLiteral("cancelled")));
+    // Cancelled half-way: nothing is left in the target (neither files nor the folders the move
+    // made), everything is still in place. A folder that was there already stays.
+    QVERIFY(QDir().mkpath(dir.filePath(QStringLiteral("cancelled/mine"))));
+    FolderMovePlan plan = planModelsFolderMove(from, dir.filePath(QStringLiteral("cancelled/models")));
     QVERIFY2(plan.ok(), qPrintable(plan.error));
     plan.sameVolume = false;
     const QString cancelled = moveModelFiles(plan, [](qint64 done, qint64) { return done < 10 * 1024 * 1024; });
     QVERIFY(!cancelled.isEmpty());
     QCOMPARE(readAll(from + QStringLiteral("/checkpoints/big.safetensors")), big);
-    QDirIterator leftovers(plan.to, QDir::Files, QDirIterator::Subdirectories);
-    QVERIFY2(!leftovers.hasNext(), qPrintable(leftovers.hasNext() ? leftovers.next() : QString()));
+    QVERIFY(!QFileInfo::exists(plan.to));
+    QVERIFY(QFileInfo(dir.filePath(QStringLiteral("cancelled/mine"))).isDir());
+    // A cancel after the last file still undoes the move: the originals are not gone yet.
+    plan = planModelsFolderMove(from, dir.filePath(QStringLiteral("late")));
+    QVERIFY2(plan.ok(), qPrintable(plan.error));
+    QVERIFY(plan.sameVolume);
+    const QString late = moveModelFiles(plan, [](qint64 done, qint64 total) { return done < total; });
+    QVERIFY(!late.isEmpty());
+    QCOMPARE(readAll(from + QStringLiteral("/checkpoints/big.safetensors")), big);
+    QVERIFY(QFileInfo::exists(sidecarPath(from + QStringLiteral("/checkpoints/big.safetensors"))));
+    QVERIFY(!QFileInfo::exists(plan.to));
 
     plan = planModelsFolderMove(from, dir.filePath(QStringLiteral("new")));
     QVERIFY2(plan.ok(), qPrintable(plan.error));
@@ -1730,12 +1801,87 @@ void TestRuntime::modelsFolderCopies()
 #ifdef Q_OS_WIN
     QCOMPARE(relocatePath(QStringLiteral("c:/old/vae/x.sft"), QStringLiteral("C:/Old"), to), QStringLiteral("D:/Models/vae/x.sft"));
 #endif
-    QVariantMap options{{QStringLiteral("extra_args"), QStringLiteral("--a C:\\Old\\x.gguf --b=C:/Old/y --c C:/Olden")},
+    QVariantMap options{{QStringLiteral("extra_args"), QStringLiteral("--a C:\\Old\\x.gguf --b=C:/Old/y --c C:/Olden --d C:/Old "
+                                                                      "--e \"C:/Old/a b.gguf\",C:/Old/z --f \"C:\\Old backup\\loras\" --g C:/Old 2/x")},
+                        {QStringLiteral("vae"), QStringLiteral("C:/Old 2/vae.safetensors")},
                         {QStringLiteral("threads"), 4}};
     QVERIFY(relocateOptions(options, QStringLiteral("C:/Old"), to));
-    QCOMPARE(options.value(QStringLiteral("extra_args")).toString(), QStringLiteral("--a D:\\Models\\x.gguf --b=D:/Models/y --c C:/Olden"));
+    QCOMPARE(options.value(QStringLiteral("extra_args")).toString(),
+             QStringLiteral("--a D:\\Models\\x.gguf --b=D:/Models/y --c C:/Olden --d D:/Models "
+                            "--e \"D:/Models/a b.gguf\",D:/Models/z --f \"C:\\Old backup\\loras\" --g D:/Models 2/x"));
+    // A plain option is one path: "C:/Old 2/…" is another folder.
+    QCOMPARE(options.value(QStringLiteral("vae")).toString(), QStringLiteral("C:/Old 2/vae.safetensors"));
     QCOMPARE(options.value(QStringLiteral("threads")).toInt(), 4);
     QVERIFY(!relocateOptions(options, QStringLiteral("E:/Elsewhere"), to));
+}
+
+void TestRuntime::modelsFolderLinks()
+{
+    // Lumen's checkpoints are ComfyUI's, through a link (a junction on Windows, which needs no
+    // rights). The link moves, ComfyUI's folder stays as it is.
+    QTemporaryDir dir;
+    const QString shared = dir.filePath(QStringLiteral("ComfyUI/models/checkpoints"));
+    QVERIFY(writeFile(shared + QStringLiteral("/comfy.safetensors"), "comfy"));
+    QVERIFY(QDir().mkpath(shared + QStringLiteral("/empty_sub")));
+    const QString from = dir.filePath(QStringLiteral("Lumen"));
+    QVERIFY(writeFile(from + QStringLiteral("/loras/a.safetensors"), "lora"));
+    QVERIFY(writeFile(from + QStringLiteral("/llm/m.gguf"), "gguf"));
+    QVERIFY(writeFile(from + QStringLiteral("/llm/chat.jinja"), "template"));
+    const QString link = from + QStringLiteral("/checkpoints");
+#ifdef Q_OS_WIN
+    QCOMPARE(QProcess::execute(QStringLiteral("cmd.exe"), {QStringLiteral("/c"), QStringLiteral("mklink"), QStringLiteral("/J"),
+                                                             QDir::toNativeSeparators(link), QDir::toNativeSeparators(shared)}),
+             0);
+    QVERIFY(QFileInfo(link).isJunction());
+#else
+    QVERIFY(QFile::link(shared, link));
+#endif
+    QCOMPARE(readAll(link + QStringLiteral("/comfy.safetensors")), QByteArray("comfy"));
+
+    const QString to = dir.filePath(QStringLiteral("New"));
+    FolderMovePlan plan = planModelsFolderMove(from, to);
+    QVERIFY2(plan.ok(), qPrintable(plan.error));
+    QVERIFY(plan.sameVolume);
+    QCOMPARE(plan.links, QStringList{QStringLiteral("checkpoints")});
+    QStringList files = plan.files;
+    files.sort();
+    QCOMPARE(files, (QStringList{QStringLiteral("llm/m.gguf"), QStringLiteral("loras/a.safetensors")})); // nothing from inside the link
+    QCOMPARE(plan.models, 3);
+
+    // Across drives a link cannot be renamed; nothing moves.
+    FolderMovePlan acrossDrives = plan;
+    acrossDrives.sameVolume = false;
+    const QString refused = moveModelFiles(acrossDrives);
+    QVERIFY2(refused.contains(QStringLiteral("link")), qPrintable(refused));
+    QCOMPARE(readAll(from + QStringLiteral("/loras/a.safetensors")), QByteArray("lora"));
+    QVERIFY(!QFileInfo::exists(to));
+
+    const QString error = moveModelFiles(plan);
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    const QFileInfo moved(to + QStringLiteral("/checkpoints"));
+    QVERIFY(moved.isJunction() || moved.isSymbolicLink());
+    QVERIFY(!QFileInfo::exists(link));
+    QCOMPARE(readAll(to + QStringLiteral("/checkpoints/comfy.safetensors")), QByteArray("comfy"));
+    // ComfyUI's own folder: its file and its empty sub-folder are still there.
+    QCOMPARE(readAll(shared + QStringLiteral("/comfy.safetensors")), QByteArray("comfy"));
+    QVERIFY(QFileInfo(shared + QStringLiteral("/empty_sub")).isDir());
+    QCOMPARE(readAll(to + QStringLiteral("/llm/m.gguf")), QByteArray("gguf"));
+    QVERIFY(QFileInfo::exists(from + QStringLiteral("/llm/chat.jinja"))); // not a model: stays
+
+    // Options follow what moved; a file that stayed keeps its path.
+    QVariantMap options{{QStringLiteral("model"), QDir::toNativeSeparators(from + QStringLiteral("/checkpoints/comfy.safetensors"))},
+                        {QStringLiteral("more_models"), QVariantList{QVariantMap{{QStringLiteral("model"), from + QStringLiteral("/llm/m.gguf")}}}},
+                        {QStringLiteral("extra_args"), QStringLiteral("--chat-template-file \"%1\" --lora-dir %2")
+                                                           .arg(QDir::toNativeSeparators(from + QStringLiteral("/llm/chat.jinja")), from + QStringLiteral("/loras"))}};
+    QVERIFY(relocateOptions(options, from, to));
+    QCOMPARE(options.value(QStringLiteral("model")).toString(), QDir::toNativeSeparators(to + QStringLiteral("/checkpoints/comfy.safetensors")));
+    QCOMPARE(options.value(QStringLiteral("more_models")).toList().value(0).toMap().value(QStringLiteral("model")).toString(),
+             to + QStringLiteral("/llm/m.gguf"));
+    QCOMPARE(options.value(QStringLiteral("extra_args")).toString(),
+             QStringLiteral("--chat-template-file \"%1\" --lora-dir %2")
+                 .arg(QDir::toNativeSeparators(from + QStringLiteral("/llm/chat.jinja")), to + QStringLiteral("/loras")));
+    QCOMPARE(movedPath(from + QStringLiteral("/llm/chat.jinja"), from, to), from + QStringLiteral("/llm/chat.jinja"));
+    QCOMPARE(movedPath(from + QStringLiteral("/gone.safetensors"), from, to), to + QStringLiteral("/gone.safetensors")); // neither: follows
 }
 
 void TestRuntime::legacyModelsFirstStart()
@@ -1820,8 +1966,9 @@ void TestRuntime::legacyModelsFirstStart()
         QVERIFY(job);
         QTRY_VERIFY_WITH_TIMEOUT(job->isFinished(), 30000);
         QVERIFY2(job->state() == Job::State::Succeeded, qPrintable(job->errorString()));
-        QCOMPARE(chosen.size(), 2); // the old folder while asking, then the new one
-        QCOMPARE(lib.chosenFolder(), lib.standardFolder());
+        QCOMPARE(chosen.size(), 2); // the old folder while asking, then the standard one again
+        QVERIFY(lib.chosenFolder().isEmpty());
+        QCOMPARE(lib.defaultFolder(), lib.standardFolder());
         const QString moved = lib.standardFolder() + QStringLiteral("/checkpoints/old.safetensors");
         QCOMPARE(readAll(moved), ckpt);
         QVERIFY(QFileInfo::exists(sidecarPath(moved)));
@@ -2754,6 +2901,13 @@ void TestRuntime::loraTraining()
     QFuture<QString> refused = servers.start(QStringLiteral("anything"));
     QVERIFY(refused.isFinished());
     QCOMPARE(refused.result(), QStringLiteral("training"));
+    // Nor does a second training (or one during a move of the models folder): the reservation
+    // belongs to the first, whose release would start the servers under the second.
+    Job *second = startTraining(&store, &servers, &jobs, o);
+    QTRY_VERIFY(second->isFinished());
+    QCOMPARE(second->state(), Job::State::Failed);
+    QVERIFY2(second->errorString().contains(QStringLiteral("cannot be trained now: training")), qPrintable(second->errorString()));
+    QCOMPARE(servers.gpuReservation(), QStringLiteral("training"));
     servers.releaseGpu();
     QVERIFY(servers.gpuReservation().isEmpty());
     QCOMPARE(reservation.size(), 2);

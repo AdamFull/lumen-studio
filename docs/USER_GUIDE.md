@@ -162,8 +162,11 @@ their vision projectors, so ComfyUI can use the same folder. You can put model f
   drive by copying (the originals are deleted once every copy is complete). Running servers stop
   meanwhile and start again afterwards. Server settings and characters' LoRAs that use the files
   are updated, and new downloads go to the new folder. Other files in the folder stay where they
-  are. Lumen does not move into a folder inside the current one, or into one that already has
-  files of the same names; if something goes wrong, the files go back.
+  are, and so do folders you added that lie inside it. A linked folder (a junction or symbolic
+  link, for example to ComfyUI's `checkpoints`) moves as a link, which works only on the same
+  drive. Lumen does not move into a folder inside the current one, or into one that already has
+  files of the same names, and not while models download or a LoRA is trained; downloads and
+  trainings do not start while it moves. If something goes wrong, or you cancel, the files go back.
 * Folders you add (ComfyUI, WebUI, LM Studio…) are only read: Lumen never moves or changes files
   there.
 * **Earlier versions** kept the models in `%LOCALAPPDATA%\Lumen\Lumen Studio\models`. If that

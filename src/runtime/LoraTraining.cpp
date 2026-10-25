@@ -233,6 +233,10 @@ public:
 
     void run()
     {
+        // The GPU belongs to something else (a move of the models folder, which also may hold the
+        // base model): its release would start the servers while the trainer runs.
+        if (m_servers && !m_servers->gpuReservation().isEmpty())
+            return m_job->fail(Text::tr("The LoRA cannot be trained now: %1").arg(m_servers->gpuReservation()));
         const auto trainer = m_store->runtime(m_options.runtimeId);
         if (!trainer || !isTrainerKind(trainer->kind))
             return m_job->fail(Text::tr("The LoRA trainer is not installed. Install it under Settings → Local servers → Download…"));

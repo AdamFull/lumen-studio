@@ -49,6 +49,7 @@ void Job::start()
     ++m_attempt;
     m_started = QDateTime::currentDateTime();
     m_cancelRequested = false;
+    m_ignoreCancel = false;
     setState(State::Running);
     try {
         m_starter(this);
@@ -67,6 +68,7 @@ void Job::resetForRetry()
     m_cancelHandler = nullptr;
     m_finished = QDateTime();
     m_cancelRequested = false;
+    m_ignoreCancel = false;
     m_state = State::Queued;
     emit stateChanged(m_state);
     emit progressChanged(m_progress, m_status);
@@ -134,9 +136,16 @@ void Job::reportCancelled()
     setState(State::Cancelled);
 }
 
+void Job::ignoreCancel()
+{
+    m_ignoreCancel = true;
+    m_cancelRequested = false;
+    m_cancelHandler = nullptr;
+}
+
 void Job::cancel()
 {
-    if (isFinished())
+    if (isFinished() || m_ignoreCancel)
         return;
     if (m_state == State::Queued) {
         reportCancelled();

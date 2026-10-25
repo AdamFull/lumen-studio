@@ -22,6 +22,8 @@ namespace lumen::ui {
 
 namespace {
 const QString kModelsFolderKey = QStringLiteral("models/folder");
+// The question about an earlier version's models folder was asked (settleLegacyModels).
+const QString kLegacyAskedKey = QStringLiteral("models/legacy_asked");
 } // namespace
 
 Studio::Studio(QObject *parent)
@@ -59,20 +61,24 @@ Studio::Studio(QObject *parent)
     m_models.setFolder(Settings::instance().value(kModelsFolderKey).toString());
     // Models in an earlier version's folder stay in use (not saved as the choice) until MainWindow
     // has asked once whether to move them.
-    m_legacyModels = runtime::legacyModelsToAsk(&m_models);
+    if (!Settings::instance().value(kLegacyAskedKey).toBool())
+        m_legacyModels = runtime::legacyModelsToAsk(&m_models);
     if (!m_legacyModels.isEmpty())
         m_models.setFolder(m_legacyModels);
     m_models.load();
     QTimer::singleShot(0, &m_models, &runtime::ModelLibrary::rescan); // new or changed files since the last run
     connect(&m_models, &runtime::ModelLibrary::folderChanged, this, [this] {
-        Settings::instance().setValue(kModelsFolderKey, m_models.chosenFolder());
+        if (m_models.chosenFolder().isEmpty())
+            Settings::instance().remove(kModelsFolderKey);
+        else
+            Settings::instance().setValue(kModelsFolderKey, m_models.chosenFolder());
     });
-    // Characters' LoRA files moved with the folder.
+    // Characters' LoRA files moved with the folder (those that stayed keep their paths).
     connect(&m_models, &runtime::ModelLibrary::relocated, this, [this](const QString &from, const QString &to) {
         for (const doc::CharacterEntry &c : m_characters.entries()) {
             QJsonObject lora = c.lora;
             const QString file = lora.value(QStringLiteral("file")).toString();
-            const QString moved = runtime::relocatePath(file, from, to);
+            const QString moved = runtime::movedPath(file, from, to);
             if (moved != file) {
                 lora.insert(QStringLiteral("file"), moved);
                 m_characters.setLora(c.id, lora);
@@ -194,6 +200,7 @@ Job *Studio::settleLegacyModels(const std::function<bool(const runtime::FolderMo
         return nullptr;
     // Asked once: the old folder is the choice until its files are in the new one (a successful
     // move changes the folder, and the setting with it).
+    Settings::instance().setValue(kLegacyAskedKey, true);
     Settings::instance().setValue(kModelsFolderKey, legacy);
     return reportFolderMove(this, runtime::settleLegacyModels(&m_jobs, &m_models, &m_servers, legacy, moveThem));
 }
