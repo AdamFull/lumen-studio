@@ -379,8 +379,13 @@ QList<Issue> Graph::validate() const
             error(p.node, Text::tr("The slider “%1” belongs to a setting that is not in the filter.").arg(p.label));
             continue;
         }
-        if (spec->type == PortType::Number && (p.minimum != 0.0 || p.maximum != 0.0) && p.minimum >= p.maximum)
+        if (spec->type != PortType::Number || (p.minimum == 0.0 && p.maximum == 0.0))
+            continue;
+        if (p.minimum >= p.maximum)
             error(p.node, Text::tr("The slider “%1” has no range: its lowest value is not below its highest.").arg(p.label));
+        else if (p.minimum < spec->minimum || p.maximum > spec->maximum)
+            error(p.node, Text::tr("The slider “%1” reaches values that its setting does not take; keep it within %2 to %3.")
+                              .arg(p.label, QString::number(spec->minimum), QString::number(spec->maximum)));
     }
     return issues;
 }

@@ -121,15 +121,19 @@ QVariant coerceParam(const ParamSpec &spec, const QVariant &stored)
     return v;
 }
 
+QVariant resolveParam(const ParamSpec &spec, const QVariant &stored, double scale)
+{
+    const QVariant v = coerceParam(spec, stored);
+    if (spec.pixels && spec.type == PortType::Number && scale != 1.0)
+        return v.toDouble() * scale; // not re-rounded: a node rounds where it needs whole pixels
+    return v;
+}
+
 QVariantMap resolveParams(const NodeTypeInfo &info, const QVariantMap &stored, double scale)
 {
     QVariantMap out;
-    for (const ParamSpec &spec : info.params) {
-        QVariant v = coerceParam(spec, stored.value(spec.id));
-        if (spec.pixels && spec.type == PortType::Number && scale != 1.0)
-            v = v.toDouble() * scale; // not re-rounded: a node rounds where it needs whole pixels
-        out.insert(spec.id, v);
-    }
+    for (const ParamSpec &spec : info.params)
+        out.insert(spec.id, resolveParam(spec, stored.value(spec.id), scale));
     return out;
 }
 
@@ -198,12 +202,12 @@ void EvalContext::onCancel(std::function<void()> handler)
 
 QImage EvalContext::source() const
 {
-    return m_run ? m_run->source() : QImage();
+    return m_run ? m_run->source(m_scale) : QImage();
 }
 
 QImage EvalContext::selection() const
 {
-    return m_run ? m_run->selection() : QImage();
+    return m_run ? m_run->selection(m_scale) : QImage();
 }
 
 QSize EvalContext::sourceSize() const

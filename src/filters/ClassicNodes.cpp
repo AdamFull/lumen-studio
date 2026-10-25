@@ -145,9 +145,11 @@ void addInputOutput(NodeRegistry &r)
     output.inputs = {imagePort(), maskPort(MaskPort, Text::tr("Where to apply"), true)};
     output.isOutput = true;
     add(r, output, [](const NodeArgs &args, EvalContext &) -> NodeResult {
-        Values v{{ImagePort, args.image(ImagePort)}};
+        const QImage image = args.image(ImagePort);
+        Values v{{ImagePort, image}};
+        // Stretched to the image, so the result's image and mask fit after a resize or rotation.
         if (args.isConnected(MaskPort))
-            v.insert(MaskPort, args.mask(MaskPort));
+            v.insert(MaskPort, img::scaled(args.mask(MaskPort), image.size(), true));
         return v;
     });
 }
@@ -411,7 +413,9 @@ void addTransformNodes(NodeRegistry &r)
             QSize size;
             if (a.text(QStringLiteral("by")) == QLatin1String("size")) {
                 const int w = std::max(1, a.integer(QStringLiteral("width")));
-                const int h = a.number(QStringLiteral("height")) >= 0.5
+                // The height is a whole number before the preview scales it, so only 0 is "keep the
+                // proportions"; a fixed height of 1 px may arrive as 0.25 and stays fixed.
+                const int h = a.number(QStringLiteral("height")) > 0.0
                                 ? std::max(1, a.integer(QStringLiteral("height")))
                                 : std::max(1, static_cast<int>(std::lround(double(w) * src.height() / src.width())));
                 size = {w, h};
@@ -429,10 +433,25 @@ void addTransformNodes(NodeRegistry &r)
                      pixels(QStringLiteral("y"), Text::tr("Top"), 0, 0, 16384),
                      pixels(QStringLiteral("width"), Text::tr("Width"), 512, 1, 16384),
                      pixels(QStringLiteral("height"), Text::tr("Height"), 512, 1, 16384)}),
-        [](const NodeArgs &a, EvalContext &) -> NodeResult {
-            const QRect rect(a.integer(QStringLiteral("x")), a.integer(QStringLiteral("y")),
-                             std::max(1, a.integer(QStringLiteral("width"))), std::max(1, a.integer(QStringLiteral("height"))));
-            const QImage out = ops::crop(a.image(ImagePort), rect);
+        [](const NodeArgs &a, EvalContext &ctx) -> NodeResult {
+            const QImage src = a.image(ImagePort);
+            // The pixels the rectangle touches (whole numbers at full size; in a preview the edges
+            // are scaled and the rectangle covers the preview pixels they fall in). The small
+            // margin keeps 30 * 0.1 = 3.0000000000000004 from reaching the next pixel.
+            constexpr double margin = 1e-6;
+            const double x = a.number(QStringLiteral("x")), y = a.number(QStringLiteral("y"));
+            int left = static_cast<int>(std::floor(x + margin));
+            int top = static_cast<int>(std::floor(y + margin));
+            const int right = static_cast<int>(std::ceil(x + a.number(QStringLiteral("width")) - margin));
+            const int bottom = static_cast<int>(std::ceil(y + a.number(QStringLiteral("height")) - margin));
+            // A rectangle from the last column or row at full size can start just past the edge of
+            // the preview (8 px at 0.3 previews at 2 px, column 7 at 2.1): it keeps the last one.
+            if (ctx.isPreview() && left == src.width())
+                left = src.width() - 1;
+            if (ctx.isPreview() && top == src.height())
+                top = src.height() - 1;
+            const QRect rect(left, top, std::max(1, right - left), std::max(1, bottom - top));
+            const QImage out = ops::crop(src, rect);
             if (out.isNull())
                 throw Error(Text::tr("The crop area is outside the image."));
             return image(out);

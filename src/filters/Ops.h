@@ -35,10 +35,12 @@ QImage levels(const QImage &image, Channels channels, double inBlack, double inW
 // A smooth curve through the points (input, output in 0..255) that does not overshoot between
 // them (monotone cubic); flat before the first point and after the last.
 QImage curves(const QImage &image, Channels channels, const QList<QPointF> &points);
-// "x y, x y, ..." <-> points; fewer than two valid points give the identity line.
+// "x y, x y, ..." <-> points. Parsing clamps the points to 0..255, sorts them, keeps the last of
+// two at the same input, and gives the identity line for fewer than two valid points.
 QList<QPointF> parseCurve(const QString &text);
 QString curveText(const QList<QPointF> &points);
-// The 256-entry table a curve gives (for the node editor's curve widget and the tests).
+// The 256-entry table a curve gives (for the node editor's curve widget and the tests). The points
+// are normalised as parseCurve() does, so they may come in any order.
 QList<int> curveTable(const QList<QPointF> &points);
 // brightness, contrast in -100..100. Brightness moves towards white or black; contrast stretches
 // around mid grey (-100: everything grey, 100: nearly a threshold).

@@ -345,6 +345,32 @@ QImage levels(const QImage &image, Channels channels, double inBlack, double inW
     return applyLut(image, channels, lut);
 }
 
+namespace {
+
+// Finite points clamped to 0..255, sorted by input, one per input value (the last one given
+// wins); fewer than two give the identity line.
+QList<QPointF> normalizedCurve(const QList<QPointF> &given)
+{
+    QList<QPointF> points;
+    for (const QPointF &p : given) {
+        if (std::isfinite(p.x()) && std::isfinite(p.y()))
+            points.append({std::clamp(p.x(), 0.0, 255.0), std::clamp(p.y(), 0.0, 255.0)});
+    }
+    std::stable_sort(points.begin(), points.end(), [](const QPointF &a, const QPointF &b) { return a.x() < b.x(); });
+    QList<QPointF> unique;
+    for (const QPointF &p : points) {
+        if (!unique.isEmpty() && unique.last().x() == p.x())
+            unique.last() = p;
+        else
+            unique.append(p);
+    }
+    if (unique.size() < 2)
+        return {{0, 0}, {255, 255}};
+    return unique;
+}
+
+} // namespace
+
 QList<QPointF> parseCurve(const QString &text)
 {
     QList<QPointF> points;
@@ -355,20 +381,10 @@ QList<QPointF> parseCurve(const QString &text)
         bool okX = false, okY = false;
         const double x = xy[0].toDouble(&okX);
         const double y = xy[1].toDouble(&okY);
-        if (okX && okY && std::isfinite(x) && std::isfinite(y))
-            points.append({std::clamp(x, 0.0, 255.0), std::clamp(y, 0.0, 255.0)});
+        if (okX && okY)
+            points.append({x, y});
     }
-    std::stable_sort(points.begin(), points.end(), [](const QPointF &a, const QPointF &b) { return a.x() < b.x(); });
-    QList<QPointF> unique; // one point per input value: the last one given wins
-    for (const QPointF &p : points) {
-        if (!unique.isEmpty() && unique.last().x() == p.x())
-            unique.last() = p;
-        else
-            unique.append(p);
-    }
-    if (unique.size() < 2)
-        return {{0, 0}, {255, 255}};
-    return unique;
+    return normalizedCurve(points);
 }
 
 QString curveText(const QList<QPointF> &points)
@@ -381,7 +397,8 @@ QString curveText(const QList<QPointF> &points)
 
 QList<int> curveTable(const QList<QPointF> &input)
 {
-    const QList<QPointF> pts = input.size() < 2 ? QList<QPointF>{{0, 0}, {255, 255}} : input;
+    // The spline below needs distinct, rising inputs; the curve widget may hand over any points.
+    const QList<QPointF> pts = normalizedCurve(input);
     const qsizetype n = pts.size();
     // Fritsch-Carlson tangents: a cubic Hermite spline that keeps monotone runs monotone.
     std::vector<double> secant(static_cast<size_t>(n - 1)), tangent(static_cast<size_t>(n));

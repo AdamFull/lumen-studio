@@ -9,6 +9,7 @@
 #include <QPromise>
 #include <QSet>
 
+#include <array>
 #include <atomic>
 #include <cmath>
 #include <optional>
@@ -37,6 +38,14 @@ QByteArray canonical(const QVariant &v)
     }
 }
 
+// Adds one field of a key, its length first, so that two different lists of fields never hash
+// the same bytes (the texts "a;b=" and "" stay apart from "a" and ";b=").
+void addField(QCryptographicHash &hash, QByteArrayView bytes)
+{
+    hash.addData(QByteArray::number(bytes.size()) + ':');
+    hash.addData(bytes);
+}
+
 QSize scaledSize(const QSize &size, double scale)
 {
     if (scale >= 1.0)
@@ -51,6 +60,11 @@ QImage toMask(const QImage &image)
                                                                           : image.convertToFormat(QImage::Format_Grayscale8);
 }
 
+bool isPicture(PortType type)
+{
+    return type == PortType::Image || type == PortType::Mask;
+}
+
 // A value arriving at an input: a mask feeding an image input becomes a grey image.
 QVariant convertedInput(PortType from, PortType to, const QVariant &value)
 {
@@ -59,20 +73,40 @@ QVariant convertedInput(PortType from, PortType to, const QVariant &value)
     return value;
 }
 
-// The outputs of a node, every declared one present and in its port's canonical format.
+// A value input with the id of a parameter drives it, and is resolved like the parameter.
+QVariant drivenValue(const NodeTypeInfo &info, const PortSpec &port, const QVariant &value, double scale)
+{
+    const ParamSpec *spec = isPicture(port.type) ? nullptr : info.param(port.id);
+    return spec ? resolveParam(*spec, value, scale) : value;
+}
+
+// The outputs of a node, every declared one present and in its port's canonical format. The
+// message does not name the node: the callers add the name.
 Values checkedOutputs(const NodeTypeInfo &info, Values outputs)
 {
     for (const PortSpec &p : info.outputs) {
         auto it = outputs.find(p.id);
-        const bool isPicture = p.type == PortType::Image || p.type == PortType::Mask;
-        if (it == outputs.end() || !it->isValid() || (isPicture && it->value<QImage>().isNull()))
-            throw Error(Text::tr("“%1” gave no result.").arg(info.name));
+        if (it == outputs.end() || !it->isValid() || (isPicture(p.type) && it->value<QImage>().isNull()))
+            throw Error(Text::tr("It gave no result."));
         if (p.type == PortType::Image)
             *it = img::normalized(it->value<QImage>());
         else if (p.type == PortType::Mask)
             *it = toMask(it->value<QImage>());
     }
     return outputs;
+}
+
+// An expensive node's outputs in a preview: its full-resolution images and masks scaled down.
+Values scaledDown(const NodeTypeInfo &info, Values outputs, double scale)
+{
+    for (const PortSpec &p : info.outputs) {
+        auto it = outputs.find(p.id);
+        if (it == outputs.end() || !isPicture(p.type))
+            continue;
+        const QImage image = it->value<QImage>();
+        *it = img::scaled(image, scaledSize(image.size(), scale), true);
+    }
+    return checkedOutputs(info, outputs);
 }
 
 QString nodeFailed(const QString &name, const QString &message)
@@ -85,6 +119,65 @@ QString missingInput(const NodeTypeInfo &info, const PortSpec &port)
     return Text::tr("“%1” has nothing connected to its “%2” input.").arg(info.name, port.label);
 }
 
+// Where a step computes a node's result: at full resolution or at the preview scale. A preview
+// runs its nodes in the Preview lane, except an expensive node and the nodes that feed it: they
+// run in the Full lane, so that a Run while previewing gives the result that applying uses.
+enum Lane { Full = 0, Preview = 1 };
+
+struct Step
+{
+    QString node;
+    Lane lane = Full;
+    // An expensive node in the Preview lane: its Full result scaled down; the node does not run.
+    bool scaledCopy = false;
+    QByteArray key;
+    QVariantMap params; // resolved for the lane's scale
+    std::optional<Values> cached;
+    bool needed = false; // false: it only feeds results that are cached
+};
+
+// The steps of an evaluation, every step after the steps it reads, ending with the target.
+QList<Step> planSteps(const Graph &graph, const QStringList &order, double scale)
+{
+    QList<Step> steps;
+    if (scale >= 1.0) {
+        for (const QString &id : order)
+            steps.append({id, Full});
+        return steps;
+    }
+    QSet<QString> full; // the expensive nodes and what feeds them
+    for (const QString &id : order) {
+        if (graph.node(id)->type->info().expensive) {
+            const QStringList upstream = graph.evaluationOrder(id);
+            full.unite(QSet<QString>(upstream.begin(), upstream.end()));
+        }
+    }
+    QSet<QString> preview; // what the target needs at the preview scale, up to the expensive nodes
+    QStringList pending{order.last()};
+    while (!pending.isEmpty()) {
+        const QString id = pending.takeLast();
+        if (preview.contains(id))
+            continue;
+        preview.insert(id);
+        const NodeTypeInfo &info = graph.node(id)->type->info();
+        if (info.expensive)
+            continue;
+        for (const PortSpec &port : info.inputs) {
+            if (const auto link = graph.linkInto(id, port.id))
+                pending.append(link->fromNode);
+        }
+    }
+    for (const QString &id : order) {
+        if (full.contains(id))
+            steps.append({id, Full});
+    }
+    for (const QString &id : order) {
+        if (preview.contains(id))
+            steps.append({id, Preview, graph.node(id)->type->info().expensive});
+    }
+    return steps;
+}
+
 } // namespace
 
 struct Evaluator::Cache
@@ -95,50 +188,60 @@ struct Evaluator::Cache
         Values outputs;
     };
 
-    std::optional<Values> find(const QString &node, const QByteArray &key) const
+    std::optional<Values> find(const QString &node, Lane lane, const QByteArray &key) const
     {
         QMutexLocker lock(&mutex);
-        const auto it = entries.constFind(node);
-        if (it == entries.constEnd() || it->key != key)
+        const auto it = lanes[lane].constFind(node);
+        if (it == lanes[lane].constEnd() || it->key != key)
             return std::nullopt;
         return it->outputs;
     }
 
-    void store(const QString &node, const QByteArray &key, const Values &outputs)
+    void store(const QString &node, Lane lane, const QByteArray &key, const Values &outputs)
     {
         QMutexLocker lock(&mutex);
-        entries.insert(node, {key, outputs});
+        lanes[lane].insert(node, {key, outputs});
     }
 
     // Drops the results of nodes that are no longer in the graph.
     void retain(const QSet<QString> &nodes)
     {
         QMutexLocker lock(&mutex);
-        for (auto it = entries.begin(); it != entries.end();) {
-            if (nodes.contains(it.key()))
-                ++it;
-            else
-                it = entries.erase(it);
+        for (QHash<QString, Entry> &entries : lanes) {
+            for (auto it = entries.begin(); it != entries.end();) {
+                if (nodes.contains(it.key()))
+                    ++it;
+                else
+                    it = entries.erase(it);
+            }
         }
     }
 
+    int size() const
+    {
+        QMutexLocker lock(&mutex);
+        return static_cast<int>(lanes[Full].size() + lanes[Preview].size());
+    }
+
     mutable QMutex mutex;
-    QHash<QString, Entry> entries; // node id -> its last result
+    // Node id -> its last result at full resolution [Full] and at the preview scale [Preview], so
+    // that going from previewing to applying and back computes nothing again.
+    std::array<QHash<QString, Entry>, 2> lanes;
 };
 
 // One evaluation. Runs on the worker pool; between nodes that return futures it is held only by
-// the futures' continuations. The evaluation state (index, keys, outputs) is touched by one
+// the futures' continuations. The evaluation state (steps, index, outputs) is touched by one
 // thread at a time, since every hand-over goes through a future; cancel() comes from the caller's
 // thread and shares only the members under m_mutex.
 class Evaluator::Run final : public EvalContext::Run, public std::enable_shared_from_this<Evaluator::Run>
 {
 public:
-    Run(Graph graph, QStringList order, EvalOptions options, EvalInputs inputs, std::shared_ptr<Cache> cache)
+    Run(Graph graph, const QStringList &order, EvalOptions options, EvalInputs inputs, std::shared_ptr<Cache> cache)
         : m_graph(std::move(graph))
-        , m_order(std::move(order))
         , m_options(std::move(options))
         , m_inputs(std::move(inputs))
         , m_cache(std::move(cache))
+        , m_steps(planSteps(m_graph, order, m_options.scale))
     {
     }
 
@@ -148,62 +251,43 @@ public:
         return m_promise.future();
     }
 
+    void begin()
+    {
+        if (isCancelled())
+            return finishCancelled();
+        if (!prepare())
+            return;
+        // A preview that would have to run an expensive node stops before it runs anything.
+        if (m_result.needsRun)
+            return finishOk();
+        step();
+    }
+
     void step()
     {
-        while (m_index < m_order.size()) {
+        while (m_index < m_steps.size()) {
             if (isCancelled())
                 return finishCancelled();
-            const Node *node = m_graph.node(m_order.at(m_index));
-            const NodeTypeInfo &info = node->type->info();
-            const QVariantMap params = resolveParams(info, node->params, m_options.scale);
-
-            // The key: the type, the parameters, the scale and the keys of the nodes feeding it.
-            QCryptographicHash hash(QCryptographicHash::Sha1);
-            hash.addData(info.id.toUtf8());
-            hash.addData(QByteArrayView("|"));
-            for (const ParamSpec &spec : info.params) {
-                hash.addData(spec.id.toUtf8());
-                hash.addData(QByteArrayView("="));
-                hash.addData(canonical(params.value(spec.id)));
-                hash.addData(QByteArrayView(";"));
-            }
-            hash.addData(QByteArray::number(m_options.scale, 'g', 17));
-            Values inputs;
-            for (const PortSpec &port : info.inputs) {
-                hash.addData(port.id.toUtf8());
-                hash.addData(QByteArrayView(":"));
-                const auto link = m_graph.linkInto(node->id, port.id);
-                if (!link) {
-                    if (!port.optional)
-                        return fail(missingInput(info, port));
-                    hash.addData(QByteArrayView("-;"));
-                    continue;
-                }
-                const PortSpec *out = m_graph.node(link->fromNode)->type->info().output(link->fromPort);
-                hash.addData(m_keys.value(link->fromNode));
-                hash.addData(link->fromPort.toUtf8());
-                hash.addData(QByteArrayView(";"));
-                inputs.insert(port.id, convertedInput(out->type, port.type, m_outputs.value(link->fromNode).value(link->fromPort)));
-            }
-            if (info.readsSource)
-                hash.addData(sourceKey());
-            const QByteArray key = hash.result();
-            m_keys.insert(node->id, key);
-
-            if (std::optional<Values> cached = m_cache->find(node->id, key)) {
-                m_outputs.insert(node->id, *cached);
+            const Step &s = m_steps.at(m_index);
+            if (!s.needed) {
                 ++m_index;
                 continue;
             }
-            if (info.expensive && !m_options.runExpensive) {
-                m_result.needsRun = true;
-                return finishOk();
+            if (s.cached) {
+                m_outputs[s.lane].insert(s.node, *s.cached);
+                ++m_index;
+                continue;
             }
-
-            m_result.evaluated.append(node->id);
-            EvalContext ctx(this, node->id, m_options.scale);
+            const Node *node = m_graph.node(s.node);
+            const NodeTypeInfo &info = node->type->info();
             try {
-                const NodeResult result = node->type->evaluate(NodeArgs(inputs, params), ctx);
+                if (s.scaledCopy) {
+                    accept(scaledDown(info, m_outputs[Full].value(s.node), m_options.scale));
+                    continue;
+                }
+                m_result.evaluated.append(s.node);
+                EvalContext ctx(this, s.node, laneScale(s.lane));
+                const NodeResult result = node->type->evaluate(NodeArgs(inputsOf(s, info), s.params), ctx);
                 if (!result.isReady())
                     return wait(result.future());
                 // A node that saw the cancellation returned early; its outputs are not kept.
@@ -258,39 +342,129 @@ public:
         handler();
     }
 
-    QImage source() override
+    QImage source(double scale) override
     {
-        if (m_source.isNull() && !m_inputs.image.isNull()) {
+        QImage &source = m_source[laneOf(scale)];
+        if (source.isNull() && !m_inputs.image.isNull()) {
             const QImage image = img::normalized(m_inputs.image);
-            m_source = img::scaled(image, scaledSize(image.size(), m_options.scale), true);
+            source = img::scaled(image, scaledSize(image.size(), scale), true);
         }
-        return m_source;
+        return source;
     }
 
-    QImage selection() override
+    QImage selection(double scale) override
     {
-        if (m_selection.isNull()) {
-            const QSize size = source().size();
-            m_selection = m_inputs.selection.isNull() ? img::createMask(size, 255)
-                                                      : img::scaled(toMask(m_inputs.selection), size, true);
+        QImage &selection = m_selection[laneOf(scale)];
+        if (selection.isNull()) {
+            const QSize size = source(scale).size();
+            selection = m_inputs.selection.isNull() ? img::createMask(size, 255)
+                                                    : img::scaled(toMask(m_inputs.selection), size, true);
         }
-        return m_selection;
+        return selection;
     }
 
     QSize sourceSize() const override { return m_inputs.image.size(); }
 
 private:
+    static Lane laneOf(double scale) { return scale < 1.0 ? Preview : Full; }
+    double laneScale(Lane lane) const { return lane == Full ? 1.0 : m_options.scale; }
+
     QByteArray sourceKey() const
     {
         return QByteArray::number(m_inputs.image.cacheKey()) + 'x' + QByteArray::number(m_inputs.image.width()) + 'x'
              + QByteArray::number(m_inputs.image.height()) + '/' + QByteArray::number(m_inputs.selection.cacheKey());
     }
 
+    // Computes every step's key and takes what the cache holds for it, before anything runs: a
+    // key depends only on the graph, the parameters and the source (the type, the parameter
+    // values, the lane's scale and the keys of the steps feeding it). Then, from the target back,
+    // a step is needed when a needed step without a cached result reads it, so nothing that only
+    // feeds cached results runs, and a preview knows at once whether it would run an expensive node.
+    bool prepare()
+    {
+        std::array<QHash<QString, qsizetype>, 2> index; // node -> its step, per lane
+        // planSteps() puts every node that a step reads into the step's lane, before the step.
+        auto feeding = [&](const Step &s, const Link &link) -> Step & {
+            return m_steps[index[s.lane].value(link.fromNode)];
+        };
+        for (qsizetype i = 0; i < m_steps.size(); ++i) {
+            Step &s = m_steps[i];
+            index[s.lane].insert(s.node, i);
+            const Node *node = m_graph.node(s.node);
+            const NodeTypeInfo &info = node->type->info();
+            const double scale = laneScale(s.lane);
+            QCryptographicHash hash(QCryptographicHash::Sha1);
+            if (s.scaledCopy) {
+                addField(hash, "scaled copy");
+                addField(hash, m_steps.at(index[Full].value(s.node)).key);
+            } else {
+                s.params = resolveParams(info, node->params, scale);
+                addField(hash, info.id.toUtf8());
+                for (const ParamSpec &spec : info.params) {
+                    addField(hash, spec.id.toUtf8());
+                    addField(hash, canonical(s.params.value(spec.id)));
+                }
+                for (const PortSpec &port : info.inputs) {
+                    addField(hash, port.id.toUtf8());
+                    const auto link = m_graph.linkInto(s.node, port.id);
+                    if (!link) {
+                        if (!port.optional) {
+                            fail(missingInput(info, port));
+                            return false;
+                        }
+                        addField(hash, {});
+                        continue;
+                    }
+                    addField(hash, feeding(s, *link).key);
+                    addField(hash, link->fromPort.toUtf8());
+                }
+                if (info.readsSource)
+                    addField(hash, sourceKey());
+            }
+            addField(hash, QByteArray::number(scale, 'g', 17));
+            s.key = hash.result();
+            s.cached = m_cache->find(s.node, s.lane, s.key);
+        }
+
+        m_steps.last().needed = true;
+        for (qsizetype i = m_steps.size() - 1; i >= 0; --i) {
+            const Step &s = m_steps.at(i);
+            if (!s.needed || s.cached)
+                continue;
+            if (s.scaledCopy) {
+                m_steps[index[Full].value(s.node)].needed = true;
+                continue;
+            }
+            const NodeTypeInfo &info = m_graph.node(s.node)->type->info();
+            if (info.expensive && !m_options.runExpensive)
+                m_result.needsRun = true;
+            for (const PortSpec &port : info.inputs) {
+                if (const auto link = m_graph.linkInto(s.node, port.id))
+                    feeding(s, *link).needed = true;
+            }
+        }
+        return true;
+    }
+
+    Values inputsOf(const Step &s, const NodeTypeInfo &info) const
+    {
+        Values inputs;
+        for (const PortSpec &port : info.inputs) {
+            const auto link = m_graph.linkInto(s.node, port.id);
+            if (!link)
+                continue;
+            const PortSpec *out = m_graph.node(link->fromNode)->type->info().output(link->fromPort);
+            const QVariant value = m_outputs[s.lane].value(link->fromNode).value(link->fromPort);
+            inputs.insert(port.id, drivenValue(info, port, convertedInput(out->type, port.type, value), laneScale(s.lane)));
+        }
+        return inputs;
+    }
+
     void accept(const Values &outputs)
     {
-        const QString id = m_order.at(m_index);
-        m_cache->store(id, m_keys.value(id), outputs);
-        m_outputs.insert(id, outputs);
+        const Step &s = m_steps.at(m_index);
+        m_cache->store(s.node, s.lane, s.key, outputs);
+        m_outputs[s.lane].insert(s.node, outputs);
         ++m_index;
         QMutexLocker lock(&m_mutex);
         m_cancelHandlers.clear(); // they belonged to the node that finished
@@ -327,11 +501,11 @@ private:
         }
         if (isCancelled())
             return finishCancelled();
-        const NodeTypeInfo &info = m_graph.node(m_order.at(m_index))->type->info();
+        const NodeTypeInfo &info = m_graph.node(m_steps.at(m_index).node)->type->info();
         try {
             if (future.resultCount() == 0) {
                 future.waitForFinished(); // rethrows the node's exception, if it has one
-                throw Error(Text::tr("“%1” gave no result.").arg(info.name));
+                throw Error(Text::tr("It gave no result."));
             }
             accept(checkedOutputs(info, future.result()));
         } catch (const std::exception &e) {
@@ -357,9 +531,10 @@ private:
     {
         if (!markDone())
             return;
+        const QHash<QString, Values> &outputs = m_outputs[laneOf(m_options.scale)];
         m_result.scale = m_options.scale;
-        m_result.outputs = m_outputs.value(m_options.target);
-        const Values output = m_outputs.value(m_graph.outputNode());
+        m_result.outputs = outputs.value(m_options.target);
+        const Values output = outputs.value(m_graph.outputNode());
         m_result.image = output.value(QStringLiteral("image")).value<QImage>();
         m_result.mask = output.value(QStringLiteral("mask")).value<QImage>();
         m_promise.addResult(m_result);
@@ -383,18 +558,17 @@ private:
     }
 
     const Graph m_graph;
-    const QStringList m_order;
     const EvalOptions m_options;
     const EvalInputs m_inputs;
     const std::shared_ptr<Cache> m_cache;
     QPromise<EvalResult> m_promise;
 
+    QList<Step> m_steps;
     qsizetype m_index = 0;
-    QHash<QString, QByteArray> m_keys;
-    QHash<QString, Values> m_outputs;
+    std::array<QHash<QString, Values>, 2> m_outputs; // per lane: node id -> outputs
     EvalResult m_result;
-    QImage m_source;
-    QImage m_selection;
+    std::array<QImage, 2> m_source; // per lane
+    std::array<QImage, 2> m_selection;
 
     mutable QMutex m_mutex;
     std::atomic_bool m_cancelledFlag = false; // m_cancelled, readable without the lock
@@ -446,7 +620,7 @@ QFuture<EvalResult> Evaluator::evaluate(const Graph &graph, const EvalInputs &in
         m_runs.removeIf([](const std::weak_ptr<Run> &r) { return r.expired(); });
         m_runs.append(run);
     }
-    async::run([run] { run->step(); });
+    async::run([run] { run->begin(); });
     return future;
 }
 
@@ -468,10 +642,9 @@ void Evaluator::clearCache()
     m_cache->retain({});
 }
 
-int Evaluator::cachedNodes() const
+int Evaluator::cachedResults() const
 {
-    QMutexLocker lock(&m_cache->mutex);
-    return static_cast<int>(m_cache->entries.size());
+    return m_cache->size();
 }
 
 namespace {
@@ -482,8 +655,8 @@ class DirectRun final : public EvalContext::Run
 public:
     bool isCancelled() const override { return false; }
     void onCancel(std::function<void()>) override {}
-    QImage source() override { return {}; }
-    QImage selection() override { return {}; }
+    QImage source(double) override { return {}; }
+    QImage selection(double) override { return {}; }
     QSize sourceSize() const override { return {}; }
 };
 
@@ -495,26 +668,35 @@ Values evaluateNode(const NodeType &type, const Values &inputs, const QVariantMa
     Values given;
     for (const PortSpec &port : info.inputs) {
         const auto it = inputs.constFind(port.id);
-        const bool isPicture = port.type == PortType::Image || port.type == PortType::Mask;
-        if (it == inputs.constEnd() || (isPicture && it->value<QImage>().isNull())) {
+        if (it == inputs.constEnd() || (isPicture(port.type) && it->value<QImage>().isNull())) {
             if (!port.optional)
                 throw Error(missingInput(info, port));
             continue;
         }
-        given.insert(port.id, port.type == PortType::Image   ? QVariant(img::normalized(it->value<QImage>()))
+        given.insert(port.id, port.type == PortType::Image  ? QVariant(img::normalized(it->value<QImage>()))
                               : port.type == PortType::Mask ? QVariant(toMask(it->value<QImage>()))
-                                                            : *it);
+                                                            : drivenValue(info, port, *it, scale));
     }
+    auto checked = [&info](const Values &outputs) {
+        try {
+            return checkedOutputs(info, outputs);
+        } catch (const Error &e) {
+            throw Error(nodeFailed(info.name, e.message()));
+        }
+    };
     DirectRun run;
     EvalContext ctx(&run, info.id, scale);
     const NodeResult result = type.evaluate(NodeArgs(given, resolveParams(info, params, scale)), ctx);
     if (result.isReady())
-        return checkedOutputs(info, result.outputs());
+        return checked(result.outputs());
     QFuture<Values> future = result.future();
-    future.waitForFinished();
-    if (future.isCanceled() && future.resultCount() == 0)
-        throw Error(Text::tr("“%1” was cancelled.").arg(info.name));
-    return checkedOutputs(info, future.result());
+    future.waitForFinished(); // rethrows the node's exception, if it has one
+    if (future.resultCount() == 0) {
+        if (future.isCanceled())
+            throw Error(Text::tr("“%1” was cancelled.").arg(info.name));
+        return checked({});
+    }
+    return checked(future.result());
 }
 
 } // namespace lumen::filters

@@ -162,21 +162,29 @@ struct Counter
 {
     QMutex mutex;
     QHash<QString, int> counts;
+    QHash<QString, QSize> sizes; // of the last image each node got
 
-    void add(const QString &node)
+    void add(const QString &node, const QSize &input = {})
     {
         QMutexLocker lock(&mutex);
         ++counts[node];
+        sizes.insert(node, input);
     }
     int value(const QString &node)
     {
         QMutexLocker lock(&mutex);
         return counts.value(node);
     }
+    QSize size(const QString &node)
+    {
+        QMutexLocker lock(&mutex);
+        return sizes.value(node);
+    }
     void clear()
     {
         QMutexLocker lock(&mutex);
         counts.clear();
+        sizes.clear();
     }
 };
 
@@ -306,9 +314,75 @@ NodeTypePtr expensiveType()
     NodeTypeInfo info = passThroughInfo(QStringLiteral("test-expensive"));
     info.expensive = true;
     return makeNodeType(info, [](const NodeArgs &a, EvalContext &ctx) -> NodeResult {
-        counter().add(ctx.nodeId());
+        counter().add(ctx.nodeId(), a.image(QStringLiteral("image")).size());
         return Values{{QStringLiteral("image"), ops::invert(a.image(QStringLiteral("image")))}};
     });
+}
+
+// Two free-text parameters, as the prompt and the negative prompt of an AI node; counts.
+NodeTypePtr promptType()
+{
+    NodeTypeInfo info = passThroughInfo(QStringLiteral("test-prompt"));
+    for (const QString &id : {QStringLiteral("prompt"), QStringLiteral("negative")}) {
+        ParamSpec p;
+        p.id = id;
+        p.label = id;
+        p.type = PortType::Text;
+        p.defaultValue = QString();
+        info.params.append(p);
+    }
+    return makeNodeType(info, [](const NodeArgs &a, EvalContext &ctx) -> NodeResult {
+        counter().add(ctx.nodeId());
+        return Values{{QStringLiteral("image"), a.image(QStringLiteral("image"))}};
+    });
+}
+
+// A number output, to drive the parameters of other nodes.
+NodeTypePtr numberType()
+{
+    NodeTypeInfo info;
+    info.id = QStringLiteral("test-number");
+    info.name = info.id;
+    info.category = QStringLiteral("test");
+    info.outputs = {{QStringLiteral("value"), QStringLiteral("Value"), PortType::Number, false}};
+    ParamSpec value;
+    value.id = QStringLiteral("value");
+    value.label = QStringLiteral("Value");
+    value.defaultValue = 0.0;
+    value.minimum = -1000;
+    value.maximum = 1000;
+    value.decimals = 2;
+    info.params = {value};
+    return makeNodeType(info, [](const NodeArgs &a, EvalContext &) -> NodeResult {
+        return Values{{QStringLiteral("value"), a.number(QStringLiteral("value"))}};
+    });
+}
+
+// A pixel length from 0 to 20 that a number input can drive; gives back the radius it ran with.
+NodeTypePtr radiusType()
+{
+    NodeTypeInfo info = passThroughInfo(QStringLiteral("test-radius"));
+    info.inputs.append({QStringLiteral("radius"), QStringLiteral("Radius"), PortType::Number, true});
+    info.outputs.append({QStringLiteral("radius"), QStringLiteral("Radius"), PortType::Number, false});
+    ParamSpec radius;
+    radius.id = QStringLiteral("radius");
+    radius.label = QStringLiteral("Radius");
+    radius.defaultValue = 8.0;
+    radius.maximum = 20;
+    radius.decimals = 1;
+    radius.pixels = true;
+    info.params = {radius};
+    return makeNodeType(info, [](const NodeArgs &a, EvalContext &) -> NodeResult {
+        return Values{{QStringLiteral("image"), a.image(QStringLiteral("image"))},
+                      {QStringLiteral("radius"), a.number(QStringLiteral("radius"))}};
+    });
+}
+
+// Returns nothing for its image output.
+NodeTypePtr emptyType()
+{
+    return makeNodeType(passThroughInfo(QStringLiteral("test-empty")),
+                        [](const NodeArgs &, EvalContext &) -> NodeResult { return Values{}; });
 }
 
 NodeRegistry testRegistry()
@@ -319,6 +393,10 @@ NodeRegistry testRegistry()
     r.add(slowType());
     r.add(laterType());
     r.add(expensiveType());
+    r.add(promptType());
+    r.add(numberType());
+    r.add(radiusType());
+    r.add(emptyType());
     return r;
 }
 
@@ -382,6 +460,8 @@ private slots:
     void library();
     void cacheRunsOnlyWhatChanged();
     void previewScale();
+    void drivenParameters();
+    void nodeErrors();
     void cancellation();
     void asynchronousNode();
     void expensiveNodeWaitsForRun();
@@ -562,6 +642,15 @@ void TestFilters::curvesNode()
     QCOMPARE(inner[255], 224);
     QCOMPARE(ops::parseCurve(QStringLiteral("nonsense")), (QList<QPointF>{{0, 0}, {255, 255}}));
     QCOMPARE(ops::curveText(lifted), QStringLiteral("0 0, 128 200, 255 255"));
+    // The table takes points as the curve widget may hold them: in any order, two at the same
+    // input (the last one wins), outside 0..255.
+    QCOMPARE(ops::curveTable({{0, 0}, {100, 50}, {100, 200}, {255, 255}}), ops::curveTable({{0, 0}, {100, 200}, {255, 255}}));
+    QCOMPARE(ops::curveTable({{255, 255}, {128, 200}, {0, 0}}), table);
+    const QList<int> identity = ops::curveTable({{0, 0}, {255, 255}});
+    for (int i = 0; i < 256; ++i)
+        QCOMPARE(identity[i], i);
+    QCOMPARE(ops::curveTable({{300, 400}, {-50, -10}}), identity);
+    QCOMPARE(ops::curveTable({{40, 40}}), identity);
     // One channel only.
     const QImage green = apply(QStringLiteral("curves"), solid(1, 1, qRgb(100, 100, 100)),
                                {{QStringLiteral("points"), QStringLiteral("0 255, 255 0")}, {QStringLiteral("channel"), QStringLiteral("green")}});
@@ -930,6 +1019,18 @@ void TestFilters::inputAndOutput()
     // No image: an error in plain words.
     o = run(evaluator, g, {});
     QVERIFY(o.error.contains(QStringLiteral("no image")));
+
+    // The output stretches its mask to its image when the filter changes the size, so the image
+    // and the mask of the result always fit together.
+    Graph half = chain({QStringLiteral("resize")}); // 50 %
+    QVERIFY(half.connect(QStringLiteral("n1"), QStringLiteral("selection"), QStringLiteral("n3"), QStringLiteral("mask")));
+    o = run(evaluator, half, {src, selection});
+    QVERIFY2(o.error.isEmpty(), qPrintable(o.error));
+    QCOMPARE(o.result.image.size(), QSize(6, 4));
+    QCOMPARE(o.result.mask.size(), QSize(6, 4));
+    QCOMPARE(o.result.mask.format(), QImage::Format_Grayscale8);
+    QCOMPARE(maskAt(o.result.mask, 0, 0), 255);
+    QCOMPARE(maskAt(o.result.mask, 5, 3), 0);
 }
 
 void TestFilters::validation()
@@ -1009,6 +1110,12 @@ void TestFilters::validation()
     const QString blur = published.addNode(QStringLiteral("gaussian-blur"));
     published.publish({blur, QStringLiteral("radius"), QStringLiteral("Softness"), 5, 2});
     QVERIFY(errors(published).join(QLatin1Char(' ')).contains(QStringLiteral("no range")));
+    // ... and one within the setting's own (the blur radius takes 0 to 250).
+    published.publish({blur, QStringLiteral("radius"), QStringLiteral("Softness"), -50, 9000});
+    QCOMPARE(errors(published), QStringList{QStringLiteral("The slider “Softness” reaches values that its setting does not "
+                                                           "take; keep it within 0 to 250.")});
+    published.publish({blur, QStringLiteral("radius"), QStringLiteral("Softness"), 0, 300});
+    QVERIFY(!published.isValid());
     published.publish({blur, QStringLiteral("radius"), QStringLiteral("Softness"), 0, 20});
     QVERIFY(published.isValid());
     QCOMPARE(published.published().size(), 1);
@@ -1211,7 +1318,7 @@ void TestFilters::cacheRunsOnlyWhatChanged()
     QCOMPARE(first.result.evaluated, all);
     QCOMPARE(counter().value(QStringLiteral("n2")), 1);
     QCOMPARE(counter().value(QStringLiteral("n4")), 1);
-    QCOMPARE(evaluator.cachedNodes(), 5);
+    QCOMPARE(evaluator.cachedResults(), 5);
 
     // Nothing changed: everything comes from the cache.
     Outcome again = run(evaluator, g, {src, {}});
@@ -1243,9 +1350,9 @@ void TestFilters::cacheRunsOnlyWhatChanged()
     QVERIFY(g.removeNode(QStringLiteral("n4")));
     QVERIFY(g.connect(QStringLiteral("n3"), QStringLiteral("image"), QStringLiteral("n5"), QStringLiteral("image")));
     QCOMPARE(run(evaluator, g, {src, selection}).result.evaluated, QStringList{QStringLiteral("n5")});
-    QCOMPARE(evaluator.cachedNodes(), 4);
+    QCOMPARE(evaluator.cachedResults(), 4);
     evaluator.clearCache();
-    QCOMPARE(evaluator.cachedNodes(), 0);
+    QCOMPARE(evaluator.cachedResults(), 0);
 
     // Previewing one node runs only what it depends on.
     Evaluator fresh;
@@ -1255,6 +1362,17 @@ void TestFilters::cacheRunsOnlyWhatChanged()
     QCOMPARE(part.result.evaluated, (QStringList{QStringLiteral("n1"), QStringLiteral("n2")}));
     QCOMPARE(part.result.outputs.value(QStringLiteral("image")).value<QImage>(), src);
     QVERIFY(part.result.image.isNull());
+
+    // Text values that would read the same when joined still give different keys.
+    counter().clear();
+    Graph prompt = chain({QStringLiteral("test-prompt")}, registry);
+    QVERIFY(prompt.setParam(QStringLiteral("n2"), QStringLiteral("prompt"), QStringLiteral("cat;negative=dog")));
+    const QStringList afterInput{QStringLiteral("n2"), QStringLiteral("n3")}; // the input is cached
+    QCOMPARE(run(fresh, prompt, {src, {}}).result.evaluated, afterInput);
+    QVERIFY(prompt.setParam(QStringLiteral("n2"), QStringLiteral("prompt"), QStringLiteral("cat")));
+    QVERIFY(prompt.setParam(QStringLiteral("n2"), QStringLiteral("negative"), QStringLiteral("dog;negative=")));
+    QCOMPARE(run(fresh, prompt, {src, {}}).result.evaluated, afterInput);
+    QCOMPARE(counter().value(QStringLiteral("n2")), 2);
 }
 
 void TestFilters::previewScale()
@@ -1299,6 +1417,91 @@ void TestFilters::previewScale()
     EvalOptions odd;
     odd.scale = 3.0;
     QCOMPARE(run(evaluator, crop, {src, {}}, odd).result.scale, 1.0);
+
+    // A crop at the right or bottom edge keeps at least one pixel in the preview: the rectangle
+    // covers the preview pixels it touches.
+    Graph edge = chain({QStringLiteral("crop")});
+    edge.setParam(QStringLiteral("n2"), QStringLiteral("x"), 99);
+    edge.setParam(QStringLiteral("n2"), QStringLiteral("width"), 1);
+    edge.setParam(QStringLiteral("n2"), QStringLiteral("height"), 100);
+    const QImage square = gradient(100, 100);
+    QCOMPARE(run(evaluator, edge, {square, {}}).result.image.size(), QSize(1, 100));
+    Outcome edgePreview = run(evaluator, edge, {square, {}}, half);
+    QVERIFY2(edgePreview.error.isEmpty(), qPrintable(edgePreview.error));
+    QCOMPARE(edgePreview.result.image.size(), QSize(1, 50));
+    // At 0.3 an 8 px image previews at 2 px, and the last column (7 * 0.3 = 2.1) starts just past it.
+    edge.setParam(QStringLiteral("n2"), QStringLiteral("x"), 7);
+    edge.setParam(QStringLiteral("n2"), QStringLiteral("y"), 7);
+    edge.setParam(QStringLiteral("n2"), QStringLiteral("height"), 1);
+    EvalOptions third;
+    third.scale = 0.3;
+    edgePreview = run(evaluator, edge, {gradient(8, 8), {}}, third);
+    QVERIFY2(edgePreview.error.isEmpty(), qPrintable(edgePreview.error));
+    QCOMPARE(edgePreview.result.image.size(), QSize(1, 1));
+    // A crop that misses the image still fails in the preview.
+    edge.setParam(QStringLiteral("n2"), QStringLiteral("x"), 50);
+    QVERIFY(run(evaluator, edge, {gradient(8, 8), {}}, third).error.contains(QStringLiteral("outside the image")));
+
+    // A fixed height of 1 px stays fixed in the preview (0 keeps the proportions).
+    Graph flat = chain({QStringLiteral("resize")});
+    flat.setParam(QStringLiteral("n2"), QStringLiteral("by"), QStringLiteral("size"));
+    flat.setParam(QStringLiteral("n2"), QStringLiteral("width"), 40);
+    flat.setParam(QStringLiteral("n2"), QStringLiteral("height"), 1);
+    const QImage wide = gradient(40, 20);
+    QCOMPARE(run(evaluator, flat, {wide, {}}).result.image.size(), QSize(40, 1));
+    QCOMPARE(run(evaluator, flat, {wide, {}}, quarter).result.image.size(), QSize(10, 1));
+    flat.setParam(QStringLiteral("n2"), QStringLiteral("height"), 0);
+    QCOMPARE(run(evaluator, flat, {wide, {}}, quarter).result.image.size(), QSize(10, 5));
+}
+
+void TestFilters::drivenParameters()
+{
+    // A number output that drives a parameter is checked like the parameter: clamped to its
+    // range and, for a pixel length, scaled with the preview.
+    const NodeRegistry registry = testRegistry();
+    Graph g = chain({QStringLiteral("test-radius")}, registry); // input n1, radius n2, output n3
+    const QString number = g.addNode(QStringLiteral("test-number"), {}, registry);
+    Evaluator evaluator;
+    EvalOptions full;
+    full.target = QStringLiteral("n2");
+    EvalOptions half = full;
+    half.scale = 0.5;
+    auto radius = [&](const EvalOptions &options) {
+        const Outcome o = run(evaluator, g, {gradient(8, 8), {}}, options);
+        return o.error.isEmpty() ? o.result.outputs.value(QStringLiteral("radius")).toDouble() : -1.0;
+    };
+    QCOMPARE(radius(half), 4.0); // the parameter, 8 px
+    QVERIFY(g.connect(number, QStringLiteral("value"), QStringLiteral("n2"), QStringLiteral("radius")));
+    QVERIFY(g.setParam(number, QStringLiteral("value"), 6));
+    QCOMPARE(radius(full), 6.0);
+    QCOMPARE(radius(half), 3.0);
+    QVERIFY(g.setParam(number, QStringLiteral("value"), 500));
+    QCOMPARE(radius(full), 20.0);
+    QCOMPARE(radius(half), 10.0);
+    QVERIFY(g.setParam(number, QStringLiteral("value"), -3));
+    QCOMPARE(radius(full), 0.0);
+    // evaluateNode() does the same.
+    const Values direct = evaluateNode(*registry.find(QStringLiteral("test-radius")),
+                                       {{QStringLiteral("image"), gradient(4, 4)}, {QStringLiteral("radius"), 500.0}}, {}, 0.5);
+    QCOMPARE(direct.value(QStringLiteral("radius")).toDouble(), 10.0);
+}
+
+void TestFilters::nodeErrors()
+{
+    // A node's failure is shown once with its name.
+    const NodeRegistry registry = testRegistry();
+    Evaluator evaluator;
+    QCOMPARE(run(evaluator, chain({QStringLiteral("test-empty")}, registry), {gradient(4, 4), {}}).error,
+             QStringLiteral("“test-empty”: It gave no result."));
+    try {
+        evaluateNode(*registry.find(QStringLiteral("test-empty")), {{QStringLiteral("image"), gradient(4, 4)}});
+        QFAIL("a node without a result ran");
+    } catch (const Error &e) {
+        QCOMPARE(e.message(), QStringLiteral("“test-empty”: It gave no result."));
+    }
+    Graph crop = chain({QStringLiteral("crop")});
+    crop.setParam(QStringLiteral("n2"), QStringLiteral("x"), 50);
+    QCOMPARE(run(evaluator, crop, {gradient(4, 4), {}}).error, QStringLiteral("“Crop”: The crop area is outside the image."));
 }
 
 void TestFilters::cancellation()
@@ -1319,7 +1522,7 @@ void TestFilters::cancellation()
         QVERIFY(o.cancelled);
         QVERIFY(slow().sawCancel);
         QCOMPARE(counter().value(QStringLiteral("n3")), 0); // nothing after the cancelled node ran
-        QCOMPARE(evaluator.cachedNodes(), 1);               // the input; not the interrupted node
+        QCOMPARE(evaluator.cachedResults(), 1);             // the input; not the interrupted node
     }
     {
         // Cancelling the future works too.
@@ -1392,6 +1595,14 @@ void TestFilters::asynchronousNode()
         QCOMPARE(finish(future).error, QStringLiteral("“test-later”: The server is not running."));
     }
     {
+        // So does a job that finishes without a result.
+        Evaluator evaluator;
+        QFuture<EvalResult> future = evaluator.evaluate(g, {src, {}});
+        QVERIFY(later().started.tryAcquire(1, 5000));
+        later().take()->finish();
+        QCOMPARE(finish(future).error, QStringLiteral("“test-later”: It gave no result."));
+    }
+    {
         // Cancelling while the node waits finishes at once and tells the node.
         Evaluator evaluator;
         later().cancelHandlerRan = false;
@@ -1446,6 +1657,40 @@ void TestFilters::expensiveNodeWaitsForRun()
     QVERIFY(!live.result.needsRun);
     QCOMPARE(live.result.evaluated, (QStringList{QStringLiteral("n3"), QStringLiteral("n4")}));
     QCOMPARE(counter().value(QStringLiteral("n2")), 1);
+
+    // Also at a reduced preview scale: the preview takes the full-size result scaled down.
+    auto levels = [](const QImage &image) { return ops::levels(image, ops::Channels::All, 0, 255, 1.5, 0, 255); };
+    const QImage smallInverted = img::scaled(ops::invert(src), QSize(4, 4), true);
+    g.setParam(QStringLiteral("n3"), QStringLiteral("gamma"), 1.5);
+    EvalOptions half = preview;
+    half.scale = 0.5;
+    const Outcome small = run(evaluator, g, {src, {}}, half);
+    QVERIFY2(small.error.isEmpty(), qPrintable(small.error));
+    QVERIFY(!small.result.needsRun);
+    QCOMPARE(small.result.evaluated, (QStringList{QStringLiteral("n3"), QStringLiteral("n4")}));
+    QCOMPARE(small.result.image, levels(smallInverted));
+    QCOMPARE(counter().value(QStringLiteral("n2")), 1);
+
+    // A Run while previewing runs the step at full size, on the full-size image, so applying
+    // afterwards uses the same result and does not run it again.
+    Evaluator other;
+    EvalOptions runInPreview;
+    runInPreview.scale = 0.5;
+    const Outcome previewRun = run(other, g, {src, {}}, runInPreview);
+    QVERIFY2(previewRun.error.isEmpty(), qPrintable(previewRun.error));
+    QCOMPARE(counter().value(QStringLiteral("n2")), 2);
+    QCOMPARE(counter().size(QStringLiteral("n2")), src.size());
+    QCOMPARE(previewRun.result.image, levels(smallInverted));
+    // The input and the step at full size, then the nodes after the step at the preview scale.
+    QCOMPARE(previewRun.result.evaluated,
+             (QStringList{QStringLiteral("n1"), QStringLiteral("n2"), QStringLiteral("n3"), QStringLiteral("n4")}));
+    const Outcome applied = run(other, g, {src, {}});
+    QCOMPARE(counter().value(QStringLiteral("n2")), 2);
+    QCOMPARE(applied.result.evaluated, (QStringList{QStringLiteral("n3"), QStringLiteral("n4")}));
+    QCOMPARE(applied.result.image, levels(ops::invert(src)));
+    // Both results stay: going back to the preview runs nothing.
+    QVERIFY(run(other, g, {src, {}}, half).result.evaluated.isEmpty());
+    QVERIFY(run(other, g, {src, {}}).result.evaluated.isEmpty());
 }
 
 void TestFilters::goldenImage()

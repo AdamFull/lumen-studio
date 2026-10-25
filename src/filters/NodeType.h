@@ -75,7 +75,8 @@ struct NodeTypeInfo
     bool readsSource = false; // reads the evaluation's source image and selection (the input node)
     bool isOutput = false;    // the graph's result; a valid graph has exactly one
     // Takes a queue job (the AI nodes of a later step): a graph with one previews only after an
-    // explicit Run (EvalOptions::runExpensive), and its result is then reused from the cache.
+    // explicit Run (EvalOptions::runExpensive), and its result is then reused from the cache. It
+    // always runs at full resolution, in a preview too, so the result previewed is the one applied.
     bool expensive = false;
 
     const PortSpec *input(const QString &id) const;
@@ -90,8 +91,9 @@ using Values = QHash<QString, QVariant>;
 // when it has no decimals), an unknown choice replaced by the default, a colour parsed from its
 // "#aarrggbb" form. A missing value gives the default.
 QVariant coerceParam(const ParamSpec &spec, const QVariant &stored);
-// Every parameter of `info` from the stored values, coerced, with pixel lengths multiplied by
-// `scale`. Values without a spec are dropped.
+// One parameter as a node gets it: coerced, and multiplied by `scale` when it is a pixel length.
+QVariant resolveParam(const ParamSpec &spec, const QVariant &stored, double scale);
+// Every parameter of `info` from the stored values, resolved. Values without a spec are dropped.
 QVariantMap resolveParams(const NodeTypeInfo &info, const QVariantMap &stored, double scale);
 
 // What a node reads when it is evaluated: its connected inputs and its parameters.
@@ -104,7 +106,8 @@ public:
     bool isConnected(const QString &port) const { return m_inputs.contains(port); }
     QImage image(const QString &port) const; // null when not connected
     QImage mask(const QString &port) const;
-    // A connected input of that id, else the parameter: a value port can drive a parameter.
+    // A connected input of that id, else the parameter: a value port can drive a parameter. The
+    // evaluator resolves a driving value like the parameter (range, preview scale).
     QVariant value(const QString &id) const;
     double number(const QString &id) const;
     int integer(const QString &id) const; // rounded
@@ -131,24 +134,26 @@ public:
         virtual ~Run() = default;
         virtual bool isCancelled() const = 0;
         virtual void onCancel(std::function<void()> handler) = 0;
-        virtual QImage source() = 0;    // at the evaluation's scale
-        virtual QImage selection() = 0; // at the evaluation's scale; all 255 without a selection
-        virtual QSize sourceSize() const = 0; // full resolution
+        // At `scale` (the node's: an expensive node gets the full size in a preview too).
+        virtual QImage source(double scale) = 0;
+        virtual QImage selection(double scale) = 0; // all 255 without a selection
+        virtual QSize sourceSize() const = 0;       // full resolution
     };
 
     EvalContext(Run *run, QString nodeId, double scale);
 
     QString nodeId() const { return m_nodeId; }
-    // Preview scale in (0, 1]; 1 when the filter is applied. Pixel-length parameters arrive
-    // already scaled.
+    // Preview scale in (0, 1]; 1 when the filter is applied, and always 1 for an expensive node.
+    // Pixel-length parameters arrive already scaled.
     double scale() const { return m_scale; }
     bool isPreview() const { return m_scale < 1.0; }
-    // Long loops check it now and then and return early (the result is then discarded).
+    // A node that works for long checks it now and then and returns early (the result is then
+    // discarded); the evaluation stops only when the node returns.
     bool isCancelled() const;
     // Runs `handler` once if the evaluation is cancelled while this node runs or waits for its
     // future (an AI node cancels its job); at once when it is already cancelled. Any thread.
     void onCancel(std::function<void()> handler);
-    // The image the filter is applied to and the selection, at the evaluation's scale.
+    // The image the filter is applied to and the selection, at the node's scale.
     QImage source() const;
     QImage selection() const;
     QSize sourceSize() const;
@@ -196,9 +201,9 @@ public:
     QString id() const { return m_info.id; }
 
     // Computes the outputs (by output port id) from the connected inputs and the parameters
-    // (coerced to their specs, pixel lengths scaled). Required inputs are always connected; image
-    // and mask inputs arrive in the canonical formats and may differ in size (a node stretches a
-    // mask to its image). Called on a worker thread.
+    // (resolved: coerced to their specs, pixel lengths scaled, also when an input drives one).
+    // Required inputs are always connected; image and mask inputs arrive in the canonical formats
+    // and may differ in size (a node stretches a mask to its image). Called on a worker thread.
     virtual NodeResult evaluate(const NodeArgs &args, EvalContext &ctx) const = 0;
 
 private:

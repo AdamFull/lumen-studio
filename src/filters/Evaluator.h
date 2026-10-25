@@ -29,26 +29,32 @@ struct EvalOptions
     // for the output node. Only what it depends on runs.
     QString target;
     // false while previewing: an expensive node (an AI step) that is not in the cache is not run;
-    // the evaluation then stops with needsRun set. Its cached result is still used, so a slider
-    // after an AI step previews live once the step has run.
+    // the evaluation then stops with needsRun set before it runs anything. Its cached result is
+    // still used, so a slider after an AI step previews live once the step has run. An expensive
+    // node always runs at full resolution, on full-resolution inputs, and a preview at any scale
+    // takes its result scaled down: a Run while previewing gives the result that applying uses.
     bool runExpensive = true;
 };
 
 struct EvalResult
 {
     QImage image;          // the output node's image, at the evaluation's scale
-    QImage mask;           // the output node's mask (where the result applies); null when unconnected
+    QImage mask;           // the output node's mask (where the result applies), at the image's size;
+                           // null when unconnected
     Values outputs;        // the target node's outputs
-    QStringList evaluated; // the nodes that ran, in order; the others came from the cache
+    // The nodes that ran, in order; the others came from the cache or were not needed. In a
+    // preview, the nodes that feed an expensive node may be listed twice: at full size and scaled.
+    QStringList evaluated;
     bool needsRun = false; // stopped before an expensive node (EvalOptions::runExpensive false)
     double scale = 1.0;
 };
 
 // Evaluates graphs on the worker pool (core/Async.h), one node after the other, and keeps each
-// node's last outputs. A cached result is used again while the node's key is the same: its type,
-// its parameter values, the preview scale and the keys of the nodes feeding it (the input node's
-// key also covers the source image and the selection, by QImage::cacheKey), so changing one
-// parameter re-runs only that node and what depends on it.
+// node's last outputs, one result at full resolution and one at the preview scale. A cached result
+// is used again while the node's key is the same: its type, its parameter values, the scale and
+// the keys of the nodes feeding it (the input node's key also covers the source image and the
+// selection, by QImage::cacheKey), so changing one parameter re-runs only that node and what
+// depends on it, and nodes that only feed cached results do not run.
 //
 // A node may return its outputs later as a future (NodeResult): the evaluation then gives up its
 // worker thread and continues on the pool when the future finishes.
@@ -64,15 +70,17 @@ public:
 
     // Starts an evaluation. The future gives the result, fails with lumen::Error (a validation
     // error or a node that failed, in plain words) or is cancelled. Cancelling the future stops
-    // the evaluation at the next node; cancel() also interrupts a node that is running or waiting.
+    // the evaluation at the next node; cancel() also reaches a node that is running or waiting.
     QFuture<EvalResult> evaluate(const Graph &graph, const EvalInputs &inputs, const EvalOptions &options = {});
-    // Cancels every evaluation of this evaluator that still runs: the node that runs stops at its
-    // next check, a node that waits for a future has the future and its onCancel handlers
-    // cancelled, and the evaluation's future finishes as cancelled.
+    // Cancels every evaluation of this evaluator that still runs. A node that waits for a future
+    // has the future and its onCancel handlers cancelled, and the evaluation's future finishes as
+    // cancelled at once. A node that runs has its onCancel handlers run and stops at its next
+    // isCancelled() check (blur, unsharp mask and median check while they work; the other
+    // classic nodes finish their pass first); the future finishes when it returns.
     void cancel();
 
     void clearCache();
-    int cachedNodes() const;
+    int cachedResults() const; // full-size and preview results together
 
 private:
     struct Cache;

@@ -2262,8 +2262,9 @@ Survey of the code, the app log and user testing (October 2026):
     a message), published parameters (node, parameter, label, slider range). `validate()` gives
     errors for no output or several, loops, ports that do not fit (with a hint: “Put a ‘Mask from
     image’ node between them.”), unconnected required inputs of nodes that feed the output and
-    published parameters that do not exist or have no range, and a warning for nodes that do not
-    feed the output, so a half-built graph still previews.
+    published parameters that do not exist or whose slider range is empty or goes beyond the
+    parameter's, and a warning for nodes that do not feed the output, so a half-built graph still
+    previews.
   * Files: `.lumenfilter` JSON (`format`, `version` 1, name, description, nodes with type, position
     and the parameters that were set, links, published). A newer version, an unknown node type
     (“It may come from a plugin that is turned off.”) and links or ids that do not fit are load
@@ -2279,28 +2280,39 @@ Survey of the code, the app log and user testing (October 2026):
       future; the message reads ““Blur”: …”. One type object serves every node of its type on
       several threads, so node types keep no mutable state.
     * `NodeArgs`: the connected inputs in their canonical formats (sizes may differ: nodes stretch
-      a mask or a second image to the first image) and the parameters, coerced, with pixel lengths
-      already multiplied by the preview scale; a connected value input overrides the parameter of
-      the same id. `EvalContext`: node id, scale, `isCancelled()` (long loops check it; `Ops` takes
-      it as `cancelCheck()`), `onCancel(handler)` (an AI node cancels its job), and the source and
-      selection at the evaluation's scale for the input node.
+      a mask or a second image to the first image, the output node too) and the parameters,
+      coerced, with pixel lengths already multiplied by the preview scale; a connected value input
+      overrides the parameter of the same id and is resolved the same way (`resolveParam()`:
+      clamped to the range, scaled when it is a length). `EvalContext`: node id, scale (always 1
+      for an expensive node), `isCancelled()` (a node that works for long checks it; `Ops` takes it
+      as `cancelCheck()`), `onCancel(handler)` (an AI node cancels its job), and the source and
+      selection at the node's scale for the input node.
     * `Evaluator::evaluate(graph, {image, selection}, {scale, target, runExpensive})` returns a
       `QFuture<EvalResult>` (the output's image and mask, the target node's outputs, the nodes that
       ran, `needsRun`). It validates first (only what the target needs when one node is previewed)
       and runs the nodes in order on `async::pool()`.
-    * Cache: each node keeps its last outputs under a SHA-1 key of its type, its parameter values,
-      the scale and the keys of the nodes feeding it; the input node's key covers the source and
-      the selection by `QImage::cacheKey()`. A parameter change re-runs that node and what follows
-      it; moving a node re-runs nothing; entries of removed nodes go at the next evaluation.
+    * Cache: each node keeps its last outputs at full size and at the preview scale (two lanes, so
+      going from previewing to applying and back computes nothing again), each under a SHA-1 key of
+      its type, its parameter values, the scale and the keys of the nodes feeding it, every field
+      length-prefixed so that two text parameters cannot run together into the same key; the
+      input node's key covers the source and the selection by `QImage::cacheKey()`. All keys are
+      computed before anything runs, and nodes that only feed cached results do not run. A
+      parameter change re-runs that node and what follows it; moving a node re-runs nothing;
+      entries of removed nodes go at the next evaluation.
     * Preview: the source and selection are scaled once and pixel parameters with them, so a
-      preview looks like the result. With `runExpensive` off (previews of a graph with AI steps),
-      the evaluation stops with `needsRun` before an expensive node that is not cached; once it has
-      run, sliders after it preview live from its cached result.
-    * Cancellation: `Evaluator::cancel()` (and the evaluator's destructor) stops the running node
-      at its next check, cancels a pending future and runs its `onCancel` handlers, and finishes the
-      evaluation's future as cancelled at once; cancelling the future itself is seen at the same
-      checks but does not reach a pending future. Results of interrupted nodes are not cached. `evaluateNode()` runs one node
-      synchronously (tests, tools).
+      preview looks like the result. An expensive node always runs at full resolution, with the
+      nodes feeding it, and a preview at any scale takes its result scaled down, so a *Run* while
+      previewing gives the result that applying uses, without running the step again. With
+      `runExpensive` off (previews of a graph with AI steps), the evaluation stops with `needsRun`
+      before it runs anything when an expensive node is not cached; once it has run, sliders after
+      it preview live from its cached result.
+    * Cancellation: `Evaluator::cancel()` (and the evaluator's destructor) runs the `onCancel`
+      handlers of the current node. A node that waits for a future has the future cancelled, and
+      the evaluation's future finishes as cancelled at once; a running node stops at its next
+      `isCancelled()` check (blur, unsharp mask and median check while they work; the other
+      classic nodes finish their pass first) and the future finishes when it returns. Cancelling
+      the future itself is seen at the same checks but does not reach a pending future. Results of
+      interrupted nodes are not cached. `evaluateNode()` runs one node synchronously (tests, tools).
   * Classic nodes (`ClassicNodes.cpp` over the pure functions of `Ops.h`): input, output; levels
     (gamma, per channel), curves (a monotone cubic through “x y” points, no overshoot),
     brightness / contrast (GIMP's formula), hue / saturation / lightness (HSL), colour balance (per
@@ -2313,27 +2325,35 @@ Survey of the code, the app log and user testing (October 2026):
     Blend: the 13 layer modes in `doc::BlendMode`'s order with the same QPainter composition modes
     as `doc::flatten` (mirrored, `filters` does not link `doc`), opacity, optional mask; mix by
     mask. Mask from brightness or opacity, grow / shrink / feather, invert mask (`core/ImageOps`).
-    Resize (percent or pixels), crop, flip, rotate clockwise (exact for multiples of 90°, the canvas
-    grows otherwise).
-  * Tests (`tst_filters`, 33 functions): each node on small synthetic images, exactly where the formula is
-    exact (invert, levels, posterize, threshold, curves through a line, flips, rotations by 90°,
-    180° and 270°, crop, nearest-pixel resize, mix, blend modes at black and white, grow / shrink,
-    invert mask, hue 180° turning red into cyan) and by properties where it is not (a blur keeps
-    the mean and the symmetry and blurs premultiplied, sharpening overshoots at an edge and leaves
-    flat areas, noise is the same per seed and keeps the mean, the median removes salt and pepper
-    and keeps a straight edge, colour balance and brightness / contrast at their extremes). Graph
-    tests: validation messages, refused links, a JSON round-trip with every parameter type, file
-    errors, the library listing, the cache (counted evaluations: after one parameter change only
-    that node and the nodes after it run), the preview scale (equal to the full-size operation on
-    the scaled image with half the radius; crop rectangles scale), cancellation (by the evaluator,
-    by the future, by destruction), an asynchronous node (the only worker thread stays free while
-    it waits; failure; cancel), expensive nodes, and a whole-graph golden image
-    (`tests/data/filters/golden.lumenfilter` → `golden.png`, at most one level of difference;
-    regenerated with `LUMEN_UPDATE_GOLDEN=1 tst_filters goldenImage`).
+    Resize (percent or pixels; a height of 0 keeps the proportions), crop (a preview covers the
+    preview pixels the rectangle touches, so a crop at the right or bottom edge still shows), flip,
+    rotate clockwise (exact for multiples of 90°, the canvas grows otherwise). The output node
+    stretches its mask to its image, so the result's image and mask always fit.
+  * Tests (`tst_filters`, 35 functions): each node on small synthetic images, exactly where the
+    formula is exact (invert, levels, posterize, threshold, curves through a line, flips, rotations
+    by 90°, 180° and 270°, crop, nearest-pixel resize, mix, blend modes at black and white, grow /
+    shrink, invert mask, hue 180° turning red into cyan) and by properties where it is not (a blur
+    keeps the mean and the symmetry and blurs premultiplied, sharpening overshoots at an edge and
+    leaves flat areas, noise is the same per seed and keeps the mean, the median removes salt and
+    pepper and keeps a straight edge, colour balance and brightness / contrast at their extremes);
+    curve tables from unsorted and repeated points. Graph tests: validation messages (also slider
+    ranges beyond the parameter's), refused links, a JSON round-trip with every parameter type,
+    file errors, the library listing, the cache (counted evaluations: after one parameter change
+    only that node and the nodes after it run; text values that would join into the same bytes),
+    the preview scale (equal to the full-size operation on the scaled image with half the radius;
+    crop rectangles scale, crops at the edge and fixed small heights keep their shape), parameters
+    driven by a number output (clamped, scaled), node errors named once, the output's mask at the
+    image's size after a resize, cancellation (by the evaluator, by the future, by destruction),
+    an asynchronous node (the only worker thread stays free while it waits; failure; no result;
+    cancel), expensive nodes (a preview at half size after a *Run* at full size runs only what
+    follows; a *Run* in a preview runs the step on the full-size image, and applying then reuses
+    it), and a whole-graph golden image (`tests/data/filters/golden.lumenfilter` → `golden.png`,
+    at most one level of difference; regenerated with `LUMEN_UPDATE_GOLDEN=1 tst_filters
+    goldenImage`).
   * Not yet: the node editor, the Filters panel and the filters folder next to the models folder
     (next step); applying a result as one undo step onto a new layer; the AI nodes. The cache keeps
-    one result per node with no memory limit (switching between preview and full scale computes
-    again), the nodes of one evaluation run one after another, and each node uses one thread.
+    one result per node and lane with no memory limit, the nodes of one evaluation run one after
+    another, and each node uses one thread.
 - [ ] Node editor window, saved filters, the Filters panel.
 - [ ] AI nodes.
 - [ ] Fix the layout checklist (§17.9); screenshots after; then the audit runs strict in CI.

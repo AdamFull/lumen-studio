@@ -47,7 +47,8 @@ struct PublishedParam
     QString node;
     QString param;
     QString label;
-    // Slider range, within the parameter's own; both 0 takes the parameter's range.
+    // Slider range, within the parameter's own (validate() reports one that is not); both 0
+    // takes the parameter's range.
     double minimum = 0.0;
     double maximum = 0.0;
 
@@ -111,8 +112,9 @@ public:
     bool needsExplicitRun() const;
 
     // Errors (no output or several, loops, links between ports that do not fit, unconnected
-    // required inputs of nodes that feed the output, published parameters that do not exist) and
-    // warnings (nodes that do not feed the output). Messages in plain words.
+    // required inputs of nodes that feed the output, published parameters that do not exist or
+    // whose slider range is empty or beyond the parameter's) and warnings (nodes that do not feed
+    // the output). Messages in plain words.
     QList<Issue> validate() const;
     bool isValid() const;
 
