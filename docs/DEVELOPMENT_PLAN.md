@@ -3,6 +3,10 @@
 AI-assisted image generation and editing desktop application built with C++20 and Qt 6.
 
 > Status: living document. Each milestone has a checklist; tick items as they land.
+>
+> Direction change (October 2026): Lumen becomes an editor-first AI image editor, with the
+> character, pose, Live2D and LoRA features as optional plugins. See **M17**; where it conflicts
+> with sections 1–3, M17 wins.
 
 ---
 
@@ -1859,6 +1863,266 @@ Risks and open questions:
 * Three or more characters: the design takes a list, but the UI and the measurements stop at two.
 * ComfyUI's hooks are experimental; a ComfyUI update may change them. The graph is built in one
   place and has a contract test.
+
+### M17 — Editor-first redesign
+
+Goal: Lumen becomes an AI image editor that a person can use without reading a guide. Opening the
+app shows a canvas. You open an image, select an area, and say in words what should change there
+("colorize it, keep everything else", "remove the lamp", "replace the cup with a candle"). With
+nothing selected, the words apply to the whole image. A new image starts from a prompt. Character
+creation, poses, Live2D parts and LoRA training stay, but as optional plugins on top of this core.
+
+Decisions (October 2026): restructure in place (the engine stays, the shell is rebuilt); the
+character features become plugins, built in but off by default; the node filter editor covers
+classic image operations and AI steps; guided local setup is built around the managed
+stable-diffusion.cpp runtime, with ComfyUI as an advanced option.
+
+#### 17.1 What is wrong today
+
+Survey of the code, the app log and user testing (October 2026):
+
+* **The editor is not the app.** The app opens on *Create* (the AI director). The navigation rail
+  has six pages (Create, Generate, Edit, Poses, Parts, Library) and four more buttons (Assistant,
+  Queue, Settings). Generating an image and editing it happen on different pages.
+* **Setup is spread over five places**: Settings → Providers, Local servers, Models, the model hub
+  and the local setup dialog. Every server option is a raw field, so a user can pick combinations
+  that cannot work. From the log of a real session:
+  * FLUX.2 klein 4B (a standalone diffusion model) was put in the *checkpoint* field, so sd-server
+    was started with `-m` and no VAE or text encoder, and exited with
+    `get sd version from file failed`.
+  * An Anima checkpoint was started with an SDXL OpenPose ControlNet and an SDXL IP-Adapter, and
+    exited with `model metadata validation failed`.
+* **Automatic companion files exist for one family only.** `familyCompanions` (ModelHub.cpp)
+  knows Anima's VAE and text encoder; for every other model the user fills in VAE, CLIP-L, T5 or
+  LLM by hand. `companionServerOptions` never sets `clip_l`, which FLUX.1 needs.
+* **Model settings ignore the family.** `PromptStyle` recognises FLUX but keeps CFG at 6.0;
+  guidance-distilled models (FLUX.1 dev and schnell) need CFG 1, so images take twice as long
+  and burn.
+* **No local instruction editing.** `SdCppProvider` refuses `GenMode::Edit`, although the bundled
+  sd-server supports reference images (`--ref-image-args`, `--img-cfg-scale`) for edit models
+  (FLUX.1 Kontext, FLUX.2, Qwen-Image-Edit). Locally, "colorize this" can only be inpainting
+  with a regular model.
+* **Models live in a hidden folder.** The managed models folder is
+  `%LOCALAPPDATA%\Lumen\Lumen Studio\models`; users keep models in ComfyUI or Downloads folders
+  and add them one at a time.
+* **Broken layouts** in some places (reported by the user; to be found in step 2).
+
+#### 17.2 The editor shell
+
+* **Start screen** (when no document is open): *Open image…*, *Paste from clipboard*, *New from
+  prompt…*, *New blank canvas…*, recent documents with thumbnails, and a setup card while no image
+  engine works ("Set up AI", §17.5).
+* **One main window**: tools on the left; the canvas with document tabs in the centre; a right
+  panel with *Layers*, *History* and *Filters* (§17.6); a status bar with zoom, the engine in use
+  and running jobs (the Queue becomes a popup from there). The navigation rail goes away. Plugins
+  add panels, menus and canvas actions (§17.7); they do not add pages to the core window.
+* **The prompt bar** is always docked at the bottom of the canvas (it replaces the floating
+  `ContextBar` and the AI panel's mode list):
+  * With a selection: *Generate* changes only the selected area. The engine is the preset's
+    edit model when it has one (instruction edit of a crop around the selection), else inpainting.
+    The result is composited through the selection mask with feathering and colour matching (the
+    region pipeline of §3.6). *Remove* fills the area from its surroundings.
+  * Without a selection: *Generate* edits the whole image with an edit model ("colorize", "make it
+    night"). Without an edit model, the bar says so and offers img2img at a chosen strength.
+  * On a blank canvas, or from *New from prompt*: text-to-image at the canvas size.
+  * Each run returns 1–4 variants in a strip above the bar; ←/→ cycles, Enter keeps one, Esc
+    drops all. The kept result becomes a new layer named after the prompt, masked to the
+    selection, so the original pixels stay underneath (non-destructive; the history has one step).
+  * A *⋯* menu holds the settings most people never need: strength, steps, seed, number of
+    variants, negative prompt (only when the model supports it), reference images.
+* **Library** becomes *File → Browse project images* (a dialog), with batch background removal
+  and upscaling kept. *Generate* becomes *New from prompt* plus the prompt bar.
+* **Text and hints in plain words.** Every control says what it does, not which API field it
+  sets; technical names appear only under *Advanced*.
+
+#### 17.3 Models folder and model presets
+
+* **One visible models folder**: by default `Documents\Lumen\Models` (moveable from Settings →
+  Models; *Open models folder* in the Help menu and in the setup wizard). Its subfolders match
+  ComfyUI's (`checkpoints`, `diffusion_models`, `vae`, `text_encoders`, `loras`, `controlnet`,
+  `ipadapter`, `clip_vision`, `upscale_models`), so a ComfyUI install can point at the same tree.
+  Existing ComfyUI, WebUI and LM Studio folders can be added as extra read-only roots (the
+  existing `suggestedRoots`); files in the old `%LOCALAPPDATA%` folder are moved on first start,
+  after asking.
+* **Model presets** as data (`resources/presets/models/*.json`, one file per family), replacing
+  the hard-coded Anima companions. A preset says:
+  * how to recognise the family from the file header (the `ModelFormats` detection that exists);
+  * the slots it needs: diffusion model or checkpoint, VAE, text encoders (`clip_l`, `clip_g`,
+    `t5xxl`, `llm`), each with a pinned Hugging Face file (repo, revision, sha256, size) and the
+    families that may stand in for it;
+  * what it can do: generate, inpaint, instruction edit, number of reference images, negative
+    prompt, LoRAs, which ControlNet and IP-Adapter families fit;
+  * sampling defaults: CFG, distilled guidance, image CFG, steps, sampler, scheduler, native
+    resolution, prompt dialect;
+  * VRAM tiers (8, 12, 16, 24 GB): weight type (`--type`), `--offload-to-cpu`, `--clip-on-cpu`,
+    VAE tiling, and which quantised file to download.
+* First presets: FLUX.2 klein 4B (generate and edit; recommended for 8 GB), FLUX.1 Kontext dev
+  (edit), FLUX.1 dev and schnell, Qwen-Image-Edit, SDXL, Illustrious / NoobAI, Pony, SD 1.5,
+  Anima. Each file names its source, licence and the sd.cpp docs page it follows.
+* **Choosing a model** (setup wizard, Settings → Models, or dropping a file into the folder): the
+  family is detected, the preset fills every slot from the library or offers to download what is
+  missing (one button, size shown), puts a standalone diffusion model in the `--diffusion-model`
+  slot, and applies the sampling defaults and the VRAM tier of the detected GPU. Add-ons
+  (ControlNet, IP-Adapter, LoRA) are filtered by the preset's families; an incompatible one cannot
+  be chosen, and an old profile that has one gets a warning instead of a crash at start.
+* A file without a preset still works by hand under *Advanced*, as today.
+
+#### 17.4 Local instruction editing
+
+* `SdCppProvider` supports `GenMode::Edit` when the preset says so: the init image (and further
+  references) are sent as reference images, with the preset's image CFG; the field names come
+  from the pinned sd-server's `api.md` and get a contract test against the mock server.
+* Region edits: the selection's bounding box, grown for context, is cropped and scaled to the
+  model's native size, edited, scaled back and composited through the feathered mask, so pixels
+  outside the selection stay exactly as they were.
+* CFG, distilled guidance and the negative prompt come from the preset, not from the global 6.0
+  default (fixes FLUX.1 dev and schnell).
+
+#### 17.5 Setting up AI
+
+* **First-run wizard** (also *Help → Set up AI*), three choices:
+  1. *Run on this computer*: detects the GPU and VRAM (`runtime/Hardware`), recommends one preset
+     (FLUX.2 klein 4B on 8 GB; SDXL-class models as the lighter option), shows the download size,
+     installs the sd.cpp runtime and the model files, starts the server and runs a test image.
+  2. *Use an online service*: fal.ai, OpenAI or Gemini; one key field with a link to where to get
+     a key, then a test image.
+  3. *Connect a running server*: ComfyUI, Forge or another sd-server by address, found
+     automatically on the default ports where possible.
+* **Settings → AI** shows one list: the image engine (and an optional separate edit engine), with
+  status, model and *Change…*; per-field server options move under *Advanced*. The language model
+  is optional and only listed when a plugin needs one; the core editor works without an LLM.
+* The existing supervisor and GPU release (`releaseGpu`) stay; the wizard does not start an LLM
+  next to the image engine on an 8 GB GPU.
+
+#### 17.6 Node filters
+
+* **Core graph model** (`filters/`, no UI dependency): nodes with typed ports (image, mask,
+  number, colour, text, choice), a validating graph, evaluation on a worker thread with a result
+  cache per node, previews at reduced resolution while editing and full resolution on apply.
+  Graphs are JSON files (`.lumenfilter`) in a `filters` folder next to the models folder.
+* **Classic nodes**: input (layer or document, selection as mask), output; levels, curves,
+  brightness/contrast, hue/saturation, colour balance, invert, desaturate, threshold, posterize;
+  Gaussian blur, sharpen, unsharp mask, noise, median; blend (the layer blend modes), mix by mask;
+  mask from luminance or alpha, grow/shrink/feather, invert; resize, crop, flip, rotate.
+* **AI nodes** run through `GenerationService` as Queue jobs: prompt edit, inpaint, upscale,
+  remove background. A graph with AI nodes previews only after an explicit *Run*.
+* **Node editor**: a separate window (`QGraphicsView`), add nodes from a searchable menu, connect
+  ports, edit parameters, live preview of the selected node. A graph can *publish* parameters;
+  published ones appear as sliders when the filter is used.
+* **In the editor**: the *Filters* panel lists saved graphs and a few built-in ones (e.g.
+  *Colorize with AI*, *Clean up background*); applying runs on the active layer through the
+  selection, as one undo step, onto a new layer by default.
+
+#### 17.7 Plugins
+
+* **Extension interface** (`ext/Extension.h`): id, name, description, and registration calls for
+  dock panels, menu actions, prompt-bar actions, filter node types, provider types, project data
+  records and request decorators (to change a generation request, e.g. add a character's LoRA).
+  The core never includes a plugin header; CMake links plugins against the core, never the
+  reverse, and a configure check fails on a reverse dependency.
+* Built-in plugins are static libraries registered at start (no DLL loading yet); Settings →
+  Plugins switches each on or off (restart needed at first). Off by default.
+* Moved out of the core:
+  * **Characters**: character library, active character and cast (M14, M16), Create page /
+    Director, Assistant; the rest of M16 continues there.
+  * **Poses**: pose editor and library, OpenPose control as a prompt-bar input.
+  * **Live2D parts**: the Parts page (M11) and the Cubism preview.
+  * **Character LoRA**: dataset builder, local and RunPod training (M13, M15).
+* Project data written by a plugin that is off is kept unchanged when the project is saved.
+
+#### 17.8 Implementation steps
+- [x] Park M16: the open step-5 work (Generate page and *Re-run* with a cast) is in
+  `git stash` ("M16 step 5 WIP … parked for M17"). The remaining M16 steps move to the Characters
+  plugin.
+- [x] Layout audit (`tests/tst_layout.cpp`): opens every page (with a document in the editor), the
+  editor with the queue and the assistant, every Settings tab and the standalone dialogs, at the
+  logical sizes 1280×720 (1080p at 150 %), 1536×864 (1080p at 125 %) and 1920×1080, on an
+  offscreen 1920×1080 screen with the system fonts (`QT_QPA_FONTDIR`). Dialogs are checked against
+  a 1280×680 screen. Findings: window below its minimum size, widgets squeezed below their minimum,
+  cut text (labels, buttons, the current item of combo boxes), widgets clipped by a parent,
+  overlapping siblings. Report-only; `LUMEN_LAYOUT_STRICT=1` fails on any finding. With
+  `LUMEN_SCREENSHOT_DIR` it writes `layout/layout-report.md` and a PNG per state (the before set).
+  Results in §17.9.
+- [ ] Extension interface and registry; move Create, Poses, Parts, LoRA training and Assistant
+  behind it with no change in behaviour (pages still reachable while the old shell exists).
+  Test: core builds and runs with every plugin off; project data of an off plugin round-trips.
+- [ ] Model presets: the JSON format, the loader, the first presets (§17.3), family detection to
+  preset, slot filling from the library, download of missing files, add-on filtering, VRAM tiers.
+  `familyCompanions` and the Anima special case are replaced. Tests: the two failing profiles
+  from the log produce a correct command line or a clear message; FLUX.1 gets `clip_l` and
+  `t5xxl`; an SDXL ControlNet is not offered for Anima or FLUX.
+- [ ] Models folder: the visible default, ComfyUI subfolders, moving it, the one-time move from
+  `%LOCALAPPDATA%`, extra roots.
+- [ ] Sampling defaults from presets (CFG, guidance, image CFG, negative prompt) through
+  `PromptStyle` and the request; sd.cpp instruction edit (§17.4) with a mock-server contract test.
+- [ ] New shell: start screen, the editor as the main window, status bar with jobs, *New from
+  prompt*, *Browse project images*; the navigation rail and the Generate and Library pages go.
+- [ ] Prompt bar (§17.2): selection, whole-image and blank-canvas modes, *Remove*, variants strip,
+  results as masked layers. Test with the mock server: a selection edit leaves every pixel
+  outside the feathered mask unchanged.
+- [ ] Setup wizard and Settings → AI (§17.5).
+- [ ] Filter graph core and classic nodes; golden-image tests per node.
+- [ ] Node editor window, saved filters, the Filters panel.
+- [ ] AI nodes.
+- [ ] Fix the layout checklist (§17.9); screenshots after; then the audit runs strict in CI.
+- [ ] User guide and README rewritten around the editor; plugins documented separately.
+- [ ] Short live check (RTX 4060 8 GB, FLUX.2 klein 4B through sd.cpp): one selection edit, one
+  whole-image colorize, one new image. Everything before this step uses mock servers.
+
+Acceptance:
+1. A new user installs Lumen, chooses *Run on this computer*, and edits a selected area with a
+   prompt without opening Settings or reading the guide.
+2. Choosing FLUX.2 klein, FLUX.1 dev, SDXL or Anima fills every required component; no
+   combination that the setup allows makes the server exit at start.
+3. "Colorize this photo" on a black-and-white image with nothing selected colours it; with a
+   selection, pixels outside the selection are unchanged.
+4. The app starts, edits and generates with every plugin off.
+5. A saved filter graph (e.g. levels → mask by luminance → AI inpaint) runs from the Filters panel
+   on a selection as one undo step.
+6. No clipped or overlapping controls at 1280×720 or at 150 % scale.
+
+Risks and open questions:
+* Edit models are large: FLUX.2 klein 4B with its text encoder is the realistic choice on 8 GB,
+  and is still slower than SDXL. The wizard states download size and expected speed.
+* sd-server's reference-image API is newer than its txt2img API and may change between the
+  pinned `master-N` builds; the contract test catches it.
+* Restructuring touches most UI code; the old pages stay reachable until the new shell covers
+  them, so every step builds and passes the tests.
+* Moving the models folder must not break server profiles that point at old paths; profiles are
+  rewritten in the same step, and kept as they are when the user declines the move.
+
+#### 17.9 Layout audit results (October 2026)
+
+100 automatic findings, checked against the screenshots, plus what only the screenshots show.
+Root cause first; most findings follow from it.
+
+1. **The main window cannot be smaller than 1559×885**, more than a 1080p screen at 125 %
+   (1536×864) or 150 % (1280×720). The pages share one `QStackedWidget`, whose minimum is the
+   largest of all pages, shown or not: Poses needs 1472 px width, Library 1365, Create 1285, Parts
+   823 px height. On a laptop, the window is larger than the screen or every page is squeezed.
+   Fix: each page fits 1193×658 (the content area at 1280×720); toolbars wrap or move items into
+   an overflow menu; the stack must not take the minimum of hidden pages.
+2. **Poses page** (at 1280×720): the top toolbar's mode buttons show only "…", and the canvas
+   ratio and person combo boxes have no room for text. The bottom bar overlaps itself ("Underlay…",
+   the opacity slider over "Detect…", "To document" and "Use in Generate" cut).
+3. **`SliderField` at a fixed 150 px** (Poses opacity, at every size): its number box is cut to 44
+   of 64 px and the slider runs under it.
+4. **Library page**: the filter chips need 1365 px; the zoom slider is drawn over the search field;
+   the detail panel's preview collapses and "Select an image" is drawn over the name field.
+5. **Create page**: the shot-plan toolbar cuts the provider combo ("No provider c"), "Generate
+   all" and the purpose combo ("General illus").
+6. **`ProviderCombo`** is 7 px too narrow for "No provider configured" in the Generate page and the
+   editor's AI panel at 1280 and 1536 px.
+7. **Parts page**: the step hint after the stepper is cut at the window edge.
+8. **Dialogs taller than a 1280×680 screen**: Settings (1020×700), the server profile dialog
+   (640×720, sd.cpp and llama.cpp) and the pose edit dialog (760×860).
+9. Only visible in the screenshots: the negative prompt fields (Generate page, AI panel) are one
+   line high with a scroll bar; the status bar has no side margin ("No project" and "Idle" touch
+   the window edges); the Generate page's aspect-ratio chips are unevenly aligned.
+
+Items 2, 3, 5 and 7 are on pages that become plugins (§17.7), and the Generate and Library pages
+are replaced by the new shell; their fixes belong to those steps. Item 1 stays relevant until the
+new shell lands, and items 3, 6, 8 and 9 are shared widgets and dialogs that the redesign keeps.
 
 ---
 
