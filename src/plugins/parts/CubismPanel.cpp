@@ -1,0 +1,321 @@
+#include "plugins/parts/CubismPanel.h"
+
+#include "core/Settings.h"
+#include "live2d/CubismCore.h"
+#include "ui/Icons.h"
+#include "ui/Studio.h"
+#include "plugins/parts/CubismView.h"
+#include "ui/widgets/Controls.h"
+
+#include <QCheckBox>
+#include <QComboBox>
+#include <QHeaderView>
+#include <QTreeWidget>
+#include <QDir>
+#include <QFileDialog>
+#include <QFileInfo>
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QPushButton>
+#include <QScrollArea>
+#include <QVBoxLayout>
+
+namespace lumen::ui {
+
+namespace {
+
+const QString kCoreSetting = QStringLiteral("live2d/coreLibrary");
+const QString kModelSetting = QStringLiteral("live2d/lastModel");
+
+} // namespace
+
+CubismPanel::CubismPanel(Studio *studio, CubismView *view, QWidget *parent)
+    : QWidget(parent)
+    , m_studio(studio)
+    , m_view(view)
+{
+    auto *v = new QVBoxLayout(this);
+    v->setContentsMargins(0, 8, 0, 0);
+    v->setSpacing(8);
+    m_status = mutedLabel(QString(), this);
+    m_status->setWordWrap(true);
+    m_status->setTextFormat(Qt::RichText);
+    v->addWidget(m_status);
+    auto *row = new QHBoxLayout;
+    m_locate = new QPushButton(Icons::get(QStringLiteral("folder")), tr("Locate Cubism Core..."), this);
+    m_locate->setToolTip(tr("Choose %1 from the Core folder of the Live2D Cubism SDK for Native").arg(live2d::CubismCore::libraryFileName()));
+    m_open = new QPushButton(Icons::get(QStringLiteral("person")), tr("Open model..."), this);
+    m_open->setToolTip(tr("Open a .model3.json exported from Cubism Editor"));
+    row->addWidget(m_locate);
+    row->addWidget(m_open);
+    v->addLayout(row);
+
+    auto *toggles = new QHBoxLayout;
+    m_idle = new QCheckBox(tr("Idle"), this);
+    m_idle->setChecked(true);
+    m_motion = new QCheckBox(tr("Idle motions"), this);
+    m_motion->setChecked(true);
+    m_motion->setToolTip(tr("Play the model's Idle motion group (a random motion each time) when nothing else plays"));
+    m_follow = new QCheckBox(tr("Follow mouse"), this);
+    m_talk = new QCheckBox(tr("Talk"), this);
+    toggles->addWidget(m_idle);
+    toggles->addWidget(m_motion);
+    toggles->addWidget(m_follow);
+    toggles->addWidget(m_talk);
+    toggles->addStretch();
+    v->addLayout(toggles);
+    auto *physicsRow = new QHBoxLayout;
+    m_physics = new QCheckBox(tr("Physics"), this);
+    m_physics->setChecked(true);
+    m_physics->setToolTip(tr("Simulate the model's physics3.json (hair, clothes and accessories swing with the motion)"));
+    m_wind = new SliderField(tr("Wind"), -100, 100, 0, 0, QStringLiteral(" %"), this);
+    m_wind->setCompact(true);
+    m_wind->setToolTip(tr("Horizontal wind applied to every physics strand"));
+    physicsRow->addWidget(m_physics);
+    physicsRow->addWidget(m_wind, 1);
+    v->addLayout(physicsRow);
+
+    // Motions and expressions.
+    auto *motionHeader = new QHBoxLayout;
+    motionHeader->addWidget(sectionLabel(tr("Motions"), this));
+    motionHeader->addStretch();
+    m_stopMotion = new QPushButton(Icons::get(QStringLiteral("stop")), tr("Stop"), this);
+    m_stopMotion->setToolTip(tr("Fade out the playing motion"));
+    motionHeader->addWidget(m_stopMotion);
+    v->addLayout(motionHeader);
+    m_motionTree = new QTreeWidget(this);
+    m_motionTree->setHeaderHidden(true);
+    m_motionTree->setRootIsDecorated(true);
+    m_motionTree->setIndentation(12);
+    m_motionTree->setMinimumHeight(110);
+    m_motionTree->setMaximumHeight(170);
+    m_motionTree->setToolTip(tr("Click a motion to play it once; idle motions resume afterwards"));
+    v->addWidget(m_motionTree);
+    auto *expressionRow = new QHBoxLayout;
+    expressionRow->addWidget(new QLabel(tr("Expression"), this));
+    m_expression = new QComboBox(this);
+    expressionRow->addWidget(m_expression, 1);
+    v->addLayout(expressionRow);
+
+    auto *paramHeader = new QHBoxLayout;
+    paramHeader->addWidget(sectionLabel(tr("Parameters"), this));
+    paramHeader->addStretch();
+    m_reset = new QPushButton(tr("Reset"), this);
+    m_reset->setToolTip(tr("Release every parameter you moved back to the animation"));
+    paramHeader->addWidget(m_reset);
+    v->addLayout(paramHeader);
+    auto *scroll = new QScrollArea(this);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    m_paramHost = new QWidget(scroll);
+    m_params = new QVBoxLayout(m_paramHost);
+    m_params->setContentsMargins(0, 0, 6, 0);
+    m_params->setSpacing(2);
+    m_params->addStretch();
+    scroll->setWidget(m_paramHost);
+    v->addWidget(scroll, 1);
+    auto *note = mutedLabel(tr("Live2D Cubism Core is provided by Live2D Inc. under its own licence; Lumen only loads your copy."), this);
+    note->setWordWrap(true);
+    v->addWidget(note);
+
+    m_sync.setInterval(200);
+    connect(&m_sync, &QTimer::timeout, this, &CubismPanel::syncSliders);
+    connect(m_locate, &QPushButton::clicked, this, &CubismPanel::locateCore);
+    connect(m_open, &QPushButton::clicked, this, &CubismPanel::chooseModel);
+    connect(m_idle, &QCheckBox::toggled, m_view, &CubismView::setAutoIdle);
+    connect(m_motion, &QCheckBox::toggled, m_view, &CubismView::setPlayMotion);
+    connect(m_follow, &QCheckBox::toggled, m_view, &CubismView::setFollowMouse);
+    connect(m_talk, &QCheckBox::toggled, m_view, &CubismView::setTalking);
+    connect(m_reset, &QPushButton::clicked, m_view, &CubismView::clearManual);
+    connect(m_physics, &QCheckBox::toggled, m_view, &CubismView::setPhysicsEnabled);
+    connect(m_wind, &SliderField::valueChanged, this, [this](double v) { m_view->setWind(QPointF(v / 100.0 * 0.5, 0.0)); });
+    connect(m_view, &CubismView::modelChanged, this, [this] {
+        rebuildParameters();
+        rebuildMotions();
+        refreshStatus();
+    });
+    connect(m_view, &CubismView::motionChanged, this, &CubismPanel::highlightMotion);
+    connect(m_motionTree, &QTreeWidget::itemClicked, this, [this](QTreeWidgetItem *item) {
+        const int index = item->data(0, Qt::UserRole + 1).toInt();
+        if (index < 0)
+            return;
+        QString error;
+        if (!m_view->playMotion(item->data(0, Qt::UserRole).toString(), index, &error))
+            m_studio->notify(error, QStringLiteral("error"));
+    });
+    connect(m_stopMotion, &QPushButton::clicked, m_view, &CubismView::stopMotions);
+    connect(m_expression, &QComboBox::activated, this, [this](int i) {
+        QString error;
+        if (!m_view->setExpression(m_expression->itemData(i).toString(), &error))
+            m_studio->notify(error, QStringLiteral("error"));
+    });
+    refreshStatus();
+}
+
+void CubismPanel::activate()
+{
+    if (!m_activated) {
+        m_activated = true;
+        live2d::CubismCore::instance().loadDefault();
+        const QString last = Settings::instance().value(kModelSetting).toString();
+        if (live2d::CubismCore::instance().isLoaded() && !m_view->hasModel() && QFileInfo::exists(last))
+            openModel(last);
+        refreshStatus();
+    }
+    m_sync.start();
+}
+
+void CubismPanel::refreshStatus()
+{
+    live2d::CubismCore &core = live2d::CubismCore::instance();
+    QString text;
+    if (!core.isLoaded()) {
+        text = tr("<b>Cubism Core not found.</b> Download the <i>Cubism SDK for Native</i> from live2d.com, accept its "
+                  "licence, then locate %1 in its Core folder.").arg(live2d::CubismCore::libraryFileName());
+    } else if (!m_view->hasModel()) {
+        text = tr("Cubism Core %1 loaded. Open a .model3.json to preview a rigged model.").arg(core.versionString());
+    } else {
+        live2d::CubismModel *m = m_view->model();
+        text = tr("<b>%1</b> · %n parameter(s) · Core %2", nullptr, m->parameterCount()).arg(m_view->modelName().toHtmlEscaped(), core.versionString());
+        if (m_view->hasPhysics())
+            text += QStringLiteral(" · ") + tr("%n physics setting(s)", nullptr, int(m_view->physics()->settings().size()));
+        else if (!m_view->physicsError().isEmpty())
+            text += QStringLiteral("<br>") + tr("Physics unavailable: %1").arg(m_view->physicsError().toHtmlEscaped());
+    }
+    m_status->setText(text);
+    m_open->setEnabled(core.isLoaded());
+    m_motion->setEnabled(m_view->hasIdleMotion());
+    m_physics->setEnabled(m_view->hasPhysics());
+    m_stopMotion->setEnabled(m_view->hasModel());
+    m_expression->setEnabled(m_view->expressionNames().size() > 0);
+    m_wind->setEnabled(m_view->hasPhysics());
+    m_reset->setEnabled(m_view->hasModel());
+}
+
+void CubismPanel::locateCore()
+{
+    const QString start = QFileInfo(Settings::instance().value(kCoreSetting).toString()).absolutePath();
+    const QString path = QFileDialog::getOpenFileName(this, tr("Locate Live2D Cubism Core"), start,
+                                                      tr("Cubism Core (%1);;Libraries (*.dll *.so *.dylib)").arg(live2d::CubismCore::libraryFileName()));
+    if (path.isEmpty())
+        return;
+    QString error;
+    if (!live2d::CubismCore::instance().load(path, &error)) {
+        m_studio->notify(error, QStringLiteral("error"));
+        return;
+    }
+    Settings::instance().setValue(kCoreSetting, path);
+    m_studio->notify(tr("Cubism Core %1 loaded.").arg(live2d::CubismCore::instance().versionString()), QStringLiteral("success"));
+    refreshStatus();
+}
+
+void CubismPanel::chooseModel()
+{
+    const QString start = QFileInfo(Settings::instance().value(kModelSetting).toString()).absolutePath();
+    const QString path = QFileDialog::getOpenFileName(this, tr("Open Cubism model"), start, tr("Cubism model (*.model3.json)"));
+    if (!path.isEmpty())
+        openModel(path);
+}
+
+bool CubismPanel::openModel(const QString &path)
+{
+    QString error;
+    if (!m_view->loadModel(path, &error)) {
+        m_studio->notify(error, QStringLiteral("error"));
+        return false;
+    }
+    Settings::instance().setValue(kModelSetting, path);
+    m_view->setAutoIdle(m_idle->isChecked());
+    m_view->setPlayMotion(m_motion->isChecked());
+    m_view->setFollowMouse(m_follow->isChecked());
+    m_view->setTalking(m_talk->isChecked());
+    m_view->setPhysicsEnabled(m_physics->isChecked());
+    return true;
+}
+
+void CubismPanel::rebuildMotions()
+{
+    m_motionTree->clear();
+    m_expression->clear();
+    m_expression->addItem(tr("None"), QString());
+    if (!m_view->hasModel())
+        return;
+    for (const QString &group : m_view->motionGroups()) {
+        auto *g = new QTreeWidgetItem(m_motionTree);
+        g->setText(0, tr("%1 (%2)").arg(group).arg(m_view->motionCount(group)));
+        g->setData(0, Qt::UserRole, group);
+        g->setData(0, Qt::UserRole + 1, -1);
+        g->setFlags(Qt::ItemIsEnabled);
+        for (int i = 0; i < m_view->motionCount(group); ++i) {
+            auto *item = new QTreeWidgetItem(g);
+            item->setText(0, m_view->motionLabel(group, i));
+            item->setIcon(0, Icons::get(QStringLiteral("play")));
+            item->setData(0, Qt::UserRole, group);
+            item->setData(0, Qt::UserRole + 1, i);
+        }
+        g->setExpanded(!live2d::ModelSettings::isIdleGroup(group) || m_view->motionGroups().size() == 1);
+    }
+    if (m_motionTree->topLevelItemCount() == 0) {
+        auto *none = new QTreeWidgetItem(m_motionTree);
+        none->setText(0, tr("This model has no motions"));
+        none->setFlags(Qt::NoItemFlags);
+        none->setData(0, Qt::UserRole + 1, -1);
+    }
+    for (const QString &name : m_view->expressionNames())
+        m_expression->addItem(name, name);
+}
+
+void CubismPanel::highlightMotion(const QString &group, int index)
+{
+    QTreeWidgetItemIterator it(m_motionTree);
+    while (*it) {
+        const bool playing = index >= 0 && (*it)->data(0, Qt::UserRole).toString() == group
+                             && (*it)->data(0, Qt::UserRole + 1).toInt() == index;
+        QFont f = (*it)->font(0);
+        if (f.bold() != playing) {
+            f.setBold(playing);
+            (*it)->setFont(0, f);
+        }
+        ++it;
+    }
+}
+
+void CubismPanel::rebuildParameters()
+{
+    for (const QPointer<SliderField> &s : std::as_const(m_sliders)) {
+        if (s)
+            s->deleteLater();
+    }
+    m_sliders.clear();
+    live2d::CubismModel *model = m_view->model();
+    if (!model)
+        return;
+    for (int i = 0; i < model->parameterCount(); ++i) {
+        auto *slider = new SliderField(model->parameterIds().at(i), model->parameterMinimum(i), model->parameterMaximum(i),
+                                       model->parameterDefault(i), 2, QString(), m_paramHost);
+        slider->setCompact(true);
+        m_params->insertWidget(m_params->count() - 1, slider);
+        m_sliders.append(slider);
+        connect(slider, &SliderField::valueChanged, this, [this, i](double value) {
+            if (!m_syncing)
+                m_view->setManual(i, float(value));
+        });
+    }
+}
+
+void CubismPanel::syncSliders()
+{
+    if (!isVisible() || !m_view->hasModel()) {
+        if (!isVisible())
+            m_sync.stop();
+        return;
+    }
+    m_syncing = true;
+    for (int i = 0; i < m_sliders.size(); ++i) {
+        if (m_sliders[i] && !m_sliders[i]->underMouse())
+            m_sliders[i]->setValue(m_view->value(i));
+    }
+    m_syncing = false;
+}
+
+} // namespace lumen::ui

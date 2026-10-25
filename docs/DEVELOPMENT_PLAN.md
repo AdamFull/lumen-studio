@@ -2021,7 +2021,8 @@ Survey of the code, the app log and user testing (October 2026):
   The core never includes a plugin header; CMake links plugins against the core, never the
   reverse, and a configure check fails on a reverse dependency.
 * Built-in plugins are static libraries registered at start (no DLL loading yet); Settings →
-  Plugins switches each on or off (restart needed at first). Off by default.
+  Plugins switches each on or off (restart needed at first). Off by default once the new shell
+  lands; on until then, so the pages stay where users know them.
 * Moved out of the core:
   * **Characters**: character library, active character and cast (M14, M16), Create page /
     Director, Assistant; the rest of M16 continues there.
@@ -2029,6 +2030,18 @@ Survey of the code, the app log and user testing (October 2026):
   * **Live2D parts**: the Parts page (M11) and the Cubism preview.
   * **Character LoRA**: dataset builder, local and RunPod training (M13, M15).
 * Project data written by a plugin that is off is kept unchanged when the project is saved.
+* **First cut (step 3)**: the hooks that exist are rail pages (`PageSpec`: id, icon, label, order,
+  a fixed default `Alt` key), rail panels over the page area (`PanelSpec`, the assistant) and
+  Settings tabs (`SettingsTabSpec`); the other hooks come with the features that need them (prompt
+  bar §17.2, filter nodes §17.6, request decorators with the Characters work below). Differences
+  from the list above:
+  * **Character LoRA** is part of **Characters**: the dataset builder is built on director
+    sessions and only opens from the Create page.
+  * Still in the core until request decorators exist: the character library, the active character
+    and cast, `CharacterChip` and `CharacterLoraDialog` (the Generate page, the AI panel and the
+    Parts page use them), and `ai::Director` (the Generate page's prompt enhancer uses it).
+  * The pose canvas and the pose dialog stay in the core (the director's shot cards use them); the
+    Poses plugin has the page.
 
 #### 17.8 Implementation steps
 - [x] Park M16: the open step-5 work (Generate page and *Re-run* with a cast) is in
@@ -2043,9 +2056,29 @@ Survey of the code, the app log and user testing (October 2026):
   overlapping siblings. Report-only; `LUMEN_LAYOUT_STRICT=1` fails on any finding. With
   `LUMEN_SCREENSHOT_DIR` it writes `layout/layout-report.md` and a PNG per state (the before set).
   Results in §17.9.
-- [ ] Extension interface and registry; move Create, Poses, Parts, LoRA training and Assistant
+- [x] Extension interface and registry; move Create, Poses, Parts, LoRA training and Assistant
   behind it with no change in behaviour (pages still reachable while the old shell exists).
   Test: core builds and runs with every plugin off; project data of an off plugin round-trips.
+  * `ui/ext/Extension.h`: `Extension` (id, name, description, `pages()`, `panels()`,
+    `settingsTabs()`) and the registry `Extensions` (on/off in Settings `plugins/<id>/enabled`,
+    read once per session).
+  * `src/plugins`: `lumen_plugin_characters` (Create page, director, assistant, LoRA training,
+    the Cloud training tab), `lumen_plugin_poses` (Poses page), `lumen_plugin_parts` (everything
+    of `ui/parts`), and `lumen_plugins` (`registerBuiltInPlugins`, called by `main` and the UI
+    tests). A configure check in `src/ui/CMakeLists.txt` fails when a core source includes
+    `plugins/…`.
+  * Pages are string ids (`pages::Editor`…; plugins: `create`, `poses`, `parts`) instead of the
+    `Page` enum; `Studio::hasPage` tells the core whether a plugin page exists, and the core hides
+    its ways in (the Generate page's pose *Edit…*, *Slice into parts* in the Library, the pose
+    editor after *Detect pose*). `ui/page` stores the id; the old index is read once.
+  * The Studio no longer holds the director's actions for the assistant; the Characters plugin
+    keeps them per Studio (`directorActions(studio)`).
+  * The rail order and `Alt+1`…`Alt+6` are unchanged, and a page keeps its key when another
+    plugin is off. Rail labels keep their translation contexts.
+  * Tests (`tst_canvas`): `pluginsOff` (three core pages, no assistant, editing works, the pose
+    *Edit…* button hidden, no Cloud training tab, the Plugins tab switches a plugin for the next
+    start, a `director` record survives a session without the plugin and a reopen);
+    `legacyPageSetting` (the old index 3 opens Poses; fixed shortcuts).
 - [ ] Model presets: the JSON format, the loader, the first presets (§17.3), family detection to
   preset, slot filling from the library, download of missing files, add-on filtering, VRAM tiers.
   `familyCompanions` and the Anima special case are replaced. Tests: the two failing profiles

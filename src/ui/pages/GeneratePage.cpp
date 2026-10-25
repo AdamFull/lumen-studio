@@ -228,6 +228,8 @@ GeneratePage::GeneratePage(Studio *studio, QWidget *parent)
     auto *clearPose = new QPushButton(Icons::get(QStringLiteral("close")), tr("Clear"), panel);
     poseButtons->addWidget(presetBtn);
     poseButtons->addWidget(editPose);
+    // The pose editor is a plugin page.
+    editPose->setVisible(studio->hasPage(QStringLiteral("poses")));
     poseButtons->addWidget(clearPose);
     poseRow->addLayout(poseButtons);
     v->addLayout(poseRow);
@@ -378,7 +380,7 @@ GeneratePage::GeneratePage(Studio *studio, QWidget *parent)
     connect(studio, &Studio::referenceRequested, m_refs, &ReferenceStrip::addAsset);
     connect(studio, &Studio::poseForGenerationRequested, this, [this](const pose::Pose &p) {
         setPose(p);
-        m_studio->showPage(Page::Generate);
+        m_studio->showPage(pages::Generate);
     });
     connect(studio, &Studio::promptRequested, this, [this](const QString &prompt, const QString &negative) {
         m_prompt->setPlainText(prompt);

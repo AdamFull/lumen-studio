@@ -1,9 +1,11 @@
 #pragma once
 
 #include "ui/Studio.h"
+#include "ui/ext/Extension.h"
 
 #include <QHash>
 #include <QMainWindow>
+#include <QPointer>
 
 class QButtonGroup;
 class QLabel;
@@ -24,8 +26,10 @@ public:
     explicit MainWindow(Studio *studio, QWidget *parent = nullptr);
     ~MainWindow() override;
 
-    void showPage(Page page);
-    QWidget *pageWidget(Page page) const { return m_pageWidgets.value(page); }
+    // Pages by id: the core pages (pages::Editor...) and those of plugins that are on.
+    void showPage(const QString &id);
+    QWidget *pageWidget(const QString &id) const { return m_pageWidgets.value(id); }
+    QStringList pageIds() const;
     void openSettings(const QString &tab = QString());
     // Cloud GPUs of earlier trainings that are still rented (after a crash or a failed shutdown):
     // offers to shut them down. Done once at start-up when a RunPod key is saved.
@@ -41,8 +45,8 @@ private:
     void buildMenus();
     QWidget *buildNavRail();
     void toggleQueue();
-    void toggleAssistant();
-    void placeAssistant();
+    void togglePanel(int index);
+    void placePanels();
     void updateJobSummary();
     void updateTitle();
     void newProject();
@@ -53,15 +57,22 @@ private:
 
     Studio *m_studio;
     QStackedWidget *m_pages;
-    QHash<Page, QWidget *> m_pageWidgets;
+    // Rail pages in rail order (core and plugin pages); the nav button id is the index.
+    QList<ext::PageSpec> m_pageSpecs;
+    QHash<QString, QWidget *> m_pageWidgets;
+    struct Panel
+    {
+        ext::PanelSpec spec;
+        QToolButton *button = nullptr;
+        QPointer<QWidget> widget;
+    };
+    QList<Panel> m_panels;
     QButtonGroup *m_nav;
     EditorPage *m_editor = nullptr;
     Toasts *m_toasts;
     QFrame *m_queuePanel = nullptr;
     QVBoxLayout *m_queueList = nullptr;
     QToolButton *m_queueButton = nullptr;
-    QToolButton *m_assistantButton = nullptr;
-    class AssistantPanel *m_assistant = nullptr;
     QLabel *m_jobLabel;
     QLabel *m_projectLabel;
     bool m_closing = false;

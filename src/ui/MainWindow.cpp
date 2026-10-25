@@ -9,7 +9,6 @@
 #include "ui/Icons.h"
 #include "ui/PageFactory.h"
 #include "ui/Shortcuts.h"
-#include "ui/assistant/AssistantPanel.h"
 #include "ui/Theme.h"
 #include "ui/canvas/ContextBar.h"
 #include "ui/canvas/EditorState.h"
@@ -55,6 +54,11 @@ MainWindow::MainWindow(Studio *studio, QWidget *parent)
     resize(size);
     setMinimumSize(1024, 640);
 
+    m_pageSpecs = corePages() + ext::Extensions::instance().pages();
+    std::stable_sort(m_pageSpecs.begin(), m_pageSpecs.end(), [](const ext::PageSpec &a, const ext::PageSpec &b) { return a.order < b.order; });
+    for (const ext::PanelSpec &spec : ext::Extensions::instance().panels())
+        m_panels.append(Panel{spec, nullptr, nullptr});
+
     auto *central = new QWidget(this);
     auto *h = new QHBoxLayout(central);
     h->setContentsMargins(0, 0, 0, 0);
@@ -65,13 +69,12 @@ MainWindow::MainWindow(Studio *studio, QWidget *parent)
     h->addWidget(m_pages, 1);
     setCentralWidget(central);
 
-    for (Page page : {Page::Create, Page::Generate, Page::Editor, Page::Poses, Page::Parts, Page::Library}) {
-        QWidget *w = createPage(page, studio, m_pages);
+    for (const ext::PageSpec &spec : std::as_const(m_pageSpecs)) {
+        QWidget *w = spec.create(studio, m_pages);
         m_pages->addWidget(w);
-        m_pageWidgets.insert(page, w);
-        if (page == Page::Editor)
-            m_editor = qobject_cast<EditorPage *>(w);
+        m_pageWidgets.insert(spec.id, w);
     }
+    m_editor = qobject_cast<EditorPage *>(m_pageWidgets.value(pages::Editor));
 
     m_toasts = new Toasts(central);
     m_projectLabel = new QLabel(this);
@@ -131,8 +134,16 @@ MainWindow::MainWindow(Studio *studio, QWidget *parent)
     const QByteArray geometry = Settings::instance().value(QStringLiteral("ui/geometry")).toByteArray();
     if (!geometry.isEmpty())
         restoreGeometry(geometry);
-    const int lastPage = Settings::instance().value(QStringLiteral("ui/page"), static_cast<int>(Page::Create)).toInt();
-    showPage(static_cast<Page>(std::clamp(lastPage, 0, static_cast<int>(Page::Parts))));
+    // The remembered page, else the first on the rail. Before plugins, "ui/page" was the index of a
+    // fixed list of pages.
+    QString lastPage = Settings::instance().value(QStringLiteral("ui/page")).toString();
+    bool legacy = false;
+    if (const int index = lastPage.toInt(&legacy); legacy) {
+        static const QStringList legacyPages = {QStringLiteral("create"), QStringLiteral("generate"), QStringLiteral("editor"),
+                                                QStringLiteral("poses"),  QStringLiteral("library"),  QStringLiteral("parts")};
+        lastPage = legacyPages.value(index);
+    }
+    showPage(m_pageWidgets.contains(lastPage) ? lastPage : m_pageSpecs.constFirst().id);
     updateTitle();
     updateJobSummary();
     QTimer::singleShot(400, this, &MainWindow::maybeShowOnboarding);
@@ -155,58 +166,58 @@ QWidget *MainWindow::buildNavRail()
     v->addWidget(logo);
     v->addSpacing(14);
     m_nav = new QButtonGroup(this);
-    const QList<std::tuple<Page, QString, QString, QString>> items = {
-        {Page::Create, QStringLiteral("chat"), tr("Create"), tr("AI director: plan character shots from references and a description")},
-        {Page::Generate, QStringLiteral("sparkles"), tr("Generate"), tr("Text/image to image generation")},
-        {Page::Editor, QStringLiteral("brush"), tr("Edit"), tr("Layered editor with inpainting and AI tools")},
-        {Page::Poses, QStringLiteral("person"), tr("Poses"), tr("Pose editor and library")},
-        {Page::Parts, QStringLiteral("parts"), tr("Parts"), tr("Slice a character into parts for Live2D")},
-        {Page::Library, QStringLiteral("gallery"), tr("Library"), tr("All images of the project")},
-    };
-    int index = 0;
-    for (const auto &[page, icon, label, tip] : items) {
+    for (int index = 0; index < m_pageSpecs.size(); ++index) {
+        const ext::PageSpec &spec = m_pageSpecs.at(index);
         auto *b = new QToolButton(rail);
-        b->setIcon(Icons::get(icon));
+        b->setIcon(Icons::get(spec.icon));
         b->setIconSize(QSize(22, 22));
         double pointSize = 8.0;
-        b->setText(fitLabel(label, 68, &pointSize));
-        b->setAccessibleName(label);
+        b->setText(fitLabel(spec.label, 68, &pointSize));
+        b->setAccessibleName(spec.label);
         b->setCheckable(true);
         b->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
         b->setFixedSize(74, 58);
         b->setProperty("role", QStringLiteral("nav"));
         b->setStyleSheet(QStringLiteral("font-size: %1pt;").arg(pointSize));
-        Shortcuts::Info info{QStringLiteral("nav.%1").arg(icon), tr("Pages"), tr("Go to %1").arg(label), QStringLiteral("global"),
-                             {QKeySequence(QStringLiteral("Alt+%1").arg(++index))}};
+        const QString tip = spec.tooltip;
+        Shortcuts::Info info{QStringLiteral("nav.%1").arg(spec.icon), tr("Pages"), tr("Go to %1").arg(spec.label), QStringLiteral("global"),
+                             spec.shortcut.isEmpty() ? QList<QKeySequence>{} : QList<QKeySequence>{spec.shortcut}};
         Shortcuts::instance().bind(info, b, [b, tip](const QList<QKeySequence> &keys) {
             b->setShortcut(keys.value(0));
             b->setToolTip(keys.isEmpty() ? tip : QStringLiteral("%1 (%2)").arg(tip, Shortcuts::toText(keys)));
         });
-        m_nav->addButton(b, static_cast<int>(page));
+        m_nav->addButton(b, index);
         v->addWidget(b, 0, Qt::AlignHCenter);
     }
-    connect(m_nav, &QButtonGroup::idClicked, this, [this](int id) { showPage(static_cast<Page>(id)); });
+    connect(m_nav, &QButtonGroup::idClicked, this, [this](int index) { showPage(m_pageSpecs.value(index).id); });
     v->addStretch();
-    m_assistantButton = new QToolButton(rail);
-    m_assistantButton->setIcon(Icons::get(QStringLiteral("chat")));
-    m_assistantButton->setIconSize(QSize(20, 20));
-    double assistantSize = 8.0;
-    m_assistantButton->setText(fitLabel(tr("Assistant"), 68, &assistantSize));
-    m_assistantButton->setAccessibleName(tr("Assistant"));
-    m_assistantButton->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
-    m_assistantButton->setFixedSize(74, 52);
-    m_assistantButton->setProperty("role", QStringLiteral("nav"));
-    m_assistantButton->setStyleSheet(QStringLiteral("font-size: %1pt;").arg(assistantSize));
-    m_assistantButton->setCheckable(true);
-    Shortcuts::instance().bind(Shortcuts::Info{QStringLiteral("app.assistant"), tr("General"), tr("Assistant"), QStringLiteral("global"),
-                                               {QKeySequence(QStringLiteral("Ctrl+Shift+A"))}},
-                               m_assistantButton, [this](const QList<QKeySequence> &keys) {
-                                   m_assistantButton->setShortcut(keys.value(0));
-                                   const QString tip = tr("Ask the assistant to plan, generate, edit and pose for you");
-                                   m_assistantButton->setToolTip(keys.isEmpty() ? tip : QStringLiteral("%1 (%2)").arg(tip, Shortcuts::toText(keys)));
-                               });
-    connect(m_assistantButton, &QToolButton::clicked, this, &MainWindow::toggleAssistant);
-    v->addWidget(m_assistantButton, 0, Qt::AlignHCenter);
+    // Panels of plugins (the assistant), shown over the page area.
+    for (int index = 0; index < m_panels.size(); ++index) {
+        const ext::PanelSpec &spec = m_panels.at(index).spec;
+        auto *b = new QToolButton(rail);
+        b->setIcon(Icons::get(spec.icon));
+        b->setIconSize(QSize(20, 20));
+        double pointSize = 8.0;
+        b->setText(fitLabel(spec.label, 68, &pointSize));
+        b->setAccessibleName(spec.label);
+        b->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+        b->setFixedSize(74, 52);
+        b->setProperty("role", QStringLiteral("nav"));
+        b->setStyleSheet(QStringLiteral("font-size: %1pt;").arg(pointSize));
+        b->setCheckable(true);
+        b->setToolTip(spec.tooltip);
+        if (!spec.shortcutId.isEmpty()) {
+            const QString tip = spec.tooltip;
+            Shortcuts::instance().bind(Shortcuts::Info{spec.shortcutId, tr("General"), spec.label, QStringLiteral("global"), {spec.shortcut}}, b,
+                                       [b, tip](const QList<QKeySequence> &keys) {
+                                           b->setShortcut(keys.value(0));
+                                           b->setToolTip(keys.isEmpty() ? tip : QStringLiteral("%1 (%2)").arg(tip, Shortcuts::toText(keys)));
+                                       });
+        }
+        connect(b, &QToolButton::clicked, this, [this, index] { togglePanel(index); });
+        m_panels[index].button = b;
+        v->addWidget(b, 0, Qt::AlignHCenter);
+    }
     m_queueButton = new QToolButton(rail);
     m_queueButton->setIcon(Icons::get(QStringLiteral("queue")));
     m_queueButton->setIconSize(QSize(20, 20));
@@ -245,7 +256,7 @@ void MainWindow::buildMenus()
     };
     QMenu *file = menuBar()->addMenu(tr("&File"));
     bind(file->addAction(Icons::get(QStringLiteral("plus")), tr("New document..."), QKeySequence::New, this, [this] {
-        showPage(Page::Editor);
+        showPage(pages::Editor);
         m_editor->newDocumentDialog();
     }), QStringLiteral("new-document"));
     bind(file->addAction(Icons::get(QStringLiteral("image")), tr("Open image..."), QKeySequence::Open, this, &MainWindow::openImages), QStringLiteral("open-image"));
@@ -279,11 +290,11 @@ void MainWindow::buildMenus()
     QMenu *edit = menuBar()->addMenu(tr("&Edit"));
     bind(edit->addAction(Icons::get(QStringLiteral("copy")), tr("Copy merged"), QKeySequence(QStringLiteral("Ctrl+Shift+C")), this, [this] { m_editor->copyMerged(); }), QStringLiteral("copy-merged"));
     bind(edit->addAction(tr("Paste as layer"), this, [this] {
-        showPage(Page::Editor);
+        showPage(pages::Editor);
         m_editor->pasteAsLayer();
     }), QStringLiteral("paste-layer-menu"));
     bind(edit->addAction(tr("Import image as layer..."), this, [this] {
-        showPage(Page::Editor);
+        showPage(pages::Editor);
         m_editor->importAsLayer();
     }), QStringLiteral("import-layer"));
     edit->addSeparator();
@@ -327,13 +338,25 @@ void MainWindow::buildMenus()
     });
 }
 
-void MainWindow::showPage(Page page)
+void MainWindow::showPage(const QString &id)
 {
-    if (QWidget *w = m_pageWidgets.value(page))
-        m_pages->setCurrentWidget(w);
-    if (QAbstractButton *b = m_nav->button(static_cast<int>(page)))
-        b->setChecked(true);
-    Settings::instance().setValue(QStringLiteral("ui/page"), static_cast<int>(page));
+    QWidget *w = m_pageWidgets.value(id);
+    if (!w)
+        return;
+    m_pages->setCurrentWidget(w);
+    for (int index = 0; index < m_pageSpecs.size(); ++index) {
+        if (m_pageSpecs.at(index).id == id)
+            m_nav->button(index)->setChecked(true);
+    }
+    Settings::instance().setValue(QStringLiteral("ui/page"), id);
+}
+
+QStringList MainWindow::pageIds() const
+{
+    QStringList ids;
+    for (const ext::PageSpec &spec : m_pageSpecs)
+        ids << spec.id;
+    return ids;
 }
 
 void MainWindow::toggleQueue()
@@ -386,33 +409,37 @@ void MainWindow::toggleQueue()
         m_queuePanel->raise();
 }
 
-void MainWindow::toggleAssistant()
+void MainWindow::togglePanel(int index)
 {
-    if (!m_assistant) {
-        m_assistant = new AssistantPanel(m_studio, centralWidget());
-        connect(m_assistant, &AssistantPanel::closeRequested, this, [this] {
-            m_assistantButton->setChecked(false);
-            m_assistant->hide();
+    Panel &panel = m_panels[index];
+    if (!panel.widget) {
+        panel.widget = panel.spec.create(m_studio, centralWidget(), [this, index] {
+            Panel &p = m_panels[index];
+            p.button->setChecked(false);
+            if (p.widget)
+                p.widget->hide();
         });
     }
-    m_assistant->setVisible(m_assistantButton->isChecked());
-    placeAssistant();
+    panel.widget->setVisible(panel.button->isChecked());
+    placePanels();
 }
 
-void MainWindow::placeAssistant()
+void MainWindow::placePanels()
 {
-    if (!m_assistant || !m_assistant->isVisible())
-        return;
     const QSize area = centralWidget()->size();
     const int width = std::min(460, std::max(320, area.width() / 3));
-    m_assistant->setGeometry(area.width() - width - 12, 12, width, area.height() - 24);
-    m_assistant->raise();
+    for (const Panel &panel : std::as_const(m_panels)) {
+        if (!panel.widget || !panel.widget->isVisible())
+            continue;
+        panel.widget->setGeometry(area.width() - width - 12, 12, width, area.height() - 24);
+        panel.widget->raise();
+    }
 }
 
 void MainWindow::resizeEvent(QResizeEvent *e)
 {
     QMainWindow::resizeEvent(e);
-    placeAssistant();
+    placePanels();
 }
 
 void MainWindow::updateJobSummary()
@@ -479,7 +506,7 @@ void MainWindow::importToLibrary()
     }
     if (!files.isEmpty()) {
         m_studio->notify(tr("Importing %n image(s)...", nullptr, int(files.size())));
-        showPage(Page::Library);
+        showPage(pages::Library);
     }
 }
 

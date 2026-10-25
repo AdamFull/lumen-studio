@@ -1,12 +1,10 @@
 #pragma once
 
-#include "ui/Studio.h"
-
-#include <QWidget>
+#include "ui/ext/Extension.h"
 
 namespace lumen::ui {
 
-// Creates the widget implementing a main page.
-QWidget *createPage(Page page, Studio *studio, QWidget *parent);
+// The core pages of the navigation rail (generate, editor, library); plugins add theirs.
+QList<ext::PageSpec> corePages();
 
 } // namespace lumen::ui

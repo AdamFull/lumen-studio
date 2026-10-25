@@ -10,24 +10,26 @@
 #include "ui/Theme.h"
 #include "ui/Shortcuts.h"
 #include "ui/Studio.h"
-#include "ui/assistant/AssistantPanel.h"
-#include "ui/director/DirectorSession.h"
-#include "ui/director/ShotCard.h"
-#include "ui/pages/CreatePage.h"
+#include "plugins/BuiltInPlugins.h"
+#include "plugins/characters/assistant/AssistantPanel.h"
+#include "plugins/characters/assistant/DirectorActions.h"
+#include "plugins/characters/director/DirectorSession.h"
+#include "plugins/characters/director/ShotCard.h"
+#include "plugins/characters/CreatePage.h"
 #include "ui/pages/GeneratePage.h"
 #include "ui/pages/AiPanel.h"
-#include "ui/parts/PartsPage.h"
-#include "ui/parts/ExpressionCheck.h"
+#include "plugins/parts/PartsPage.h"
+#include "plugins/parts/ExpressionCheck.h"
 #include "doc/Parts.h"
 #include "pose/Rig.h"
 #include "MockHttpServer.h"
 #include "ui/dialogs/CharacterLoraDialog.h"
-#include "ui/dialogs/CloudTrainingPage.h"
+#include "plugins/characters/training/CloudTrainingPage.h"
 #include "ui/dialogs/LocalServersPage.h"
-#include "ui/dialogs/LoraDatasetDialog.h"
-#include "ui/CharacterTraining.h"
-#include "ui/LoraEvaluation.h"
-#include "ui/assistant/AssistantTools.h"
+#include "plugins/characters/training/LoraDatasetDialog.h"
+#include "plugins/characters/training/CharacterTraining.h"
+#include "plugins/characters/training/LoraEvaluation.h"
+#include "plugins/characters/assistant/AssistantTools.h"
 #include "ui/widgets/CharacterChip.h"
 #include "ai/Agent.h"
 #include "runtime/Supervisor.h"
@@ -45,6 +47,7 @@
 #include "ui/widgets/ServerStatus.h"
 #include "ai/Gate.h"
 #include "ui/widgets/Controls.h"
+#include "ui/ext/Extension.h"
 
 #include <QCryptographicHash>
 #include <QTreeWidgetItemIterator>
@@ -130,6 +133,8 @@ private slots:
     void cloudTrainingTab();
     void hubCompanionFiles();
     void activeCast();
+    void pluginsOff();
+    void legacyPageSetting();
 
 private:
     ToolEvent at(double x, double y, Qt::KeyboardModifiers mods = Qt::NoModifier) const
@@ -160,6 +165,7 @@ private:
 void TestCanvas::init()
 {
     QStandardPaths::setTestModeEnabled(true);
+    plugins::registerBuiltInPlugins();
     m_state = new EditorState;
     m_doc = new doc::Document(QSize(200, 200));
     m_doc->addLayer(QStringLiteral("Shape"), content());
@@ -524,7 +530,7 @@ void TestCanvas::accessibleNames()
     window.show();
     QVERIFY(QTest::qWaitForWindowExposed(&window));
     // Every page (and its widgets) gets polished once shown.
-    for (Page page : {Page::Create, Page::Generate, Page::Editor, Page::Poses, Page::Parts, Page::Library}) {
+    for (const QString &page : window.pageIds()) {
         window.showPage(page);
         QTest::qWait(30);
     }
@@ -714,7 +720,7 @@ void TestCanvas::assistantRunsReferenceScenario()
     studio.openProject(dir.filePath(QStringLiteral("assistant.lumen")));
     QTRY_VERIFY_WITH_TIMEOUT(studio.isProjectOpen(), 5000);
     CreatePage create(&studio);
-    QTRY_VERIFY(studio.directorActions());
+    QTRY_VERIFY(directorActions(&studio));
     for (QSpinBox *spin : create.findChildren<QSpinBox *>()) {
         if (spin->suffix().contains(QLatin1String("per shot")))
             spin->setValue(1);
@@ -731,7 +737,7 @@ void TestCanvas::assistantRunsReferenceScenario()
     QVERIFY(QJsonDocument(agentRequests[1]).toJson().contains("purposes"));
     // plan_shots reports the stored plan (title and shot ids) to the model.
     QVERIFY(QJsonDocument(agentRequests[2]).toJson().contains("Front A-pose"));
-    const QJsonObject state = studio.directorActions()->directorState();
+    const QJsonObject state = directorActions(&studio)->directorState();
     QCOMPARE(state.value(QStringLiteral("purpose")).toString(), QStringLiteral("live2d"));
     const QJsonArray shots = state.value(QStringLiteral("shots")).toArray();
     QCOMPARE(shots.size(), 1);
@@ -3035,6 +3041,132 @@ void TestCanvas::activeCast()
         chip.resize(chip.sizeHint());
         chip.grab().save(shots + QStringLiteral("/cast-chip.png"));
     }
+}
+
+namespace {
+
+QAbstractButton *buttonNamed(QWidget *root, const QString &name)
+{
+    for (QAbstractButton *b : root->findChildren<QAbstractButton *>()) {
+        if (b->accessibleName() == name || b->text() == name)
+            return b;
+    }
+    return nullptr;
+}
+
+} // namespace
+
+// The core starts, edits and keeps plugin data with every plugin off (plan M17 §17.7).
+void TestCanvas::pluginsOff()
+{
+    Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
+    ext::Extensions &registry = ext::Extensions::instance();
+    QCOMPARE(registry.all().size(), 3);
+    for (const ext::Extension *e : registry.all())
+        registry.setEnabled(e->id(), false);
+    registry.refresh();
+    auto restore = qScopeGuard([&registry] {
+        for (const ext::Extension *e : registry.all())
+            registry.setEnabled(e->id(), true);
+        registry.refresh();
+        Settings::instance().setValue(QStringLiteral("ui/page"), QVariant());
+    });
+
+    // A record of the Characters plugin, written while it was on.
+    QTemporaryDir dir;
+    const QString path = dir.filePath(QStringLiteral("plugins.lumen"));
+    {
+        Studio studio;
+        studio.openProject(path);
+        QTRY_VERIFY_WITH_TIMEOUT(studio.isProjectOpen(), 5000);
+        doc::Record r;
+        r.type = QStringLiteral("director");
+        r.name = QStringLiteral("Akane shots");
+        r.json = QJsonObject{{QStringLiteral("title"), QStringLiteral("Akane")}};
+        auto saved = studio.project()->saveRecord(r);
+        QTRY_VERIFY_WITH_TIMEOUT(saved.isFinished(), 5000);
+    }
+
+    Studio studio;
+    QVERIFY(studio.hasPage(pages::Editor));
+    for (const QString &page : {QStringLiteral("create"), QStringLiteral("poses"), QStringLiteral("parts")})
+        QVERIFY2(!studio.hasPage(page), qPrintable(page));
+    // The remembered page was a plugin's: the first core page instead.
+    Settings::instance().setValue(QStringLiteral("ui/page"), QStringLiteral("poses"));
+    MainWindow window(&studio);
+    QCOMPARE(window.pageIds(), (QStringList{QStringLiteral("generate"), QStringLiteral("editor"), QStringLiteral("library")}));
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    QVERIFY(window.pageWidget(pages::Generate)->isVisible());
+    QVERIFY(!buttonNamed(&window, QStringLiteral("Assistant")));
+    QVERIFY(!window.pageWidget(QStringLiteral("create")));
+
+    // Editing works.
+    studio.openProject(path);
+    QTRY_VERIFY_WITH_TIMEOUT(studio.isProjectOpen(), 5000);
+    doc::Document *d = studio.newDocument(QSize(64, 48), QStringLiteral("Plain"));
+    window.showPage(pages::Editor);
+    QVERIFY(window.pageWidget(pages::Editor)->isVisible());
+    QCOMPARE(studio.activeDocument(), d);
+    d->addLayer(QStringLiteral("Paint"));
+    QCOMPARE(d->layerCount(), 2);
+
+    // No way into a plugin that is off: the Generate page's pose editor button is hidden.
+    auto *generate = window.pageWidget(pages::Generate);
+    QAbstractButton *editPose = buttonNamed(generate, QStringLiteral("Edit…"));
+    QVERIFY(editPose);
+    QVERIFY(!editPose->isVisibleTo(generate));
+
+    // Settings: no Cloud training tab; the Plugins tab switches a plugin on for the next start.
+    SettingsDialog settings(&studio);
+    auto *tabs = settings.findChild<QTabWidget *>();
+    QStringList names;
+    for (int i = 0; i < tabs->count(); ++i)
+        names << tabs->tabText(i);
+    QVERIFY(!names.contains(QStringLiteral("Cloud training")));
+    QCOMPARE(names.last(), QStringLiteral("Plugins"));
+    settings.showTab(QStringLiteral("plugins"));
+    QCOMPARE(tabs->currentIndex(), tabs->count() - 1);
+    settings.showTab(QStringLiteral("cloud")); // a tab of a plugin that is off: stays where it is
+    QCOMPARE(tabs->currentIndex(), tabs->count() - 1);
+    auto *poses = settings.findChild<QCheckBox *>(QStringLiteral("plugin-poses"));
+    QVERIFY(poses);
+    QVERIFY(!poses->isChecked());
+    poses->setChecked(true);
+    QVERIFY(registry.isEnabled(QStringLiteral("poses")));
+    QVERIFY(!registry.isActive(QStringLiteral("poses")));
+    QVERIFY(!studio.hasPage(QStringLiteral("poses")));
+
+    // The plugin's record is still there after a session without the plugin, and after reopening.
+    auto saved = studio.saveSession();
+    QTRY_VERIFY_WITH_TIMEOUT(saved.isFinished(), 5000);
+    Studio again;
+    again.openProject(path);
+    QTRY_VERIFY_WITH_TIMEOUT(again.isProjectOpen(), 5000);
+    auto records = again.project()->records(QStringLiteral("director"));
+    QTRY_VERIFY_WITH_TIMEOUT(records.isFinished(), 5000);
+    QCOMPARE(records.result().size(), 1);
+    QCOMPARE(records.result().first().json.value(QStringLiteral("title")).toString(), QStringLiteral("Akane"));
+}
+
+// Before plugins, the remembered page was an index into a fixed list (3 was Poses).
+void TestCanvas::legacyPageSetting()
+{
+    Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
+    Settings::instance().setValue(QStringLiteral("ui/page"), 3);
+    auto restore = qScopeGuard([] { Settings::instance().setValue(QStringLiteral("ui/page"), QVariant()); });
+    Studio studio;
+    MainWindow window(&studio);
+    QCOMPARE(window.pageIds(), (QStringList{QStringLiteral("create"), QStringLiteral("generate"), QStringLiteral("editor"),
+                                            QStringLiteral("poses"), QStringLiteral("parts"), QStringLiteral("library")}));
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    QVERIFY(window.pageWidget(QStringLiteral("poses"))->isVisible());
+    QCOMPARE(Settings::instance().value(QStringLiteral("ui/page")).toString(), QStringLiteral("poses"));
+    // The rail keeps its order and Alt+number shortcuts; they do not depend on which plugins are on.
+    QCOMPARE(Shortcuts::instance().keys(QStringLiteral("nav.person")), QList<QKeySequence>{QKeySequence(QStringLiteral("Alt+4"))});
+    QCOMPARE(Shortcuts::instance().keys(QStringLiteral("nav.gallery")), QList<QKeySequence>{QKeySequence(QStringLiteral("Alt+6"))});
+    QVERIFY(buttonNamed(&window, QStringLiteral("Assistant")));
 }
 
 QTEST_MAIN(TestCanvas)

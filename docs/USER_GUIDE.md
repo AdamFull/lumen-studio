@@ -194,6 +194,21 @@ The left bar switches pages (`Alt+1` … `Alt+6`).
 
 `Ctrl+Return` starts the generation on the Create and Generate pages.
 
+### Plugins
+
+Create, Poses and Parts, the assistant and character LoRA training are plugins. **Settings →
+Plugins** switches each one on or off; the change takes effect the next time Lumen Studio starts.
+With a plugin off, its page and buttons are gone, and what it saved in a project is kept until it
+is on again. The plugins are:
+
+* **Characters**: the Create page, the assistant, and character LoRA training (including
+  **Settings → Cloud training**).
+* **Poses**: the Poses page. Without it, the Generate page still takes pose presets, but has no
+  *Edit…* button for the pose.
+* **Live2D parts**: the Parts page and *Slice into parts* in the Library.
+
+A page keeps its `Alt` number whichever plugins are on (Generate is always `Alt+2`).
+
 **Safe for work.** Some anime models draw nudity or underwear unasked. The shield in the status bar
 (also Settings → General) adds "nsfw, nude, nudity, explicit, cleavage, underwear, lingerie" to the
 negative prompt of every image request: Generate, Create, the editor, Parts, the assistant and

@@ -56,12 +56,15 @@ private:
     QWidget *buildProvidersTab();
     QWidget *buildRolesTab();
     QWidget *buildGeneralTab();
+    QWidget *buildPluginsTab();
+    void addTab(const QString &id, QWidget *page, const QString &icon, const QString &label);
     void reloadProviders(const QString &select = QString());
     void showProvider(const QString &id);
     void addProvider(const QString &typeId);
 
     Studio *m_studio;
     QTabWidget *m_tabs;
+    QStringList m_tabIds; // showTab ids, in tab order
     QListWidget *m_list;
     QVBoxLayout *m_formHost;
     QPointer<QWidget> m_form;

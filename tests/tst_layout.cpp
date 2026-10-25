@@ -5,6 +5,7 @@
 // finding. With LUMEN_SCREENSHOT_DIR, every state is saved as a PNG next to layout-report.md.
 
 #include "core/Settings.h"
+#include "plugins/BuiltInPlugins.h"
 #include "pose/Skeleton.h"
 #include "runtime/ServerProfile.h"
 #include "ui/Accessibility.h"
@@ -329,6 +330,7 @@ void TestLayout::initTestCase()
 {
     QStandardPaths::setTestModeEnabled(true);
     Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
+    plugins::registerBuiltInPlugins();
     // The fonts and theme of the real app (main.cpp), so text widths match.
     QFont font = QApplication::font();
     for (const char *family : {"Segoe UI Variable Text", "Segoe UI", "Inter", "Noto Sans"}) {
@@ -374,21 +376,22 @@ void TestLayout::mainWindow()
     MainWindow window(&studio);
     window.show();
     QVERIFY(QTest::qWaitForWindowExposed(&window));
-    const QList<std::pair<Page, QString>> pages = {{Page::Create, QStringLiteral("Create")},   {Page::Generate, QStringLiteral("Generate")},
-                                                   {Page::Editor, QStringLiteral("Edit")},     {Page::Poses, QStringLiteral("Poses")},
-                                                   {Page::Parts, QStringLiteral("Parts")},     {Page::Library, QStringLiteral("Library")}};
+    // Report and screenshot names as before plugins ("Edit page", not "editor").
+    const QHash<QString, QString> names = {{QStringLiteral("create"), QStringLiteral("Create")}, {QStringLiteral("generate"), QStringLiteral("Generate")},
+                                           {QStringLiteral("editor"), QStringLiteral("Edit")},   {QStringLiteral("poses"), QStringLiteral("Poses")},
+                                           {QStringLiteral("parts"), QStringLiteral("Parts")},   {QStringLiteral("library"), QStringLiteral("Library")}};
     for (const QSize &size : kWindowSizes) {
         window.resize(size);
         const QString res = QStringLiteral("%1x%2").arg(size.width()).arg(size.height());
-        for (const auto &[page, name] : pages) {
+        for (const QString &page : window.pageIds()) {
             window.showPage(page);
             Auditor::settle();
-            const QString surface = QStringLiteral("%1 page %2").arg(name, res);
+            const QString surface = QStringLiteral("%1 page %2").arg(names.value(page, page), res);
             m_auditor.audit(&window, surface);
             m_auditor.shoot(&window, surface);
         }
         // The editor with the queue and the assistant open over it.
-        window.showPage(Page::Editor);
+        window.showPage(pages::Editor);
         for (const QString &panel : {QStringLiteral("Queue"), QStringLiteral("Assistant")}) {
             QAbstractButton *b = railButton(&window, panel);
             QVERIFY2(b, qPrintable(panel));
@@ -420,11 +423,12 @@ void TestLayout::mainWindowFitsSmallScreen()
         QVERIFY2(need.width() <= screen.width() && need.height() <= screen.height(),
                  qPrintable(QStringLiteral("%1 needs %2×%3").arg(what).arg(need.width()).arg(need.height())));
     };
-    for (Page page : {Page::Create, Page::Generate, Page::Editor, Page::Poses, Page::Parts, Page::Library}) {
+    QCOMPARE(window.pageIds().size(), 6);
+    for (const QString &page : window.pageIds()) {
         window.showPage(page);
-        check(QStringLiteral("page %1").arg(static_cast<int>(page)));
+        check(QStringLiteral("page %1").arg(page));
     }
-    window.showPage(Page::Editor);
+    window.showPage(pages::Editor);
     for (const QString &panel : {QStringLiteral("Queue"), QStringLiteral("Assistant")}) {
         QAbstractButton *b = railButton(&window, panel);
         QVERIFY(b);

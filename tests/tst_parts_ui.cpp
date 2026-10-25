@@ -6,9 +6,9 @@
 #include "ui/canvas/CanvasView.h"
 #include "ui/canvas/EditorState.h"
 #include "live2d/CubismRenderer.h"
-#include "ui/parts/CubismView.h"
-#include "ui/parts/PartTools.h"
-#include "ui/parts/PuppetPreview.h"
+#include "plugins/parts/CubismView.h"
+#include "plugins/parts/PartTools.h"
+#include "plugins/parts/PuppetPreview.h"
 
 #include <QPainter>
 #include <QTemporaryDir>

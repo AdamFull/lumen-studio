@@ -23,10 +23,13 @@
 
 namespace lumen::ui {
 
-class DirectorActions;
-
-// Values are persisted (last page); new pages are appended.
-enum class Page { Create, Generate, Editor, Poses, Library, Parts };
+// Ids of the core pages. Plugins add their own (ext::PageSpec), e.g. "poses" or "parts"; the core
+// names those only to ask whether they exist (Studio::hasPage).
+namespace pages {
+inline constexpr QLatin1StringView Generate{"generate"};
+inline constexpr QLatin1StringView Editor{"editor"};
+inline constexpr QLatin1StringView Library{"library"};
+} // namespace pages
 
 // Application context shared by all UI components: services, the open project, open documents
 // and cross-page actions ("open this image in the editor", "use this pose for generation"...).
@@ -55,13 +58,6 @@ public:
     // Provider of a managed server (bound through its "managed_server" setting), if any.
     ai::Provider *providerForServer(const QString &profileId) const;
     doc::Project *project() { return m_project; }
-    // The director workflow (the Create page), used by the assistant. May be null.
-    DirectorActions *directorActions() const { return m_directorOwner ? m_directorActions : nullptr; }
-    void setDirectorActions(DirectorActions *actions, QObject *owner)
-    {
-        m_directorActions = actions;
-        m_directorOwner = owner;
-    }
     // Characters shared by all projects.
     doc::CharacterLibrary *characters() { return &m_characters; }
     // The project's cast (M16 §16.3): one or two character library ids in order (left, right),
@@ -109,7 +105,9 @@ public:
     static constexpr int kIdleSaveMs = 4000;
 
     // ---- cross-page actions -------------------------------------------------------------------
-    void showPage(Page page) { emit pageRequested(page); }
+    void showPage(const QString &id) { emit pageRequested(id); }
+    // Whether a page exists in this session: a core page, or one of a plugin that is on.
+    bool hasPage(const QString &id) const;
     void useAsReference(const QString &assetId) { emit referenceRequested(assetId); }
     void usePoseForGeneration(const pose::Pose &pose) { emit poseForGenerationRequested(pose); }
     void editPose(const pose::Pose &pose, const QString &context = QString()) { emit poseEditRequested(pose, context); }
@@ -118,7 +116,7 @@ public:
     // Starts a part slicing session (Live2D) from an image asset.
     void sliceAsset(const QString &assetId)
     {
-        showPage(Page::Parts);
+        showPage(QStringLiteral("parts"));
         emit sliceRequested(assetId);
     }
 
@@ -129,7 +127,7 @@ signals:
     void projectClosed();
     void documentsChanged();
     void activeDocumentChanged(lumen::doc::Document *doc);
-    void pageRequested(lumen::ui::Page page);
+    void pageRequested(const QString &id);
     void referenceRequested(const QString &assetId);
     void poseForGenerationRequested(const lumen::pose::Pose &pose);
     void poseEditRequested(const lumen::pose::Pose &pose, const QString &context);
@@ -164,8 +162,6 @@ private:
     ai::PartService m_parts;
     QPointer<doc::Project> m_project;
     doc::CharacterLibrary m_characters{doc::CharacterLibrary::defaultDirectory()};
-    DirectorActions *m_directorActions = nullptr;
-    QPointer<QObject> m_directorOwner;
     QList<doc::Document *> m_documents;
     QPointer<doc::Document> m_active;
     QTimer m_autosave;

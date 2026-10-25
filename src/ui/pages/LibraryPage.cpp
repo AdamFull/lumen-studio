@@ -473,13 +473,13 @@ LibraryPage::LibraryPage(Studio *studio, QWidget *parent)
         const auto info = m_studio->project() ? m_studio->project()->asset(m_currentId) : std::nullopt;
         if (info) {
             m_studio->usePrompt(info->prompt(), info->metadata.value(QStringLiteral("negative_prompt")).toString());
-            m_studio->showPage(Page::Generate);
+            m_studio->showPage(pages::Generate);
         }
     });
     connect(rerun, &QPushButton::clicked, this, [this] {
         if (!m_currentId.isEmpty()) {
             m_studio->rerunAsset(m_currentId);
-            m_studio->showPage(Page::Generate);
+            m_studio->showPage(pages::Generate);
         }
     });
     connect(exportBtn, &QPushButton::clicked, this, &LibraryPage::exportSelected);
@@ -515,9 +515,11 @@ LibraryPage::LibraryPage(Studio *studio, QWidget *parent)
             for (const QString &id : selectedIds())
                 m_studio->useAsReference(id);
         });
-        menu.addAction(Icons::get(QStringLiteral("parts")), tr("Slice into parts (Live2D)"), this, [this] {
-            m_studio->sliceAsset(selectedIds().first());
-        });
+        if (m_studio->hasPage(QStringLiteral("parts"))) {
+            menu.addAction(Icons::get(QStringLiteral("parts")), tr("Slice into parts (Live2D)"), this, [this] {
+                m_studio->sliceAsset(selectedIds().first());
+            });
+        }
         const int count = int(selectedIds().size());
         const QString suffix = count > 1 ? tr(" (%n images)", nullptr, count) : QString();
         menu.addAction(Icons::get(QStringLiteral("scissors")), tr("Remove background") + suffix, this, [this] {

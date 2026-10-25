@@ -239,7 +239,7 @@ void ReferenceStrip::rebuild()
             }
         });
         menu->addAction(Icons::get(QStringLiteral("gallery")), tr("From library (drag images here)"), this, [this] {
-            m_studio->showPage(Page::Library);
+            m_studio->showPage(pages::Library);
         });
         add->setMenu(menu);
         m_items->addWidget(add);

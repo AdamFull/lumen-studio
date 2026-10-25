@@ -7,7 +7,8 @@
 #include "ui/Accessibility.h"
 #include "ui/MainWindow.h"
 #include "ui/pages/EditorPage.h"
-#include "ui/parts/PartsPage.h"
+#include "plugins/BuiltInPlugins.h"
+#include "plugins/parts/PartsPage.h"
 #include "ui/Studio.h"
 #include "ui/Theme.h"
 
@@ -101,6 +102,7 @@ int main(int argc, char *argv[])
     ui::Theme::instance().apply(app, Settings::instance().theme());
     ui::Accessibility::install();
 
+    plugins::registerBuiltInPlugins();
     ui::Studio studio;
     ui::MainWindow window(&studio);
 
@@ -111,24 +113,18 @@ int main(int argc, char *argv[])
         studio.openDefaultProject();
 
     const QString page = parser.value(pageOpt).toLower();
-    const QHash<QString, ui::Page> pages = {{QStringLiteral("create"), ui::Page::Create},
-                                            {QStringLiteral("generate"), ui::Page::Generate},
-                                            {QStringLiteral("editor"), ui::Page::Editor},
-                                            {QStringLiteral("poses"), ui::Page::Poses},
-                                            {QStringLiteral("library"), ui::Page::Library},
-                                            {QStringLiteral("parts"), ui::Page::Parts}};
-    if (pages.contains(page))
-        window.showPage(pages.value(page));
+    if (window.pageIds().contains(page))
+        window.showPage(page);
     if (parser.isSet(imageOpt))
         studio.openFile(QFileInfo(parser.value(imageOpt)).absoluteFilePath());
     if (parser.isSet(toolOpt)) {
-        if (auto *editor = qobject_cast<ui::EditorPage *>(window.pageWidget(ui::Page::Editor)))
+        if (auto *editor = qobject_cast<ui::EditorPage *>(window.pageWidget(ui::pages::Editor)))
             editor->selectTool(parser.value(toolOpt));
     }
     if (parser.isSet(sliceOpt)) {
         const QString file = QFileInfo(parser.value(sliceOpt)).absoluteFilePath();
         const int step = parser.value(sliceStepOpt).toInt();
-        if (auto *parts = qobject_cast<ui::PartsPage *>(window.pageWidget(ui::Page::Parts)); parts && parser.isSet(sliceStepOpt))
+        if (auto *parts = qobject_cast<ui::PartsPage *>(window.pageWidget(QStringLiteral("parts"))); parts && parser.isSet(sliceStepOpt))
             parts->automate(step >= 2, std::clamp(step, 1, 4) - 1);
         auto start = [&studio, file] {
             studio.project()->importFile(file, doc::AssetKind::Reference).then(&studio, [&studio](doc::AssetInfo info) {
@@ -141,8 +137,8 @@ int main(int argc, char *argv[])
             QObject::connect(&studio, &ui::Studio::projectOpened, &studio, start, Qt::SingleShotConnection);
     }
     if (parser.isSet(cubismOpt)) {
-        window.showPage(ui::Page::Parts);
-        if (auto *parts = qobject_cast<ui::PartsPage *>(window.pageWidget(ui::Page::Parts)))
+        window.showPage(QStringLiteral("parts"));
+        if (auto *parts = qobject_cast<ui::PartsPage *>(window.pageWidget(QStringLiteral("parts"))))
             parts->previewCubismModel(QFileInfo(parser.value(cubismOpt)).absoluteFilePath());
     }
     if (parser.isSet(sizeOpt)) {

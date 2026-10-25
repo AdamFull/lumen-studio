@@ -38,18 +38,20 @@
 #include "runtime/ServerProfile.h"
 #include "runtime/Supervisor.h"
 #include "runtime/Trainer.h"
-#include "ui/CharacterTraining.h"
-#include "ui/LoraEvaluation.h"
-#include "ui/director/DirectorSession.h"
+#include "plugins/characters/training/CharacterTraining.h"
+#include "plugins/characters/training/LoraEvaluation.h"
+#include "plugins/characters/director/DirectorSession.h"
 #include "ui/pages/AiPanel.h"
 #include "ui/pages/GeneratePage.h"
-#include "ui/parts/ExpressionCheck.h"
+#include "plugins/parts/ExpressionCheck.h"
 #include "ui/widgets/CharacterChip.h"
 #include "ui/widgets/Controls.h"
-#include "ui/dialogs/LoraDatasetDialog.h"
+#include "plugins/characters/training/LoraDatasetDialog.h"
 #include "ui/Studio.h"
-#include "ui/assistant/AssistantPanel.h"
-#include "ui/pages/CreatePage.h"
+#include "plugins/BuiltInPlugins.h"
+#include "plugins/characters/assistant/AssistantPanel.h"
+#include "plugins/characters/assistant/DirectorActions.h"
+#include "plugins/characters/CreatePage.h"
 
 #include "ai/GenerationService.h"
 #include <QAction>
@@ -100,7 +102,11 @@ class TestLive : public QObject
 {
     Q_OBJECT
 private slots:
-    void initTestCase() { QStandardPaths::setTestModeEnabled(true); }
+    void initTestCase()
+    {
+        QStandardPaths::setTestModeEnabled(true);
+        plugins::registerBuiltInPlugins();
+    }
     void llmToolCalling();
     void llmPlansShots();
     void comfyTextToImage();
@@ -297,7 +303,7 @@ void TestLive::assistantScenario()
     }
     qInfo().noquote() << "  reply:" << panel.lastReply();
     QVERIFY(!panel.lastReply().isEmpty());
-    const QJsonArray shots = studio.directorActions()->directorState().value(QStringLiteral("shots")).toArray();
+    const QJsonArray shots = directorActions(&studio)->directorState().value(QStringLiteral("shots")).toArray();
     QVERIFY(!shots.isEmpty());
     int images = 0;
     for (const QJsonValue &v : shots) {
@@ -429,7 +435,7 @@ void TestLive::assistantWithReferenceAndCritic()
             qInfo().noquote() << "  result:" << m.text.left(300);
     }
     qInfo().noquote() << "  reply:" << panel.lastReply();
-    const QJsonObject state = studio.directorActions()->directorState();
+    const QJsonObject state = directorActions(&studio)->directorState();
     qInfo().noquote() << "  character:" << QJsonDocument(state.value(QStringLiteral("character")).toObject()).toJson(QJsonDocument::Compact);
     int images = 0;
     for (const QJsonValue &v : state.value(QStringLiteral("shots")).toArray()) {
@@ -873,7 +879,7 @@ void TestLive::managedStudioScenario()
             qInfo().noquote() << "  result:" << m.text.left(300);
     }
     qInfo().noquote() << "  reply:" << panel.lastReply();
-    const QJsonObject state = studio.directorActions()->directorState();
+    const QJsonObject state = directorActions(&studio)->directorState();
     int images = 0;
     for (const QJsonValue &v : state.value(QStringLiteral("shots")).toArray()) {
         const QJsonObject shot = v.toObject();

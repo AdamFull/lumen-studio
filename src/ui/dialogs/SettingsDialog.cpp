@@ -1,5 +1,4 @@
 #include "ui/dialogs/SettingsDialog.h"
-#include "ui/dialogs/CloudTrainingPage.h"
 #include "ui/dialogs/LocalServersPage.h"
 #include "ui/dialogs/LocalSetupDialog.h"
 #include "ui/dialogs/ModelsPage.h"
@@ -17,6 +16,7 @@
 #include "runtime/Supervisor.h"
 #include "ui/Icons.h"
 #include "ui/Studio.h"
+#include "ui/ext/Extension.h"
 #include "ui/Theme.h"
 #include "ui/widgets/Controls.h"
 #include "ui/widgets/ProviderCombo.h"
@@ -367,36 +367,88 @@ SettingsDialog::SettingsDialog(Studio *studio, QWidget *parent)
     resize(1020, 700);
     auto *v = new QVBoxLayout(this);
     m_tabs = new QTabWidget(this);
-    m_tabs->addTab(buildProvidersTab(), Icons::get(QStringLiteral("server")), tr("Providers"));
-    // "&&": a single "&" would turn the next letter into a mnemonic and disappear.
-    m_tabs->addTab(buildRolesTab(), Icons::get(QStringLiteral("chat")), tr("Models & roles").replace(QLatin1Char('&'), QStringLiteral("&&")));
-    m_tabs->addTab(new LocalServersPage(studio, this), Icons::get(QStringLiteral("server")), tr("Local servers"));
-    m_tabs->addTab(new ModelsPage(studio, this), Icons::get(QStringLiteral("layers")), tr("Models"));
-    m_tabs->addTab(new CloudTrainingPage(studio, this), Icons::get(QStringLiteral("cloud")), tr("Cloud training"));
-    m_tabs->addTab(buildGeneralTab(), Icons::get(QStringLiteral("settings")), tr("General"));
-    m_tabs->addTab(new ShortcutsPage(this), Icons::get(QStringLiteral("text")), tr("Shortcuts"));
+    // Core tabs and the tabs of plugins that are on, by order (ext::SettingsTabSpec).
+    struct Tab
+    {
+        int order;
+        QString id;
+        std::function<QWidget *()> create;
+        QString icon;
+        QString label;
+    };
+    QList<Tab> tabs = {
+        {10, QStringLiteral("providers"), [this] { return buildProvidersTab(); }, QStringLiteral("server"), tr("Providers")},
+        // "&&": a single "&" would turn the next letter into a mnemonic and disappear.
+        {20, QStringLiteral("roles"), [this] { return buildRolesTab(); }, QStringLiteral("chat"),
+         tr("Models & roles").replace(QLatin1Char('&'), QStringLiteral("&&"))},
+        {30, QStringLiteral("servers"), [this, studio] { return new LocalServersPage(studio, this); }, QStringLiteral("server"), tr("Local servers")},
+        {40, QStringLiteral("models"), [this, studio] { return new ModelsPage(studio, this); }, QStringLiteral("layers"), tr("Models")},
+        {60, QStringLiteral("general"), [this] { return buildGeneralTab(); }, QStringLiteral("settings"), tr("General")},
+        {70, QStringLiteral("shortcuts"), [this] { return new ShortcutsPage(this); }, QStringLiteral("text"), tr("Shortcuts")},
+        {80, QStringLiteral("plugins"), [this] { return buildPluginsTab(); }, QStringLiteral("parts"), tr("Plugins")},
+    };
+    for (const ext::SettingsTabSpec &spec : ext::Extensions::instance().settingsTabs())
+        tabs.append({spec.order, spec.id, [this, studio, create = spec.create] { return create(studio, this); }, spec.icon, spec.label});
+    std::stable_sort(tabs.begin(), tabs.end(), [](const Tab &a, const Tab &b) { return a.order < b.order; });
+    for (const Tab &tab : tabs)
+        addTab(tab.id, tab.create(), tab.icon, tab.label);
     v->addWidget(m_tabs, 1);
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, this);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::accept);
     v->addWidget(buttons);
 }
 
+void SettingsDialog::addTab(const QString &id, QWidget *page, const QString &icon, const QString &label)
+{
+    m_tabs->addTab(page, Icons::get(icon), label);
+    m_tabIds << id;
+}
+
 void SettingsDialog::showTab(const QString &tab)
 {
-    if (tab == QLatin1String("providers"))
-        m_tabs->setCurrentIndex(0);
-    else if (tab == QLatin1String("roles"))
-        m_tabs->setCurrentIndex(1);
-    else if (tab == QLatin1String("servers"))
-        m_tabs->setCurrentIndex(2);
-    else if (tab == QLatin1String("models"))
-        m_tabs->setCurrentIndex(3);
-    else if (tab == QLatin1String("cloud"))
-        m_tabs->setCurrentIndex(4);
-    else if (tab == QLatin1String("general"))
-        m_tabs->setCurrentIndex(5);
-    else if (tab == QLatin1String("shortcuts"))
-        m_tabs->setCurrentIndex(6);
+    if (const int index = int(m_tabIds.indexOf(tab)); index >= 0)
+        m_tabs->setCurrentIndex(index);
+}
+
+QWidget *SettingsDialog::buildPluginsTab()
+{
+    auto *w = new QWidget;
+    auto *v = new QVBoxLayout(w);
+    v->setContentsMargins(16, 16, 16, 16);
+    v->setSpacing(12);
+    v->addWidget(mutedLabel(tr("Plugins add features to Lumen Studio. Switching one on or off takes effect the next time "
+                               "Lumen Studio starts; what a plugin saved in a project is kept while it is off."),
+                            w));
+    ext::Extensions &registry = ext::Extensions::instance();
+    if (registry.all().isEmpty())
+        v->addWidget(mutedLabel(tr("No plugins are installed."), w));
+    for (const ext::Extension *e : registry.all()) {
+        auto *row = card(w);
+        auto *rv = new QVBoxLayout(row);
+        auto *box = new QCheckBox(e->name(), row);
+        box->setObjectName(QStringLiteral("plugin-%1").arg(e->id()));
+        box->setChecked(registry.isEnabled(e->id()));
+        rv->addWidget(box);
+        rv->addWidget(mutedLabel(e->description(), row));
+        auto *restart = mutedLabel(QString(), row);
+        rv->addWidget(restart);
+        auto sync = [restart, id = e->id()] {
+            const ext::Extensions &r = ext::Extensions::instance();
+            const bool pending = r.isEnabled(id) != r.isActive(id);
+            restart->setText(pending ? (r.isEnabled(id) ? tr("Turns on when Lumen Studio starts again.")
+                                                        : tr("Turns off when Lumen Studio starts again."))
+                                     : QString());
+            restart->setVisible(pending);
+        };
+        sync();
+        connect(box, &QCheckBox::toggled, row, [id = e->id(), sync](bool on) {
+            ext::Extensions::instance().setEnabled(id, on);
+            sync();
+        });
+        v->addWidget(row);
+    }
+    v->addStretch();
+    return w;
 }
 
 QWidget *SettingsDialog::buildProvidersTab()

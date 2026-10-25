@@ -564,8 +564,12 @@ void AiPanel::run()
                 const QJsonObject json = out.info.value(QStringLiteral("openpose")).toObject();
                 if (auto pose = pose::Pose::fromOpenPoseJson(json, nullptr, d->size()); pose && !pose->isEmpty()) {
                     d->setControlPose(*pose);
-                    m_studio->notify(tr("Pose detected - it is now the document's control pose. Open the Poses page to edit it."));
-                    m_studio->editPose(*pose, d->name());
+                    if (m_studio->hasPage(QStringLiteral("poses"))) {
+                        m_studio->notify(tr("Pose detected - it is now the document's control pose. Open the Poses page to edit it."));
+                        m_studio->editPose(*pose, d->name());
+                    } else {
+                        m_studio->notify(tr("Pose detected - it is now the document's control pose."));
+                    }
                 } else if (!out.images.isEmpty()) {
                     addResultLayers(d, {out.images.first()}, tr("Pose map"), {});
                     m_studio->notify(tr("The server returned only a pose image (no keypoints); it was added as a layer."));

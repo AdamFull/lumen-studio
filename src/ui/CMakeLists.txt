@@ -3,9 +3,7 @@ add_library(lumen_ui STATIC
     Icons.h Icons.cpp
     Shortcuts.h Shortcuts.cpp
     Accessibility.h Accessibility.cpp
-    assistant/DirectorActions.h
-    assistant/AssistantTools.h assistant/AssistantTools.cpp
-    assistant/AssistantPanel.h assistant/AssistantPanel.cpp
+    ext/Extension.h ext/Extension.cpp
     Studio.h Studio.cpp
     MainWindow.h MainWindow.cpp
     PageFactory.h PageFactory.cpp
@@ -33,28 +31,23 @@ add_library(lumen_ui STATIC
     dialogs/ModelHubDialog.h dialogs/ModelHubDialog.cpp
     dialogs/LocalSetupDialog.h dialogs/LocalSetupDialog.cpp
     dialogs/CharacterLoraDialog.h dialogs/CharacterLoraDialog.cpp
-    dialogs/CloudTrainingPage.h dialogs/CloudTrainingPage.cpp
-    dialogs/LoraDatasetDialog.h dialogs/LoraDatasetDialog.cpp
-    CharacterTraining.h CharacterTraining.cpp
-    LoraEvaluation.h LoraEvaluation.cpp
     dialogs/PoseEditDialog.h dialogs/PoseEditDialog.cpp
     widgets/ThumbnailCache.h widgets/ThumbnailCache.cpp
     pose/PoseCanvas.h pose/PoseCanvas.cpp
-    director/DirectorSession.h director/DirectorSession.cpp
-    director/ShotCard.h director/ShotCard.cpp
     pages/LibraryPage.h pages/LibraryPage.cpp
     pages/GeneratePage.h pages/GeneratePage.cpp
-    pages/PosePage.h pages/PosePage.cpp
-    pages/CreatePage.h pages/CreatePage.cpp
-    parts/PartTools.h parts/PartTools.cpp
-    parts/PartListPanel.h parts/PartListPanel.cpp
-    parts/PuppetPreview.h parts/PuppetPreview.cpp
-    parts/PartsPage.h parts/PartsPage.cpp
-    parts/ExpressionCheck.h parts/ExpressionCheck.cpp
-    parts/CubismView.h parts/CubismView.cpp
-    parts/CubismPanel.h parts/CubismPanel.cpp
 )
 target_include_directories(lumen_ui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
 target_link_libraries(lumen_ui PUBLIC lumen_ai lumen_runtime lumen_live2d lumen_doc lumen_pose lumen_core
     Qt6::Widgets Qt6::Svg Qt6::OpenGL Qt6::OpenGLWidgets)
 lumen_configure_target(lumen_ui)
+
+# The core never depends on a plugin: plugins link against lumen_ui, not the reverse
+# (src/plugins). Fails the configure step when a core source includes a plugin header.
+get_target_property(LUMEN_UI_SOURCES lumen_ui SOURCES)
+foreach(source IN LISTS LUMEN_UI_SOURCES)
+    file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/${source}" plugin_includes REGEX "#include \"plugins/")
+    if(plugin_includes)
+        message(FATAL_ERROR "src/ui/${source} includes a plugin header (${plugin_includes}); the core must not depend on plugins.")
+    endif()
+endforeach()

@@ -8,6 +8,7 @@
 #include "core/Log.h"
 #include "core/Paths.h"
 #include "core/Settings.h"
+#include "ui/ext/Extension.h"
 
 #include <QDir>
 #include <QJsonArray>
@@ -495,7 +496,7 @@ doc::Document *Studio::openImageAsDocument(const QImage &image, const QString &n
     doc->addLayer(name.isEmpty() ? tr("Image") : name, img::normalized(image), meta);
     doc->undoStack()->clear();
     adoptDocument(doc);
-    showPage(Page::Editor);
+    showPage(pages::Editor);
     return doc;
 }
 
@@ -537,7 +538,7 @@ void Studio::openPsdAsDocument(const QString &path)
             d->undoStack()->clear();
             d->setModified(false);
             adoptDocument(d);
-            showPage(Page::Editor);
+            showPage(pages::Editor);
             if (!imported.warnings.isEmpty())
                 notify(tr("Opened %1 (%2).").arg(name, imported.warnings.join(QStringLiteral("; "))), QStringLiteral("warning"));
         })
@@ -564,7 +565,7 @@ void Studio::openStoredDocument(const QString &documentId, bool show)
         if (d->id() == documentId) {
             setActiveDocument(d);
             if (show)
-                showPage(Page::Editor);
+                showPage(pages::Editor);
             return;
         }
     }
@@ -574,7 +575,7 @@ void Studio::openStoredDocument(const QString &documentId, bool show)
         .then(this, [this, show](std::shared_ptr<doc::LoadedDocument> loaded) {
             adoptLoaded(loaded);
             if (show)
-                showPage(Page::Editor);
+                showPage(pages::Editor);
         })
         .onFailed(this, [this](const std::exception &e) { notify(describeException(e), QStringLiteral("error")); });
 }
@@ -597,6 +598,11 @@ void Studio::closeDocument(doc::Document *doc)
     if (m_active == doc)
         setActiveDocument(m_documents.isEmpty() ? nullptr : m_documents.last());
     emit documentsChanged();
+}
+
+bool Studio::hasPage(const QString &id) const
+{
+    return id == pages::Generate || id == pages::Editor || id == pages::Library || ext::Extensions::instance().hasPage(id);
 }
 
 } // namespace lumen::ui
