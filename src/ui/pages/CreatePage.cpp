@@ -16,6 +16,7 @@
 #include "ui/dialogs/LoraDatasetDialog.h"
 #include "ui/director/ShotCard.h"
 #include "ui/widgets/Controls.h"
+#include "ui/widgets/FlowLayout.h"
 #include "ui/widgets/ProviderCombo.h"
 #include "ui/widgets/ReferenceStrip.h"
 #include "ui/widgets/ThumbnailCache.h"
@@ -176,9 +177,12 @@ CreatePage::CreatePage(Studio *studio, QWidget *parent)
     m_planTitle = new QLabel(tr("Shot plan"), board);
     Theme::setRole(m_planTitle, QStringLiteral("heading"));
     genBar->addWidget(m_planTitle, 1);
-    genBar->addWidget(new QLabel(tr("Generator"), board));
+    // The plan's options wrap under the title on a narrow board (1080p at 150 %).
+    auto *planOptions = new QWidget(board);
+    auto *optionsFlow = new FlowLayout(planOptions);
+    optionsFlow->setContentsMargins(0, 0, 0, 0);
     m_provider = new ProviderCombo(studio->providers(), ai::ProviderKind::Image, board);
-    genBar->addWidget(m_provider);
+    optionsFlow->addGroup({new QLabel(tr("Generator"), board), m_provider});
     connect(m_provider, &ProviderCombo::providerChanged, this, &CreatePage::refreshCharacter); // LoRA support differs
     // A LoRA attached to the session's library character (after training) reaches the session.
     connect(studio->characters(), &doc::CharacterLibrary::changed, this, [this] {
@@ -191,7 +195,7 @@ CreatePage::CreatePage(Studio *studio, QWidget *parent)
     m_variants->setRange(1, 8);
     m_variants->setValue(2);
     m_variants->setSuffix(tr(" per shot"));
-    genBar->addWidget(m_variants);
+    optionsFlow->addWidget(m_variants);
     Settings &settings = Settings::instance();
     m_critic = new QCheckBox(tr("Critic"), board);
     m_critic->setToolTip(tr("A vision model reviews every result against the references and the shot, and retries shots that "
@@ -208,9 +212,7 @@ CreatePage::CreatePage(Studio *studio, QWidget *parent)
     m_criticRetries->setPrefix(tr("retries "));
     m_criticRetries->setToolTip(tr("How often a shot is generated again when no result reaches the minimum score"));
     m_criticRetries->setValue(settings.value(QStringLiteral("director/criticRetries"), 1).toInt());
-    genBar->addWidget(m_critic);
-    genBar->addWidget(m_criticThreshold);
-    genBar->addWidget(m_criticRetries);
+    optionsFlow->addGroup({m_critic, m_criticThreshold, m_criticRetries});
     auto syncCritic = [this] {
         m_criticThreshold->setEnabled(m_critic->isChecked());
         m_criticRetries->setEnabled(m_critic->isChecked());
@@ -227,6 +229,7 @@ CreatePage::CreatePage(Studio *studio, QWidget *parent)
     Theme::setRole(m_generateAll, QStringLiteral("primary"));
     genBar->addWidget(m_generateAll);
     bv->addLayout(genBar);
+    bv->addWidget(planOptions);
 
     auto *shotsScroll = new QScrollArea(board);
     shotsScroll->setWidgetResizable(true);

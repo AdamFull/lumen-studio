@@ -11,6 +11,8 @@
 #include <QKeyEvent>
 #include <QPainter>
 #include <QPainterPath>
+#include <QScrollArea>
+#include <QScrollBar>
 #include <QSlider>
 #include <QTextBlock>
 
@@ -173,6 +175,46 @@ QLabel *sectionLabel(const QString &text, QWidget *parent)
     return l;
 }
 
+// ---- ElidedLabel --------------------------------------------------------------------------------------
+
+ElidedLabel::ElidedLabel(const QString &text, QWidget *parent)
+    : QLabel(parent)
+{
+    setWordWrap(false);
+    setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    setFullText(text);
+}
+
+void ElidedLabel::setFullText(const QString &text)
+{
+    m_full = text;
+    setToolTip(text);
+    updateText();
+    updateGeometry();
+}
+
+QSize ElidedLabel::minimumSizeHint() const
+{
+    return QSize(0, QLabel::minimumSizeHint().height());
+}
+
+QSize ElidedLabel::sizeHint() const
+{
+    const QMargins m = contentsMargins();
+    return QSize(fontMetrics().horizontalAdvance(m_full) + m.left() + m.right() + 2 * margin(), QLabel::sizeHint().height());
+}
+
+void ElidedLabel::resizeEvent(QResizeEvent *e)
+{
+    QLabel::resizeEvent(e);
+    updateText();
+}
+
+void ElidedLabel::updateText()
+{
+    setText(fontMetrics().elidedText(m_full, Qt::ElideRight, contentsRect().width()));
+}
+
 QLabel *mutedLabel(const QString &text, QWidget *parent)
 {
     auto *l = new QLabel(text, parent);
@@ -241,6 +283,30 @@ QFrame *separator(Qt::Orientation orientation, QWidget *parent)
     else
         f->setFixedWidth(1);
     return f;
+}
+
+QScrollArea *verticalScroll(QWidget *content, QWidget *parent)
+{
+    // Grows its minimum width with the content's (plus the scroll bar), never its minimum height.
+    class Area : public QScrollArea
+    {
+    public:
+        using QScrollArea::QScrollArea;
+        QSize minimumSizeHint() const override
+        {
+            const int content = widget() ? widget()->minimumSizeHint().width() : 0;
+            return QSize(content + verticalScrollBar()->sizeHint().width() + 2 * frameWidth(), 60);
+        }
+    };
+    auto *area = new Area(parent);
+    area->setFrameShape(QFrame::NoFrame);
+    area->setWidgetResizable(true);
+    area->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    area->setWidget(content);
+    // The panel background of the content shows through.
+    area->viewport()->setAutoFillBackground(false);
+    content->setAutoFillBackground(false);
+    return area;
 }
 
 } // namespace lumen::ui

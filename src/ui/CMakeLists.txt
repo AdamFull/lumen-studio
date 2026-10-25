@@ -16,6 +16,7 @@ add_library(lumen_ui STATIC
     canvas/TransformTool.h canvas/TransformTool.cpp
     canvas/ContextBar.h canvas/ContextBar.cpp
     widgets/Controls.h widgets/Controls.cpp
+    widgets/FlowLayout.h widgets/FlowLayout.cpp
     widgets/ReferenceStrip.h widgets/ReferenceStrip.cpp
     widgets/CharacterChip.h widgets/CharacterChip.cpp
     widgets/LayersPanel.h widgets/LayersPanel.cpp

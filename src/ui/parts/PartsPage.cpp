@@ -256,8 +256,8 @@ PartsPage::PartsPage(Studio *studio, QWidget *parent)
         }
     }
     hh->addSpacing(12);
-    m_stepHint = mutedLabel(QString(), header);
-    m_stepHint->setWordWrap(false);
+    m_stepHint = new ElidedLabel(QString(), header);
+    m_stepHint->setProperty("role", QStringLiteral("muted"));
     hh->addWidget(m_stepHint, 1);
     root->addWidget(header);
     root->addWidget(separator(Qt::Horizontal, this));
@@ -352,7 +352,7 @@ PartsPage::PartsPage(Studio *studio, QWidget *parent)
     m_overlayMode->addItem(tr("Source only"), 2);
     m_overlayOpacity = new SliderField(tr("Overlay"), 0, 100, 55, 0, QStringLiteral(" %"), status);
     m_overlayOpacity->setCompact(true);
-    m_overlayOpacity->setFixedWidth(190);
+    m_overlayOpacity->setMaximumWidth(240);
     auto *zoomOut = iconButton(QStringLiteral("zoom-out"), tr("Zoom out"), status);
     auto *zoomIn = iconButton(QStringLiteral("zoom-in"), tr("Zoom in"), status);
     auto *fit = iconButton(QStringLiteral("fit"), tr("Fit to window (Ctrl+0)"), status);
@@ -377,10 +377,11 @@ PartsPage::PartsPage(Studio *studio, QWidget *parent)
     m_panels = new QStackedWidget(splitter);
     m_panels->setObjectName(QStringLiteral("Panel"));
     m_panels->setMinimumWidth(320);
-    m_panels->addWidget(buildSourcePanel());
-    m_panels->addWidget(buildMasksPanel());
-    m_panels->addWidget(buildGeneratePanel());
-    m_panels->addWidget(buildExportPanel());
+    // Each step scrolls on its own, so the tallest step does not set the window's minimum height.
+    m_panels->addWidget(verticalScroll(buildSourcePanel(), m_panels));
+    m_panels->addWidget(verticalScroll(buildMasksPanel(), m_panels));
+    m_panels->addWidget(verticalScroll(buildGeneratePanel(), m_panels));
+    m_panels->addWidget(verticalScroll(buildExportPanel(), m_panels));
 
     splitter->addWidget(m_list);
     splitter->addWidget(center);
@@ -1028,7 +1029,7 @@ void PartsPage::setStep(int step)
     if (QAbstractButton *b = m_steps->button(step))
         b->setChecked(true);
     m_panels->setCurrentIndex(step);
-    m_stepHint->setText(stepHint(step));
+    m_stepHint->setFullText(stepHint(step));
     const bool preview = step == ExportStep;
     if (preview)
         showPreviewWidget();

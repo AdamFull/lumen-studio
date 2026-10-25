@@ -11,6 +11,7 @@
 
 class QSlider;
 class QDoubleSpinBox;
+class QScrollArea;
 class QHBoxLayout;
 class QVBoxLayout;
 
@@ -79,6 +80,26 @@ private:
     bool m_enterSubmits = false;
 };
 
+// One line of text that shortens itself with "…" to the width it gets, instead of setting the
+// minimum width of everything around it; the full text is in the tooltip.
+class ElidedLabel : public QLabel
+{
+    Q_OBJECT
+public:
+    explicit ElidedLabel(const QString &text = QString(), QWidget *parent = nullptr);
+    void setFullText(const QString &text);
+    QString fullText() const { return m_full; }
+    QSize minimumSizeHint() const override;
+    QSize sizeHint() const override;
+
+protected:
+    void resizeEvent(QResizeEvent *e) override;
+
+private:
+    void updateText();
+    QString m_full;
+};
+
 // Small helpers to build consistent layouts.
 QLabel *sectionLabel(const QString &text, QWidget *parent = nullptr);
 QLabel *mutedLabel(const QString &text, QWidget *parent = nullptr);
@@ -89,5 +110,8 @@ QToolButton *iconButton(const QString &icon, const QString &tooltip, QWidget *pa
 QString fitLabel(const QString &text, int width, double *pointSize);
 QFrame *card(QWidget *parent = nullptr);
 QFrame *separator(Qt::Orientation orientation, QWidget *parent = nullptr);
+// Puts a side panel's content into a frameless scroll area that scrolls vertically only, so a tall
+// panel does not set the window's minimum height. The area is as wide as the content needs.
+QScrollArea *verticalScroll(QWidget *content, QWidget *parent = nullptr);
 
 } // namespace lumen::ui

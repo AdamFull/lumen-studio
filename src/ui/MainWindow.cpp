@@ -31,6 +31,7 @@
 #include <QLabel>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QScreen>
 #include <QScrollArea>
 #include <QStackedWidget>
 #include <QStatusBar>
@@ -47,7 +48,11 @@ MainWindow::MainWindow(Studio *studio, QWidget *parent)
 {
     setWindowTitle(QStringLiteral("Lumen Studio"));
     setWindowIcon(Icons::get(QStringLiteral("logo")));
-    resize(1500, 920);
+    // 1500×920 where it fits; on a laptop at 125 % or 150 % (1536×864, 1280×720) most of the screen.
+    QSize size(1500, 920);
+    if (const QScreen *screen = QGuiApplication::primaryScreen())
+        size = size.boundedTo(screen->availableGeometry().size() * 0.92);
+    resize(size);
     setMinimumSize(1024, 640);
 
     auto *central = new QWidget(this);

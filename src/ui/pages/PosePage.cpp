@@ -13,6 +13,7 @@
 #include "ui/Theme.h"
 #include "ui/pose/PoseCanvas.h"
 #include "ui/widgets/Controls.h"
+#include "ui/widgets/FlowLayout.h"
 
 #include <QButtonGroup>
 #include <QCheckBox>
@@ -160,9 +161,9 @@ PosePage::PosePage(Studio *studio, QWidget *parent)
     cv->setSpacing(0);
     auto *toolbar = new QWidget(center);
     toolbar->setObjectName(QStringLiteral("Panel"));
-    auto *th = new QHBoxLayout(toolbar);
+    // Wraps onto a second row when the canvas column is narrow (1080p at 150 %).
+    auto *th = new FlowLayout(toolbar);
     th->setContentsMargins(12, 6, 12, 6);
-    th->setSpacing(6);
     m_modes = new QButtonGroup(this);
     const QList<std::tuple<pose::DragMode, QString, QString>> modes = {
         {pose::DragMode::Rotate, tr("Rotate"), tr("Rotate joints around their parent (keeps bone lengths)")},
@@ -170,6 +171,7 @@ PosePage::PosePage(Studio *studio, QWidget *parent)
         {pose::DragMode::Free, tr("Free"), tr("Move single points (Alt)")},
         {pose::DragMode::Translate, tr("Move part"), tr("Move a joint with everything attached to it (Shift)")},
     };
+    QList<QWidget *> modeButtons;
     for (const auto &[mode, label, tip] : modes) {
         auto *b = new QToolButton(toolbar);
         b->setText(label);
@@ -177,35 +179,28 @@ PosePage::PosePage(Studio *studio, QWidget *parent)
         b->setCheckable(true);
         b->setProperty("role", QStringLiteral("chip"));
         m_modes->addButton(b, static_cast<int>(mode));
-        th->addWidget(b);
+        modeButtons << b;
     }
     m_modes->button(static_cast<int>(pose::DragMode::Rotate))->setChecked(true);
-    th->addSpacing(10);
-    th->addWidget(new QLabel(tr("Canvas"), toolbar));
+    th->addGroup(modeButtons);
     m_aspect = new QComboBox(toolbar);
     m_aspect->addItems(kAspects);
-    th->addWidget(m_aspect);
-    th->addSpacing(10);
-    th->addWidget(new QLabel(tr("Person"), toolbar));
+    th->addGroup({new QLabel(tr("Canvas"), toolbar), m_aspect});
     m_people = new QComboBox(toolbar);
-    th->addWidget(m_people);
+    m_people->setSizeAdjustPolicy(QComboBox::AdjustToContents);
     auto *addPerson = iconButton(QStringLiteral("plus"), tr("Add a person"), toolbar);
     auto *removePerson = iconButton(QStringLiteral("trash"), tr("Remove the selected person"), toolbar);
     auto *mirror = iconButton(QStringLiteral("flip"), tr("Mirror the selected person"), toolbar);
-    th->addWidget(addPerson);
-    th->addWidget(removePerson);
-    th->addWidget(mirror);
-    th->addStretch();
+    th->addGroup({new QLabel(tr("Person"), toolbar), m_people, addPerson, removePerson, mirror});
     auto *undo = iconButton(QStringLiteral("undo"), tr("Undo"), toolbar);
     auto *redo = iconButton(QStringLiteral("redo"), tr("Redo"), toolbar);
-    th->addWidget(undo);
-    th->addWidget(redo);
+    th->setAlignment(th->addGroup({undo, redo}), Qt::AlignRight);
     cv->addWidget(toolbar);
     m_canvas = new PoseCanvas(center);
     cv->addWidget(m_canvas, 1);
     auto *bottom = new QWidget(center);
     bottom->setObjectName(QStringLiteral("Panel"));
-    auto *bh = new QHBoxLayout(bottom);
+    auto *bh = new FlowLayout(bottom);
     bh->setContentsMargins(12, 8, 12, 8);
     auto *hands = new QCheckBox(tr("Hands"), bottom);
     hands->setChecked(true);
@@ -215,16 +210,11 @@ PosePage::PosePage(Studio *studio, QWidget *parent)
     underlay->setToolTip(tr("Show a reference image under the skeleton"));
     auto *opacity = new SliderField(tr("Opacity"), 0, 100, 50, 0, QStringLiteral(" %"), bottom);
     opacity->setCompact(true);
-    opacity->setFixedWidth(150);
+    opacity->setMaximumWidth(240);
     auto *detect = new QPushButton(Icons::get(QStringLiteral("target")), tr("Detect…"), bottom);
     detect->setToolTip(tr("Detect the pose of a person in an image"));
-    bh->addWidget(hands);
-    bh->addWidget(face);
-    bh->addSpacing(12);
-    bh->addWidget(underlay);
-    bh->addWidget(opacity);
-    bh->addWidget(detect);
-    bh->addStretch();
+    bh->addGroup({hands, face});
+    bh->addGroup({underlay, opacity, detect});
     auto *more = new QPushButton(Icons::get(QStringLiteral("dots")), tr("File"), bottom);
     auto *fileMenu = new QMenu(more);
     fileMenu->addAction(Icons::get(QStringLiteral("download")), tr("Export pose map (PNG)…"), this, &PosePage::exportPng);
@@ -235,9 +225,7 @@ PosePage::PosePage(Studio *studio, QWidget *parent)
     toDoc->setToolTip(tr("Use as the control pose of the active editor document"));
     auto *toGen = new QPushButton(Icons::get(QStringLiteral("sparkles")), tr("Use in Generate"), bottom);
     Theme::setRole(toGen, QStringLiteral("primary"));
-    bh->addWidget(more);
-    bh->addWidget(toDoc);
-    bh->addWidget(toGen);
+    bh->setAlignment(bh->addGroup({more, toDoc, toGen}), Qt::AlignRight);
     cv->addWidget(bottom);
 
     // ---- rig column ----

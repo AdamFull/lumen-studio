@@ -40,6 +40,7 @@ class CanvasView;
 class CharacterChip;
 class CubismPanel;
 class CubismView;
+class ElidedLabel;
 class EditorState;
 class PartEditContext;
 class PartCard;
@@ -142,7 +143,7 @@ private:
     // Header.
     QComboBox *m_sessions;
     QButtonGroup *m_steps;
-    QLabel *m_stepHint;
+    ElidedLabel *m_stepHint;
     // Center.
     QStackedWidget *m_center;
     CanvasView *m_canvas;

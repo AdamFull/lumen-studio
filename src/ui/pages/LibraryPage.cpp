@@ -7,6 +7,7 @@
 #include "ui/Studio.h"
 #include "ui/Theme.h"
 #include "ui/widgets/Controls.h"
+#include "ui/widgets/FlowLayout.h"
 #include "ui/widgets/ReferenceStrip.h"
 #include "ui/widgets/ThumbnailCache.h"
 
@@ -284,13 +285,11 @@ LibraryPage::LibraryPage(Studio *studio, QWidget *parent)
     // Toolbar.
     auto *bar = new QWidget(this);
     bar->setObjectName(QStringLiteral("Panel"));
-    auto *bh = new QHBoxLayout(bar);
+    auto *bh = new FlowLayout(bar);
     bh->setContentsMargins(16, 10, 16, 10);
-    bh->setSpacing(6);
     auto *title = new QLabel(tr("Library"), bar);
     Theme::setRole(title, QStringLiteral("title"));
     bh->addWidget(title);
-    bh->addSpacing(14);
     m_kinds = new QButtonGroup(this);
     const QList<QPair<QString, int>> kinds = {
         {tr("All"), kAllFilter},
@@ -312,23 +311,19 @@ LibraryPage::LibraryPage(Studio *studio, QWidget *parent)
         bh->addWidget(chip);
     }
     m_kinds->button(kAllFilter)->setChecked(true);
-    bh->addSpacing(8);
     m_favorites = iconButton(QStringLiteral("star"), tr("Favourites only"), bar, true);
     bh->addWidget(m_favorites);
-    bh->addStretch();
     m_search = new QLineEdit(bar);
     m_search->setPlaceholderText(tr("Search prompts, names, tags…"));
     m_search->setClearButtonEnabled(true);
     m_search->setFixedWidth(260);
-    bh->addWidget(m_search);
     m_size = new QSlider(Qt::Horizontal, bar);
     m_size->setRange(100, 360);
     m_size->setValue(s_tileSize);
     m_size->setFixedWidth(100);
     m_size->setToolTip(tr("Thumbnail size"));
-    bh->addWidget(m_size);
     auto *import = new QPushButton(Icons::get(QStringLiteral("upload")), tr("Import"), bar);
-    bh->addWidget(import);
+    bh->setAlignment(bh->addGroup({m_search, m_size, import}), Qt::AlignRight);
     root->addWidget(bar);
     root->addWidget(separator(Qt::Horizontal, this));
 
@@ -374,48 +369,48 @@ LibraryPage::LibraryPage(Studio *studio, QWidget *parent)
     m_center->addWidget(m_docsView);
 
     // Inspector.
-    m_inspector = new QWidget(splitter);
-    m_inspector->setObjectName(QStringLiteral("Panel"));
-    m_inspector->setMinimumWidth(320);
-    auto *iv = new QVBoxLayout(m_inspector);
+    // Inspector: scrolls when the window is too short for the preview and every field.
+    auto *inspector = new QWidget;
+    inspector->setMinimumWidth(300);
+    auto *iv = new QVBoxLayout(inspector);
     iv->setContentsMargins(14, 14, 14, 14);
     iv->setSpacing(10);
-    m_preview = new QLabel(m_inspector);
+    m_preview = new QLabel(inspector);
     m_preview->setAlignment(Qt::AlignCenter);
-    m_preview->setMinimumHeight(260);
+    m_preview->setMinimumHeight(200);
     m_preview->setStyleSheet(QStringLiteral("background: %1; border-radius: 10px;").arg(Theme::palette().canvas.name()));
     iv->addWidget(m_preview);
     auto *nameRow = new QHBoxLayout;
-    m_name = new QLineEdit(m_inspector);
+    m_name = new QLineEdit(inspector);
     m_name->setAccessibleName(tr("Image name"));
     m_name->setPlaceholderText(tr("Name"));
-    m_star = iconButton(QStringLiteral("star"), tr("Favourite"), m_inspector, true);
+    m_star = iconButton(QStringLiteral("star"), tr("Favourite"), inspector, true);
     nameRow->addWidget(m_name, 1);
     nameRow->addWidget(m_star);
     iv->addLayout(nameRow);
-    m_meta = mutedLabel(QString(), m_inspector);
+    m_meta = mutedLabel(QString(), inspector);
     m_meta->setTextInteractionFlags(Qt::TextSelectableByMouse);
     iv->addWidget(m_meta);
     iv->addWidget(sectionLabel(tr("Prompt")));
-    m_prompt = new QPlainTextEdit(m_inspector);
+    m_prompt = new QPlainTextEdit(inspector);
     m_prompt->setReadOnly(true);
     m_prompt->setAccessibleName(tr("Prompt"));
     m_prompt->setMaximumHeight(110);
     iv->addWidget(m_prompt);
     iv->addWidget(sectionLabel(tr("Parameters")));
-    m_params = new QPlainTextEdit(m_inspector);
+    m_params = new QPlainTextEdit(inspector);
     m_params->setReadOnly(true);
     m_params->setAccessibleName(tr("Parameters"));
     iv->addWidget(m_params, 1);
     auto *actions = new QGridLayout;
     actions->setSpacing(6);
-    auto *open = new QPushButton(Icons::get(QStringLiteral("brush")), tr("Open in editor"), m_inspector);
+    auto *open = new QPushButton(Icons::get(QStringLiteral("brush")), tr("Open in editor"), inspector);
     Theme::setRole(open, QStringLiteral("primary"));
-    auto *asRef = new QPushButton(Icons::get(QStringLiteral("link")), tr("Use as reference"), m_inspector);
-    auto *usePrompt = new QPushButton(Icons::get(QStringLiteral("text")), tr("Reuse prompt"), m_inspector);
-    auto *rerun = new QPushButton(Icons::get(QStringLiteral("refresh")), tr("Re-run"), m_inspector);
-    auto *exportBtn = new QPushButton(Icons::get(QStringLiteral("download")), tr("Export…"), m_inspector);
-    auto *del = new QPushButton(Icons::get(QStringLiteral("trash")), tr("Delete"), m_inspector);
+    auto *asRef = new QPushButton(Icons::get(QStringLiteral("link")), tr("Use as reference"), inspector);
+    auto *usePrompt = new QPushButton(Icons::get(QStringLiteral("text")), tr("Reuse prompt"), inspector);
+    auto *rerun = new QPushButton(Icons::get(QStringLiteral("refresh")), tr("Re-run"), inspector);
+    auto *exportBtn = new QPushButton(Icons::get(QStringLiteral("download")), tr("Export…"), inspector);
+    auto *del = new QPushButton(Icons::get(QStringLiteral("trash")), tr("Delete"), inspector);
     Theme::setRole(del, QStringLiteral("danger"));
     actions->addWidget(open, 0, 0, 1, 2);
     actions->addWidget(asRef, 1, 0);
@@ -425,6 +420,8 @@ LibraryPage::LibraryPage(Studio *studio, QWidget *parent)
     actions->addWidget(del, 3, 0, 1, 2);
     iv->addLayout(actions);
     splitter->addWidget(m_center);
+    m_inspector = verticalScroll(inspector, splitter);
+    m_inspector->setObjectName(QStringLiteral("Panel"));
     splitter->addWidget(m_inspector);
     splitter->setStretchFactor(0, 1);
     splitter->setSizes({1000, 360});

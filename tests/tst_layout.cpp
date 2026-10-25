@@ -114,7 +114,8 @@ bool insideScrollViewport(const QWidget *w)
 
 bool ignored(const QWidget *w)
 {
-    return qobject_cast<const QScrollBar *>(w) || qobject_cast<const QSplitterHandle *>(w)
+    // An ElidedLabel shortens its text on purpose (the full text is in its tooltip).
+    return qobject_cast<const QScrollBar *>(w) || qobject_cast<const QSplitterHandle *>(w) || w->inherits("lumen::ui::ElidedLabel")
            || w->objectName().startsWith(QLatin1String("qt_")) || w->isWindow();
 }
 
@@ -316,6 +317,7 @@ private slots:
     void initTestCase();
     void cleanupTestCase();
     void mainWindow();
+    void mainWindowFitsSmallScreen();
     void settingsDialog();
     void dialogs();
 
@@ -399,6 +401,41 @@ void TestLayout::mainWindow()
             Auditor::settle();
         }
     }
+}
+
+// Not report-only: every page fits a 1080p screen at 150 % (1280×720), with the queue and the
+// assistant open too. The page stack's minimum is that of its largest page, shown or not.
+void TestLayout::mainWindowFitsSmallScreen()
+{
+    Studio studio;
+    studio.openImageAsDocument(sampleImage(), QStringLiteral("Sample"));
+    MainWindow window(&studio);
+    window.resize(1280, 720);
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    const QSize screen(1280, 720);
+    auto check = [&](const QString &what) {
+        Auditor::settle();
+        const QSize need = window.minimumSizeHint();
+        QVERIFY2(need.width() <= screen.width() && need.height() <= screen.height(),
+                 qPrintable(QStringLiteral("%1 needs %2×%3").arg(what).arg(need.width()).arg(need.height())));
+    };
+    for (Page page : {Page::Create, Page::Generate, Page::Editor, Page::Poses, Page::Parts, Page::Library}) {
+        window.showPage(page);
+        check(QStringLiteral("page %1").arg(static_cast<int>(page)));
+    }
+    window.showPage(Page::Editor);
+    for (const QString &panel : {QStringLiteral("Queue"), QStringLiteral("Assistant")}) {
+        QAbstractButton *b = railButton(&window, panel);
+        QVERIFY(b);
+        b->click();
+        check(panel);
+        b->click();
+    }
+    // A new window takes at most the screen it opens on.
+    MainWindow fresh(&studio);
+    const QSize available = QGuiApplication::primaryScreen()->availableGeometry().size();
+    QVERIFY(fresh.width() <= available.width() && fresh.height() <= available.height());
 }
 
 void TestLayout::settingsDialog()

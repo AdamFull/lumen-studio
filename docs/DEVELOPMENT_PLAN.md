@@ -2102,6 +2102,14 @@ Root cause first; most findings follow from it.
    823 px height. On a laptop, the window is larger than the screen or every page is squeezed.
    Fix: each page fits 1193×658 (the content area at 1280×720); toolbars wrap or move items into
    an overflow menu; the stack must not take the minimum of hidden pages.
+   **Fixed** (October 2026): `FlowLayout` (wrapping toolbars; groups that wrap as a whole, and
+   right-aligned groups) for the Poses toolbars, the Library header and the Create page's plan
+   options; `verticalScroll` for the Library inspector and the four Parts steps; `ElidedLabel` for
+   the Parts step hint; the default window size is bounded by the screen. The window's minimum is
+   now within 1280×720 on every page, with the queue and the assistant open
+   (`tst_layout mainWindowFitsSmallScreen`, strict). This also fixed items 2, 4, 5 and 7, and item 3
+   where it appeared (the Poses and Parts opacity fields had fixed widths below their minimum).
+   The audit's findings went from 100 to 7: item 6 and item 8.
 2. **Poses page** (at 1280×720): the top toolbar's mode buttons show only "…", and the canvas
    ratio and person combo boxes have no room for text. The bottom bar overlaps itself ("Underlay…",
    the opacity slider over "Detect…", "To document" and "Use in Generate" cut).
