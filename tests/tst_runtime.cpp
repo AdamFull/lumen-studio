@@ -10,6 +10,7 @@
 #include "runtime/LoraTraining.h"
 #include "runtime/ModelFormats.h"
 #include "runtime/ModelHub.h"
+#include "runtime/ModelPresets.h"
 #include "runtime/ModelLibrary.h"
 #include "runtime/CloudTraining.h"
 #include "runtime/PodAgent.h"
@@ -237,6 +238,8 @@ private slots:
     void hubDownloads();
     void hubCompanions();
     void animaCompanions();
+    void modelPresets();
+    void presetProfiles();
     void trainerRecipes();
     void trainerAdopt();
     void trainerInstall();
@@ -783,6 +786,15 @@ void TestRuntime::supervisorCrashAndFailures()
     QVERIFY(fx.supervisor.log(flaky.id).join(QLatin1Char('\n')).contains(QLatin1String("restarting")));
     fx.supervisor.stop(flaky.id);
     QTRY_COMPARE_WITH_TIMEOUT(fx.supervisor.state(flaky.id), ServerState::Stopped, 10000);
+
+    // A profile the preflight check refuses: its message instead of a start.
+    ServerProfile refused = fx.profile(QString());
+    fx.supervisor.preflight = [&refused](const ServerProfile &p, const QString &) {
+        return p.id == refused.id ? QStringLiteral("The model is in the wrong slot.") : QString();
+    };
+    QCOMPARE(await(fx.supervisor.start(refused.id)), QStringLiteral("The model is in the wrong slot."));
+    QCOMPARE(fx.supervisor.state(refused.id), ServerState::Failed);
+    fx.supervisor.preflight = nullptr;
 
     // Missing model: refused before starting anything.
     ServerProfile broken = fx.profile(QString());
@@ -2925,6 +2937,312 @@ void TestRuntime::cloudTraining()
     QCOMPARE(leftovers.result().size(), 2);
     QCOMPARE(leftovers.result()[0].id, QStringLiteral("a"));
     QCOMPARE(leftovers.result()[1].id, QStringLiteral("b"));
+}
+
+namespace {
+
+// Headers of the model families the presets know, as small safetensors files.
+QByteArray flux2Klein(int textWidth)
+{
+    return makeSafetensors({{QStringLiteral("img_in.weight"), {3072, 128}},
+                            {QStringLiteral("txt_in.weight"), {3072, textWidth}},
+                            {QStringLiteral("double_stream_modulation_img.lin.weight"), {18432, 3072}},
+                            {QStringLiteral("double_blocks.0.img_attn.qkv.weight"), {9216, 3072}},
+                            {QStringLiteral("single_blocks.0.linear1.weight"), {27648, 3072}}});
+}
+
+QByteArray flux1(bool dev)
+{
+    QList<QPair<QString, QList<int>>> t = {{QStringLiteral("img_in.weight"), {3072, 64}},
+                                           {QStringLiteral("txt_in.weight"), {3072, 4096}},
+                                           {QStringLiteral("double_blocks.0.img_attn.qkv.weight"), {9216, 3072}}};
+    if (dev)
+        t.append({QStringLiteral("guidance_in.in_layer.weight"), {3072, 256}});
+    return makeSafetensors(t);
+}
+
+QByteArray vae(int channels)
+{
+    return makeSafetensors({{QStringLiteral("encoder.down_blocks.0.resnets.0.conv1.weight"), {128, 128, 3, 3}},
+                            {QStringLiteral("decoder.conv_in.weight"), {512, channels, 3, 3}},
+                            {QStringLiteral("decoder.up_blocks.0.resnets.0.conv1.weight"), {512, 512, 3, 3}}});
+}
+
+QByteArray qwen3(int width)
+{
+    return makeSafetensors({{QStringLiteral("model.embed_tokens.weight"), {151936, width}}, {QStringLiteral("model.layers.0.self_attn.q_norm.weight"), {128}}});
+}
+
+QByteArray clip(int width)
+{
+    return makeSafetensors({{QStringLiteral("text_model.embeddings.token_embedding.weight"), {49408, width}},
+                            {QStringLiteral("text_model.encoder.layers.0.mlp.fc1.weight"), {width * 4, width}}});
+}
+
+QByteArray t5()
+{
+    return makeSafetensors({{QStringLiteral("encoder.block.0.layer.0.SelfAttention.q.weight"), {4096, 4096}}, {QStringLiteral("shared.weight"), {32128, 4096}}});
+}
+
+QByteArray sdxlCheckpoint()
+{
+    return makeSafetensors({{QStringLiteral("model.diffusion_model.input_blocks.0.0.weight"), {320, 4, 3, 3}},
+                            {QStringLiteral("model.diffusion_model.label_emb.0.0.weight"), {1280, 2816}},
+                            {QStringLiteral("conditioner.embedders.1.model.ln_final.weight"), {1280}}});
+}
+
+QByteArray sdxlControlNet()
+{
+    return makeSafetensors({{QStringLiteral("control_model.input_blocks.0.0.weight"), {320, 4, 3, 3}},
+                            {QStringLiteral("control_model.label_emb.0.0.weight"), {1280, 2816}},
+                            {QStringLiteral("control_model.input_hint_block.0.weight"), {16, 3, 3, 3}}});
+}
+
+QByteArray sdxlIpAdapter()
+{
+    return makeSafetensors({{QStringLiteral("image_proj.proj.weight"), {8192, 1024}}, {QStringLiteral("ip_adapter.1.to_k_ip.weight"), {640, 2048}}});
+}
+
+QByteArray anima()
+{
+    return makeSafetensors({{QStringLiteral("net.blocks.0.self_attn.q_proj.weight"), {2048, 2048}},
+                            {QStringLiteral("net.llm_adapter.out_proj.weight"), {1024, 1024}}});
+}
+
+QStringList messages(const QList<ProfileProblem> &problems)
+{
+    QStringList out;
+    for (const ProfileProblem &p : problems)
+        out << QStringLiteral("%1: %2").arg(p.option, p.message);
+    return out;
+}
+
+} // namespace
+
+// The bundled presets load, every file is pinned, and model headers pick the right preset.
+void TestRuntime::modelPresets()
+{
+    // Every family file parses without a problem.
+    QDirIterator it(QStringLiteral(":/presets/models"), {QStringLiteral("*.json")}, QDir::Files);
+    int files = 0;
+    while (it.hasNext()) {
+        QFile f(it.next());
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        QString error;
+        QVERIFY2(!parseModelPresets(f.readAll(), QFileInfo(f.fileName()).completeBaseName(), &error).isEmpty() && error.isEmpty(),
+                 qPrintable(f.fileName() + QStringLiteral(": ") + error));
+        ++files;
+    }
+    QCOMPARE(files, 5);
+    const QList<ModelPreset> &presets = lumen::runtime::modelPresets();
+    QStringList ids;
+    for (const ModelPreset &preset : presets) {
+        QVERIFY2(!ids.contains(preset.id), qPrintable(preset.id));
+        ids << preset.id;
+        QVERIFY(preset.docs.toString().startsWith(QLatin1String("https://github.com/leejet/stable-diffusion.cpp/blob/")));
+        for (const PresetSlot &slot : preset.components) {
+            const HubFile f = slot.hubFile();
+            QVERIFY2(f.url.toString().startsWith(QStringLiteral("https://huggingface.co/%1/resolve/%2/").arg(slot.file.repo, slot.file.revision)),
+                     qPrintable(f.url.toString()));
+            QCOMPARE(f.sha256.size(), 64);
+            QVERIFY(f.size > 0);
+            QVERIFY(f.required);
+        }
+    }
+    for (const QString &id : {QStringLiteral("flux2-klein-4b"), QStringLiteral("flux2-klein-base-4b"), QStringLiteral("flux2-klein-9b"),
+                              QStringLiteral("flux1-dev"), QStringLiteral("flux1-schnell"), QStringLiteral("flux1-kontext-dev"),
+                              QStringLiteral("qwen-image-edit"), QStringLiteral("anima"), QStringLiteral("illustrious"), QStringLiteral("sdxl"),
+                              QStringLiteral("sd15")})
+        QVERIFY2(ids.contains(id), qPrintable(id));
+
+    // A broken file names its problem.
+    QString error;
+    QVERIFY(parseModelPresets(R"({"version": 1, "files": {"x": {"repo": "a/b"}}, "presets": []})", QStringLiteral("x"), &error).isEmpty());
+    QVERIFY2(error.contains(QLatin1String("revision")), qPrintable(error));
+
+    auto inspect = [this](const QString &name, const QByteArray &bytes) {
+        const QString path = m_tmp.filePath(QStringLiteral("presets/") + name);
+        writeFile(path, bytes);
+        return std::pair{inspectModel(path), path};
+    };
+    auto presetOf = [&](const QString &name, const QByteArray &bytes) {
+        const auto [info, path] = inspect(name, bytes);
+        const ModelPreset *p = presetFor(info, path);
+        return p ? p->id : QString();
+    };
+
+    // FLUX.2: 128 input channels; the text width tells klein 4B from 9B.
+    auto [klein, kleinPath] = inspect(QStringLiteral("flux-2-klein-4b-fp8.safetensors"), flux2Klein(7680));
+    QCOMPARE(klein.kind, ModelKind::DiffusionModel);
+    QCOMPARE(klein.family, QStringLiteral("FLUX.2"));
+    QCOMPARE(klein.variant, QStringLiteral("Klein 4B"));
+    QCOMPARE(presetOf(QStringLiteral("flux-2-klein-4b-fp8.safetensors"), flux2Klein(7680)), QStringLiteral("flux2-klein-4b"));
+    QCOMPARE(presetOf(QStringLiteral("flux-2-klein-base-4b.safetensors"), flux2Klein(7680)), QStringLiteral("flux2-klein-base-4b"));
+    QCOMPARE(presetOf(QStringLiteral("flux-2-klein-9b.safetensors"), flux2Klein(12288)), QStringLiteral("flux2-klein-9b"));
+    // The same from a GGUF file, whose shapes are stored innermost first.
+    auto [gguf, ggufPath] = inspect(QStringLiteral("unslothFLUX2Klein4BGGUF_q80.gguf"),
+                                    makeGguf(QString(), 8,
+                                             {{QStringLiteral("img_in.weight"), {128, 3072}},
+                                              {QStringLiteral("txt_in.weight"), {7680, 3072}},
+                                              {QStringLiteral("double_blocks.0.img_attn.qkv.weight"), {3072, 9216}}},
+                                             false));
+    QCOMPARE(gguf.family, QStringLiteral("FLUX.2"));
+    QCOMPARE(gguf.variant, QStringLiteral("Klein 4B"));
+    QCOMPARE(presetFor(gguf, ggufPath)->id, QStringLiteral("flux2-klein-4b"));
+    const ModelPreset *kleinPreset = presetFor(klein, kleinPath);
+    QCOMPARE(kleinPreset->cfg, 1.0);
+    QCOMPARE(kleinPreset->steps, 4);
+    QVERIFY(kleinPreset->edit);
+    QVERIFY(!kleinPreset->negativePrompt);
+    QVERIFY(kleinPreset->controlNetFamilies.isEmpty());
+
+    // FLUX.1: dev has a guidance embedding, schnell has not; Kontext by its name.
+    QCOMPARE(inspect(QStringLiteral("flux1-dev.safetensors"), flux1(true)).first.variant, QStringLiteral("Dev"));
+    QCOMPARE(presetOf(QStringLiteral("flux1-dev.safetensors"), flux1(true)), QStringLiteral("flux1-dev"));
+    QCOMPARE(presetOf(QStringLiteral("flux1-schnell.safetensors"), flux1(false)), QStringLiteral("flux1-schnell"));
+    QCOMPARE(presetOf(QStringLiteral("flux1-kontext-dev.safetensors"), flux1(true)), QStringLiteral("flux1-kontext-dev"));
+    // Text encoders: CLIP-L and CLIP-G by width.
+    QCOMPARE(inspect(QStringLiteral("clip_l.safetensors"), clip(768)).first.variant, QStringLiteral("CLIP-L"));
+    QCOMPARE(inspect(QStringLiteral("clip_g.safetensors"), clip(1280)).first.variant, QStringLiteral("CLIP-G"));
+    // SDXL fine-tunes keep their name hints; plain files are SDXL.
+    QCOMPARE(presetOf(QStringLiteral("waiIllustriousSDXL_v170.safetensors"), sdxlCheckpoint()), QStringLiteral("illustrious"));
+    QCOMPARE(presetOf(QStringLiteral("juggernautXL.safetensors"), sdxlCheckpoint()), QStringLiteral("sdxl"));
+    QCOMPARE(presetOf(QStringLiteral("miaomiao3DHarem_animaLH3D10.safetensors"), anima()), QStringLiteral("anima"));
+}
+
+// The two failed starts of a real session (plan §17.1), and what presets make of them.
+void TestRuntime::presetProfiles()
+{
+    const QByteArray pad(2 * 1024 * 1024, '\0'); // the scan skips files under 1 MB
+    QTemporaryDir comfy;
+    auto put = [&](const QString &rel, const QByteArray &bytes) {
+        const QString path = QDir::cleanPath(comfy.filePath(rel));
+        writeFile(path, bytes + pad);
+        return path;
+    };
+    // A ComfyUI folder as the user had it: FLUX.2 klein under checkpoints, its VAE and both Qwen3s.
+    const QString klein = put(QStringLiteral("checkpoints/flux-2-klein-4b-fp8.safetensors"), flux2Klein(7680));
+    const QString flux2Vae = put(QStringLiteral("vae/flux2-vae.safetensors"), vae(32));
+    const QString qwen4b = put(QStringLiteral("text_encoders/qwen_3_4b.safetensors"), qwen3(2560));
+    const QString qwen8b = put(QStringLiteral("text_encoders/qwen_3_8b_fp8mixed.safetensors"), qwen3(4096));
+    const QString animaModel = put(QStringLiteral("checkpoints/miaomiao3DHarem_animaLH3D10.safetensors"), anima());
+    const QString controlNet = put(QStringLiteral("controlnet/xinsir-controlnet-openpose-sdxl-1.0.safetensors"), sdxlControlNet());
+    const QString ipAdapter = put(QStringLiteral("ipadapter/ip-adapter_sdxl_vit-h.safetensors"), sdxlIpAdapter());
+    const QString clipVision = put(QStringLiteral("clip_vision/CLIP-ViT-H-14.safetensors"),
+                                   makeSafetensors({{QStringLiteral("vision_model.encoder.layers.0.mlp.fc1.weight"), {5120, 1280}}}));
+    const QString wai = put(QStringLiteral("checkpoints/waiIllustriousSDXL_v170.safetensors"), sdxlCheckpoint());
+    const QString fluxDev = put(QStringLiteral("diffusion_models/flux1-dev.safetensors"), flux1(true));
+    const QString clipL = put(QStringLiteral("clip/clip_l.safetensors"), clip(768));
+    put(QStringLiteral("clip/clip_g.safetensors"), clip(1280));
+    const QString t5xxl = put(QStringLiteral("text_encoders/t5xxl_fp8_e4m3fn.safetensors"), t5());
+
+    net::HttpClient http;
+    QTemporaryDir data;
+    ModelLibrary lib(&http);
+    lib.setDataDir(data.path());
+    lib.load();
+    QSignalSpy scanned(&lib, &ModelLibrary::scanFinished);
+    QVERIFY(lib.addRoot(comfy.path()));
+    QTRY_VERIFY_WITH_TIMEOUT(scanned.size() >= 1 && !lib.isScanning(), 20000);
+    auto native = [](const QString &path) { return QDir::toNativeSeparators(path); };
+
+    // 1. FLUX.2 klein chosen as the checkpoint: refused with what to do, not "exited (code 1)".
+    ServerProfile failed;
+    failed.options = {{QStringLiteral("model"), native(klein)}};
+    QStringList problems = messages(checkSdProfile(&lib, failed));
+    QCOMPARE(problems.size(), 1);
+    QVERIFY2(problems.first().startsWith(QLatin1String("model: flux-2-klein-4b-fp8.safetensors is a diffusion model (FLUX.2 Klein 4B)")),
+             qPrintable(problems.first()));
+    QVERIFY(problems.first().contains(QLatin1String("Diffusion model")));
+    // Choosing it through the preset puts it in its slot with its components: the 4B encoder, not the 8B.
+    QVariantMap options = modelServerOptions(&lib, klein, VramTier::Small);
+    QCOMPARE(options.value(QStringLiteral("diffusion_model")).toString(), native(klein));
+    QCOMPARE(options.value(QStringLiteral("model")).toString(), QString());
+    QCOMPARE(options.value(QStringLiteral("vae")).toString(), native(flux2Vae));
+    QCOMPARE(options.value(QStringLiteral("llm")).toString(), native(qwen4b));
+    ServerProfile fixed;
+    fixed.port = 7861;
+    for (auto it = options.begin(); it != options.end(); ++it) {
+        if (!it.value().toString().isEmpty() || it.value().typeId() != QMetaType::QString)
+            fixed.options.insert(it.key(), it.value());
+    }
+    QVERIFY2(checkSdProfile(&lib, fixed).isEmpty(), qPrintable(messages(checkSdProfile(&lib, fixed)).join(QLatin1Char('\n'))));
+    InstalledRuntime rt;
+    rt.kind = QStringLiteral("sd.cpp");
+    rt.executable = m_tmp.filePath(QStringLiteral("sd-server.exe"));
+    const LaunchCommand cmd = buildLaunch(fixed, rt);
+    QVERIFY2(cmd.error.isEmpty(), qPrintable(cmd.error));
+    QVERIFY(!cmd.arguments.contains(QStringLiteral("-m")));
+    QCOMPARE(cmd.arguments.value(cmd.arguments.indexOf(QStringLiteral("--diffusion-model")) + 1), native(klein));
+    QCOMPARE(cmd.arguments.value(cmd.arguments.indexOf(QStringLiteral("--vae")) + 1), native(flux2Vae));
+    QCOMPARE(cmd.arguments.value(cmd.arguments.indexOf(QStringLiteral("--llm")) + 1), native(qwen4b));
+    // The wrong encoder is named, with the one it needs.
+    fixed.options.insert(QStringLiteral("llm"), native(qwen8b));
+    problems = messages(checkSdProfile(&lib, fixed));
+    QCOMPARE(problems.size(), 1);
+    QVERIFY2(problems.first().startsWith(QLatin1String("llm: qwen_3_8b_fp8mixed.safetensors")) && problems.first().contains(QLatin1String("Qwen3 4B")),
+             qPrintable(problems.first()));
+    // No encoder at all: what to get and how big it is.
+    fixed.options.remove(QStringLiteral("llm"));
+    problems = messages(checkSdProfile(&lib, fixed));
+    QCOMPARE(problems.size(), 1);
+    QVERIFY2(problems.first().contains(QLatin1String("qwen_3_4b.safetensors")) && problems.first().contains(QLatin1String("GB")), qPrintable(problems.first()));
+
+    // 2. Anima with an SDXL ControlNet and IP-Adapter: each named; none are offered for Anima or FLUX.
+    ServerProfile animaProfile;
+    animaProfile.options = {{QStringLiteral("model"), native(animaModel)},
+                            {QStringLiteral("control_net"), native(controlNet)},
+                            {QStringLiteral("ip_adapter"), native(ipAdapter)},
+                            {QStringLiteral("clip_vision"), native(clipVision)}};
+    problems = messages(checkSdProfile(&lib, animaProfile));
+    // The slot (whose message asks for the VAE and encoder too), the ControlNet and the IP-Adapter.
+    QVERIFY2(problems.size() == 3, qPrintable(problems.join(QLatin1Char('\n'))));
+    QVERIFY(problems.first().startsWith(QLatin1String("model: ")));
+    QVERIFY(std::any_of(problems.cbegin(), problems.cend(), [](const QString &m) {
+        return m.startsWith(QLatin1String("control_net: xinsir-controlnet-openpose-sdxl-1.0.safetensors is for SDXL models"))
+               && m.contains(QLatin1String("Remove it"));
+    }));
+    QVERIFY(std::any_of(problems.cbegin(), problems.cend(), [](const QString &m) { return m.startsWith(QLatin1String("ip_adapter: ")); }));
+    const ModelPreset *animaPreset = presetFor(*modelInfoOf(&lib, animaModel), animaModel);
+    QVERIFY(!addonFits(*animaPreset, *modelInfoOf(&lib, controlNet)));
+    QVERIFY(!addonFits(*presetFor(*modelInfoOf(&lib, klein), klein), *modelInfoOf(&lib, controlNet)));
+    // The same ControlNet and IP-Adapter fit an SDXL checkpoint.
+    ServerProfile sdxl;
+    sdxl.options = {{QStringLiteral("model"), native(wai)},
+                    {QStringLiteral("control_net"), native(controlNet)},
+                    {QStringLiteral("ip_adapter"), native(ipAdapter)},
+                    {QStringLiteral("clip_vision"), native(clipVision)}};
+    QVERIFY2(checkSdProfile(&lib, sdxl).isEmpty(), qPrintable(messages(checkSdProfile(&lib, sdxl)).join(QLatin1Char('\n'))));
+    QVERIFY(addonFits(*presetFor(*modelInfoOf(&lib, wai), wai), *modelInfoOf(&lib, controlNet)));
+    // A checkpoint needs no components.
+    options = modelServerOptions(&lib, wai);
+    QCOMPARE(options, (QVariantMap{{QStringLiteral("model"), native(wai)}, {QStringLiteral("diffusion_model"), QString()}}));
+
+    // 3. FLUX.1 dev gets CLIP-L (not CLIP-G) and T5-XXL; on 8 GB, q4_K weights and encoders on the CPU.
+    options = modelServerOptions(&lib, fluxDev, VramTier::Small);
+    QCOMPARE(options.value(QStringLiteral("clip_l")).toString(), native(clipL));
+    QCOMPARE(options.value(QStringLiteral("t5xxl")).toString(), native(t5xxl));
+    QVERIFY(!options.contains(QStringLiteral("clip_g")));
+    QVERIFY(!options.contains(QStringLiteral("vae"))); // no FLUX.1 VAE in the library
+    QCOMPARE(options.value(QStringLiteral("weight_type")).toString(), QStringLiteral("q4_K"));
+    QVERIFY(options.value(QStringLiteral("clip_on_cpu")).toBool());
+    const QList<ModelCompanion> devNeeds = companionsOf(&lib, fluxDev);
+    QCOMPARE(devNeeds.size(), 3);
+    QCOMPARE(devNeeds[0].option, QStringLiteral("vae"));
+    QVERIFY(devNeeds[0].missing());
+    // The missing VAE comes from the ungated copy, with its licence.
+    const HubDownload d = companionDownload(*lib.entry(fluxDev), devNeeds[0].file);
+    QCOMPARE(d.modelId, QStringLiteral("Comfy-Org/z_image_turbo"));
+    QCOMPARE(d.license, QStringLiteral("apache-2.0"));
+    QCOMPARE(d.file.fileName(), QStringLiteral("ae.safetensors"));
+
+    // 4. A file that is gone, and a model that is not an image model.
+    ServerProfile gone;
+    gone.options = {{QStringLiteral("model"), native(comfy.filePath(QStringLiteral("missing.safetensors")))}};
+    QVERIFY(messages(checkSdProfile(&lib, gone)).first().contains(QLatin1String("does not exist")));
+    ServerProfile vaeAsModel;
+    vaeAsModel.options = {{QStringLiteral("model"), native(flux2Vae)}};
+    QVERIFY(messages(checkSdProfile(&lib, vaeAsModel)).first().contains(QLatin1String("not an image model")));
 }
 
 QTEST_MAIN(TestRuntime)

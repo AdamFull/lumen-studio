@@ -2,6 +2,7 @@
 #include "ui/dialogs/LocalSetupDialog.h"
 #include "ui/dialogs/ModelsPage.h"
 #include "runtime/ModelHub.h"
+#include "runtime/ModelPresets.h"
 
 #include "ai/ProviderRegistry.h"
 #include "core/Error.h"
@@ -906,8 +907,27 @@ ServerProfileDialog::ServerProfileDialog(Studio *studio, const runtime::ServerPr
     m_preview->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
     m_preview->setFixedHeight(84);
     v->addWidget(m_preview);
+    // What the chosen model is and needs, with a download for what is missing.
+    m_modelInfo = new QLabel(content);
+    m_modelInfo->setObjectName(QStringLiteral("modelInfo"));
+    m_modelInfo->setWordWrap(true);
+    m_modelInfo->setTextFormat(Qt::RichText);
+    m_modelInfo->setVisible(false);
+    v->addWidget(m_modelInfo);
+    m_downloadMissing = new QPushButton(Icons::get(QStringLiteral("download")), QString(), content);
+    m_downloadMissing->setObjectName(QStringLiteral("downloadMissing"));
+    m_downloadMissing->setVisible(false);
+    v->addWidget(m_downloadMissing, 0, Qt::AlignLeft);
+    connect(m_downloadMissing, &QPushButton::clicked, this, &ServerProfileDialog::downloadMissing);
+    // A finished download fills its slot.
+    connect(m_studio->hub(), &runtime::ModelHub::downloaded, this, [this] {
+        if (!modelPath().isEmpty())
+            applyModel(QString(), modelPath());
+    });
     m_problem = new QLabel(content);
+    m_problem->setObjectName(QStringLiteral("problems"));
     m_problem->setWordWrap(true);
+    m_problem->setTextFormat(Qt::RichText);
     Theme::setRole(m_problem, QStringLiteral("error"));
     v->addWidget(m_problem);
     if (isNew) {
@@ -921,7 +941,8 @@ ServerProfileDialog::ServerProfileDialog(Studio *studio, const runtime::ServerPr
     outer->addWidget(buttons);
     connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
-    buttons->button(QDialogButtonBox::Ok)->setEnabled(m_runtime->count() > 0);
+    m_ok = buttons->button(QDialogButtonBox::Ok);
+    m_ok->setEnabled(m_runtime->count() > 0);
 
     connect(m_runtime, &QComboBox::currentIndexChanged, this, [this] {
         m_profile = this->profile(); // keep typed values
@@ -1028,7 +1049,7 @@ void ServerProfileDialog::buildOptions()
                 connect(menu, &QMenu::aboutToShow, this, [this, menu, libraryKinds, edit] {
                     fillModelMenu(menu, m_studio->models(), libraryKinds, [this, edit](const QString &path) {
                         edit->setText(path);
-                        fillCompanions(edit->property("optionKey").toString(), path);
+                        applyModel(edit->property("optionKey").toString(), path);
                     });
                 });
                 h->addWidget(library);
@@ -1046,7 +1067,7 @@ void ServerProfileDialog::buildOptions()
                     return;
                 edit->setText(QDir::toNativeSeparators(path));
                 Settings::instance().setValue(QStringLiteral("servers/lastModelDir"), dir ? path : QFileInfo(path).absolutePath());
-                fillCompanions(edit->property("optionKey").toString(), path);
+                applyModel(edit->property("optionKey").toString(), path);
                 // A vision model's projector usually sits next to it.
                 if (edit->property("optionKey").toString() == QLatin1String("model")) {
                     if (auto *mmproj = qobject_cast<QLineEdit *>(m_fields.value(QStringLiteral("mmproj"))); mmproj && mmproj->text().isEmpty())
@@ -1054,6 +1075,11 @@ void ServerProfileDialog::buildOptions()
                 }
             });
             connect(edit, &QLineEdit::textChanged, this, &ServerProfileDialog::updatePreview);
+            // A path typed or pasted in is applied like a chosen one.
+            connect(edit, &QLineEdit::editingFinished, this, [this, edit] {
+                if (!edit->text().trimmed().isEmpty())
+                    applyModel(edit->property("optionKey").toString(), edit->text().trimmed());
+            });
             w = edit;
             break;
         }
@@ -1141,15 +1167,72 @@ void ServerProfileDialog::buildOptions()
     updatePreview();
 }
 
-void ServerProfileDialog::fillCompanions(const QString &key, const QString &path)
+void ServerProfileDialog::setField(const QString &key, const QVariant &value)
 {
-    if (key != QLatin1String("model") && key != QLatin1String("diffusion_model"))
-        return;
-    const QVariantMap options = runtime::companionServerOptions(m_studio->models(), QDir::cleanPath(QDir::fromNativeSeparators(path)));
-    for (auto it = options.begin(); it != options.end(); ++it) {
-        if (auto *edit = qobject_cast<QLineEdit *>(m_fields.value(it.key())); edit && edit->text().trimmed().isEmpty())
-            edit->setText(it.value().toString());
+    QWidget *w = m_fields.value(key);
+    if (auto *e = qobject_cast<QLineEdit *>(w))
+        e->setText(value.toString());
+    else if (auto *c = qobject_cast<QCheckBox *>(w))
+        c->setChecked(value.toBool());
+    else if (auto *box = qobject_cast<QComboBox *>(w))
+        box->setCurrentIndex(std::max(0, box->findText(value.toString())));
+    else if (auto *spin = qobject_cast<QSpinBox *>(w))
+        spin->setValue(value.toInt());
+    else if (auto *dspin = qobject_cast<QDoubleSpinBox *>(w))
+        dspin->setValue(value.toDouble());
+}
+
+QString ServerProfileDialog::modelPath() const
+{
+    for (const QString &key : {QStringLiteral("diffusion_model"), QStringLiteral("model")}) {
+        if (auto *e = qobject_cast<QLineEdit *>(m_fields.value(key)); e && !e->text().trimmed().isEmpty())
+            return QDir::cleanPath(QDir::fromNativeSeparators(e->text().trimmed()));
     }
+    return {};
+}
+
+void ServerProfileDialog::applyModel(const QString &key, const QString &path)
+{
+    if (kind() != QLatin1String("sd.cpp") || (!key.isEmpty() && key != QLatin1String("model") && key != QLatin1String("diffusion_model")))
+        return;
+    const int tier = m_preset->currentData().toInt();
+    const QVariantMap options = runtime::modelServerOptions(m_studio->models(), QDir::cleanPath(QDir::fromNativeSeparators(path)),
+                                                            tier < 0 ? std::nullopt : std::optional(runtime::VramTier(tier)));
+    const runtime::ServerProfile current = profile();
+    const QStringList problemOptions = [&] {
+        QStringList out;
+        for (const runtime::ProfileProblem &p : runtime::checkSdProfile(m_studio->models(), current))
+            out << p.option;
+        return out;
+    }();
+    for (auto it = options.begin(); it != options.end(); ++it) {
+        const bool mainSlot = it.key() == QLatin1String("model") || it.key() == QLatin1String("diffusion_model");
+        auto *edit = qobject_cast<QLineEdit *>(m_fields.value(it.key()));
+        // The model's slot is set (the other cleared); a component replaces an empty field or a file
+        // that does not fit; launch options of the preset are set.
+        if (mainSlot || !edit || edit->text().trimmed().isEmpty() || problemOptions.contains(it.key()))
+            setField(it.key(), it.value());
+    }
+    updatePreview();
+}
+
+void ServerProfileDialog::downloadMissing()
+{
+    const QString path = modelPath();
+    const std::optional<runtime::ModelEntry> e = m_studio->models()->entry(path);
+    if (!e)
+        return;
+    QStringList names;
+    for (const runtime::ModelCompanion &c : runtime::companionsOf(m_studio->models(), path)) {
+        if (!c.missing())
+            continue;
+        m_studio->hub()->download(runtime::companionDownload(*e, c.file));
+        names << c.file.fileName();
+    }
+    if (names.isEmpty())
+        return;
+    m_downloadMissing->setEnabled(false);
+    m_studio->notify(tr("Downloading %1 — progress is shown in the Queue. The server form fills in when it is done.").arg(names.join(QStringLiteral(", "))));
 }
 
 runtime::ServerProfile ServerProfileDialog::profile() const
@@ -1208,8 +1291,51 @@ void ServerProfileDialog::updatePreview()
         if (other.id != p.id && other.port == p.port && problem.isEmpty())
             problem = tr("Port %1 is already used by the server '%2'.").arg(p.port).arg(other.name);
     }
-    m_problem->setText(problem);
-    m_problem->setVisible(!problem.isEmpty());
+    // An sd.cpp model: its preset, its components, and what keeps it from working.
+    bool blocking = false;
+    QStringList problems;
+    if (!problem.isEmpty())
+        problems << problem.toHtmlEscaped();
+    QString info;
+    qint64 missingBytes = 0;
+    int missingFiles = 0;
+    if (rt->kind == QLatin1String("sd.cpp")) {
+        for (const runtime::ProfileProblem &pp : runtime::checkSdProfile(m_studio->models(), p)) {
+            problems << pp.message.toHtmlEscaped();
+            blocking = blocking || !pp.missing;
+        }
+        const QString path = modelPath();
+        const std::optional<runtime::ModelInfo> mi = path.isEmpty() ? std::nullopt : runtime::modelInfoOf(m_studio->models(), path);
+        if (const runtime::ModelPreset *preset = mi ? runtime::presetFor(*mi, path) : nullptr) {
+            QStringList lines{QStringLiteral("<b>%1</b>").arg(preset->name.toHtmlEscaped())};
+            if (!preset->note.isEmpty())
+                lines << preset->note.toHtmlEscaped();
+            for (const runtime::PresetSlot &slot : preset->components) {
+                const QString file = p.options.value(slot.option).toString();
+                lines << (file.isEmpty() ? tr("%1: missing").arg(slot.label.toHtmlEscaped())
+                                         : tr("%1: %2").arg(slot.label.toHtmlEscaped(), QFileInfo(QDir::fromNativeSeparators(file)).fileName().toHtmlEscaped()));
+            }
+            if (m_studio->models()->entry(path)) {
+                for (const runtime::ModelCompanion &c : runtime::companionsOf(m_studio->models(), path)) {
+                    if (c.missing() && p.options.value(c.option).toString().isEmpty()) {
+                        missingBytes += std::max<qint64>(0, c.file.size);
+                        ++missingFiles;
+                    }
+                }
+            }
+            info = lines.join(QStringLiteral("<br>"));
+        }
+    }
+    m_modelInfo->setText(info);
+    m_modelInfo->setVisible(!info.isEmpty());
+    m_downloadMissing->setText(tr("Download missing files (%1)").arg(runtime::formatBytes(missingBytes)));
+    m_downloadMissing->setVisible(missingFiles > 0);
+    m_problem->setText(problems.join(QStringLiteral("<br>")));
+    m_problem->setVisible(!problems.isEmpty());
+    // Files in the wrong slot or of the wrong family cannot be saved; missing components can (the
+    // start says what to download).
+    if (m_ok)
+        m_ok->setEnabled(!blocking);
 }
 
 // ---- ServerLogDialog ------------------------------------------------------------------------------

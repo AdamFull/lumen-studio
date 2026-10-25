@@ -25,6 +25,7 @@
 #include "MockHttpServer.h"
 #include "ui/dialogs/CharacterLoraDialog.h"
 #include "plugins/characters/training/CloudTrainingPage.h"
+#include "runtime/ModelPresets.h"
 #include "ui/dialogs/LocalServersPage.h"
 #include "plugins/characters/training/LoraDatasetDialog.h"
 #include "plugins/characters/training/CharacterTraining.h"
@@ -53,6 +54,7 @@
 #include <QTreeWidgetItemIterator>
 #include <QComboBox>
 #include <QCheckBox>
+#include <QDialogButtonBox>
 #include <QDirIterator>
 #include <QTableWidget>
 #include <QJsonArray>
@@ -135,6 +137,7 @@ private slots:
     void activeCast();
     void pluginsOff();
     void legacyPageSetting();
+    void presetServerDialog();
 
 private:
     ToolEvent at(double x, double y, Qt::KeyboardModifiers mods = Qt::NoModifier) const
@@ -775,6 +778,11 @@ void TestCanvas::localServersWiring()
     servers->healthIntervalMs = 100;
     for (const runtime::ServerProfile &old : servers->profiles())
         servers->removeProfile(old.id);
+    // Runtimes another test left behind when it was aborted (the store persists between runs).
+    for (const runtime::InstalledRuntime &old : studio.runtimes()->runtimes()) {
+        if (old.id.startsWith(QLatin1String("adopted/")))
+            studio.runtimes()->remove(old.id);
+    }
     runtime::InstalledRuntime rt;
     rt.id = QStringLiteral("adopted/test-fake");
     rt.kind = QStringLiteral("llama.cpp");
@@ -1583,7 +1591,8 @@ void TestCanvas::loraEvaluation()
     };
     const QString checkpoint = write(QStringLiteral("models/xl.safetensors"),
                                      fakeSafetensors({QStringLiteral("model.diffusion_model.input_blocks.0.0.weight"),
-                                                      QStringLiteral("model.diffusion_model.label_emb.0.0.weight")}));
+                                                      QStringLiteral("model.diffusion_model.label_emb.0.0.weight"),
+                                                      QStringLiteral("conditioner.embedders.1.model.ln_final.weight")}));
     const QString serverLoras = QDir::cleanPath(dir.filePath(QStringLiteral("server-loras")));
     QDir().mkpath(serverLoras);
 
@@ -3167,6 +3176,126 @@ void TestCanvas::legacyPageSetting()
     QCOMPARE(Shortcuts::instance().keys(QStringLiteral("nav.person")), QList<QKeySequence>{QKeySequence(QStringLiteral("Alt+4"))});
     QCOMPARE(Shortcuts::instance().keys(QStringLiteral("nav.gallery")), QList<QKeySequence>{QKeySequence(QStringLiteral("Alt+6"))});
     QVERIFY(buttonNamed(&window, QStringLiteral("Assistant")));
+}
+
+namespace {
+
+// A safetensors header with tensor shapes, padded past the library's 1 MB minimum.
+QByteArray shapedSafetensors(const QList<QPair<QString, QList<int>>> &tensors)
+{
+    QJsonObject header;
+    for (const auto &[name, shape] : tensors) {
+        QJsonArray dims;
+        for (int d : shape)
+            dims.append(d);
+        header.insert(name, QJsonObject{{QStringLiteral("dtype"), QStringLiteral("BF16")}, {QStringLiteral("shape"), dims},
+                                        {QStringLiteral("data_offsets"), QJsonArray{0, 0}}});
+    }
+    const QByteArray json = QJsonDocument(header).toJson(QJsonDocument::Compact);
+    QByteArray out;
+    for (int i = 0; i < 8; ++i)
+        out.append(char((quint64(json.size()) >> (8 * i)) & 0xFF));
+    return out + json + QByteArray(2 * 1024 * 1024, '\0');
+}
+
+} // namespace
+
+// Choosing FLUX.2 klein in the Checkpoint field, as in the session of plan §17.1: the dialog
+// moves it to its slot, fills its VAE and text encoder, and refuses an SDXL ControlNet.
+void TestCanvas::presetServerDialog()
+{
+    Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
+    QTemporaryDir comfy;
+    auto put = [&](const QString &rel, const QList<QPair<QString, QList<int>>> &tensors) {
+        const QString path = QDir::cleanPath(comfy.filePath(rel));
+        QDir().mkpath(QFileInfo(path).absolutePath());
+        QFile f(path);
+        if (f.open(QIODevice::WriteOnly))
+            f.write(shapedSafetensors(tensors));
+        return path;
+    };
+    const QString klein = put(QStringLiteral("checkpoints/flux-2-klein-4b-fp8.safetensors"),
+                              {{QStringLiteral("img_in.weight"), {3072, 128}},
+                               {QStringLiteral("txt_in.weight"), {3072, 7680}},
+                               {QStringLiteral("double_stream_modulation_img.lin.weight"), {18432, 3072}},
+                               {QStringLiteral("double_blocks.0.img_attn.qkv.weight"), {9216, 3072}}});
+    const QString vae = put(QStringLiteral("vae/flux2-vae.safetensors"),
+                            {{QStringLiteral("encoder.down_blocks.0.resnets.0.conv1.weight"), {128, 128, 3, 3}},
+                             {QStringLiteral("decoder.conv_in.weight"), {512, 32, 3, 3}},
+                             {QStringLiteral("decoder.up_blocks.0.resnets.0.conv1.weight"), {512, 512, 3, 3}}});
+    const QString qwen = put(QStringLiteral("text_encoders/qwen_3_4b.safetensors"),
+                             {{QStringLiteral("model.embed_tokens.weight"), {151936, 2560}}, {QStringLiteral("model.layers.0.self_attn.q_norm.weight"), {128}}});
+    const QString controlNet = put(QStringLiteral("controlnet/xinsir-controlnet-openpose-sdxl-1.0.safetensors"),
+                                   {{QStringLiteral("control_model.input_blocks.0.0.weight"), {320, 4, 3, 3}},
+                                    {QStringLiteral("control_model.label_emb.0.0.weight"), {1280, 2816}},
+                                    {QStringLiteral("control_model.input_hint_block.0.weight"), {16, 3, 3, 3}}});
+
+    Studio studio;
+    QSignalSpy scanned(studio.models(), &runtime::ModelLibrary::scanFinished);
+    QVERIFY(studio.models()->addRoot(comfy.path()));
+    QTRY_VERIFY_WITH_TIMEOUT(studio.models()->entry(klein) && studio.models()->entry(qwen) && !studio.models()->isScanning(), 20000);
+    auto removeRoot = qScopeGuard([&] { studio.models()->removeRoot(comfy.path()); });
+    runtime::InstalledRuntime rt;
+    rt.id = QStringLiteral("adopted/test-sdcpp");
+    rt.kind = QStringLiteral("sd.cpp");
+    rt.executable = comfy.filePath(QStringLiteral("sd-server.exe"));
+    studio.runtimes()->addInstalled(rt);
+    auto removeRuntime = qScopeGuard([&] { studio.runtimes()->remove(rt.id); });
+    const runtime::ServerProfile profile = studio.servers()->createProfile(rt.id, QStringLiteral("Images"));
+
+    ServerProfileDialog dlg(&studio, profile, true);
+    dlg.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&dlg));
+    auto field = [&dlg](const QString &key) -> QLineEdit * {
+        for (QLineEdit *e : dlg.findChildren<QLineEdit *>()) {
+            if (e->property("optionKey").toString() == key)
+                return e;
+        }
+        return nullptr;
+    };
+    QPushButton *ok = dlg.findChild<QDialogButtonBox *>()->button(QDialogButtonBox::Ok);
+    QVERIFY(ok);
+    auto *info = dlg.findChild<QLabel *>(QStringLiteral("modelInfo"));
+    auto *problems = dlg.findChild<QLabel *>(QStringLiteral("problems"));
+    QVERIFY(info && problems);
+
+    // The user's choice: the klein file under Checkpoint.
+    QLineEdit *model = field(QStringLiteral("model"));
+    QVERIFY(model);
+    model->setText(QDir::toNativeSeparators(klein));
+    emit model->editingFinished();
+    runtime::ServerProfile chosen = dlg.profile();
+    QCOMPARE(chosen.options.value(QStringLiteral("diffusion_model")).toString(), QDir::toNativeSeparators(klein));
+    QVERIFY(chosen.options.value(QStringLiteral("model")).toString().isEmpty());
+    QCOMPARE(chosen.options.value(QStringLiteral("vae")).toString(), QDir::toNativeSeparators(vae));
+    QCOMPARE(chosen.options.value(QStringLiteral("llm")).toString(), QDir::toNativeSeparators(qwen));
+    QVERIFY(info->isVisible());
+    QVERIFY2(info->text().contains(QLatin1String("FLUX.2 [klein] 4B")) && info->text().contains(QLatin1String("qwen_3_4b.safetensors")), qPrintable(info->text()));
+    QVERIFY(!problems->isVisible());
+    QVERIFY(ok->isEnabled());
+    const runtime::LaunchCommand cmd = runtime::buildLaunch(chosen, rt);
+    QVERIFY(cmd.arguments.contains(QStringLiteral("--diffusion-model")) && !cmd.arguments.contains(QStringLiteral("-m")));
+
+    // An SDXL ControlNet does not fit: named, and the server cannot be saved like that.
+    field(QStringLiteral("control_net"))->setText(QDir::toNativeSeparators(controlNet));
+    QVERIFY(problems->isVisible());
+    QVERIFY2(problems->text().contains(QLatin1String("does not work with FLUX.2 [klein] 4B")), qPrintable(problems->text()));
+    QVERIFY(!ok->isEnabled());
+    field(QStringLiteral("control_net"))->clear();
+    QVERIFY(ok->isEnabled());
+
+    // Without a text encoder in the library: named with its size, a download is offered, and saving
+    // stays possible.
+    QVERIFY(QFile::remove(qwen));
+    studio.models()->rescan();
+    QTRY_VERIFY_WITH_TIMEOUT(!studio.models()->entry(qwen) && !studio.models()->isScanning(), 20000);
+    field(QStringLiteral("llm"))->clear();
+    QVERIFY(problems->isVisible());
+    QVERIFY2(problems->text().contains(QLatin1String("Qwen3 4B text encoder")), qPrintable(problems->text()));
+    QVERIFY(ok->isEnabled());
+    auto *download = dlg.findChild<QPushButton *>(QStringLiteral("downloadMissing"));
+    QVERIFY(download && download->isVisible());
+    QVERIFY2(download->text().contains(QLatin1String("GB")), qPrintable(download->text()));
 }
 
 QTEST_MAIN(TestCanvas)

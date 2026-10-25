@@ -363,6 +363,10 @@ void ServerSupervisor::launch(const QString &id)
         return failNow(Text::tr("Unknown server."));
     if (!cmd.error.isEmpty())
         return failNow(cmd.error);
+    if (preflight) {
+        if (const QString problem = preflight(*p, kindOf(id)); !problem.isEmpty())
+            return failNow(problem);
+    }
     if (!QFileInfo::exists(cmd.program))
         return failNow(Text::tr("%1 is missing. Reinstall the runtime.").arg(QDir::toNativeSeparators(cmd.program)));
     if (!portIsFree(p->port))

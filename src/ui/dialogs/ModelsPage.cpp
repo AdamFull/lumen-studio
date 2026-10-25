@@ -10,6 +10,7 @@
 #include "ui/Theme.h"
 #include "ui/dialogs/LocalServersPage.h"
 #include "runtime/ModelHub.h"
+#include "runtime/ModelPresets.h"
 #include "ui/dialogs/ModelHubDialog.h"
 #include "ui/widgets/Controls.h"
 
@@ -638,6 +639,21 @@ void ModelsPage::warnMissingCompanions(const ModelEntry &e)
                          QStringLiteral("warning"));
 }
 
+namespace {
+
+// Server options from modelServerOptions: an empty model slot is removed, the rest set.
+void applyModelOptions(QVariantMap *options, const QVariantMap &model)
+{
+    for (auto it = model.begin(); it != model.end(); ++it) {
+        if (it.value().typeId() == QMetaType::QString && it.value().toString().isEmpty())
+            options->remove(it.key());
+        else
+            options->insert(it.key(), it.value());
+    }
+}
+
+} // namespace
+
 void ModelsPage::useWithServer(const ModelEntry &e)
 {
     // Offer servers of the matching kind, or a new one.
@@ -668,11 +684,17 @@ void ModelsPage::useWithServer(const ModelEntry &e)
                             changed.options.remove(it.key());
                     }
                 }
-                changed.options.insert(key, QDir::toNativeSeparators(e.path));
-                if (key == QLatin1String("diffusion_model"))
-                    changed.options.remove(QStringLiteral("model"));
-                changed.options.insert(runtime::companionServerOptions(m_studio->models(), e.path));
+                // The preset puts it in its slot with its components (ModelPresets.h).
+                applyModelOptions(&changed.options, runtime::modelServerOptions(m_studio->models(), e.path));
                 warnMissingCompanions(e);
+                // What still does not fit (a ControlNet of another family) is named now, not at the start.
+                const QList<runtime::ProfileProblem> problems = runtime::checkSdProfile(m_studio->models(), changed);
+                for (const runtime::ProfileProblem &problem : problems) {
+                    if (!problem.missing) {
+                        m_studio->notify(problem.message, QStringLiteral("warning"));
+                        break;
+                    }
+                }
             }
             m_studio->servers()->updateProfile(changed);
             m_studio->notify(m_studio->servers()->needsRestart(p.id) ? tr("%1 uses it after a restart.").arg(p.name) : tr("%1 updated.").arg(p.name),
@@ -682,11 +704,11 @@ void ModelsPage::useWithServer(const ModelEntry &e)
     const auto runtimes = m_studio->runtimes()->runtimes(kind);
     QAction *create = menu.addAction(Icons::get(QStringLiteral("plus")), tr("New server with this model…"), this, [this, e, kind, key, runtimes] {
         runtime::ServerProfile p = m_studio->servers()->createProfile(runtimes.last().id, e.name());
-        p.options.insert(key, QDir::toNativeSeparators(e.path));
         if (kind == QLatin1String("llama.cpp")) {
+            p.options.insert(key, QDir::toNativeSeparators(e.path));
             p.options.insert(QStringLiteral("mmproj"), QDir::toNativeSeparators(runtime::findProjector(e.path)));
         } else {
-            p.options.insert(runtime::companionServerOptions(m_studio->models(), e.path));
+            applyModelOptions(&p.options, runtime::modelServerOptions(m_studio->models(), e.path));
             warnMissingCompanions(e);
         }
         ServerProfileDialog dlg(m_studio, p, true, this);

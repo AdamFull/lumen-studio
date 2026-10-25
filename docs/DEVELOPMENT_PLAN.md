@@ -2079,11 +2079,47 @@ Survey of the code, the app log and user testing (October 2026):
     *Edit…* button hidden, no Cloud training tab, the Plugins tab switches a plugin for the next
     start, a `director` record survives a session without the plugin and a reopen);
     `legacyPageSetting` (the old index 3 opens Poses; fixed shortcuts).
-- [ ] Model presets: the JSON format, the loader, the first presets (§17.3), family detection to
+- [x] Model presets: the JSON format, the loader, the first presets (§17.3), family detection to
   preset, slot filling from the library, download of missing files, add-on filtering, VRAM tiers.
   `familyCompanions` and the Anima special case are replaced. Tests: the two failing profiles
   from the log produce a correct command line or a clear message; FLUX.1 gets `clip_l` and
   `t5xxl`; an SDXL ControlNet is not offered for Anima or FLUX.
+  * Detection (`ModelFormats`, inspector version 3): FLUX.2 from FLUX.1 by the input width (128 =
+    32 latent channels × 2 × 2) and the shared modulation layers; the FLUX.2 variant by the text
+    input width (7680 = 3 × Qwen3 4B: klein 4B; 12288: klein 9B; 15360: dev); FLUX.1 dev / schnell
+    by the guidance embedding; CLIP-L / CLIP-G by width. GGUF shapes are kept in PyTorch's order.
+    Checked against the headers of real files (FLUX.2 klein 4B fp8, its VAE, Qwen3 4B / 8B, Anima).
+  * `runtime/ModelPresets`: `resources/presets/models/{anima,flux1,flux2,qwen-image,sd}.json`
+    (pinned files with repo, commit, size, SHA-256 and licence, looked up through the Hugging Face
+    API; component slots with the header family / variant a library file needs; what the model
+    can do; sampling defaults from sd.cpp's docs at the pinned commit f89d9b1; VRAM overrides).
+    Presets: FLUX.2 klein 4B / 9B and their base models, FLUX.1 dev / schnell / Kontext dev and
+    single-file FLUX.1, Qwen-Image and Qwen-Image-Edit, Anima, Illustrious, Pony, SDXL, SD 1.5.
+    Ungated sources: the FLUX.1 VAE is Black Forest Labs' `ae.safetensors` from Comfy-Org's copy.
+  * `companionsOf` / `companionServerOptions` / `companionDownload` keep their signatures and
+    take the components from the presets (a download comes from the model's own preset, so the
+    same VAE keeps the licence of the right repository); `ModelCompanion::option` names the slot
+    (fixes `clip_l`, which was never filled).
+  * `modelServerOptions(library, file, tier)`: the file in its slot (the other cleared), its
+    components, the preset's launch options. Used by the server dialog (Browse, the library menu,
+    a typed path) and *Use with a server*.
+  * `checkSdProfile`: a model in the wrong slot, a file that is gone or is not an image model, a
+    missing or mismatched component (with the file and its size), a ControlNet / IP-Adapter of
+    another family. The supervisor's new `preflight` runs it before every sd.cpp start, so the
+    start fails with these messages instead of "exited (code 1)". The server dialog shows the
+    preset, its components and the problems, offers *Download missing files*, and cannot be saved
+    with a blocking problem (a missing component does not block).
+  * Tests: `tst_runtime modelPresets` (every bundled file parses, all files pinned, detection and
+    matching for each family, GGUF), `presetProfiles` (the klein-as-checkpoint and Anima + SDXL
+    ControlNet / IP-Adapter profiles of the log; FLUX.1 with CLIP-L, not CLIP-G, and the 8 GB
+    overrides; downloads from the ungated copy; missing files), `supervisorCrashAndFailures`
+    (preflight); `tst_canvas presetServerDialog` (the dialog moves klein to its slot, fills VAE
+    and encoder, refuses an SDXL ControlNet, offers the download).
+  * Not yet: FLUX.2 dev (Mistral Small 3.2 24B encoder), Z-Image, SD 3 and split SDXL presets;
+    *Use with a server* does not know the GPU size, so it applies no VRAM overrides; sampling
+    defaults reach requests in the next step. ComfyUI's "mixed" fp8 files (with `weight_scale`
+    tensors, such as `flux-2-klein-4b-fp8`) may not load in sd.cpp: the short live check at the end
+    of M17 tries one; GGUF files are the safe choice.
 - [ ] Models folder: the visible default, ComfyUI subfolders, moving it, the one-time move from
   `%LOCALAPPDATA%`, extra roots.
 - [ ] Sampling defaults from presets (CFG, guidance, image CFG, negative prompt) through

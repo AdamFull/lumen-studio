@@ -10,6 +10,7 @@
 #include <QJsonObject>
 #include <QRegularExpression>
 
+#include <algorithm>
 #include <functional>
 
 namespace lumen::runtime {
@@ -66,7 +67,37 @@ struct Tensors
         return any([&s](const QString &n) { return n.contains(s); });
     }
     qint64 dim(const QString &name, int i) const { return shapes.value(name).value(i, 0); }
+    // The first tensor whose name ends with `suffix` (checkpoints prefix "model.diffusion_model.").
+    QString find(const QString &suffix) const
+    {
+        for (const QString &n : names) {
+            if (n == suffix || n.endsWith(QLatin1Char('.') + suffix))
+                return n;
+        }
+        return {};
+    }
 };
+
+// FLUX.1 and FLUX.2 share the double / single block layout. FLUX.2 has 32 latent channels (img_in
+// takes 128 = 32 × 2 × 2, FLUX.1 64) and shared modulation layers; its text input stacks three
+// hidden layers of its language model, so the width tells the variant (3 × 2560 Qwen3 4B for klein
+// 4B, 3 × 4096 Qwen3 8B for klein 9B, 3 × 5120 Mistral Small for dev). FLUX.1 dev and Kontext
+// have a guidance embedding, schnell has not; Kontext is told by its file name (model presets).
+void classifyFlux(const Tensors &t, ModelInfo *info)
+{
+    const QString imgIn = t.find(QStringLiteral("img_in.weight"));
+    const bool flux2 = t.has(QStringLiteral("double_stream_modulation_img")) || (!imgIn.isEmpty() && t.dim(imgIn, 1) == 128);
+    if (flux2) {
+        info->family = QStringLiteral("FLUX.2");
+        static const QHash<qint64, QString> byText{{7680, QStringLiteral("Klein 4B")}, {12288, QStringLiteral("Klein 9B")},
+                                                   {15360, QStringLiteral("Dev")}};
+        const QString txtIn = t.find(QStringLiteral("txt_in.weight"));
+        info->variant = txtIn.isEmpty() ? QString() : byText.value(t.dim(txtIn, 1));
+        return;
+    }
+    info->family = QStringLiteral("FLUX");
+    info->variant = t.has(QStringLiteral("guidance_in.")) ? QStringLiteral("Dev") : QStringLiteral("Schnell");
+}
 
 // Hints from the file and folder names (ComfyUI / A1111 folder layout, common naming).
 ModelKind kindFromNames(const QString &path)
@@ -167,7 +198,7 @@ void classifyDiffusion(const Tensors &t, const QVariantMap &meta, ModelInfo *inf
                                                                   || t.hasPrefix(QStringLiteral("conditioner.")))) {
         info->kind = ModelKind::Checkpoint;
         if (t.has(QStringLiteral("double_blocks")))
-            info->family = QStringLiteral("FLUX");
+            classifyFlux(t, info);
         else if (t.has(QStringLiteral("joint_blocks")))
             info->family = QStringLiteral("SD 3");
         else if (t.hasPrefix(QStringLiteral("conditioner.embedders.1")) || t.has(QStringLiteral("label_emb")))
@@ -181,7 +212,7 @@ void classifyDiffusion(const Tensors &t, const QVariantMap &meta, ModelInfo *inf
     // Diffusion model only.
     if (t.has(QStringLiteral("double_blocks.")) || t.has(QStringLiteral("single_blocks."))) {
         info->kind = ModelKind::DiffusionModel;
-        info->family = QStringLiteral("FLUX");
+        classifyFlux(t, info);
         return;
     }
     if (t.has(QStringLiteral("joint_blocks."))) {
@@ -217,6 +248,12 @@ void classifyDiffusion(const Tensors &t, const QVariantMap &meta, ModelInfo *inf
         info->family = t.hasPrefix(QStringLiteral("model.layers."))                                            ? QStringLiteral("LLM")
                        : t.hasPrefix(QStringLiteral("encoder.block.")) || t.hasPrefix(QStringLiteral("enc.blk.")) ? QStringLiteral("T5")
                                                                                                                   : QStringLiteral("CLIP");
+        if (info->family == QLatin1String("CLIP")) {
+            // CLIP-L (SD 1.5, SDXL, SD 3, FLUX.1) is 768 wide, CLIP-G (SDXL, SD 3) 1280.
+            const QString embed = t.find(QStringLiteral("token_embedding.weight"));
+            const qint64 width = embed.isEmpty() ? 0 : t.dim(embed, 1);
+            info->variant = width == 768 ? QStringLiteral("CLIP-L") : width == 1280 ? QStringLiteral("CLIP-G") : QString();
+        }
         if (info->family == QLatin1String("LLM")) {
             // Which language model: Qwen3 has q/k norms, Qwen2.5 has not; the width tells the size.
             // Image models need a particular one (Anima: Qwen3 0.6B; Qwen-Image: Qwen2.5-VL 7B).
@@ -465,6 +502,8 @@ void inspectGguf(QFile &f, const QString &path, ModelInfo *info)
         }
         r.u32(); // ggml type
         r.u64(); // offset
+        // GGUF lists dimensions innermost first; Tensors keeps PyTorch's order, as safetensors does.
+        std::reverse(shape.begin(), shape.end());
         t.names << name;
         t.shapes.insert(name, shape);
         info->parameters += elements;
@@ -601,7 +640,9 @@ ModelInfo inspectModel(const QString &path)
         if (info.kind == ModelKind::Llm)
             info.kind = ModelKind::Unknown;
     }
-    if (info.kind == ModelKind::Checkpoint || info.kind == ModelKind::Lora || info.kind == ModelKind::DiffusionModel || info.kind == ModelKind::ControlNet)
+    // Names hint at fine-tunes (Illustrious, Pony) where the header has no variant (FLUX has one).
+    if ((info.kind == ModelKind::Checkpoint || info.kind == ModelKind::Lora || info.kind == ModelKind::DiffusionModel || info.kind == ModelKind::ControlNet)
+        && info.variant.isEmpty())
         info.variant = variantFromNames(path);
     info.inspector = kModelInspectorVersion;
     return info;

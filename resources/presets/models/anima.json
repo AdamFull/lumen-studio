@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "comment": "Anima (circlestone-labs): a Cosmos-style diffusion model plus the Qwen-Image VAE and the Qwen3 0.6B base text encoder, as stable-diffusion.cpp's docs/anima.md lists them, from the model's own repository. CFG 4-5 as the model card says, tag prompts.",
+  "docs": "https://github.com/leejet/stable-diffusion.cpp/blob/f89d9b13d730eabeede7314ce49dacd18d3c90c2/docs/anima.md",
+  "files": {
+    "anima-vae": {
+      "repo": "circlestone-labs/Anima",
+      "revision": "f973fc41ec7545364ac9776c2440285f43ff2a30",
+      "path": "split_files/vae/qwen_image_vae.safetensors",
+      "size": 253806246,
+      "sha256": "a70580f0213e67967ee9c95f05bb400e8fb08307e017a924bf3441223e023d1f",
+      "license": "circlestone-labs-non-commercial-license"
+    },
+    "qwen3-06b-base": {
+      "repo": "circlestone-labs/Anima",
+      "revision": "f973fc41ec7545364ac9776c2440285f43ff2a30",
+      "path": "split_files/text_encoders/qwen_3_06b_base.safetensors",
+      "size": 1192135096,
+      "sha256": "cd2a512003e2f9f3cd3c32a9c3573f820bb28c940f73c57b1ddaa983d9223eba",
+      "license": "circlestone-labs-non-commercial-license"
+    }
+  },
+  "presets": [
+    {
+      "id": "anima",
+      "name": "Anima",
+      "match": {"family": "Anima", "kinds": ["diffusion_model", "checkpoint"]},
+      "slots": [
+        {"option": "vae", "kind": "vae", "family": "Qwen-Image / Wan", "label": "Qwen-Image VAE", "file": "anima-vae"},
+        {"option": "llm", "kind": "text_encoder", "family": "LLM", "variant": "Qwen3 0.6B", "label": "Qwen3 0.6B text encoder", "file": "qwen3-06b-base"}
+      ],
+      "can": {"generate": true, "edit": false, "inpaint": true, "negative_prompt": true, "loras": true, "control_net": [], "ip_adapter": []},
+      "sampling": {"cfg": 4.5, "sampler": "euler", "native_resolution": 1024, "dialect": "tags"}
+    }
+  ]
+}

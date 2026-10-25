@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "comment": "Stable Diffusion 1.5 and SDXL single-file checkpoints (with Illustrious / NoobAI and Pony fine-tunes, told by their file names): everything is inside the file. ControlNets and IP-Adapters must be of the same family. Sampling stays the server's and the prompt style's defaults.",
+  "docs": "https://github.com/leejet/stable-diffusion.cpp/blob/f89d9b13d730eabeede7314ce49dacd18d3c90c2/docs/sd.md",
+  "files": {},
+  "presets": [
+    {
+      "id": "illustrious",
+      "name": "Illustrious / NoobAI (SDXL)",
+      "match": {"family": "SDXL", "variant": "Illustrious", "kinds": ["checkpoint"]},
+      "can": {"generate": true, "edit": false, "inpaint": true, "negative_prompt": true, "loras": true, "control_net": ["SDXL"], "ip_adapter": ["SDXL"]},
+      "sampling": {"native_resolution": 1024, "dialect": "tags"}
+    },
+    {
+      "id": "pony",
+      "name": "Pony (SDXL)",
+      "match": {"family": "SDXL", "variant": "Pony", "kinds": ["checkpoint"]},
+      "can": {"generate": true, "edit": false, "inpaint": true, "negative_prompt": true, "loras": true, "control_net": ["SDXL"], "ip_adapter": ["SDXL"]},
+      "sampling": {"native_resolution": 1024, "dialect": "tags"}
+    },
+    {
+      "id": "sdxl",
+      "name": "SDXL",
+      "match": {"family": "SDXL", "kinds": ["checkpoint"]},
+      "can": {"generate": true, "edit": false, "inpaint": true, "negative_prompt": true, "loras": true, "control_net": ["SDXL"], "ip_adapter": ["SDXL"]},
+      "sampling": {"native_resolution": 1024, "dialect": "natural"}
+    },
+    {
+      "id": "sd15",
+      "name": "Stable Diffusion 1.5",
+      "match": {"family": "SD 1.5", "kinds": ["checkpoint"]},
+      "can": {"generate": true, "edit": false, "inpaint": true, "negative_prompt": true, "loras": true, "control_net": ["SD 1.5"], "ip_adapter": ["SD 1.5"]},
+      "sampling": {"native_resolution": 512, "dialect": "natural"}
+    }
+  ]
+}

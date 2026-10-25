@@ -9,6 +9,7 @@ add_library(lumen_runtime STATIC
     ModelFormats.h ModelFormats.cpp
     ModelLibrary.h ModelLibrary.cpp
     ModelHub.h ModelHub.cpp
+    ModelPresets.h ModelPresets.cpp
     CloudTraining.h CloudTraining.cpp
     PodAgent.h PodAgent.cpp
     RunPod.h RunPod.cpp
@@ -29,6 +30,13 @@ qt_add_resources(lumen_runtime model_starters
     PREFIX "/models"
     BASE "${PROJECT_SOURCE_DIR}/resources/models"
     FILES "${PROJECT_SOURCE_DIR}/resources/models/starters.json"
+)
+# Model presets (plan M17 §17.3): one file per family, read as :/presets/models/*.json.
+file(GLOB LUMEN_MODEL_PRESETS CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/resources/presets/models/*.json")
+qt_add_resources(lumen_runtime model_presets
+    PREFIX "/presets/models"
+    BASE "${PROJECT_SOURCE_DIR}/resources/presets/models"
+    FILES ${LUMEN_MODEL_PRESETS}
 )
 find_package(ZLIB QUIET)
 target_include_directories(lumen_runtime PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)

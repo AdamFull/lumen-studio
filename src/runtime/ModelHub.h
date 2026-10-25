@@ -137,29 +137,18 @@ struct ModelCompanion
 {
     HubFile file;
     QString path;            // where it is on this computer; empty = missing
+    QString option;          // the sd.cpp option it fills ("vae", "llm", "clip_l"…); empty = unknown
     bool missing() const { return path.isEmpty(); }
 };
-// Files a model family needs that its model files never carry (Anima: the Qwen-Image VAE and
-// the Qwen3 0.6B text encoder), pinned to a Hugging Face commit with their SHA-256. A file in
-// the library with the same header family / variant stands in for it.
-struct FamilyCompanion
-{
-    HubFile file;            // url, size, sha256, kind; required
-    QString repo;            // "circlestone-labs/Anima"
-    QString revision;
-    QString license;
-    QString family;          // ModelInfo::family a stand-in must have ("Qwen-Image / Wan", "LLM")
-    QString variant;         // and ModelInfo::variant, if set ("Qwen3 0.6B")
-};
-QList<FamilyCompanion> familyCompanions(const QString &modelFamily);
 
-// The companions of a library model and whether each is on this computer: the ones recorded
-// from Civitai, else those of its family.
+// The companions of a library model and whether each is on this computer: the ones recorded from
+// Civitai, then the components of its model preset (ModelPresets.h) that those do not cover. A
+// library file with the slot's header family and variant stands in for a preset's file.
 QList<ModelCompanion> companionsOf(const ModelLibrary *library, const QString &modelPath);
 // A download of a missing companion, with the model's Civitai data.
 HubDownload companionDownload(const ModelEntry &model, const HubFile &companion);
-// sd.cpp server options for the companions on this computer: "vae", and "llm" or "t5xxl" for a
-// text encoder of that type.
+// sd.cpp server options for the companions on this computer: "vae", and "llm", "t5xxl", "clip_l"
+// or "clip_g" for a text encoder of that type.
 QVariantMap companionServerOptions(const ModelLibrary *library, const QString &modelPath);
 // Adds companions to a downloaded model's sidecar (when they came later than the model).
 bool recordCompanions(const QString &modelPath, const QList<HubFile> &companions);

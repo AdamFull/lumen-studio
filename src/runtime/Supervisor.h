@@ -11,6 +11,7 @@
 #include <QPromise>
 #include <QTimer>
 
+#include <functional>
 #include <memory>
 #include <optional>
 
@@ -93,6 +94,9 @@ public:
     int users(const QString &id) const;
 
     int healthIntervalMs = 500;
+    // Checked before a server is started: a non-empty answer is the error the start fails with
+    // instead (e.g. an sd.cpp profile whose model is in the wrong slot, see checkSdProfile).
+    std::function<QString(const ServerProfile &profile, const QString &kind)> preflight;
     int maxRestarts = 3;
 
 signals:

@@ -10,6 +10,7 @@
 #include "runtime/Download.h"
 #include "runtime/Hardware.h"
 #include "runtime/ModelLibrary.h"
+#include "runtime/ModelPresets.h"
 
 #include <QCoreApplication>
 #include <QDir>
@@ -691,68 +692,22 @@ HubFile companionFromJson(const QJsonObject &o)
     return f;
 }
 
-QList<FamilyCompanion> familyCompanions(const QString &modelFamily)
-{
-    if (modelFamily != QLatin1String("Anima"))
-        return {};
-    // circlestone-labs/Anima, as sd.cpp's docs/anima.md lists them.
-    const QString repo = QStringLiteral("circlestone-labs/Anima");
-    const QString revision = QStringLiteral("f973fc41ec7545364ac9776c2440285f43ff2a30");
-    const QString license = QStringLiteral("circlestone-labs-non-commercial-license");
-    auto make = [&](const QString &path, ModelKind kind, const QString &type, qint64 size, const QString &sha, const QString &family,
-                    const QString &variant) {
-        FamilyCompanion c;
-        c.file.path = QFileInfo(path).fileName();
-        c.file.url = QUrl(QStringLiteral("https://huggingface.co/%1/resolve/%2/%3").arg(repo, revision, path));
-        c.file.size = size;
-        c.file.sha256 = sha;
-        c.file.kind = kind;
-        c.file.hubType = type;
-        c.file.format = QStringLiteral("safetensors");
-        c.file.precision = QStringLiteral("BF16");
-        c.file.required = true;
-        c.repo = repo;
-        c.revision = revision;
-        c.license = license;
-        c.family = family;
-        c.variant = variant;
-        return c;
-    };
-    return {make(QStringLiteral("split_files/vae/qwen_image_vae.safetensors"), ModelKind::Vae, QStringLiteral("VAE"), 253806246,
-                 QStringLiteral("a70580f0213e67967ee9c95f05bb400e8fb08307e017a924bf3441223e023d1f"), QStringLiteral("Qwen-Image / Wan"), QString()),
-            make(QStringLiteral("split_files/text_encoders/qwen_3_06b_base.safetensors"), ModelKind::TextEncoder, QStringLiteral("Text Encoder"),
-                 1192135096, QStringLiteral("cd2a512003e2f9f3cd3c32a9c3573f820bb28c940f73c57b1ddaa983d9223eba"), QStringLiteral("LLM"),
-                 QStringLiteral("Qwen3 0.6B"))};
-}
-
 namespace {
 
-std::optional<FamilyCompanion> familyCompanionFor(const HubFile &file)
+// The sd.cpp option a component file fills, from its header.
+QString companionOption(const ModelInfo &info)
 {
-    for (const QString &family : {QStringLiteral("Anima")}) {
-        for (const FamilyCompanion &c : familyCompanions(family)) {
-            if (c.file.sha256 == file.sha256)
-                return c;
-        }
-    }
-    return std::nullopt;
-}
-
-// A library file that can stand in for a family companion: the same file, else one whose
-// header says it is the same kind of model (the name the file has does not matter).
-QString standIn(const ModelLibrary *library, const FamilyCompanion &c)
-{
-    if (const auto same = library->find(c.file.sha256, c.file.fileName(), c.file.size))
-        return same->path;
-    QString best;
-    for (const ModelEntry &e : library->entries(c.file.kind)) {
-        if (e.info.family != c.family || (!c.variant.isEmpty() && e.info.variant != c.variant))
-            continue;
-        // Prefer one named like the original (qwen_image_vae_fp8 over wan_2.1_vae).
-        if (best.isEmpty() || QFileInfo(e.path).fileName().startsWith(QFileInfo(c.file.path).completeBaseName(), Qt::CaseInsensitive))
-            best = e.path;
-    }
-    return best;
+    if (info.kind == ModelKind::Vae)
+        return QStringLiteral("vae");
+    if (info.kind != ModelKind::TextEncoder)
+        return {};
+    if (info.family == QLatin1String("LLM"))
+        return QStringLiteral("llm");
+    if (info.family == QLatin1String("T5"))
+        return QStringLiteral("t5xxl");
+    if (info.family == QLatin1String("CLIP"))
+        return info.variant == QLatin1String("CLIP-G") ? QStringLiteral("clip_g") : info.variant == QLatin1String("CLIP-L") ? QStringLiteral("clip_l") : QString();
+    return {};
 }
 
 } // namespace
@@ -763,39 +718,61 @@ QList<ModelCompanion> companionsOf(const ModelLibrary *library, const QString &m
     if (!e)
         return {};
     QList<ModelCompanion> out;
+    QStringList filled;
     for (const QJsonValue &v : e->civitai.value(QStringLiteral("companions")).toArray()) {
         ModelCompanion c;
         c.file = companionFromJson(v.toObject());
         if (c.file.path.isEmpty())
             continue;
-        if (const auto local = library->find(c.file.sha256, c.file.fileName(), c.file.size))
+        if (const auto local = library->find(c.file.sha256, c.file.fileName(), c.file.size)) {
             c.path = local->path;
+            c.option = companionOption(local->info);
+        } else if (c.file.kind == ModelKind::Vae) {
+            c.option = QStringLiteral("vae");
+        }
+        if (!c.option.isEmpty())
+            filled << c.option;
         out << c;
     }
-    if (!out.isEmpty() || (e->info.kind != ModelKind::DiffusionModel && e->info.kind != ModelKind::Checkpoint))
+    if (e->info.kind != ModelKind::DiffusionModel && e->info.kind != ModelKind::Checkpoint)
         return out;
-    for (const FamilyCompanion &f : familyCompanions(e->info.family)) {
-        ModelCompanion c;
-        c.file = f.file;
-        c.path = standIn(library, f);
-        out << c;
+    if (const ModelPreset *preset = presetFor(e->info, e->path)) {
+        for (const PresetSlot &slot : preset->components) {
+            if (filled.contains(slot.option))
+                continue;
+            ModelCompanion c;
+            c.file = slot.hubFile();
+            c.path = slotStandIn(library, slot);
+            c.option = slot.option;
+            out << c;
+        }
     }
     return out;
 }
 
 HubDownload companionDownload(const ModelEntry &model, const HubFile &companion)
 {
-    if (const auto f = familyCompanionFor(companion)) {
-        // A family's file: from its pinned Hugging Face repository.
+    // A preset's file: from the repository the model's own preset pins it to (the same VAE can be in
+    // several repositories, under different licences), else from any preset that pins it.
+    const PresetSlot *slot = nullptr;
+    if (const ModelPreset *preset = presetFor(model.info, model.path)) {
+        for (const PresetSlot &s : preset->components) {
+            if (!companion.sha256.isEmpty() && s.file.sha256 == companion.sha256.toLower())
+                slot = &s;
+        }
+    }
+    if (!slot)
+        slot = presetSlotForSha(companion.sha256);
+    if (slot) {
         HubDownload d;
         d.source = HubSource::HuggingFace;
-        d.modelId = f->repo;
-        d.modelName = f->repo.section(QLatin1Char('/'), 1);
-        d.versionId = f->revision;
-        d.versionName = f->revision.left(7);
-        d.license = f->license;
-        d.page = QUrl(QStringLiteral("https://huggingface.co/") + f->repo);
-        d.file = f->file;
+        d.modelId = slot->file.repo;
+        d.modelName = slot->file.repo.section(QLatin1Char('/'), 1);
+        d.versionId = slot->file.revision;
+        d.versionName = slot->file.revision.left(7);
+        d.license = slot->file.license;
+        d.page = QUrl(QStringLiteral("https://huggingface.co/") + slot->file.repo);
+        d.file = slot->hubFile();
         return d;
     }
     const QJsonObject c = model.civitai;
@@ -820,17 +797,9 @@ QVariantMap companionServerOptions(const ModelLibrary *library, const QString &m
 {
     QVariantMap out;
     for (const ModelCompanion &c : companionsOf(library, modelPath)) {
-        if (c.missing())
+        if (c.missing() || c.option.isEmpty() || out.contains(c.option))
             continue;
-        const std::optional<ModelEntry> e = library->entry(c.path);
-        const ModelKind kind = e && e->info.kind != ModelKind::Unknown ? e->info.kind : c.file.kind;
-        const QString native = QDir::toNativeSeparators(c.path);
-        if (kind == ModelKind::Vae)
-            out.insert(QStringLiteral("vae"), native);
-        else if (kind == ModelKind::TextEncoder && e && e->info.family == QLatin1String("LLM"))
-            out.insert(QStringLiteral("llm"), native);
-        else if (kind == ModelKind::TextEncoder && e && e->info.family == QLatin1String("T5"))
-            out.insert(QStringLiteral("t5xxl"), native);
+        out.insert(c.option, QDir::toNativeSeparators(c.path));
     }
     return out;
 }

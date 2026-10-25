@@ -103,6 +103,25 @@ is limited to 0.3 (provider setting *IP-Adapter weight with pose control*). An i
 already generating cannot be stopped by the server: cancelling ends the job in Lumen at once, and
 the server finishes that image in the background.
 
+**Models that need more than one file (FLUX, Qwen-Image, Anima).** Lumen knows what these model
+families need and fills it in when you choose the model, in the server settings or with *Use with a
+server*:
+* The model goes in the right field. A FLUX, Qwen-Image or Anima file is a *diffusion model*, not a
+  checkpoint, even when it sits in a `checkpoints` folder.
+* Its VAE and text encoders come from your model library: for FLUX.2 [klein] 4B the FLUX.2 VAE
+  and the Qwen3 4B text encoder; for FLUX.1 the FLUX.1 VAE, CLIP-L and T5-XXL. Files are recognised
+  by their contents, whatever they are called.
+* What is missing is listed with its size, and **Download missing files** fetches it from a pinned
+  Hugging Face repository. The server settings fill in when the download is done.
+* A ControlNet or IP-Adapter that does not fit the model (an SDXL ControlNet with FLUX or Anima) is
+  named, and the server cannot be saved with it.
+* A server that cannot work says why when it is started, instead of "The server exited while
+  starting".
+
+Known families: FLUX.2 [klein] 4B and 9B (and their base models), FLUX.1 dev, schnell and Kontext
+dev, Qwen-Image and Qwen-Image-Edit, Anima, SDXL (with Illustrious and Pony) and SD 1.5. Other
+models work as before, with the fields filled in by hand.
+
 **Language models with llama.cpp.**
 * **Models:** a server can offer several models. Use *More models* for further ones; each has a
   name that roles and requests use. Choosing a vision model fills in its *Vision projector* (the

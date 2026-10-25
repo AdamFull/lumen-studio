@@ -31,8 +31,9 @@ struct ModelInfo
 {
     ModelKind kind = ModelKind::Unknown;
     QString format;          // "gguf", "safetensors", "pickle"
-    QString family;          // "SD 1.5", "SDXL", "SD 3", "FLUX", … or the LLM architecture ("qwen3vl")
-    QString variant;         // finer hint from metadata or the name: "Illustrious", "Pony"
+    QString family;          // "SD 1.5", "SDXL", "SD 3", "FLUX" (FLUX.1), "FLUX.2", … or the LLM architecture ("qwen3vl")
+    QString variant;         // finer hint: "Illustrious", "Pony" (names); "Dev", "Schnell", "Klein 4B" (FLUX
+                             // headers); "Qwen3 4B", "CLIP-L" (text encoders)
     QString precision;       // "Q4_K_M", "F16", "BF16", "FP8", …
     QString title;           // name stored in the file (GGUF general.name), if any
     qint64 parameters = 0;   // weight count
@@ -55,7 +56,8 @@ struct ModelInfo
 // folder names.
 // Raised when the header inspection learns something new, so the library reads indexed files
 // again (2: Wan / Qwen-Image VAEs, text encoder type and size).
-constexpr int kModelInspectorVersion = 2;
+// 3: FLUX.2 (and its klein / dev variants) told from FLUX.1, FLUX.1 dev / schnell, CLIP-L / CLIP-G.
+constexpr int kModelInspectorVersion = 3;
 ModelInfo inspectModel(const QString &path);
 
 // File extensions Lumen treats as models.

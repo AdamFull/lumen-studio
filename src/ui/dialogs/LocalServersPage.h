@@ -102,7 +102,12 @@ private:
     void buildOptions();
     // A model chosen for `key` ("model", "diffusion_model") brings its VAE / text encoder into
     // the empty fields (Civitai companions in the library).
-    void fillCompanions(const QString &key, const QString &path);
+    // A model chosen for "model" or "diffusion_model": its preset puts it in its slot and fills the
+    // components it needs from the library (ModelPresets.h).
+    void applyModel(const QString &key, const QString &path);
+    void setField(const QString &key, const QVariant &value);
+    QString modelPath() const;
+    void downloadMissing();
     void updatePreview();
     void applyPreset();
     void updatePresetRow();
@@ -122,6 +127,9 @@ private:
     QHash<QString, QWidget *> m_fields;
     QPlainTextEdit *m_preview;
     QLabel *m_problem;
+    QLabel *m_modelInfo;
+    QPushButton *m_downloadMissing;
+    QPushButton *m_ok = nullptr;
     QCheckBox *m_createProvider = nullptr;
     QString m_builtFor;
 };

@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "comment": "Qwen-Image and Qwen-Image-Edit (20B) as stable-diffusion.cpp's docs/qwen_image.md and docs/qwen_image_edit.md run them: the diffusion model plus the Qwen-Image VAE and the Qwen2.5-VL 7B text encoder, at CFG 2.5 with flow shift 3. Files from Comfy-Org/Qwen-Image_ComfyUI. Qwen-Image-Edit 2511 also needs --model-args qwen_image_zero_cond_t=true (Extra arguments).",
+  "docs": "https://github.com/leejet/stable-diffusion.cpp/blob/f89d9b13d730eabeede7314ce49dacd18d3c90c2/docs/qwen_image.md",
+  "files": {
+    "qwen-image-vae": {
+      "repo": "Comfy-Org/Qwen-Image_ComfyUI",
+      "revision": "1f12b17be14c89b026c51a91d67c32f84bb047bc",
+      "path": "split_files/vae/qwen_image_vae.safetensors",
+      "size": 253806246,
+      "sha256": "a70580f0213e67967ee9c95f05bb400e8fb08307e017a924bf3441223e023d1f",
+      "license": "apache-2.0"
+    },
+    "qwen25-vl-7b": {
+      "repo": "Comfy-Org/Qwen-Image_ComfyUI",
+      "revision": "1f12b17be14c89b026c51a91d67c32f84bb047bc",
+      "path": "split_files/text_encoders/qwen_2.5_vl_7b.safetensors",
+      "size": 16584415576,
+      "sha256": "cfafd739459bc86257397259f612a9aee88e5b98e85b5c0d0d1717e898b3463a",
+      "license": "apache-2.0"
+    }
+  },
+  "presets": [
+    {
+      "id": "qwen-image-edit",
+      "name": "Qwen-Image-Edit",
+      "note": "A 20B model: realistic with 16 GB of GPU memory or more.",
+      "docs": "https://github.com/leejet/stable-diffusion.cpp/blob/f89d9b13d730eabeede7314ce49dacd18d3c90c2/docs/qwen_image_edit.md",
+      "match": {"family": "Qwen-Image", "kinds": ["diffusion_model"], "name_any": ["edit"]},
+      "slots": [
+        {"option": "vae", "kind": "vae", "family": "Qwen-Image / Wan", "label": "Qwen-Image VAE", "file": "qwen-image-vae"},
+        {"option": "llm", "kind": "text_encoder", "family": "LLM", "variant": "Qwen2.5 7B", "label": "Qwen2.5-VL 7B text encoder", "file": "qwen25-vl-7b"}
+      ],
+      "can": {"generate": false, "edit": true, "inpaint": true, "references": 3, "negative_prompt": true, "loras": true, "control_net": [], "ip_adapter": []},
+      "sampling": {"cfg": 2.5, "flow_shift": 3, "sampler": "euler", "native_resolution": 1024, "dialect": "natural"}
+    },
+    {
+      "id": "qwen-image",
+      "name": "Qwen-Image",
+      "note": "A 20B model: realistic with 16 GB of GPU memory or more.",
+      "match": {"family": "Qwen-Image", "kinds": ["diffusion_model"]},
+      "slots": [
+        {"option": "vae", "kind": "vae", "family": "Qwen-Image / Wan", "label": "Qwen-Image VAE", "file": "qwen-image-vae"},
+        {"option": "llm", "kind": "text_encoder", "family": "LLM", "variant": "Qwen2.5 7B", "label": "Qwen2.5-VL 7B text encoder", "file": "qwen25-vl-7b"}
+      ],
+      "can": {"generate": true, "edit": false, "inpaint": true, "negative_prompt": true, "loras": true, "control_net": [], "ip_adapter": []},
+      "sampling": {"cfg": 2.5, "flow_shift": 3, "sampler": "euler", "native_resolution": 1024, "dialect": "natural"}
+    }
+  ]
+}

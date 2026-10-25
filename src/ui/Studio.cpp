@@ -8,6 +8,7 @@
 #include "core/Log.h"
 #include "core/Paths.h"
 #include "core/Settings.h"
+#include "runtime/ModelPresets.h"
 #include "ui/ext/Extension.h"
 
 #include <QDir>
@@ -35,6 +36,16 @@ Studio::Studio(QObject *parent)
     connect(&m_registry, &ai::ProviderRegistry::providersChanged, this, &Studio::applyConcurrency);
     m_runtimes.load();
     m_servers.load();
+    // An sd.cpp profile that cannot work (a model in the wrong slot, a missing text encoder, a
+    // ControlNet of another family) fails with what to change instead of a server exit code.
+    m_servers.preflight = [this](const runtime::ServerProfile &profile, const QString &kind) {
+        if (kind != QLatin1String("sd.cpp"))
+            return QString();
+        QStringList messages;
+        for (const runtime::ProfileProblem &p : runtime::checkSdProfile(&m_models, profile))
+            messages << p.message;
+        return messages.join(QLatin1Char(' '));
+    };
     applyServerBindings();
     connect(&m_registry, &ai::ProviderRegistry::providersChanged, this, &Studio::applyServerBindings);
     connect(&m_servers, &runtime::ServerSupervisor::profilesChanged, this, &Studio::applyServerBindings);

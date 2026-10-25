@@ -1,0 +1,134 @@
+#pragma once
+
+#include "runtime/ModelFormats.h"
+#include "runtime/ModelHub.h"
+#include "runtime/ServerProfile.h"
+
+#include <QMap>
+#include <QUrl>
+#include <QVariantMap>
+
+#include <optional>
+
+namespace lumen::runtime {
+
+class ModelLibrary;
+
+// ---- Model presets (plan M17 §17.3) ----
+// What a model family needs and how to run it, as data (resources/presets/models/*.json, one file
+// per family): the files its model files never carry (VAE, text encoders), pinned to a Hugging
+// Face commit with their SHA-256; which add-ons fit; sampling defaults; launch options per GPU size.
+// Choosing a model fills every component slot from the library, so a model cannot be started
+// with the wrong slots or without its text encoder.
+
+// A file a preset needs, pinned to a commit.
+struct PresetFile
+{
+    QString id;              // key in its family file
+    QString repo;            // "Comfy-Org/flux2-klein-4B"
+    QString revision;        // commit
+    QString path;            // in the repository
+    qint64 size = 0;
+    QString sha256;
+    QString license;
+
+    QUrl url() const;
+    QString fileName() const;
+};
+
+// A component: a server option the model needs a file for.
+struct PresetSlot
+{
+    QString option;          // sd.cpp server option: "vae", "clip_l", "clip_g", "t5xxl", "llm"
+    ModelKind kind = ModelKind::Unknown; // Vae or TextEncoder
+    QString family;          // ModelInfo::family a library file must have ("FLUX.2", "LLM", "CLIP", "T5")
+    QString variant;         // and its variant, if set ("Qwen3 4B", "CLIP-L")
+    QString label;           // what it is, for messages ("Qwen3 4B text encoder")
+    bool required = true;
+    PresetFile file;
+
+    HubFile hubFile() const; // the pinned download as a HubFile (kind, url, size, sha256, required)
+};
+
+struct ModelPreset
+{
+    QString id;              // "flux2-klein-4b"
+    QString name;            // "FLUX.2 [klein] 4B"
+    QString familyFile;      // the file it came from ("flux2")
+    QUrl docs;               // the sd.cpp page it follows
+    QString note;            // a hint for the user (shown with the model)
+
+    // Matching a model file: its header family (and variant), kind, and words in its file name.
+    QString family;
+    QString variant;
+    QList<ModelKind> kinds;  // Checkpoint and/or DiffusionModel
+    QStringList nameAny;     // the file name contains one of these (lower case); empty = any
+    QStringList nameNone;    // and none of these
+
+    QList<PresetSlot> components;
+
+    // What it can do.
+    bool generate = true;
+    bool edit = false;       // instruction edits with reference images
+    bool inpaint = true;
+    int references = 0;      // reference images for edits
+    bool negativePrompt = true;
+    bool loras = true;
+    QStringList controlNetFamilies; // ControlNet / IP-Adapter families that fit; empty = none do
+    QStringList ipAdapterFamilies;
+
+    // Sampling defaults; 0 / empty = the server's.
+    double cfg = 0;
+    double guidance = 0;     // distilled guidance (FLUX.1 dev)
+    double imageCfg = 0;
+    double flowShift = 0;
+    int steps = 0;
+    QString sampler;
+    QString scheduler;
+    int nativeResolution = 0;
+    QString dialect;         // "natural" or "tags"
+
+    // Launch options per GPU size, applied over presetOptions("sd.cpp", tier).
+    QMap<VramTier, QVariantMap> vram;
+    QVariantMap serverOptions; // always (e.g. "extra_args")
+
+    bool matches(const ModelInfo &info, const QString &path) const;
+    const PresetSlot *slot(const QString &option) const;
+};
+
+// The bundled presets, in matching order (the first that matches a file is its preset).
+const QList<ModelPreset> &modelPresets();
+// Parses one family file; on a problem returns nothing and names it in `error`.
+QList<ModelPreset> parseModelPresets(const QByteArray &json, const QString &familyFile, QString *error = nullptr);
+const ModelPreset *presetFor(const ModelInfo &info, const QString &path);
+// The pinned file with this SHA-256 in any preset, and the preset (for its licence and source).
+const PresetSlot *presetSlotForSha(const QString &sha256);
+
+// What a model file is, from the library or (when it is not in it yet) from its header.
+std::optional<ModelInfo> modelInfoOf(const ModelLibrary *library, const QString &path);
+// The sd.cpp option a model file goes in: "model" (a complete checkpoint) or "diffusion_model";
+// empty for other kinds.
+QString mainModelOption(const ModelInfo &info);
+// The library file that fills a slot: the pinned file itself, else one with the slot's header
+// family and variant (preferring one named like the pinned file). Empty when there is none.
+QString slotStandIn(const ModelLibrary *library, const PresetSlot &slot);
+
+// sd.cpp server options for using a model file: the file in its slot ("model" or
+// "diffusion_model"; the other slot "" = cleared), the components found in the library, and the
+// preset's launch options for the GPU size. Empty for files that are not image models.
+QVariantMap modelServerOptions(const ModelLibrary *library, const QString &path, std::optional<VramTier> tier = std::nullopt);
+
+// What keeps an sd.cpp server profile from starting or working, each with the option it is about:
+// a model in the wrong slot, a missing or mismatched component, a ControlNet / IP-Adapter of
+// another family, a file that is gone. Empty when nothing is known to be wrong.
+struct ProfileProblem
+{
+    QString option;
+    QString message;
+    bool missing = false;    // a component that is not there yet: downloading it fixes the profile
+};
+QList<ProfileProblem> checkSdProfile(const ModelLibrary *library, const ServerProfile &profile);
+// Whether a ControlNet or IP-Adapter file fits a preset.
+bool addonFits(const ModelPreset &preset, const ModelInfo &addon);
+
+} // namespace lumen::runtime
