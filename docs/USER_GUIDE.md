@@ -455,6 +455,16 @@ Results are added as new layers, so the original stays untouched. Only the maske
 Lumen crops the region around the mask, generates it at the model's working resolution and
 blends it back.
 
+**Instruction edits on your own computer.** With a model that edits from an instruction running
+in stable-diffusion.cpp (FLUX.2 [klein], FLUX.1 Kontext or Qwen-Image-Edit), **Instruct edit** in
+the AI tab works locally: "colorize it", "make it night", "replace the cup with a candle".
+* With a selection, the area around it is edited as a whole and blended back through the
+  selection, so the rest of the image stays exactly as it was.
+* Without a selection, the whole image is edited.
+* Reference images are passed to the model too (up to three besides the image for FLUX.2 [klein]).
+* Steps, CFG and the sampler follow the model: 4 steps at CFG 1 for FLUX.2 [klein], with no negative
+  prompt. Values you set on the Generate page still win there.
+
 ## 7. Library
 
 * Filter by kind, favourites or text; the inspector shows the prompt and all parameters.

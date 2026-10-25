@@ -26,6 +26,7 @@ public:
     QFuture<QStringList> listSchedulers() override;
 
     ImageCapabilities capabilities() const override;
+    ImageCapabilities capabilitiesFor(const ImageRequest &request) const override;
     ImageOperation *generate(const ImageRequest &request) override;
     bool supportsUtility(Utility u) const override;
     ImageOperation *runUtility(Utility utility, const QImage &image, const QJsonObject &params) override;

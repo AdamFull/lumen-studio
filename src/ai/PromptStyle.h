@@ -17,8 +17,14 @@ struct PromptStyle
     bool supportsNegative = true;
     // A rating tag the model understands, added with "Safe for work" (Anima: "safe").
     QString safeTag;
-    // Recommended guidance (CFG) when the user has not chosen one: Lumen's usual 6, Anima 4.5.
+    // Recommended guidance (CFG) when the user has not chosen one: Lumen's usual 6, Anima 4.5,
+    // FLUX 1 (from the model preset of a server Lumen runs, see ModelDefaults).
     double cfg = 6.0;
+    // Recommended steps and sampler from the model preset; 0 / empty = the back-end's default.
+    int steps = 0;
+    QString sampler;
+    QString scheduler;
+    QString preset;          // the model preset's id, if one applies
 
     QString describeForLlm() const;
     QString apply(const QString &prompt) const;

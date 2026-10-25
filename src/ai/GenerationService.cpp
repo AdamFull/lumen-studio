@@ -108,7 +108,9 @@ ImageRequest prepareRegionRequest(const ImageRequest &base, const RegionInput &r
     req.initImage = img::normalized(img::scaled(crop, plan.modelSize, true));
     req.mask = img::thresholdMask(img::scaled(maskCrop, plan.modelSize, true), 128);
     req.size = plan.modelSize;
-    if (caps.inpaint || caps.edit)
+    if (base.mode == GenMode::Edit && caps.edit && caps.regionEdit)
+        req.mode = GenMode::Edit; // the crop is edited as a whole; the mask only blends it back
+    else if (caps.inpaint || caps.edit)
         req.mode = GenMode::Inpaint;
     else
         req.mode = GenMode::ImageToImage;
@@ -240,6 +242,8 @@ void GenerationService::execute(Job *job, const GenerationSpec &specIn, OutputHa
         spec.request.prompt = style.withSafeTag(spec.request.prompt); // Anima: "safe"
     if (!spec.request.cfgChosen)
         spec.request.cfg = style.cfg;
+    if (!spec.request.stepsChosen && style.steps > 0)
+        spec.request.steps = style.steps;
     job->setProgress(-1.0, tr("Preparing..."));
 
     auto launch = [job, providerGuard, spec, onOutput](ImageRequest request, std::optional<RegionPlan> plan) {

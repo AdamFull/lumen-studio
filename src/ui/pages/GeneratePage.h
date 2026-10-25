@@ -57,7 +57,8 @@ private:
     Studio *m_studio;
     ProviderCombo *m_provider;
     QComboBox *m_model;
-    QString m_cfgFamily;        // the prompt style the CFG slider was last set for
+    QString m_cfgFamily;        // the prompt style (and model preset) the CFG slider was last set for
+    bool m_stepsFromPreset = false; // the steps slider shows a model preset's value
     AutoTextEdit *m_prompt;
     AutoTextEdit *m_negative;
     QButtonGroup *m_aspects;

@@ -47,6 +47,7 @@
 #include "ui/dialogs/ShortcutsPage.h"
 #include "ui/widgets/ServerStatus.h"
 #include "ai/Gate.h"
+#include "ai/PromptStyle.h"
 #include "ui/widgets/Controls.h"
 #include "ui/ext/Extension.h"
 
@@ -3275,6 +3276,26 @@ void TestCanvas::presetServerDialog()
     QVERIFY(ok->isEnabled());
     const runtime::LaunchCommand cmd = runtime::buildLaunch(chosen, rt);
     QVERIFY(cmd.arguments.contains(QStringLiteral("--diffusion-model")) && !cmd.arguments.contains(QStringLiteral("-m")));
+
+    // Saved as a server with a provider: the provider knows the preset, so it offers instruction
+    // edits and the prompt style takes klein's 4 steps at CFG 1.
+    studio.servers()->addProfile(chosen);
+    ai::Provider *bound = studio.providers()->addProvider(QStringLiteral("sdcpp"), QStringLiteral("Klein"),
+                                                          {{QStringLiteral("url"), QStringLiteral("http://127.0.0.1:1")},
+                                                           {QStringLiteral("managed_server"), chosen.id}});
+    QVERIFY(bound);
+    const QString boundId = bound->instanceId();
+    auto removeServer = qScopeGuard([&] {
+        studio.providers()->removeProvider(boundId);
+        studio.servers()->removeProfile(chosen.id);
+    });
+    QTRY_COMPARE(studio.providers()->provider(boundId)->setting(QStringLiteral("model_preset")).toMap().value(QStringLiteral("id")).toString(),
+                 QStringLiteral("flux2-klein-4b"));
+    ai::ImageProvider *kleinProvider = studio.providers()->imageProvider(boundId);
+    QVERIFY(kleinProvider && kleinProvider->capabilities().edit && kleinProvider->capabilities().regionEdit);
+    const ai::PromptStyle kleinStyle = ai::promptStyleFor(kleinProvider);
+    QCOMPARE(kleinStyle.steps, 4);
+    QCOMPARE(kleinStyle.cfg, 1.0);
 
     // An SDXL ControlNet does not fit: named, and the server cannot be saved like that.
     field(QStringLiteral("control_net"))->setText(QDir::toNativeSeparators(controlNet));

@@ -2122,8 +2122,30 @@ Survey of the code, the app log and user testing (October 2026):
     of M17 tries one; GGUF files are the safe choice.
 - [ ] Models folder: the visible default, ComfyUI subfolders, moving it, the one-time move from
   `%LOCALAPPDATA%`, extra roots.
-- [ ] Sampling defaults from presets (CFG, guidance, image CFG, negative prompt) through
+- [x] Sampling defaults from presets (CFG, guidance, image CFG, negative prompt) through
   `PromptStyle` and the request; sd.cpp instruction edit (§17.4) with a mock-server contract test.
+  * `ai::ModelDefaults`: the preset as the image back-end sees it; Studio passes it to the provider
+    of a server Lumen runs as its `model_preset` setting (`applyServerBindings`; the AI layer does
+    not depend on the runtime library).
+  * `PromptStyle` takes the preset's CFG, steps, sampler, scheduler and dialect, and drops the
+    negative prompt where the model takes none; `ImageRequest::stepsChosen` works like
+    `cfgChosen` (the Generate page chooses both; it follows a preset's steps when the model
+    changes, and goes back to 28 after it). FLUX.1 dev, schnell and klein no longer get CFG 6.
+  * `SdCppProvider`: capabilities from the preset (edit, references, negative prompt, native
+    size); the payload sends `distilled_guidance`, `img_cfg`, `flow_shift` and the preset's
+    sampler (after the request's and the provider's); an edit sends its source and references as
+    `ref_images` (no `init_image`, `strength` or mask), as the pinned sd-server's `api.md` says;
+    without an IP-Adapter, references guide new images the same way.
+  * `ImageCapabilities::regionEdit`: a selection stays an instruction edit of its crop (blended
+    back through the feathered mask) instead of becoming inpainting; set for local edit models
+    only, so cloud providers keep their behaviour.
+  * Tests: `tst_providers sdcppPresetDefaultsAndEdit` (capabilities, prompt style, the edit and
+    reference payloads, FLUX.1 guidance, Qwen-Image-Edit image CFG and flow shift, no edits
+    without a preset), `tst_services regionEditMode` and `localRegionEditEndToEnd` (a klein edit of a
+    selection: the request, and no pixel outside the feathered selection changes),
+    `tst_canvas presetServerDialog` (a saved server's provider gets the preset).
+  * The current editor uses this through the AI panel's *Instruct edit*; the prompt bar of §17.2
+    picks it automatically later.
 - [ ] New shell: start screen, the editor as the main window, status bar with jobs, *New from
   prompt*, *Browse project images*; the navigation rail and the Generate and Library pages go.
 - [ ] Prompt bar (§17.2): selection, whole-image and blank-canvas modes, *Remove*, variants strip,

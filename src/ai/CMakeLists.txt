@@ -19,6 +19,7 @@ add_library(lumen_ai STATIC
     ProviderCatalog.h ProviderCatalog.cpp
     StructuredChat.h StructuredChat.cpp
     PromptStyle.h PromptStyle.cpp
+    ModelDefaults.h ModelDefaults.cpp
     GenerationService.h GenerationService.cpp
     CastGeneration.h CastGeneration.cpp
     CharacterContext.h CharacterContext.cpp

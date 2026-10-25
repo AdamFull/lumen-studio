@@ -7,6 +7,7 @@
 #include "ai/Director.h"
 #include "ai/Gate.h"
 #include "ai/LoraCaptions.h"
+#include "ai/ModelDefaults.h"
 #include "ai/GenerationService.h"
 #include "ai/ProviderCatalog.h"
 #include "ai/StructuredChat.h"
@@ -47,6 +48,8 @@ private slots:
     void directorSchemasAcceptExample();
     void shotRequestBuildsPoseControl();
     void generationServiceRegionEndToEnd();
+    void regionEditMode();
+    void localRegionEditEndToEnd();
     void utilityOnAssets();
     void directorCritique();
     void directorDatasetPlan();
@@ -248,6 +251,120 @@ void TestServices::generationServiceRegionEndToEnd()
     // Inpaint request sent at model resolution with a mask.
     QVERIFY(payload.contains(QStringLiteral("mask")));
     QCOMPARE(payload.value(QStringLiteral("width")).toInt() % 8, 0);
+    QFile::remove(registry.configPath());
+}
+
+// A selection stays an instruction edit of its crop for local edit models; inpainting otherwise.
+void TestServices::regionEditMode()
+{
+    QImage source(400, 300, QImage::Format_ARGB32_Premultiplied);
+    source.fill(Qt::white);
+    QImage mask = img::createMask(source.size());
+    mask.fill(0);
+    for (int y = 100; y < 200; ++y)
+        for (int x = 150; x < 250; ++x)
+            mask.scanLine(y)[x] = 255;
+    const RegionInput region{source, mask, 32, 6, 12, false};
+    ImageCapabilities local;
+    local.inpaint = local.edit = local.regionEdit = true;
+    ImageCapabilities cloud;
+    cloud.inpaint = cloud.edit = true;
+    const RegionPlan plan = planRegion(img::maskBounds(mask), source.size(), 32, local);
+    ImageRequest edit;
+    edit.mode = GenMode::Edit;
+    QCOMPARE(prepareRegionRequest(edit, region, plan, local).mode, GenMode::Edit);
+    QCOMPARE(prepareRegionRequest(edit, region, plan, cloud).mode, GenMode::Inpaint);
+    ImageRequest fill;
+    fill.mode = GenMode::Inpaint;
+    QCOMPARE(prepareRegionRequest(fill, region, plan, local).mode, GenMode::Inpaint);
+}
+
+// "Colorize the selection" with FLUX.2 klein through sd.cpp: an instruction edit of the crop with
+// the preset's steps and CFG, and not one pixel outside the feathered selection changes.
+void TestServices::localRegionEditEndToEnd()
+{
+    MockHttpServer server;
+    QJsonObject payload;
+    server.route("POST", QStringLiteral("/sdcpp/v1/img_gen"), [&](const MockRequest &req) {
+        payload = req.json();
+        return MockResponse::json({{QStringLiteral("id"), QStringLiteral("job_1")}}, 202);
+    });
+    server.route("GET", QStringLiteral("/sdcpp/v1/jobs/job_1"), [&](const MockRequest &) {
+        const QSize size(payload.value(QStringLiteral("width")).toInt(), payload.value(QStringLiteral("height")).toInt());
+        const QJsonArray images{QJsonObject{{QStringLiteral("index"), 0}, {QStringLiteral("b64_json"), pngB64(QColor(255, 128, 0), size)}}};
+        return MockResponse::json({{QStringLiteral("status"), QStringLiteral("completed")}, {QStringLiteral("result"), QJsonObject{{QStringLiteral("images"), images}}}});
+    });
+
+    QTemporaryDir dir;
+    doc::Project project;
+    auto opened = project.open(dir.filePath(QStringLiteral("p.lumen")));
+    QTRY_VERIFY(opened.isFinished());
+    ProviderRegistry registry(&m_http);
+    registerBuiltInProviders(registry);
+    QFile::remove(registry.configPath());
+    ModelDefaults klein;
+    klein.id = QStringLiteral("flux2-klein-4b");
+    klein.cfg = 1.0;
+    klein.steps = 4;
+    klein.sampler = QStringLiteral("euler");
+    klein.nativeResolution = 1024;
+    klein.edit = true;
+    klein.references = 4;
+    klein.negativePrompt = false;
+    auto *sd = qobject_cast<SdCppProvider *>(registry.addProvider(
+        QStringLiteral("sdcpp"), QStringLiteral("Klein"),
+        {{QStringLiteral("url"), server.baseUrl().toString()}, {QStringLiteral("model"), QStringLiteral("flux-2-klein-4b.safetensors")},
+         {QStringLiteral("model_preset"), klein.toVariant()}}));
+    QVERIFY(sd);
+    sd->pollIntervalMs = 20;
+    JobQueue queue;
+    GenerationService service(&registry, &queue);
+    service.setProject(&project);
+
+    // A photo with detail everywhere, so any change outside the selection would show.
+    QImage source(1200, 900, QImage::Format_ARGB32_Premultiplied);
+    for (int y = 0; y < source.height(); ++y)
+        for (int x = 0; x < source.width(); ++x)
+            source.setPixelColor(x, y, QColor((x * 7) % 256, (y * 5) % 256, ((x + y) * 3) % 256));
+    QImage mask = img::createMask(source.size());
+    mask.fill(0);
+    for (int y = 300; y < 520; ++y)
+        for (int x = 400; x < 700; ++x)
+            mask.scanLine(y)[x] = 255;
+    GenerationSpec spec;
+    spec.request.mode = GenMode::Edit;
+    spec.request.prompt = QStringLiteral("colorize it, keep everything else");
+    spec.region = RegionInput{source, mask, 48, 6, 12, false};
+    spec.assetKind = doc::AssetKind::Edit;
+    Job *job = service.submit(spec);
+    QTRY_VERIFY_WITH_TIMEOUT(job->isFinished(), 10000);
+    QVERIFY2(job->state() == Job::State::Succeeded, qPrintable(job->errorString()));
+
+    // The request: the crop as the edit's source, with the preset's steps, CFG and sampler.
+    QCOMPARE(payload.value(QStringLiteral("ref_images")).toArray().size(), 1);
+    QVERIFY(!payload.contains(QStringLiteral("init_image")));
+    QVERIFY(!payload.contains(QStringLiteral("mask_image")));
+    const QJsonObject sample = payload.value(QStringLiteral("sample_params")).toObject();
+    QCOMPARE(sample.value(QStringLiteral("sample_steps")).toInt(), 4);
+    QCOMPARE(sample.value(QStringLiteral("guidance")).toObject().value(QStringLiteral("txt_cfg")).toDouble(), 1.0);
+    QCOMPARE(sample.value(QStringLiteral("sample_method")).toString(), QStringLiteral("euler"));
+    QCOMPARE(payload.value(QStringLiteral("width")).toInt() % 64, 0);
+
+    // The result layer: the edit inside the selection, nothing outside it plus its feathered edge.
+    // The edge is grown by grow + feather / 2 and blurred by three box passes of feather / 2, so for
+    // this rectangle it ends 6 + 6 + 18 = 30 px out.
+    const GenerationOutput out = GenerationService::outputOf(job);
+    QCOMPARE(out.images.size(), 1);
+    const QImage layer = out.images[0];
+    QCOMPARE(layer.size(), source.size());
+    QCOMPARE(layer.pixelColor(550, 410), QColor(255, 128, 0));
+    const QRect reach = QRect(400, 300, 300, 220).adjusted(-30, -30, 30, 30);
+    int changed = 0;
+    for (int y = 0; y < layer.height(); ++y)
+        for (int x = 0; x < layer.width(); ++x)
+            if (!reach.contains(x, y) && qAlpha(layer.pixel(x, y)) != 0)
+                ++changed;
+    QCOMPARE(changed, 0);
     QFile::remove(registry.configPath());
 }
 

@@ -8,6 +8,7 @@
 #include "core/Log.h"
 #include "core/Paths.h"
 #include "core/Settings.h"
+#include "ai/ModelDefaults.h"
 #include "runtime/ModelPresets.h"
 #include "ui/ext/Extension.h"
 
@@ -150,6 +151,37 @@ ai::Provider *Studio::providerForServer(const QString &profileId) const
     return nullptr;
 }
 
+namespace {
+
+// The preset of a server's model file, as the provider sees it.
+ai::ModelDefaults modelDefaultsFor(const runtime::ModelLibrary *library, const QString &file)
+{
+    const QString path = QDir::cleanPath(QDir::fromNativeSeparators(file));
+    const std::optional<runtime::ModelInfo> info = path.isEmpty() ? std::nullopt : runtime::modelInfoOf(library, path);
+    const runtime::ModelPreset *p = info ? runtime::presetFor(*info, path) : nullptr;
+    ai::ModelDefaults d;
+    if (!p)
+        return d;
+    d.id = p->id;
+    d.name = p->name;
+    d.cfg = p->cfg;
+    d.guidance = p->guidance;
+    d.imageCfg = p->imageCfg;
+    d.flowShift = p->flowShift;
+    d.steps = p->steps;
+    d.sampler = p->sampler;
+    d.scheduler = p->scheduler;
+    d.dialect = p->dialect;
+    d.nativeResolution = p->nativeResolution;
+    d.generate = p->generate;
+    d.edit = p->edit;
+    d.references = p->references;
+    d.negativePrompt = p->negativePrompt;
+    return d;
+}
+
+} // namespace
+
 void Studio::applyServerBindings()
 {
     QList<QPair<QString, QVariantMap>> urlUpdates;
@@ -180,6 +212,8 @@ void Studio::applyServerBindings()
             // Its family from the header, when the name does not tell (Anima models have any name).
             const auto entry = m_models.entry(QDir::cleanPath(QDir::fromNativeSeparators(model)));
             wanted.insert(QStringLiteral("model_family"), entry ? entry->info.family : QString());
+            // Its preset: sampling defaults and what it can do (instruction edits, references).
+            wanted.insert(QStringLiteral("model_preset"), modelDefaultsFor(&m_models, model).toVariant());
         }
         QVariantMap settings = m_registry.settingsFor(p->instanceId());
         if (kind == QLatin1String("llama.cpp")) {

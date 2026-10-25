@@ -107,6 +107,8 @@ struct ImageRequest
     // The user chose `cfg` (Generate page); otherwise the model's recommended value applies
     // (PromptStyle::cfg, set by GenerationService).
     bool cfgChosen = false;
+    // Likewise for `steps`: otherwise the model preset's (PromptStyle::steps; FLUX.2 klein takes 4).
+    bool stepsChosen = false;
     QString sampler;
     QString scheduler;
     QString model;
@@ -150,6 +152,10 @@ struct ImageCapabilities
     bool imageToImage = false;
     bool inpaint = false;          // native masked inpainting
     bool edit = false;             // instruction edit of an input image
+    // A selection is edited as an instruction edit of its crop (then blended in through the mask)
+    // rather than inpainted: local edit models (FLUX.2 klein, Kontext, Qwen-Image-Edit) keep the
+    // rest of the crop as it is, where inpainting would repaint the masked area from noise.
+    bool regionEdit = false;
     int maxReferences = 0;         // reference images usable for identity/style
     bool poseControl = false;      // ControlNet-style pose conditioning
     bool negativePrompt = false;

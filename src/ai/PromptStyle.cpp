@@ -1,5 +1,6 @@
 #include "ai/PromptStyle.h"
 
+#include "ai/ModelDefaults.h"
 #include "ai/Provider.h"
 
 #include <QFileInfo>
@@ -103,6 +104,23 @@ PromptStyle promptStyleFor(const ImageProvider *provider, const QString &model)
         s.dialect = PromptStyle::Dialect::Natural;
         s.qualityPrefix = QStringLiteral("high quality, detailed, ");
         s.defaultNegative = kPhotoNegative;
+    }
+    // A server Lumen runs knows its model's preset: its sampling defaults, dialect and whether it
+    // takes a negative prompt (FLUX.2 klein: CFG 1, 4 steps, none).
+    if (const ModelDefaults d = modelDefaultsOf(provider); d.isValid() && sameModel) {
+        s.preset = d.id;
+        if (d.cfg > 0)
+            s.cfg = d.cfg;
+        s.steps = d.steps;
+        s.sampler = d.sampler;
+        s.scheduler = d.scheduler;
+        if (d.dialect == QLatin1String("tags"))
+            s.dialect = PromptStyle::Dialect::Tags;
+        else if (d.dialect == QLatin1String("natural"))
+            s.dialect = PromptStyle::Dialect::Natural;
+        s.supportsNegative = caps.negativePrompt && d.negativePrompt;
+        if (!s.supportsNegative)
+            s.defaultNegative.clear();
     }
     if (provider->type().id == QLatin1String("comfyui") && provider->text(QStringLiteral("workflow")) != QLatin1String("builtin")
         && !provider->text(QStringLiteral("workflow")).isEmpty()) {

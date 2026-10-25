@@ -2,6 +2,8 @@
 
 #include "ai/ProviderRegistry.h"
 #include "ai/Director.h"
+#include "ai/ModelDefaults.h"
+#include "ai/PromptStyle.h"
 #include "ai/ProviderUtil.h"
 #include "ai/providers/ComfyUiProvider.h"
 #include "ai/providers/OpenAiChatProvider.h"
@@ -45,6 +47,7 @@ private slots:
     void sdcppFailureCancelAndUpscale();
     void lorasAcrossProviders();
     void sdCppPromptStyle();
+    void sdcppPresetDefaultsAndEdit();
 
 private:
     net::HttpClient m_http;
@@ -580,6 +583,161 @@ void TestProviders::sdCppPromptStyle()
     QCOMPARE(promptStyleFor(&sd, QStringLiteral("animagine-xl-4.0-opt.safetensors")).family, QStringLiteral("illustrious"));
     // Other models have no rating tag.
     QVERIFY(promptStyleFor(&sd, QStringLiteral("waiIllustriousSDXL_v170")).withSafeTag(QStringLiteral("1girl")) == QStringLiteral("1girl"));
+}
+
+namespace {
+
+// The FLUX.2 klein 4B preset as the studio hands it to the provider of a server it runs.
+QVariantMap kleinPreset()
+{
+    ModelDefaults d;
+    d.id = QStringLiteral("flux2-klein-4b");
+    d.name = QStringLiteral("FLUX.2 [klein] 4B");
+    d.cfg = 1.0;
+    d.steps = 4;
+    d.sampler = QStringLiteral("euler");
+    d.dialect = QStringLiteral("natural");
+    d.nativeResolution = 1024;
+    d.edit = true;
+    d.references = 4;
+    d.negativePrompt = false;
+    return d.toVariant();
+}
+
+} // namespace
+
+// A server Lumen runs knows its model's preset: FLUX.2 klein edits with reference images, takes
+// 4 steps at CFG 1 and no negative prompt; FLUX.1 dev gets its distilled guidance.
+void TestProviders::sdcppPresetDefaultsAndEdit()
+{
+    MockHttpServer server;
+    QJsonObject submitted;
+    server.route("POST", QStringLiteral("/sdcpp/v1/img_gen"), [&](const MockRequest &req) {
+        submitted = req.json();
+        return MockResponse::json({{QStringLiteral("id"), QStringLiteral("job_1")}}, 202);
+    });
+    server.route("GET", QStringLiteral("/sdcpp/v1/jobs/job_1"), [&](const MockRequest &) {
+        const QSize size(submitted.value(QStringLiteral("width")).toInt(), submitted.value(QStringLiteral("height")).toInt());
+        const QJsonArray images{QJsonObject{{QStringLiteral("index"), 0}, {QStringLiteral("b64_json"), pngBase64(size, QColor(255, 128, 0))}}};
+        return MockResponse::json({{QStringLiteral("status"), QStringLiteral("completed")}, {QStringLiteral("result"), QJsonObject{{QStringLiteral("images"), images}}}});
+    });
+    auto run = [&](SdCppProvider &sd, const ImageRequest &r) {
+        submitted = {};
+        ImageOperation *op = sd.generate(r);
+        op->setAutoDelete(false);
+        if (!QTest::qWaitFor([op] { return op->isFinished(); }, 5000)) {
+            delete op;
+            return QStringLiteral("timed out");
+        }
+        const bool ok = op->state() == Operation::State::Succeeded;
+        const QString error = op->errorString();
+        delete op;
+        return ok ? QString() : error;
+    };
+
+    // Without a preset: no instruction edits, and the request says why.
+    SdCppProvider plain(SdCppProvider::describe(), QStringLiteral("plain"), &m_http, nullptr);
+    plain.pollIntervalMs = 20;
+    plain.configure({{QStringLiteral("url"), server.baseUrl().toString()}, {QStringLiteral("model"), QStringLiteral("waiIllustriousSDXL_v170.safetensors")}});
+    QVERIFY(!plain.capabilities().edit);
+    QVERIFY(plain.capabilities().negativePrompt);
+    QCOMPARE(plain.capabilities().maxReferences, 0);
+    ImageRequest edit;
+    edit.mode = GenMode::Edit;
+    edit.prompt = QStringLiteral("colorize the photo");
+    edit.size = QSize(1024, 768);
+    edit.initImage = QImage(1024, 768, QImage::Format_ARGB32);
+    edit.initImage.fill(Qt::gray);
+    edit.steps = 4;
+    edit.cfg = 1.0;
+    QVERIFY(run(plain, edit).contains(QLatin1String("FLUX.2 [klein]")));
+
+    SdCppProvider sd(SdCppProvider::describe(), QStringLiteral("sd"), &m_http, nullptr);
+    sd.pollIntervalMs = 20;
+    sd.configure({{QStringLiteral("url"), server.baseUrl().toString()},
+                  {QStringLiteral("model"), QStringLiteral("flux-2-klein-4b.safetensors")},
+                  {QStringLiteral("model_family"), QStringLiteral("FLUX.2")},
+                  {QStringLiteral("model_preset"), kleinPreset()}});
+    ImageCapabilities caps = sd.capabilities();
+    QVERIFY(caps.edit);
+    QVERIFY(caps.regionEdit);
+    QVERIFY(!caps.negativePrompt);
+    QCOMPARE(caps.maxReferences, 4);
+    QCOMPARE(caps.nativePixels, qint64(1024) * 1024);
+    QCOMPARE(sd.capabilitiesFor(edit).maxReferences, 3); // the source is the first reference
+
+    // The prompt style follows the preset.
+    const PromptStyle style = promptStyleFor(&sd);
+    QCOMPARE(style.preset, QStringLiteral("flux2-klein-4b"));
+    QCOMPARE(style.cfg, 1.0);
+    QCOMPARE(style.steps, 4);
+    QCOMPARE(style.sampler, QStringLiteral("euler"));
+    QVERIFY(!style.supportsNegative);
+    QVERIFY(style.defaultNegative.isEmpty());
+    QVERIFY(style.dialect == PromptStyle::Dialect::Natural);
+    // Another model than the server's: not its preset.
+    QVERIFY(promptStyleFor(&sd, QStringLiteral("waiIllustriousSDXL_v170")).preset.isEmpty());
+
+    // An edit: the source and a reference as ref_images; no init image, strength or mask.
+    ReferenceImage character;
+    character.image = QImage(64, 64, QImage::Format_ARGB32);
+    character.image.fill(Qt::green);
+    character.role = ReferenceRole::Character;
+    edit.references << character;
+    edit.mask = img::createMask(edit.size, 255);
+    QCOMPARE(run(sd, edit), QString());
+    const QJsonArray refs = submitted.value(QStringLiteral("ref_images")).toArray();
+    QCOMPARE(refs.size(), 2);
+    QCOMPARE(img::fromBase64(refs[0].toString().toLatin1()).pixelColor(5, 5), QColor(Qt::gray));
+    QCOMPARE(img::fromBase64(refs[1].toString().toLatin1()).pixelColor(5, 5), QColor(Qt::green));
+    QVERIFY(!submitted.contains(QStringLiteral("init_image")));
+    QVERIFY(!submitted.contains(QStringLiteral("mask_image")));
+    QVERIFY(!submitted.contains(QStringLiteral("strength")));
+    QVERIFY(!submitted.contains(QStringLiteral("ip_adapter_image")));
+    QJsonObject sample = submitted.value(QStringLiteral("sample_params")).toObject();
+    QCOMPARE(sample.value(QStringLiteral("sample_steps")).toInt(), 4);
+    QCOMPARE(sample.value(QStringLiteral("sample_method")).toString(), QStringLiteral("euler")); // the preset's
+    QCOMPARE(sample.value(QStringLiteral("guidance")).toObject().value(QStringLiteral("txt_cfg")).toDouble(), 1.0);
+    QVERIFY(!sample.value(QStringLiteral("guidance")).toObject().contains(QStringLiteral("distilled_guidance")));
+
+    // A new image with a reference: guided by it through ref_images (there is no IP-Adapter).
+    ImageRequest t2i;
+    t2i.prompt = QStringLiteral("the same character at the beach");
+    t2i.size = QSize(1024, 1024);
+    t2i.steps = 4;
+    t2i.cfg = 1.0;
+    t2i.sampler = QStringLiteral("euler_a"); // the request's sampler wins
+    t2i.references << character;
+    QCOMPARE(run(sd, t2i), QString());
+    QCOMPARE(submitted.value(QStringLiteral("ref_images")).toArray().size(), 1);
+    QCOMPARE(submitted.value(QStringLiteral("sample_params")).toObject().value(QStringLiteral("sample_method")).toString(), QStringLiteral("euler_a"));
+
+    // FLUX.1 dev: CFG 1 plus distilled guidance 3.5; Qwen-Image-Edit: image CFG and flow shift.
+    ModelDefaults dev;
+    dev.id = QStringLiteral("flux1-dev");
+    dev.cfg = 1.0;
+    dev.guidance = 3.5;
+    dev.steps = 20;
+    dev.negativePrompt = false;
+    ModelDefaults qwen;
+    qwen.id = QStringLiteral("qwen-image-edit");
+    qwen.cfg = 2.5;
+    qwen.imageCfg = 1.5;
+    qwen.flowShift = 3;
+    qwen.edit = true;
+    qwen.references = 3;
+    for (const ModelDefaults &d : {dev, qwen}) {
+        sd.configure({{QStringLiteral("model_preset"), d.toVariant()}});
+        ImageRequest r = d.edit ? edit : t2i;
+        r.steps = 0; // not chosen: the preset's (or the server's 20)
+        QCOMPARE(run(sd, r), QString());
+        sample = submitted.value(QStringLiteral("sample_params")).toObject();
+        QCOMPARE(sample.value(QStringLiteral("sample_steps")).toInt(), d.steps > 0 ? d.steps : 20);
+        const QJsonObject guidance = sample.value(QStringLiteral("guidance")).toObject();
+        QCOMPARE(guidance.value(QStringLiteral("distilled_guidance")).toDouble(), d.guidance);
+        QCOMPARE(guidance.value(QStringLiteral("img_cfg")).toDouble(), d.imageCfg);
+        QCOMPARE(sample.value(QStringLiteral("flow_shift")).toDouble(), d.flowShift);
+    }
 }
 
 void TestProviders::lorasAcrossProviders()

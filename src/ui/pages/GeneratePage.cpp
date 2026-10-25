@@ -421,10 +421,19 @@ void GeneratePage::updateSizeLabel()
 void GeneratePage::followRecommendedCfg()
 {
     const ai::PromptStyle style = ai::promptStyleFor(m_provider->imageProvider(), m_model->currentText());
-    if (style.family == m_cfgFamily)
-        return; // the user's value stays while the model family does
-    m_cfgFamily = style.family;
+    const QString family = style.family + u'/' + style.preset;
+    if (family == m_cfgFamily)
+        return; // the user's values stay while the model family does
+    m_cfgFamily = family;
     m_cfg->setValue(style.cfg);
+    // The model preset's steps (FLUX.2 klein: 4); back to the usual 28 after such a model.
+    if (style.steps > 0) {
+        m_steps->setValue(style.steps);
+        m_stepsFromPreset = true;
+    } else if (m_stepsFromPreset) {
+        m_steps->setValue(28);
+        m_stepsFromPreset = false;
+    }
 }
 
 void GeneratePage::providerChanged()
@@ -516,6 +525,7 @@ void GeneratePage::generate()
     r.steps = int(m_steps->value());
     r.cfg = m_cfg->value();
     r.cfgChosen = true;
+    r.stepsChosen = true;
     r.sampler = m_sampler->currentText().trimmed();
     r.scheduler = m_scheduler->currentText().trimmed();
     if (caps.qualityTiers)

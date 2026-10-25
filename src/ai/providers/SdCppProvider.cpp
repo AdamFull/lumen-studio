@@ -1,5 +1,6 @@
 #include "ai/providers/SdCppProvider.h"
 
+#include "ai/ModelDefaults.h"
 #include "ai/ProviderUtil.h"
 #include "core/Async.h"
 #include "core/ImageOps.h"
@@ -141,25 +142,49 @@ ImageCapabilities SdCppProvider::capabilities() const
     c.textToImage = true;
     c.imageToImage = true;
     c.inpaint = true;
-    c.edit = false;
+    // What the model can do comes from its preset (servers Lumen runs; see ModelDefaults).
+    const ModelDefaults d = modelDefaultsOf(this);
+    c.edit = d.edit;
+    c.regionEdit = d.edit;
     c.poseControl = setting(QStringLiteral("control_net")).toBool();
-    c.maxReferences = setting(QStringLiteral("ip_adapter")).toBool() ? 1 : 0;
-    c.negativePrompt = c.seed = c.steps = c.cfg = c.samplers = true;
+    // References: one for the IP-Adapter, else those the model takes itself (FLUX.2 ref_images).
+    c.maxReferences = setting(QStringLiteral("ip_adapter")).toBool() ? 1 : d.references;
+    c.seed = c.steps = c.cfg = c.samplers = true;
+    c.negativePrompt = !d.isValid() || d.negativePrompt;
     c.batch = true;
     c.loras = true;
     c.sizeMultiple = 64;
     const QString res = text(QStringLiteral("native_resolution"));
-    c.nativePixels = res != QLatin1String(kAuto) && res.toInt() > 0 ? qint64(res.toInt()) * res.toInt() : 1024 * 1024;
+    const int side = res != QLatin1String(kAuto) && res.toInt() > 0 ? res.toInt() : d.nativeResolution > 0 ? d.nativeResolution : 1024;
+    c.nativePixels = qint64(side) * side;
     c.maxPixels = 2048 * 2048;
+    return c;
+}
+
+ImageCapabilities SdCppProvider::capabilitiesFor(const ImageRequest &request) const
+{
+    ImageCapabilities c = capabilities();
+    // An edit's source image is the first reference image.
+    if (request.mode == GenMode::Edit && !setting(QStringLiteral("ip_adapter")).toBool())
+        c.maxReferences = std::max(0, c.maxReferences - 1);
     return c;
 }
 
 QJsonObject SdCppProvider::buildPayload(const ImageRequest &r) const
 {
-    QJsonObject sample{{QStringLiteral("sample_steps"), r.steps},
-                       {QStringLiteral("guidance"), QJsonObject{{QStringLiteral("txt_cfg"), r.cfg}}}};
-    const QString sampler = r.sampler.isEmpty() ? text(QStringLiteral("sampler")) : r.sampler;
-    const QString scheduler = r.scheduler.isEmpty() ? text(QStringLiteral("scheduler")) : r.scheduler;
+    // The request's values, else the provider's settings, else the model preset's.
+    const ModelDefaults d = modelDefaultsOf(this);
+    QJsonObject guidance{{QStringLiteral("txt_cfg"), r.cfg}};
+    if (d.guidance > 0)
+        guidance.insert(QStringLiteral("distilled_guidance"), d.guidance);
+    if (d.imageCfg > 0)
+        guidance.insert(QStringLiteral("img_cfg"), d.imageCfg);
+    QJsonObject sample{{QStringLiteral("sample_steps"), r.steps > 0 ? r.steps : d.steps > 0 ? d.steps : 20},
+                       {QStringLiteral("guidance"), guidance}};
+    if (d.flowShift > 0)
+        sample.insert(QStringLiteral("flow_shift"), d.flowShift);
+    const QString sampler = !r.sampler.isEmpty() ? r.sampler : !text(QStringLiteral("sampler")).isEmpty() ? text(QStringLiteral("sampler")) : d.sampler;
+    const QString scheduler = !r.scheduler.isEmpty() ? r.scheduler : !text(QStringLiteral("scheduler")).isEmpty() ? text(QStringLiteral("scheduler")) : d.scheduler;
     if (!sampler.isEmpty())
         sample.insert(QStringLiteral("sample_method"), sampler);
     if (!scheduler.isEmpty())
@@ -181,6 +206,20 @@ QJsonObject SdCppProvider::buildPayload(const ImageRequest &r) const
         p.insert(QStringLiteral("vae_tiling_params"),
                  QJsonObject{{QStringLiteral("enabled"), true}, {QStringLiteral("tile_size_w"), 512}, {QStringLiteral("tile_size_h"), 512}});
     }
+    // Reference images (FLUX.2, Kontext, Qwen-Image-Edit): an edit's source first, then the
+    // request's references. Without an IP-Adapter, references guide a new image the same way.
+    const bool ipAdapter = setting(QStringLiteral("ip_adapter")).toBool();
+    if (r.mode == GenMode::Edit || (!ipAdapter && d.references > 0 && !r.references.isEmpty())) {
+        QJsonArray refs;
+        if (r.mode == GenMode::Edit)
+            refs.append(toBase64Png(img::flatten(r.initImage, Qt::white).convertToFormat(QImage::Format_RGB888)));
+        for (const ReferenceImage &ref : r.references) {
+            if (refs.size() >= std::max(1, d.references))
+                break;
+            refs.append(toBase64Png(img::flatten(ref.image, Qt::white).convertToFormat(QImage::Format_RGB888)));
+        }
+        p.insert(QStringLiteral("ref_images"), refs);
+    }
     if (r.mode == GenMode::ImageToImage || r.mode == GenMode::Inpaint) {
         p.insert(QStringLiteral("init_image"), toBase64Png(r.initImage));
         p.insert(QStringLiteral("strength"), r.denoise);
@@ -198,7 +237,7 @@ QJsonObject SdCppProvider::buildPayload(const ImageRequest &r) const
             break; // one ControlNet per server
         }
     }
-    if (setting(QStringLiteral("ip_adapter")).toBool() && !r.references.isEmpty()) {
+    if (ipAdapter && !r.references.isEmpty()) {
         // One reference image: prefer the character reference.
         const ReferenceImage *ref = &r.references.first();
         for (const ReferenceImage &candidate : r.references) {
@@ -235,8 +274,9 @@ QList<ServerLora> SdCppProvider::serverLoras(const QJsonObject &capabilities)
 ImageOperation *SdCppProvider::generate(const ImageRequest &r)
 {
     auto *op = new ImageOperation(this);
-    if (r.mode == GenMode::Edit) {
-        failLater(op, tr("stable-diffusion.cpp does not do instruction edits with this model; use inpainting or img2img."));
+    if (r.mode == GenMode::Edit && !capabilities().edit) {
+        failLater(op, tr("The model on this server does not edit images from an instruction (FLUX.2 [klein], FLUX.1 Kontext and "
+                         "Qwen-Image-Edit do); use inpainting or a variation instead."));
         return op;
     }
     QPointer<SdCppProvider> self(this);
