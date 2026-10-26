@@ -27,6 +27,7 @@ namespace lumen::ui {
 class AiOptions;
 class AiPanel;
 class AutoTextEdit;
+class LoraPicker;
 class ElidedLabel;
 class ProviderCombo;
 class SliderField;
@@ -73,6 +74,7 @@ public:
     // prompt (models that take one), reference images, the control pose (with pose control), the
     // engine, steps and seed under "Advanced", and "All AI options…".
     QWidget *optionsPopup() const { return m_popup; }
+    LoraPicker *loraPicker() const { return m_loras; }
     void showOptions();
 
 signals:
@@ -129,6 +131,7 @@ private:
     QCheckBox *m_randomSeed = nullptr;
     QSpinBox *m_variants = nullptr;
     AutoTextEdit *m_negative = nullptr;
+    LoraPicker *m_loras = nullptr;
     QPushButton *m_references = nullptr;
     QCheckBox *m_pose = nullptr;
     ProviderCombo *m_engine = nullptr;

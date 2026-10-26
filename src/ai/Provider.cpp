@@ -68,6 +68,11 @@ QFuture<QStringList> ImageProvider::listSchedulers()
     return QtFuture::makeReadyValueFuture(QStringList());
 }
 
+QFuture<QList<ServerLora>> ImageProvider::availableLoras()
+{
+    return QtFuture::makeReadyValueFuture(QList<ServerLora>());
+}
+
 QString errorMessage(const std::exception_ptr &e)
 {
     try {

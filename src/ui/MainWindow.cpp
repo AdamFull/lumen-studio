@@ -263,6 +263,7 @@ void MainWindow::buildStatusBar()
     });
     statusBar()->addPermanentWidget(m_engineButton);
     statusBar()->addPermanentWidget(new ServerStatusButton(m_studio, [this] { openSettings(QStringLiteral("servers")); }, this));
+    connect(m_studio, &Studio::settingsRequested, this, [this](const QString &tab) { openSettings(tab); }, Qt::QueuedConnection);
 
     // "Safe for work" in one click (also in Settings → General).
     auto *safe = new QToolButton(this);

@@ -57,8 +57,16 @@ struct ModelInfo
 // Raised when the header inspection learns something new, so the library reads indexed files
 // again (2: Wan / Qwen-Image VAEs, text encoder type and size).
 // 3: FLUX.2 (and its klein / dev variants) told from FLUX.1, FLUX.1 dev / schnell, CLIP-L / CLIP-G.
-constexpr int kModelInspectorVersion = 3;
+// 4: LoRAs of FLUX.2 klein 4B / 9B, FLUX.1, Anima, Qwen-Image and Krea 2 told apart by their layers.
+constexpr int kModelInspectorVersion = 4;
 ModelInfo inspectModel(const QString &path);
+
+// Why a LoRA cannot be used with a model of `family` / `variant` (the model's ModelInfo), in plain
+// words; empty when it fits or when either side is not known well enough to tell.
+QString loraMismatch(const ModelInfo &lora, const QString &family, const QString &variant);
+// The model a LoRA (or a model file) is for, as people name it ("FLUX.2 [klein] 4B", "SDXL");
+// empty if unknown.
+QString modelFamilyName(const QString &family, const QString &variant);
 
 // File extensions Lumen treats as models.
 QStringList modelFileFilters();

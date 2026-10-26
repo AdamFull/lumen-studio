@@ -21,6 +21,7 @@ public:
     QFuture<QStringList> listOptions(const QString &settingKey) override;
     QFuture<QStringList> listSamplers() override;
     QFuture<QStringList> listSchedulers() override;
+    QFuture<QList<ServerLora>> availableLoras() override;
 
     ImageCapabilities capabilities() const override;
     ImageOperation *generate(const ImageRequest &request) override;

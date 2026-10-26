@@ -127,6 +127,10 @@ public:
     virtual ImageOperation *runUtility(Utility utility, const QImage &image, const QJsonObject &params);
     virtual QFuture<QStringList> listSamplers();
     virtual QFuture<QStringList> listSchedulers();
+    // The LoRAs the server can load (its LoRA folder), as it names them; empty when it lists none
+    // or cannot use LoRAs. Asks a running server; for a server Lumen starts, the studio reads its
+    // LoRA folder instead so as not to start it (ui/LoraCatalog).
+    virtual QFuture<QList<ServerLora>> availableLoras();
     // Frees GPU memory held between jobs (e.g. unloads models) so another local model, such as a
     // language model on the same GPU, can run at full speed. Resolves when done; no-op by default.
     virtual QFuture<void> releaseGpu() { return QtFuture::makeReadyVoidFuture(); }

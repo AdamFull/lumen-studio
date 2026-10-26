@@ -6,6 +6,7 @@
 #include "ui/Studio.h"
 #include "ui/Theme.h"
 #include "ui/pages/AiOptions.h"
+#include "ui/widgets/LoraPicker.h"
 #include "ui/pages/AiPanel.h"
 #include "ui/pages/VariantStrip.h"
 #include "ui/widgets/Controls.h"
@@ -150,6 +151,17 @@ void PromptBar::buildOptions()
     m_negative->setAccessibleName(tr("Negative prompt"));
     m_negative->setPlaceholderText(tr("Things that should not be in the result"));
     m_form->addRow(tr("Leave out"), m_negative);
+    // Chosen here rather than typed into the description (plan M18 §18.3).
+    m_loras = new LoraPicker(m_studio, m_options, m_popup);
+    m_form->addRow(tr("LoRAs"), m_loras);
+    connect(m_loras, &LoraPicker::listed, this, [this] {
+        if (m_popup->isVisible())
+            m_popup->adjustSize();
+    });
+    connect(m_options, &AiOptions::changed, this, [this] {
+        if (m_popup->isVisible())
+            QMetaObject::invokeMethod(m_popup, [this] { m_popup->adjustSize(); }, Qt::QueuedConnection);
+    });
     m_references = new QPushButton(m_popup);
     m_references->setToolTip(tr("Pictures the engine follows for a character, a style or an object (in the AI tab)"));
     m_form->addRow(tr("References"), m_references);
@@ -460,6 +472,8 @@ void PromptBar::updateOptions()
     m_form->setRowVisible(m_seedRow, advanced && (!provider || caps.seed));
     const bool negative = provider && caps.negativePrompt && ai::promptStyleFor(provider).supportsNegative;
     m_form->setRowVisible(m_negative, negative);
+    m_loras->setEngine(provider);
+    m_form->setRowVisible(m_loras, provider && caps.loras);
     m_form->setRowVisible(m_references, caps.maxReferences > 0);
     m_form->setRowVisible(m_pose, caps.poseControl && m_doc && m_doc->controlPose());
 }

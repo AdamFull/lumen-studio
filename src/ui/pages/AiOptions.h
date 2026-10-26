@@ -1,14 +1,36 @@
 #pragma once
 
+#include <QHash>
+#include <QJsonObject>
+#include <QList>
 #include <QObject>
 #include <QString>
+#include <QStringList>
 
 namespace lumen::ai {
 class ImageProvider;
 class ProviderRegistry;
+struct LoraRef;
 } // namespace lumen::ai
 
 namespace lumen::ui {
+
+// A LoRA chosen in the editor for an image engine (plan M18 §18.3): what its server calls it, the
+// file on this computer when Lumen knows it, how strongly it applies, whether it is used, and the
+// words that call it up (added to the description when they are not in it).
+struct ChosenLora
+{
+    QString name;           // the server's name for it (file name without extension)
+    QString path;           // relative to the server's LoRA folder ("styles/ink.safetensors")
+    QString file;           // full path on this computer; empty for a server elsewhere
+    double weight = 0.8;
+    bool on = true;
+    QStringList triggerWords;
+
+    QJsonObject toJson() const;
+    static ChosenLora fromJson(const QJsonObject &o);
+    bool operator==(const ChosenLora &o) const = default;
+};
 
 // The editor's AI settings, shared by the prompt bar's ⋯ menu and the AI panel: one value each,
 // whichever of the two changes it. The prompt bar's words are here too, for the AI panel's actions
@@ -63,6 +85,13 @@ public:
     void setFeather(int pixels);
     bool colorMatch() const { return m_colorMatch; }
     void setColorMatch(bool on);
+    // The LoRAs chosen for an engine, remembered for the next session. A request takes the ones that
+    // are on (loraRefs) and their trigger words (withTriggerWords).
+    QList<ChosenLora> loras(const QString &providerId) const { return m_loras.value(providerId); }
+    void setLoras(const QString &providerId, const QList<ChosenLora> &loras);
+    QList<ai::LoraRef> loraRefs(const QString &providerId) const;
+    // `prompt` with the trigger words of the engine's LoRAs that are on and missing from it.
+    QString withTriggerWords(const QString &providerId, const QString &prompt) const;
 
 signals:
     // An option changed (not the words, which change with every key).
@@ -92,6 +121,7 @@ private:
     int m_padding = 64;
     int m_feather = 16;
     bool m_colorMatch = true;
+    QHash<QString, QList<ChosenLora>> m_loras;
 };
 
 } // namespace lumen::ui

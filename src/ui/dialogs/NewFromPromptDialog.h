@@ -26,6 +26,7 @@ namespace lumen::ui {
 
 class AiOptions;
 class AutoTextEdit;
+class LoraPicker;
 class ProviderCombo;
 class Studio;
 
@@ -40,8 +41,10 @@ public:
 
     void setPrompt(const QString &prompt, const QString &negative = QString());
     // The editor's choice of engine for new images (the prompt bar's ⋯ menu on a blank canvas): the
-    // dialog starts with it, and a choice here is that choice too.
+    // dialog starts with it, and a choice here is that choice too. Its LoRAs for the engine are
+    // chosen under More options and go with the request.
     void shareEngineChoice(AiOptions *options);
+    LoraPicker *loraPicker() const { return m_loras; }
     // The prompt, negative prompt, size and seed an image was made with ("Re-run").
     void fillFrom(const doc::AssetInfo &asset);
     // The new document's control pose ("New image with this pose"); the engine follows it when it
@@ -86,6 +89,8 @@ private:
     QLabel *m_poseNote;
     std::optional<pose::Pose> m_pose;
     QPushButton *m_create;
+    AiOptions *m_options = nullptr;
+    LoraPicker *m_loras = nullptr;
 };
 
 } // namespace lumen::ui

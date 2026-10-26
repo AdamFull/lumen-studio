@@ -7,6 +7,7 @@ add_library(lumen_ui STATIC
     Studio.h Studio.cpp
     MainWindow.h MainWindow.cpp
     DocumentFiles.h DocumentFiles.cpp
+    LoraCatalog.h LoraCatalog.cpp
     canvas/EditorState.h canvas/EditorState.cpp
     canvas/CanvasView.h canvas/CanvasView.cpp
     canvas/Tool.h
@@ -18,6 +19,7 @@ add_library(lumen_ui STATIC
     widgets/CharacterChip.h widgets/CharacterChip.cpp
     widgets/LayersPanel.h widgets/LayersPanel.cpp
     widgets/ProviderCombo.h widgets/ProviderCombo.cpp
+    widgets/LoraPicker.h widgets/LoraPicker.cpp
     widgets/JobCard.h widgets/JobCard.cpp
     widgets/Toasts.h widgets/Toasts.cpp
     widgets/ServerStatus.h widgets/ServerStatus.cpp

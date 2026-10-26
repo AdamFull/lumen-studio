@@ -173,6 +173,9 @@ signals:
     void rerunRequested(const QString &assetId);
     void sliceRequested(const QString &assetId);
     void notification(const QString &message, const QString &level);
+    // A Settings page should open (its id, as SettingsDialog::showTab takes it): asked for by a widget
+    // that cannot reach the main window, such as the LoRA picker in a popup.
+    void settingsRequested(const QString &tab);
     void sessionRestored();
     // The cast changed: a member, the order, or none.
     void activeCharacterChanged();

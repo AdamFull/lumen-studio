@@ -99,6 +99,110 @@ void classifyFlux(const Tensors &t, ModelInfo *info)
     info->variant = t.has(QStringLiteral("guidance_in.")) ? QStringLiteral("Dev") : QStringLiteral("Schnell");
 }
 
+// The highest block number in tensor names matching `pattern` (one capture group); -1 if none.
+int highestBlock(const Tensors &t, const QRegularExpression &pattern)
+{
+    int top = -1;
+    for (const QString &n : t.names) {
+        const QRegularExpressionMatch m = pattern.match(n);
+        if (m.hasMatch())
+            top = std::max(top, m.captured(1).toInt());
+    }
+    return top;
+}
+
+// What a LoRA was trained on. Its layers tell more than its metadata (an Anima LoRA made with
+// sd-scripts says "stable-diffusion-v1"), so the layout decides first and the metadata where the
+// layout cannot:
+// * FLUX (double / single blocks): FLUX.2 has no modulation per block. The width tells the size:
+//   3072 for klein 4B and FLUX.1, 4096 for klein 9B, 6144 for FLUX.2 dev; klein 4B has 5 double and
+//   20 single blocks where FLUX.1 has 19 and 38.
+// * Qwen-Image: transformer blocks with separate image and text MLPs, no single blocks.
+// * Anima (Cosmos DiT): blocks with self_attn and cross_attn.
+// * Krea 2: a text fusion stack (layerwise blocks).
+void classifyLora(const Tensors &t, const QVariantMap &meta, ModelInfo *info)
+{
+    const QString base = (meta.value(QStringLiteral("ss_base_model_version")).toString() + QLatin1Char(' ')
+                          + meta.value(QStringLiteral("modelspec.architecture")).toString())
+                             .toLower();
+    if (t.has(QStringLiteral("text_fusion")) || t.has(QStringLiteral("txtfusion")) || base.contains(QLatin1String("krea2"))
+        || base.contains(QLatin1String("krea_2"))) {
+        info->family = QStringLiteral("Krea 2");
+        return;
+    }
+    const bool fluxLayout = t.has(QStringLiteral("double_blocks")) || t.has(QStringLiteral("single_blocks"))
+                            || t.has(QStringLiteral("single_transformer_blocks"));
+    if (fluxLayout) {
+        static const QRegularExpression doubleBlock(QStringLiteral("(?:double_blocks|(?<!single_)transformer_blocks)[._](\\d+)[._]"));
+        static const QRegularExpression singleBlock(QStringLiteral("(?:single_blocks|single_transformer_blocks)[._](\\d+)[._]"));
+        const int doubles = highestBlock(t, doubleBlock);
+        const int singles = highestBlock(t, singleBlock);
+        // The model's width: the out side of an attention output (lora_B / lora_up), else the in
+        // side of the most common down projection of a known width.
+        qint64 width = 0;
+        for (const QString &n : t.names) {
+            if ((n.contains(QLatin1String("img_attn.proj")) || n.contains(QLatin1String("img_attn_proj")) || n.contains(QLatin1String("attn.to_out.0")))
+                && (n.contains(QLatin1String("lora_B")) || n.contains(QLatin1String("lora_up")))) {
+                width = t.dim(n, 0);
+                break;
+            }
+        }
+        if (width == 0) {
+            QHash<qint64, int> count;
+            for (const QString &n : t.names) {
+                if (n.contains(QLatin1String("lora_A")) || n.contains(QLatin1String("lora_down")))
+                    ++count[t.dim(n, 1)];
+            }
+            int best = 0;
+            for (auto it = count.cbegin(); it != count.cend(); ++it) {
+                if (it.value() > best && (it.key() == 3072 || it.key() == 4096 || it.key() == 6144)) {
+                    best = it.value();
+                    width = it.key();
+                }
+            }
+        }
+        const bool perBlockModulation = t.has(QStringLiteral("img_mod")) || t.has(QStringLiteral("txt_mod"))
+                                        || t.has(QStringLiteral("norm1.linear")) || t.has(QStringLiteral("norm1_context"));
+        const bool saysFlux1 = base.contains(QLatin1String("flux1")) || base.contains(QLatin1String("flux.1"))
+                               || base.contains(QLatin1String("flux-1")) || base.contains(QLatin1String("flux_1"));
+        if (base.contains(QLatin1String("klein_4b")) || base.contains(QLatin1String("klein-4b"))) {
+            info->family = QStringLiteral("FLUX.2");
+            info->variant = QStringLiteral("Klein 4B");
+        } else if (base.contains(QLatin1String("klein_9b")) || base.contains(QLatin1String("klein-9b"))) {
+            info->family = QStringLiteral("FLUX.2");
+            info->variant = QStringLiteral("Klein 9B");
+        } else if (width == 4096) {
+            info->family = QStringLiteral("FLUX.2");
+            info->variant = QStringLiteral("Klein 9B");
+        } else if (width == 6144) {
+            info->family = QStringLiteral("FLUX.2");
+            info->variant = QStringLiteral("Dev");
+        } else if (perBlockModulation || saysFlux1 || doubles > 4 || singles > 19) {
+            info->family = QStringLiteral("FLUX");
+        } else if (width == 3072) {
+            info->family = QStringLiteral("FLUX.2");
+            info->variant = QStringLiteral("Klein 4B");
+        } else {
+            info->family = base.contains(QLatin1String("flux2")) ? QStringLiteral("FLUX.2") : QStringLiteral("FLUX");
+        }
+        return;
+    }
+    if ((t.has(QStringLiteral("img_mlp")) && t.has(QStringLiteral("txt_mlp"))) || base.contains(QLatin1String("qwen"))) {
+        info->family = QStringLiteral("Qwen-Image");
+        return;
+    }
+    if ((t.has(QStringLiteral("cross_attn")) && t.has(QStringLiteral("self_attn")) && !t.has(QStringLiteral("attn1")))
+        || base.contains(QLatin1String("anima")) || base.contains(QLatin1String("cosmos"))) {
+        info->family = QStringLiteral("Anima");
+        return;
+    }
+    if (base.contains(QLatin1String("sdxl")) || base.contains(QLatin1String("xl")) || t.hasPrefix(QStringLiteral("lora_te2_"))
+        || t.has(QStringLiteral("input_blocks_4_1_transformer_blocks_1")))
+        info->family = QStringLiteral("SDXL");
+    else if (base.contains(QLatin1String("sd_v1")) || base.contains(QLatin1String("v1")) || t.hasPrefix(QStringLiteral("lora_te_text_model")))
+        info->family = QStringLiteral("SD 1.5");
+}
+
 // Hints from the file and folder names (ComfyUI / A1111 folder layout, common naming).
 ModelKind kindFromNames(const QString &path)
 {
@@ -157,15 +261,7 @@ void classifyDiffusion(const Tensors &t, const QVariantMap &meta, ModelInfo *inf
     if (t.has(QStringLiteral("lora_up")) || t.has(QStringLiteral("lora_down")) || t.has(QStringLiteral(".lora_A.")) || t.has(QStringLiteral(".lora_B."))
         || t.hasPrefix(QStringLiteral("lora_unet_")) || t.has(QStringLiteral(".hada_w1")) || t.has(QStringLiteral(".lokr_w1"))) {
         info->kind = ModelKind::Lora;
-        const QString base = meta.value(QStringLiteral("ss_base_model_version")).toString().toLower()
-                             + meta.value(QStringLiteral("modelspec.architecture")).toString().toLower();
-        if (base.contains(QLatin1String("flux")) || t.has(QStringLiteral("double_blocks")) || t.has(QStringLiteral("single_transformer_blocks")))
-            info->family = QStringLiteral("FLUX");
-        else if (base.contains(QLatin1String("sdxl")) || base.contains(QLatin1String("xl")) || t.hasPrefix(QStringLiteral("lora_te2_"))
-                 || t.has(QStringLiteral("input_blocks_4_1_transformer_blocks_1")))
-            info->family = QStringLiteral("SDXL");
-        else if (base.contains(QLatin1String("sd_v1")) || base.contains(QLatin1String("v1")) || t.hasPrefix(QStringLiteral("lora_te_text_model")))
-            info->family = QStringLiteral("SD 1.5");
+        classifyLora(t, meta, info);
         const QString trigger = meta.value(QStringLiteral("modelspec.trigger_phrase")).toString().trimmed();
         if (!trigger.isEmpty())
             info->triggerWords = trigger.split(QLatin1Char(','), Qt::SkipEmptyParts);
@@ -604,6 +700,34 @@ QString ggufFileTypeName(int type)
         {31, QStringLiteral("IQ1_M")},  {32, QStringLiteral("BF16")},
     };
     return names.value(type);
+}
+
+QString modelFamilyName(const QString &family, const QString &variant)
+{
+    if (family.isEmpty())
+        return {};
+    if (family == QLatin1String("FLUX.2") && variant.startsWith(QLatin1String("Klein ")))
+        return QStringLiteral("FLUX.2 [klein] %1").arg(variant.mid(6));
+    if (family == QLatin1String("FLUX.2") && variant == QLatin1String("Dev"))
+        return QStringLiteral("FLUX.2 [dev]");
+    if (family == QLatin1String("FLUX"))
+        return QStringLiteral("FLUX.1");
+    return family;
+}
+
+QString loraMismatch(const ModelInfo &lora, const QString &family, const QString &variant)
+{
+    if (lora.family.isEmpty() || family.isEmpty())
+        return {};
+    const QString made = modelFamilyName(lora.family, lora.variant);
+    const QString model = modelFamilyName(family, variant);
+    if (lora.family != family)
+        return QCoreApplication::translate("lumen::runtime::ModelFormats", "Made for %1; this engine runs %2.").arg(made, model);
+    // FLUX.2's sizes have different layers (klein 4B, klein 9B, dev); SDXL's variants (Illustrious,
+    // Pony) share theirs, so only FLUX.2 is checked by size.
+    if (family == QLatin1String("FLUX.2") && !lora.variant.isEmpty() && !variant.isEmpty() && lora.variant != variant)
+        return QCoreApplication::translate("lumen::runtime::ModelFormats", "Made for %1; this engine runs %2.").arg(made, model);
+    return {};
 }
 
 qint64 ModelInfo::estimatedMemory(qint64 fileSize, int context, double kvBytesPerValue) const

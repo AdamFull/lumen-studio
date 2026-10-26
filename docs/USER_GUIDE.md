@@ -250,6 +250,7 @@ The **⋯** button next to Generate holds what most people never need, and only 
 * **How much may change** (in per cent), when the area is painted anew or for a variation;
 * **Results per run** (1–4);
 * **Leave out**: things that should not be in the result, for models that take this;
+* **LoRAs**: small add-ons to the model for a style, a character or a look (see below);
 * **References**: pictures the engine follows for a character, a style or an object (they are added
   in the AI tab);
 * the engine: *Engine for changes* on a picture, *Image engine* on a blank canvas. A choice here
@@ -257,6 +258,18 @@ The **⋯** button next to Generate holds what most people never need, and only 
 * **Advanced**: *Steps* (the model's choice unless you set them) and *Seed* (random, or fixed to get
   the same result again);
 * **All AI options…** opens the AI tab.
+
+**LoRAs.** *Add a LoRA…* lists the LoRAs the engine can load. Those made for the engine's model come
+first; the others are greyed out under *Made for another model*, with what they were made for (a LoRA
+works only with the model it was trained on, and for FLUX.2 [klein] only with the same size: a 9B
+LoRA does nothing on klein 4B). Lumen tells this from the file itself, not from its name. Each chosen
+LoRA has a tick box (used while ticked), a strength (1 is full; 0.6 to 1 suits most) and ✕ to remove
+it; its trigger words, when the file names them, are added to your description. The choice is kept
+for each engine, also in **New from prompt** under *More options*. You do not type `<lora:…>` tags.
+
+For a server Lumen runs, the LoRAs come from the server's **LoRA folder** (Settings → Local servers),
+read without starting the server. Without one the list says so and *Server settings…* takes you there.
+A server that runs elsewhere is asked for its list; there Lumen cannot tell what each was made for.
 
 ### The AI tab and the AI menu
 

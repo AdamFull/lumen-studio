@@ -261,6 +261,11 @@ QJsonObject SdCppProvider::buildPayload(const ImageRequest &r) const
     return json::merge(p, r.extras);
 }
 
+QFuture<QList<ServerLora>> SdCppProvider::availableLoras()
+{
+    return serverCapabilities().then([](const QJsonObject &caps) { return serverLoras(caps); });
+}
+
 QList<ServerLora> SdCppProvider::serverLoras(const QJsonObject &capabilities)
 {
     QList<ServerLora> out;

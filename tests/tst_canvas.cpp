@@ -31,6 +31,7 @@
 #include "ui/pages/StartScreen.h"
 #include "ui/pages/VariantStrip.h"
 #include "ui/widgets/JobCard.h"
+#include "ui/widgets/LoraPicker.h"
 #include "ui/widgets/ProviderCombo.h"
 #include "ui/widgets/ReferenceStrip.h"
 #include "ai/ModelDefaults.h"
@@ -202,6 +203,8 @@ private slots:
     void promptModes();
     void promptBarSelectionEdit();
     void promptBarNewImage();
+    void loraPickerElsewhere();
+    void loraPickerFolder();
     void promptBarWithoutEdits();
     void aiMenuAndPanel();
     void promptBarKeepsTyping();
@@ -4590,6 +4593,7 @@ struct MockSdCpp
     bool hold = false;
     bool echo = false;
     int cancels = 0;
+    QJsonArray loras; // what its capabilities list in its LoRA folder
 
     static QImage tinted(const QImage &source)
     {
@@ -4606,7 +4610,8 @@ struct MockSdCpp
 
     MockSdCpp()
     {
-        server.route("GET", QStringLiteral("/sdcpp/v1/capabilities"), [](const MockRequest &) { return MockResponse::json({}); });
+        server.route("GET", QStringLiteral("/sdcpp/v1/capabilities"),
+                     [this](const MockRequest &) { return MockResponse::json({{QStringLiteral("loras"), loras}}); });
         server.route("POST", QStringLiteral("/sdcpp/v1/img_gen"), [this](const MockRequest &req) {
             generations << req.json();
             return MockResponse::json({{QStringLiteral("id"), QStringLiteral("job_%1").arg(generations.size())}}, 202);
@@ -4919,6 +4924,209 @@ void TestCanvas::promptBarNewImage()
     QCOMPARE(image->props.name, QStringLiteral("a lighthouse on a cliff at dusk"));
     // With a picture on it, the words change the whole image.
     QTRY_VERIFY(bar->plan().action == PromptAction::EditImage);
+}
+
+// LoRAs chosen in the prompt bar's ⋯ instead of typed (plan M18 §18.3), from a server elsewhere that
+// lists them: the chosen one goes with the request at its weight with its trigger words, an unticked
+// one does not, and the choice is kept for the engine in the next session.
+void TestCanvas::loraPickerElsewhere()
+{
+    PromptBarFixture f;
+    f.sd.loras = QJsonArray{QJsonObject{{QStringLiteral("name"), QStringLiteral("ink")}, {QStringLiteral("path"), QStringLiteral("styles/ink.safetensors")}},
+                            QJsonObject{{QStringLiteral("name"), QStringLiteral("pixel")}, {QStringLiteral("path"), QStringLiteral("pixel.safetensors")}}};
+    QVERIFY(f.setUp(true));
+    Settings::instance().remove(QStringLiteral("editor/ai/loras"));
+    auto cleanup = qScopeGuard([] { Settings::instance().remove(QStringLiteral("editor/ai/loras")); });
+    doc::Document *doc = f.studio.newDocument(QSize(512, 512), QStringLiteral("Blank"));
+    QVERIFY(doc);
+    QTRY_VERIFY(f.bar()->plan().action == PromptAction::NewImage);
+    LoraPicker *picker = f.bar()->loraPicker();
+    QVERIFY(picker);
+    QSignalSpy listed(picker, &LoraPicker::listed);
+    f.bar()->findChild<QToolButton *>(QStringLiteral("promptMore"))->click();
+    QTRY_VERIFY(f.bar()->optionsPopup()->isVisible());
+    QCOMPARE(picker->engine(), f.provider);
+    QTRY_VERIFY(listed.size() >= 1);
+    QCOMPARE(picker->listing().loras.size(), 2);
+    QVERIFY(picker->listing().problem.isEmpty());
+    // The menu: both, as the server names them (what they were made for is not known here).
+    QMenu *menu = picker->addButton()->menu();
+    emit menu->aboutToShow();
+    QAction *ink = nullptr;
+    for (QAction *a : menu->actions()) {
+        if (a->text() == QLatin1String("ink"))
+            ink = a;
+    }
+    QVERIFY(ink && ink->isEnabled());
+    ink->trigger();
+    AiOptions *options = f.editor()->aiOptions();
+    QList<ChosenLora> chosen = options->loras(f.provider->instanceId());
+    QCOMPARE(chosen.size(), 1);
+    QCOMPARE(chosen.first().path, QStringLiteral("styles/ink.safetensors"));
+    // Its weight in the row, and words that call it up.
+    chosen.first().triggerWords = {QStringLiteral("inkstyle")};
+    options->setLoras(f.provider->instanceId(), chosen);
+    QTRY_VERIFY(picker->findChild<QDoubleSpinBox *>(QStringLiteral("loraWeight")));
+    auto *weight = picker->findChild<QDoubleSpinBox *>(QStringLiteral("loraWeight"));
+    weight->setValue(0.6);
+    emit weight->editingFinished();
+    QCOMPARE(options->loras(f.provider->instanceId()).first().weight, 0.6);
+    f.bar()->optionsPopup()->hide();
+
+    f.words()->setPlainText(QStringLiteral("a lighthouse"));
+    QTest::keyClick(f.words(), Qt::Key_Return);
+    QTRY_COMPARE_WITH_TIMEOUT(f.strip()->count(), 2, 10000);
+    QJsonObject sent = f.sd.last();
+    const QJsonArray loras = sent.value(QStringLiteral("lora")).toArray();
+    QCOMPARE(loras.size(), 1);
+    QCOMPARE(loras.first().toObject().value(QStringLiteral("path")).toString(), QStringLiteral("styles/ink.safetensors"));
+    QCOMPARE(loras.first().toObject().value(QStringLiteral("multiplier")).toDouble(), 0.6);
+    QVERIFY2(sent.value(QStringLiteral("prompt")).toString().contains(QStringLiteral("inkstyle")), qPrintable(sent.value(QStringLiteral("prompt")).toString()));
+    f.strip()->discard();
+
+    // Unticked: not sent.
+    auto *on = picker->findChild<QCheckBox *>(QStringLiteral("loraOn"));
+    QVERIFY(on && on->isChecked());
+    on->setChecked(false);
+    QVERIFY(!options->loras(f.provider->instanceId()).first().on);
+    QTest::keyClick(f.words(), Qt::Key_Return);
+    QTRY_COMPARE_WITH_TIMEOUT(f.strip()->count(), 2, 10000);
+    sent = f.sd.last();
+    QVERIFY(!sent.contains(QStringLiteral("lora")));
+    QVERIFY(!sent.value(QStringLiteral("prompt")).toString().contains(QStringLiteral("inkstyle")));
+    f.strip()->discard();
+
+    // Kept for the engine in the next session.
+    AiOptions next;
+    QCOMPARE(next.loras(f.provider->instanceId()).size(), 1);
+    QCOMPARE(next.loras(f.provider->instanceId()).first().weight, 0.6);
+    QVERIFY(!next.loras(f.provider->instanceId()).first().on);
+}
+
+// A server Lumen runs: its LoRA folder is read without starting it, and the LoRAs are told apart by
+// what they were made for. Only those for its model (FLUX.2 [klein] 4B) can be chosen; one for klein
+// 9B chosen before is turned off with the reason; a server without a LoRA folder says so.
+void TestCanvas::loraPickerFolder()
+{
+    Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
+    Settings::instance().remove(QStringLiteral("editor/ai/loras"));
+    auto cleanup = qScopeGuard([] { Settings::instance().remove(QStringLiteral("editor/ai/loras")); });
+    QTemporaryDir dir;
+    auto put = [&](const QString &rel, const QByteArray &bytes) {
+        const QString path = QDir::cleanPath(dir.filePath(rel));
+        QDir().mkpath(QFileInfo(path).absolutePath());
+        QFile f(path);
+        if (f.open(QIODevice::WriteOnly))
+            f.write(bytes);
+        return path;
+    };
+    // FLUX blocks of a LoRA: `doubles` double and `singles` single blocks of `width`.
+    auto fluxLora = [](int width, int doubles, int singles) {
+        Tensors t;
+        for (int b = 0; b < doubles; ++b) {
+            t.append({QStringLiteral("diffusion_model.double_blocks.%1.img_attn.proj.lora_A.weight").arg(b), {16, width}});
+            t.append({QStringLiteral("diffusion_model.double_blocks.%1.img_attn.proj.lora_B.weight").arg(b), {width, 16}});
+        }
+        for (int b = 0; b < singles; ++b)
+            t.append({QStringLiteral("diffusion_model.single_blocks.%1.linear2.lora_A.weight").arg(b), {16, width * 4}});
+        return shapedSafetensors(t);
+    };
+    const QString klein = put(QStringLiteral("models/flux-2-klein-4b.safetensors"), shapedSafetensors(kleinTensors(7680)));
+    put(QStringLiteral("loras/ink_klein4b.safetensors"), fluxLora(3072, 5, 20));
+    put(QStringLiteral("loras/realism_klein9b.safetensors"), fluxLora(4096, 8, 24));
+    put(QStringLiteral("loras/sdxl/pixel.safetensors"),
+        shapedSafetensors({{QStringLiteral("lora_unet_input_blocks_4_1_transformer_blocks_1_attn1_to_q.lora_down.weight"), {32, 640}}}));
+    // Not a LoRA: left out.
+    put(QStringLiteral("loras/stray-vae.safetensors"), shapedSafetensors(vaeTensors(32)));
+
+    // lorasInFolder: the folder as sd-server lists it, with each file's model.
+    const QList<LoraChoice> found = lorasInFolder(dir.filePath(QStringLiteral("loras")), QStringLiteral("FLUX.2"), QStringLiteral("Klein 4B"));
+    QCOMPARE(found.size(), 3);
+    QCOMPARE(found.at(0).name, QStringLiteral("ink_klein4b"));
+    QVERIFY(found.at(0).mismatch.isEmpty());
+    // Then the others by name.
+    QCOMPARE(found.at(1).path, QStringLiteral("sdxl/pixel.safetensors"));
+    QCOMPARE(found.at(1).mismatch, QStringLiteral("Made for SDXL; this engine runs FLUX.2 [klein] 4B."));
+    QCOMPARE(found.at(2).path, QStringLiteral("realism_klein9b.safetensors"));
+    QCOMPARE(found.at(2).mismatch, QStringLiteral("Made for FLUX.2 [klein] 9B; this engine runs FLUX.2 [klein] 4B."));
+
+    Studio studio;
+    runtime::InstalledRuntime rt;
+    rt.id = QStringLiteral("adopted/lora-sdcpp");
+    rt.kind = QStringLiteral("sd.cpp");
+    rt.executable = dir.filePath(QStringLiteral("sd-server.exe"));
+    studio.runtimes()->addInstalled(rt);
+    auto removeRuntime = qScopeGuard([&] { studio.runtimes()->remove(rt.id); });
+    runtime::ServerProfile profile = studio.servers()->createProfile(rt.id, QStringLiteral("Klein"));
+    profile.options.insert(QStringLiteral("diffusion_model"), QDir::toNativeSeparators(klein));
+    studio.servers()->addProfile(profile);
+    auto removeProfile = qScopeGuard([&] { studio.servers()->removeProfile(profile.id); });
+    for (ai::Provider *p : studio.providers()->providers())
+        studio.providers()->removeProvider(p->instanceId());
+    auto *provider = qobject_cast<ai::ImageProvider *>(
+        studio.providers()->addProvider(QStringLiteral("sdcpp"), QStringLiteral("Klein"), {{QStringLiteral("managed_server"), profile.id}}));
+    QVERIFY(provider);
+    auto removeProvider = qScopeGuard([&] { studio.providers()->removeProvider(provider->instanceId()); });
+
+    // No LoRA folder yet: the reason, and the way to Settings → Local servers.
+    AiOptions options;
+    LoraPicker picker(&studio, &options);
+    QSignalSpy listed(&picker, &LoraPicker::listed);
+    picker.setEngine(provider);
+    QTRY_COMPARE(listed.size(), 1);
+    QCOMPARE(picker.listing().problem, QStringLiteral("This server has no LoRA folder. Choose one in Settings → Local servers."));
+    QCOMPARE(picker.listing().model, QStringLiteral("FLUX.2 [klein] 4B"));
+    QVERIFY(!picker.addButton()->isEnabled());
+    QSignalSpy settings(&studio, &Studio::settingsRequested);
+    auto *serverSettings = picker.findChild<QPushButton *>(QStringLiteral("loraServerSettings"));
+    QVERIFY(serverSettings && !serverSettings->isHidden());
+    serverSettings->click();
+    QCOMPARE(settings.size(), 1);
+    QCOMPARE(settings.first().first().toString(), QStringLiteral("servers"));
+
+    // With the folder, and a 9B LoRA chosen before: it is turned off and says why.
+    profile.options.insert(QStringLiteral("lora_dir"), QDir::toNativeSeparators(dir.filePath(QStringLiteral("loras"))));
+    studio.servers()->updateProfile(profile);
+    ChosenLora old;
+    old.name = QStringLiteral("realism_klein9b");
+    old.path = QStringLiteral("realism_klein9b.safetensors");
+    options.setLoras(provider->instanceId(), {old});
+    picker.refresh();
+    QTRY_COMPARE(listed.size(), 2);
+    QCOMPARE(picker.listing().loras.size(), 3);
+    QVERIFY(picker.listing().problem.isEmpty());
+    QVERIFY(!options.loras(provider->instanceId()).first().on);
+    QVERIFY(options.loraRefs(provider->instanceId()).isEmpty());
+    auto *on = picker.findChild<QCheckBox *>(QStringLiteral("loraOn"));
+    QVERIFY(on && !on->isChecked() && !on->isEnabled());
+    auto *reason = picker.findChild<QLabel *>(QStringLiteral("loraReason"));
+    QVERIFY(reason);
+    QCOMPARE(reason->text(), QStringLiteral("Made for FLUX.2 [klein] 9B; this engine runs FLUX.2 [klein] 4B."));
+    // The menu: the 4B one to choose, the others under "Made for another model", greyed out.
+    QMenu *menu = picker.addButton()->menu();
+    emit menu->aboutToShow();
+    QStringList enabled;
+    QStringList greyed;
+    bool section = false;
+    for (QAction *a : menu->actions()) {
+        if (a->isSeparator()) {
+            section = section || a->text() == QLatin1String("Made for another model");
+            continue;
+        }
+        (a->isEnabled() ? enabled : greyed) << a->text();
+    }
+    QVERIFY(section);
+    QCOMPARE(enabled, QStringList{QStringLiteral("ink_klein4b")});
+    QCOMPARE(greyed, (QStringList{QStringLiteral("pixel  ·  SDXL"), QStringLiteral("realism_klein9b  ·  FLUX.2 [klein] 9B")}));
+    for (QAction *a : menu->actions()) {
+        if (a->text() == QLatin1String("ink_klein4b"))
+            a->trigger();
+    }
+    const QList<ai::LoraRef> refs = options.loraRefs(provider->instanceId());
+    QCOMPARE(refs.size(), 1);
+    QCOMPARE(QDir::cleanPath(QDir::fromNativeSeparators(refs.first().file)), QDir::cleanPath(dir.filePath(QStringLiteral("loras/ink_klein4b.safetensors"))));
+    // The server was never started to list them.
+    QCOMPARE(studio.servers()->state(profile.id), runtime::ServerState::Stopped);
 }
 
 // An engine without instruction edits (sd.cpp with a model it has no preset for): without a

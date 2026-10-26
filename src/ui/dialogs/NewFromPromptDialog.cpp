@@ -11,6 +11,7 @@
 #include "ui/Studio.h"
 #include "ui/Theme.h"
 #include "ui/pages/AiOptions.h"
+#include "ui/widgets/LoraPicker.h"
 #include "ui/pages/AiPanel.h"
 #include "ui/widgets/Controls.h"
 #include "ui/widgets/FlowLayout.h"
@@ -232,6 +233,19 @@ NewFromPromptDialog::NewFromPromptDialog(Studio *studio, QWidget *parent)
 
 void NewFromPromptDialog::shareEngineChoice(AiOptions *options)
 {
+    m_options = options;
+    if (!m_loras) {
+        // Under More options, after what to leave out.
+        auto *box = new QWidget(m_more);
+        box->setObjectName(QStringLiteral("newLoras"));
+        auto *lv = new QVBoxLayout(box);
+        lv->setContentsMargins(0, 0, 0, 0);
+        lv->addWidget(sectionLabel(tr("LoRAs"), box));
+        m_loras = new LoraPicker(m_studio, options, box);
+        lv->addWidget(m_loras);
+        if (auto *mv = qobject_cast<QVBoxLayout *>(m_more->layout()))
+            mv->insertWidget(mv->indexOf(m_negativeBox) + 1, box);
+    }
     auto show = [this, options] {
         const QSignalBlocker block(m_engine);
         m_engine->setPinnedProviderId(options->providerId(false));
@@ -343,6 +357,10 @@ void NewFromPromptDialog::updateUi()
     ai::ImageProvider *provider = m_engine->imageProvider();
     const ai::ImageCapabilities caps = provider ? provider->capabilities() : ai::ImageCapabilities();
     m_negativeBox->setVisible(takesNegative());
+    if (m_loras) {
+        m_loras->setEngine(provider);
+        m_loras->parentWidget()->setVisible(provider && caps.loras);
+    }
     m_poseBox->setVisible(m_pose.has_value());
     if (m_pose)
         m_poseNote->setText(provider && !caps.poseControl
@@ -382,6 +400,11 @@ doc::Document *NewFromPromptDialog::create()
     r.size = size;
     r.batchCount = m_variants->value();
     r.seed = m_randomSeed->isChecked() ? qint64(QRandomGenerator::global()->bounded(2147483647)) : m_seed->value();
+    // The LoRAs chosen for the engine (those that fit its model) and the words that call them up.
+    if (m_options && caps.loras) {
+        r.loras = m_options->loraRefs(provider->instanceId());
+        r.prompt = m_options->withTriggerWords(provider->instanceId(), r.prompt);
+    }
     // Steps, guidance and the sampler come from the model (its preset) and the provider.
     std::optional<pose::Pose> fitted = m_pose;
     if (fitted) {

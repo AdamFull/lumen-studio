@@ -159,7 +159,7 @@
         <translation>Dieser Anbieter unterstützt %1 nicht</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+28"/>
         <location filename="../src/doc/Project.cpp" line="+124"/>
         <source>Unknown error</source>
         <translation>Unbekannter Fehler</translation>
@@ -230,7 +230,7 @@
         <translation>Der Teile-Server hat keine Ebenen zurückgegeben</translation>
     </message>
     <message>
-        <location filename="../src/ai/providers/SdWebUiProvider.cpp" line="+446"/>
+        <location filename="../src/ai/providers/SdWebUiProvider.cpp" line="+451"/>
         <source>Step %1 / %2</source>
         <translation>Schritt %1 / %2</translation>
     </message>
@@ -2803,7 +2803,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Verbunden – Modell: %1</translation>
     </message>
     <message>
-        <location line="+171"/>
+        <location line="+176"/>
         <source>The model on this server does not edit images from an instruction (FLUX.2 [klein], FLUX.1 Kontext and Qwen-Image-Edit do); use inpainting or a variation instead.</source>
         <translation>Das Modell auf diesem Server bearbeitet keine Bilder nach einer Anweisung (FLUX.2 [klein], FLUX.1 Kontext und Qwen-Image-Edit können das); verwenden Sie stattdessen Inpainting oder eine Variation.</translation>
     </message>
@@ -2881,7 +2881,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ai::SdWebUiProvider</name>
     <message>
-        <location filename="../src/ai/providers/SdWebUiProvider.cpp" line="-385"/>
+        <location filename="../src/ai/providers/SdWebUiProvider.cpp" line="-390"/>
         <source>Local AUTOMATIC1111, Forge or reForge server started with --api. Pose control and character references use the ControlNet extension (built into Forge) with OpenPose and IP-Adapter models.</source>
         <translation>Lokaler AUTOMATIC1111-, Forge- oder reForge-Server, gestartet mit --api. Posensteuerung und Charakterreferenzen nutzen die ControlNet-Erweiterung (in Forge integriert) mit OpenPose- und IP-Adapter-Modellen.</translation>
     </message>
@@ -3016,12 +3016,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Die Posensteuerung benötigt ein OpenPose-ControlNet-Modell, auf dem Server wurde jedoch keines gefunden. Installieren Sie eines (z. B. controlnet-openpose-sdxl oder xinsir union) oder wählen Sie es in den Anbietereinstellungen aus.</translation>
     </message>
     <message>
-        <location line="+56"/>
+        <location line="+71"/>
         <source>Stable Diffusion WebUI does not support instruction edits; use inpainting or img2img.</source>
         <translation>Stable Diffusion WebUI unterstützt keine Bearbeitung per Anweisung; verwenden Sie Inpainting oder img2img.</translation>
     </message>
     <message>
-        <location line="+199"/>
+        <location line="+189"/>
         <source>Stable Diffusion WebUI cannot segment character parts.</source>
         <translation>Stable Diffusion WebUI kann keine Charakterteile segmentieren.</translation>
     </message>
@@ -4902,7 +4902,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Vision-Projektor</translation>
     </message>
     <message>
-        <location line="+286"/>
+        <location line="+382"/>
         <source>Not a safetensors file.</source>
         <translation>Keine safetensors-Datei.</translation>
     </message>
@@ -4922,6 +4922,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <location line="+19"/>
         <source>Damaged GGUF header.</source>
         <translation>Beschädigter GGUF-Header.</translation>
+    </message>
+    <message>
+        <location line="+117"/>
+        <location line="+4"/>
+        <source>Made for %1; this engine runs %2.</source>
+        <translation>Für %1 gemacht; diese Engine verwendet %2.</translation>
     </message>
 </context>
 <context>
@@ -6440,7 +6446,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::AiPanel</name>
     <message>
-        <location filename="../src/ui/pages/AiPanel.cpp" line="+90"/>
+        <location filename="../src/ui/pages/AiPanel.cpp" line="+91"/>
         <source>Action</source>
         <translation>Aktion</translation>
     </message>
@@ -6461,24 +6467,24 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+326"/>
+        <location line="+327"/>
         <source>Upscale</source>
         <translation>Hochskalieren</translation>
     </message>
     <message>
-        <location line="-325"/>
+        <location line="-326"/>
         <source>Cut out the subject onto a transparent layer.</source>
         <translation>Das Motiv auf eine transparente Ebene freistellen.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+326"/>
-        <location line="+315"/>
+        <location line="+327"/>
+        <location line="+321"/>
         <source>Detect pose</source>
         <translation>Pose erkennen</translation>
     </message>
     <message>
-        <location line="-581"/>
+        <location line="-588"/>
         <source>Left</source>
         <translation>Links</translation>
     </message>
@@ -6504,7 +6510,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Faktor</translation>
     </message>
     <message>
-        <location line="+17"/>
+        <location line="+18"/>
         <source>Options</source>
         <translation>Optionen</translation>
     </message>
@@ -6534,16 +6540,16 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Für diese Aktion wird %1 verwendet.</translation>
     </message>
     <message>
-        <location line="-311"/>
-        <location line="+326"/>
-        <location line="+298"/>
+        <location line="-312"/>
+        <location line="+327"/>
+        <location line="+304"/>
         <location line="+4"/>
         <source>Remove background</source>
         <translation>Hintergrund entfernen</translation>
     </message>
     <message>
-        <location line="-300"/>
-        <location line="+249"/>
+        <location line="-306"/>
+        <location line="+255"/>
         <source>Expand canvas</source>
         <translation>Arbeitsfläche erweitern</translation>
     </message>
@@ -6563,13 +6569,13 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>%1 Varianten wurden als Ebenen hinzugefügt – schalten Sie ihre Sichtbarkeit um, um sie zu vergleichen.</translation>
     </message>
     <message>
-        <location line="-431"/>
+        <location line="-439"/>
         <location line="+3"/>
         <source>Engine for changes</source>
         <translation>Engine für Änderungen</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+12"/>
         <source>Character</source>
         <translation>Charakter</translation>
     </message>
@@ -6605,7 +6611,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+20"/>
-        <location line="+237"/>
+        <location line="+238"/>
         <source>Make a variation</source>
         <translation>Eine Variation erstellen</translation>
     </message>
@@ -6708,7 +6714,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>%1 erstellt nur neue Bilder; es kann keine Variation dieses Bildes erstellen.</translation>
     </message>
     <message>
-        <location line="+124"/>
+        <location line="+130"/>
         <location line="+91"/>
         <source>Set up an image engine first: Help → Set up AI…</source>
         <translation>Richten Sie zuerst eine Bild-Engine ein: Hilfe → KI einrichten…</translation>
@@ -8690,7 +8696,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Farben tauschen (X)</translation>
     </message>
     <message>
-        <location line="+32"/>
+        <location line="+34"/>
         <source>Zoom out (Ctrl+-)</source>
         <translation>Verkleinern (Strg+-)</translation>
     </message>
@@ -8721,12 +8727,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Ebenen</translation>
     </message>
     <message>
-        <location line="-297"/>
+        <location line="-299"/>
         <source>New blank canvas (Ctrl+N)</source>
         <translation>Neue leere Arbeitsfläche (Strg+N)</translation>
     </message>
     <message>
-        <location line="+125"/>
+        <location line="+127"/>
         <location line="+172"/>
         <source>History</source>
         <translation>Protokoll</translation>
@@ -10893,6 +10899,44 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
 </context>
 <context>
+    <name>lumen::ui::LoraCatalog</name>
+    <message>
+        <location filename="../src/ui/LoraCatalog.cpp" line="+60"/>
+        <source>There is no image engine to use LoRAs with.</source>
+        <translation>Es gibt keine Bild-Engine, mit der LoRAs verwendet werden können.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>%1 does not use LoRAs.</source>
+        <translation>%1 verwendet keine LoRAs.</translation>
+    </message>
+    <message>
+        <location line="+23"/>
+        <source>This server has no LoRA folder. Choose one in Settings → Local servers.</source>
+        <translation>Dieser Server hat keinen LoRA-Ordner. Wählen Sie einen unter Einstellungen → Lokale Server.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>The server&apos;s LoRA folder %1 is not there.</source>
+        <translation>Der LoRA-Ordner %1 des Servers ist nicht vorhanden.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>There are no LoRAs in the server&apos;s LoRA folder (%1).</source>
+        <translation>Im LoRA-Ordner des Servers (%1) liegen keine LoRAs.</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>The server lists no LoRAs.</source>
+        <translation>Der Server nennt keine LoRAs.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>The server&apos;s LoRAs could not be listed: %1</source>
+        <translation>Die LoRAs des Servers konnten nicht aufgelistet werden: %1</translation>
+    </message>
+</context>
+<context>
     <name>lumen::ui::LoraDatasetDialog</name>
     <message>
         <location filename="../src/plugins/characters/training/LoraDatasetDialog.cpp" line="+81"/>
@@ -11714,6 +11758,95 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
     </message>
 </context>
 <context>
+    <name>lumen::ui::LoraPicker</name>
+    <message>
+        <location filename="../src/ui/widgets/LoraPicker.cpp" line="+41"/>
+        <source>Add a LoRA…</source>
+        <translation>LoRA hinzufügen…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Small add-ons to the model for a style, a character or a look. Only those made for the engine&apos;s model can be used.</source>
+        <translation>Kleine Zusätze zum Modell für einen Stil, eine Figur oder einen Look. Nur die für das Modell der Engine gemachten lassen sich verwenden.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Server settings…</source>
+        <translation>Server-Einstellungen…</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Settings → Local servers, where the server&apos;s LoRA folder is chosen</source>
+        <translation>Einstellungen → Lokale Server, wo der LoRA-Ordner des Servers gewählt wird</translation>
+    </message>
+    <message>
+        <location line="+83"/>
+        <source>It is not in the server&apos;s LoRAs any more.</source>
+        <translation>Er ist nicht mehr unter den LoRAs des Servers.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Used in the next runs while ticked.</source>
+        <translation>Wird in den nächsten Durchläufen verwendet, solange er angehakt ist.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Words that call it up (added to the description): %1</source>
+        <translation>Wörter, die ihn aufrufen (werden der Beschreibung hinzugefügt): %1</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Strength of %1</source>
+        <translation>Stärke von %1</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>How strongly it applies: 1 is full strength; 0.6 to 1 suits most LoRAs.</source>
+        <translation>Wie stark er wirkt: 1 ist volle Stärke; 0,6 bis 1 passt für die meisten LoRAs.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <location line="+1"/>
+        <source>Remove %1</source>
+        <translation>%1 entfernen</translation>
+    </message>
+    <message>
+        <location line="+40"/>
+        <source>There is no image engine to use LoRAs with.</source>
+        <translation>Es gibt keine Bild-Engine, mit der LoRAs verwendet werden können.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Looking at the engine&apos;s LoRAs…</source>
+        <translation>Die LoRAs der Engine werden gesucht…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>None chosen.</source>
+        <translation>Keiner gewählt.</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>None chosen. The engine runs %1.</source>
+        <translation>Keiner gewählt. Die Engine verwendet %1.</translation>
+    </message>
+    <message>
+        <location line="+24"/>
+        <source>Made for another model</source>
+        <translation>Für ein anderes Modell gemacht</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Made for %1</source>
+        <translation>Für %1 gemacht</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Words that call it up: %1</source>
+        <translation>Wörter, die ihn aufrufen: %1</translation>
+    </message>
+</context>
+<context>
     <name>lumen::ui::MainWindow</name>
     <message>
         <location filename="../src/plugins/characters/CharactersPlugin.cpp" line="+12"/>
@@ -11746,7 +11879,7 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         <translation>Einen Charakter für Live2D in Teile zerlegen</translation>
     </message>
     <message>
-        <location filename="../src/ui/MainWindow.cpp" line="+307"/>
+        <location filename="../src/ui/MainWindow.cpp" line="+308"/>
         <source>General</source>
         <translation>Allgemein</translation>
     </message>
@@ -11855,7 +11988,7 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         <translation>Aufträge</translation>
     </message>
     <message>
-        <location line="-696"/>
+        <location line="-697"/>
         <source>Project images — Lumen Studio</source>
         <translation>Projektbilder — Lumen Studio</translation>
     </message>
@@ -11865,7 +11998,7 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         <translation>Bild-Engine</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+17"/>
         <source>Safe for work</source>
         <translation>Jugendfrei</translation>
     </message>
@@ -13206,7 +13339,7 @@ Downloads und trainierte LoRAs kommen hierher, in Unterordner mit Namen wie bei 
 <context>
     <name>lumen::ui::NewFromPromptDialog</name>
     <message>
-        <location filename="../src/ui/dialogs/NewFromPromptDialog.cpp" line="+55"/>
+        <location filename="../src/ui/dialogs/NewFromPromptDialog.cpp" line="+56"/>
         <source>New from prompt</source>
         <translation>Neu aus Prompt</translation>
     </message>
@@ -13348,7 +13481,12 @@ Downloads und trainierte LoRAs kommen hierher, in Unterordner mit Namen wie bei 
         <translation>Ein neues Dokument dieser Größe anlegen und das Bild hineinzeichnen (Strg+Eingabe)</translation>
     </message>
     <message>
-        <location line="+122"/>
+        <location line="+44"/>
+        <source>LoRAs</source>
+        <translation>LoRAs</translation>
+    </message>
+    <message>
+        <location line="+91"/>
         <source>The engine draws the closest size it supports; the image is scaled to this size.</source>
         <translation>Die Engine zeichnet die nächstliegende Größe, die sie unterstützt; das Bild wird auf diese Größe skaliert.</translation>
     </message>
@@ -13358,7 +13496,7 @@ Downloads und trainierte LoRAs kommen hierher, in Unterordner mit Namen wie bei 
         <translation>Die Engine zeichnet das nächstliegende Format, das sie unterstützt; das Bild wird auf diese Größe skaliert.</translation>
     </message>
     <message>
-        <location line="+27"/>
+        <location line="+31"/>
         <source>This engine cannot follow a pose; the pose is kept with the new document.</source>
         <translation>Diese Engine kann keiner Pose folgen; die Pose bleibt beim neuen Dokument.</translation>
     </message>
@@ -15607,7 +15745,7 @@ oder eines aus den Projektbildern ziehen</translation>
 <context>
     <name>lumen::ui::PromptBar</name>
     <message>
-        <location filename="../src/ui/pages/PromptBar.cpp" line="+57"/>
+        <location filename="../src/ui/pages/PromptBar.cpp" line="+58"/>
         <source>Progress</source>
         <translation>Fortschritt</translation>
     </message>
@@ -15633,12 +15771,12 @@ oder eines aus den Projektbildern ziehen</translation>
     </message>
     <message>
         <location line="+4"/>
-        <location line="+307"/>
+        <location line="+318"/>
         <source>Generate</source>
         <translation>Generieren</translation>
     </message>
     <message>
-        <location line="-302"/>
+        <location line="-313"/>
         <source>Remove object</source>
         <translation>Objekt entfernen</translation>
     </message>
@@ -15684,7 +15822,12 @@ oder eines aus den Projektbildern ziehen</translation>
         <translation>Weglassen</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+3"/>
+        <source>LoRAs</source>
+        <translation>LoRAs</translation>
+    </message>
+    <message>
+        <location line="+10"/>
         <source>Pictures the engine follows for a character, a style or an object (in the AI tab)</source>
         <translation>Bilder, denen die Engine für einen Charakter, einen Stil oder ein Objekt folgt (in der KI-Registerkarte)</translation>
     </message>
@@ -15918,7 +16061,7 @@ oder eines aus den Projektbildern ziehen</translation>
         </translation>
     </message>
     <message>
-        <location line="+86"/>
+        <location line="+88"/>
         <source>Removed</source>
         <translation>Entfernt</translation>
     </message>

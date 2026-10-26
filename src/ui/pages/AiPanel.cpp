@@ -450,6 +450,12 @@ ai::ImageRequest AiPanel::baseRequest(const ai::ImageProvider *provider, const Q
             r.stepsChosen = true;
         }
         r.references = r.references.mid(0, caps.maxReferences);
+        // The LoRAs chosen for this engine that are on (the picker turns off those that do not fit
+        // its model), and the words that call them up.
+        if (caps.loras) {
+            r.loras << m_options->loraRefs(provider->instanceId());
+            r.prompt = m_options->withTriggerWords(provider->instanceId(), r.prompt);
+        }
         if (m_options->usePose() && m_doc && m_doc->controlPose() && caps.poseControl) {
             ai::ControlInput c;
             c.type = ai::ControlType::OpenPose;

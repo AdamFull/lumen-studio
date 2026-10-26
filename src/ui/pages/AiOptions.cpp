@@ -1,8 +1,12 @@
 #include "ui/pages/AiOptions.h"
 
 #include "ai/ProviderRegistry.h"
+#include "ai/Types.h"
 #include "core/Settings.h"
 #include "ui/widgets/ProviderCombo.h"
+
+#include <QJsonArray>
+#include <QJsonDocument>
 
 #include <algorithm>
 #include <utility>
@@ -11,12 +15,96 @@ namespace lumen::ui {
 
 namespace {
 const QString kVariantsKey = QStringLiteral("editor/ai/variants");
+// {engine id: [ChosenLora…]} as JSON.
+const QString kLorasKey = QStringLiteral("editor/ai/loras");
+}
+
+QJsonObject ChosenLora::toJson() const
+{
+    return {{QStringLiteral("name"), name},
+            {QStringLiteral("path"), path},
+            {QStringLiteral("file"), file},
+            {QStringLiteral("weight"), weight},
+            {QStringLiteral("on"), on},
+            {QStringLiteral("trigger_words"), QJsonArray::fromStringList(triggerWords)}};
+}
+
+ChosenLora ChosenLora::fromJson(const QJsonObject &o)
+{
+    ChosenLora l;
+    l.name = o.value(QStringLiteral("name")).toString();
+    l.path = o.value(QStringLiteral("path")).toString();
+    l.file = o.value(QStringLiteral("file")).toString();
+    l.weight = o.value(QStringLiteral("weight")).toDouble(0.8);
+    l.on = o.value(QStringLiteral("on")).toBool(true);
+    for (const QJsonValue &w : o.value(QStringLiteral("trigger_words")).toArray())
+        l.triggerWords << w.toString();
+    return l;
 }
 
 AiOptions::AiOptions(QObject *parent)
     : QObject(parent)
 {
     m_variants = std::clamp(Settings::instance().value(kVariantsKey, m_variants).toInt(), 1, kMaxVariants);
+    const QJsonObject saved = QJsonDocument::fromJson(Settings::instance().value(kLorasKey).toByteArray()).object();
+    for (auto it = saved.begin(); it != saved.end(); ++it) {
+        QList<ChosenLora> list;
+        for (const QJsonValue &v : it.value().toArray())
+            list << ChosenLora::fromJson(v.toObject());
+        if (!list.isEmpty())
+            m_loras.insert(it.key(), list);
+    }
+}
+
+void AiOptions::setLoras(const QString &providerId, const QList<ChosenLora> &loras)
+{
+    if (providerId.isEmpty() || m_loras.value(providerId) == loras)
+        return;
+    if (loras.isEmpty())
+        m_loras.remove(providerId);
+    else
+        m_loras.insert(providerId, loras);
+    QJsonObject saved;
+    for (auto it = m_loras.cbegin(); it != m_loras.cend(); ++it) {
+        QJsonArray list;
+        for (const ChosenLora &l : it.value())
+            list.append(l.toJson());
+        saved.insert(it.key(), list);
+    }
+    Settings::instance().setValue(kLorasKey, QJsonDocument(saved).toJson(QJsonDocument::Compact));
+    emit changed();
+}
+
+QList<ai::LoraRef> AiOptions::loraRefs(const QString &providerId) const
+{
+    QList<ai::LoraRef> out;
+    for (const ChosenLora &l : m_loras.value(providerId)) {
+        if (!l.on)
+            continue;
+        ai::LoraRef ref;
+        ref.name = l.name;
+        // The provider finds it among the server's by this path (its relative path is a suffix of it).
+        ref.file = l.file.isEmpty() ? l.path : l.file;
+        ref.weight = l.weight;
+        out << ref;
+    }
+    return out;
+}
+
+QString AiOptions::withTriggerWords(const QString &providerId, const QString &prompt) const
+{
+    QStringList missing;
+    for (const ChosenLora &l : m_loras.value(providerId)) {
+        if (!l.on)
+            continue;
+        for (const QString &w : l.triggerWords) {
+            if (!w.isEmpty() && !prompt.contains(w, Qt::CaseInsensitive) && !missing.contains(w))
+                missing << w;
+        }
+    }
+    if (missing.isEmpty())
+        return prompt;
+    return prompt.trimmed().isEmpty() ? missing.join(QStringLiteral(", ")) : missing.join(QStringLiteral(", ")) + QStringLiteral(", ") + prompt;
 }
 
 void AiOptions::setPrompt(const QString &prompt)

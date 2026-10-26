@@ -233,6 +233,7 @@ private slots:
     void adoptExisting();
     void adoptPythonApps();
     void inspectRealModels();
+    void loraFamilies();
     void modelFormats();
     void modelLibrary();
     void modelsFolderDefaults();
@@ -2912,6 +2913,86 @@ void TestRuntime::loraTraining()
     servers.releaseGpu();
     QVERIFY(servers.gpuReservation().isEmpty());
     QCOMPARE(reservation.size(), 2);
+}
+
+// LoRAs are told apart by their layers first and their metadata second (M18 §18.3), with the layouts
+// of real files: klein 4B and 9B, FLUX.1, Anima (whose sd-scripts metadata says SD 1.5), Krea 2 and
+// SDXL; and a LoRA of another model or size is refused in plain words.
+void TestRuntime::loraFamilies()
+{
+    QTemporaryDir dir;
+    auto inspect = [&dir](const QString &name, const QByteArray &bytes) {
+        const QString path = dir.filePath(name);
+        QDir().mkpath(QFileInfo(path).absolutePath());
+        QFile f(path);
+        f.open(QIODevice::WriteOnly);
+        f.write(bytes);
+        f.close();
+        return inspectModel(path);
+    };
+    // BFL-style FLUX blocks: `doubles` double and `singles` single blocks of `width`.
+    auto flux = [](int width, int doubles, int singles, bool modulation = false) {
+        QList<QPair<QString, QList<int>>> t;
+        for (int b = 0; b < doubles; ++b) {
+            t.append({QStringLiteral("diffusion_model.double_blocks.%1.img_attn.proj.lora_A.weight").arg(b), {16, width}});
+            t.append({QStringLiteral("diffusion_model.double_blocks.%1.img_attn.proj.lora_B.weight").arg(b), {width, 16}});
+            if (modulation)
+                t.append({QStringLiteral("diffusion_model.double_blocks.%1.img_mod.lin.lora_A.weight").arg(b), {16, width}});
+        }
+        for (int b = 0; b < singles; ++b)
+            t.append({QStringLiteral("diffusion_model.single_blocks.%1.linear2.lora_A.weight").arg(b), {16, width * 4}});
+        return t;
+    };
+    auto bytes = [](const QList<QPair<QString, QList<int>>> &tensors, const QJsonObject &meta = {}) { return makeSafetensors(tensors, meta); };
+
+    ModelInfo i = inspect(QStringLiteral("klein4b.safetensors"), bytes(flux(3072, 5, 20)));
+    QCOMPARE(i.kind, ModelKind::Lora);
+    QCOMPARE(i.family, QStringLiteral("FLUX.2"));
+    QCOMPARE(i.variant, QStringLiteral("Klein 4B"));
+    i = inspect(QStringLiteral("klein9b.safetensors"), bytes(flux(4096, 8, 24)));
+    QCOMPARE(i.family, QStringLiteral("FLUX.2"));
+    QCOMPARE(i.variant, QStringLiteral("Klein 9B"));
+    // Only some blocks trained: the width still tells 9B.
+    QCOMPARE(inspect(QStringLiteral("partial9b.safetensors"), bytes(flux(4096, 7, 8))).variant, QStringLiteral("Klein 9B"));
+    // FLUX.1: the same width as klein 4B, but more blocks and modulation per block.
+    i = inspect(QStringLiteral("flux1.safetensors"), bytes(flux(3072, 19, 38, true)));
+    QCOMPARE(i.family, QStringLiteral("FLUX"));
+    QVERIFY(i.variant.isEmpty());
+    // The metadata names the size when the layers alone could not.
+    i = inspect(QStringLiteral("named.safetensors"), bytes(flux(3072, 2, 2), {{QStringLiteral("ss_base_model_version"), QStringLiteral("flux2_klein_9b")}}));
+    QCOMPARE(i.variant, QStringLiteral("Klein 9B"));
+    // Anima (Cosmos DiT), whose metadata claims SD 1.5.
+    i = inspect(QStringLiteral("anima.safetensors"),
+                bytes({{QStringLiteral("lora_unet_blocks_0_cross_attn_k_proj.lora_down.weight"), {32, 1024}},
+                       {QStringLiteral("lora_unet_blocks_0_self_attn_q_proj.lora_down.weight"), {32, 2048}}},
+                      {{QStringLiteral("modelspec.architecture"), QStringLiteral("stable-diffusion-v1/lora")}}));
+    QCOMPARE(i.family, QStringLiteral("Anima"));
+    // Krea 2 (a text fusion stack), with or without metadata.
+    QCOMPARE(inspect(QStringLiteral("krea.safetensors"),
+                     bytes({{QStringLiteral("transformer.text_fusion.layerwise_blocks.0.attn.to_q.lora_A.weight"), {32, 2560}}}))
+                 .family,
+             QStringLiteral("Krea 2"));
+    // SDXL by its layers.
+    QCOMPARE(inspect(QStringLiteral("xl.safetensors"),
+                     bytes({{QStringLiteral("lora_unet_input_blocks_4_1_transformer_blocks_1_attn1_to_q.lora_down.weight"), {32, 640}}}))
+                 .family,
+             QStringLiteral("SDXL"));
+
+    // Fit: the same family and, for FLUX.2, the same size.
+    ModelInfo klein4 = inspect(QStringLiteral("a4.safetensors"), bytes(flux(3072, 5, 20)));
+    ModelInfo klein9 = inspect(QStringLiteral("a9.safetensors"), bytes(flux(4096, 8, 24)));
+    QVERIFY(loraMismatch(klein4, QStringLiteral("FLUX.2"), QStringLiteral("Klein 4B")).isEmpty());
+    QCOMPARE(loraMismatch(klein9, QStringLiteral("FLUX.2"), QStringLiteral("Klein 4B")),
+             QStringLiteral("Made for FLUX.2 [klein] 9B; this engine runs FLUX.2 [klein] 4B."));
+    QCOMPARE(loraMismatch(klein4, QStringLiteral("SDXL"), QString()), QStringLiteral("Made for FLUX.2 [klein] 4B; this engine runs SDXL."));
+    // SDXL LoRAs fit SDXL's variants; an unknown side is not refused.
+    ModelInfo xl;
+    xl.kind = ModelKind::Lora;
+    xl.family = QStringLiteral("SDXL");
+    QVERIFY(loraMismatch(xl, QStringLiteral("SDXL"), QStringLiteral("Illustrious")).isEmpty());
+    QVERIFY(loraMismatch(xl, QString(), QString()).isEmpty());
+    QVERIFY(loraMismatch(ModelInfo{}, QStringLiteral("SDXL"), QString()).isEmpty());
+    QCOMPARE(modelFamilyName(QStringLiteral("FLUX"), QStringLiteral("Dev")), QStringLiteral("FLUX.1"));
 }
 
 void TestRuntime::inspectRealModels()

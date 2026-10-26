@@ -358,6 +358,21 @@ ImageResult SdWebUiProvider::parseResponse(const QByteArray &body, int expectedI
     return result;
 }
 
+QFuture<QList<ServerLora>> SdWebUiProvider::availableLoras()
+{
+    net::CallOptions lo;
+    lo.timeoutMs = 15000;
+    lo.maxRetries = 0;
+    return futureFromCall<QList<ServerLora>>(http()->get(request(QStringLiteral("/sdapi/v1/loras")), lo), [](net::HttpCall *call) {
+        QList<ServerLora> out;
+        for (const QJsonValue &v : QJsonDocument::fromJson(call->body()).array()) {
+            const QJsonObject o = v.toObject();
+            out.append({o.value(QStringLiteral("name")).toString(), o.value(QStringLiteral("path")).toString()});
+        }
+        return out;
+    });
+}
+
 ImageOperation *SdWebUiProvider::generate(const ImageRequest &r)
 {
     auto *op = new ImageOperation(this);
@@ -375,17 +390,7 @@ ImageOperation *SdWebUiProvider::generate(const ImageRequest &r)
     // LoRAs: the server's list gives the names it knows them by.
     QFuture<ImageRequest> prepared = QtFuture::makeReadyValueFuture(r);
     if (!r.loras.isEmpty()) {
-        net::CallOptions lo;
-        lo.timeoutMs = 15000;
-        lo.maxRetries = 0;
-        prepared = futureFromCall<QList<ServerLora>>(http()->get(request(QStringLiteral("/sdapi/v1/loras")), lo), [](net::HttpCall *call) {
-                       QList<ServerLora> out;
-                       for (const QJsonValue &v : QJsonDocument::fromJson(call->body()).array()) {
-                           const QJsonObject o = v.toObject();
-                           out.append({o.value(QStringLiteral("name")).toString(), o.value(QStringLiteral("path")).toString()});
-                       }
-                       return out;
-                   }).then([r](const QList<ServerLora> &available) {
+        prepared = availableLoras().then([r](const QList<ServerLora> &available) {
             ImageRequest req = r;
             QString error;
             if (!resolveLoras(req.loras, available, &error))

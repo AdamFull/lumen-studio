@@ -3790,6 +3790,11 @@ Decisions (October 2026, with the user):
   model is set up, and the plan (selection method, prompt, LoRAs) is shown before it runs.
 * **Checking the result and retrying automatically is not planned**; the results strip already lets
   the user compare and pick.
+* **Added by the user (26 October 2026), and done first**: LoRAs are chosen in the interface, because
+  typed `<lora:…>` tags did not work reliably (most of the user's LoRAs were for another model or
+  size, and nothing said so); the settings of a run follow the model type, as the server dialog's
+  fields do (§18.4); and a filter can make its mask with a detection model (the *Find area* node of
+  §18.1). Work goes one step at a time, each built, tested and committed before the next.
 * **Detection runs in Lumen, without Python**: ONNX Runtime (its C API, so MinGW can use the official
   Windows build) as a managed component, with the detector and segmenter as pinned model files in the
   models folder. ComfyUI and online services can offer the same utility.
@@ -3845,7 +3850,20 @@ Decisions (October 2026, with the user):
 * **Suggestions**: LoRAs whose name, tags or trigger words match the prompt are shown first with a
   tick box, never applied without one.
 
-#### 18.4 Planning with a vision model (optional)
+#### 18.4 Settings per model type
+
+* The ⋯ menu's *Advanced* and the AI tab show the settings the engine's model takes, named in plain
+  words with the technical name in the tooltip, starting from its preset's values and with *Model's
+  choice* to go back: steps; how closely to follow the words (CFG, for models that use it; FLUX.1
+  dev's distilled guidance instead); how closely to keep the picture in an edit (image guidance, for
+  edit models); sampler and scheduler (the server's lists); flow shift where the preset sets one;
+  how much may change (denoising strength) for inpainting and variations; CLIP skip for SD 1.5 and
+  SDXL anime models. A setting the model does not take is not shown (FLUX.2 [klein] runs at CFG 1:
+  its row says so instead of offering a slider that does nothing). There is no "temperature" for an
+  image model; the closest is how closely to follow the words.
+* Remembered per model type, like the LoRAs per engine; the results' details show what was used.
+
+#### 18.5 Planning with a vision model (optional)
 
 * With a vision-capable language model set up (local llama.cpp with a projector, or an online one),
   *Plan this change* in ⋯ looks at the picture and the words and proposes: how to find the area
@@ -3856,8 +3874,38 @@ Decisions (October 2026, with the user):
 * GPU memory: on 8 GB the language model and the image model take turns (the supervisor's
   arbitration); the plan says how long that takes the first time.
 
-#### 18.5 Implementation steps
+#### 18.6 Implementation steps
 
+- [x] LoRA picker (§18.3, without suggestions yet): LoRAs told apart by their layers, with the
+  metadata second (FLUX.2 [klein] 4B / 9B, FLUX.1, Anima, Qwen-Image, Krea 2, SDXL, SD 1.5); the
+  picker in ⋯ and New from prompt; a server Lumen runs has its LoRA folder read without starting it.
+  * Why first: the user's typed tags "did not work reliably". Their two LoRA folders (14 files, headers
+    read only) showed why: of the ten LoRAs in the folder of their klein 4B server, two were for klein
+    4B, five for klein 9B, two for Krea 2 and one for Anima, and their klein 9B server had no LoRA
+    folder at all. Nothing told them.
+  * `runtime::classifyLora` (inspector version 4): FLUX layouts by width (3072 klein 4B or FLUX.1, 4096
+    klein 9B, 6144 FLUX.2 dev), block count and modulation per block (FLUX.1 only); Anima by its
+    self/cross attention blocks (its sd-scripts metadata says SD 1.5); Krea 2 by its text fusion
+    stack; Qwen-Image by separate image and text MLPs; then SDXL / SD 1.5 as before. All 14 real files
+    come out right. `loraMismatch` says why one does not fit ("Made for FLUX.2 [klein] 9B; this
+    engine runs FLUX.2 [klein] 4B."); FLUX.2 is checked by size, SDXL's variants share their LoRAs.
+  * `ImageProvider::availableLoras` (sd.cpp's capabilities, WebUI's `/sdapi/v1/loras`);
+    `ui::listLoras` reads a Lumen-run server's LoRA folder on a worker thread instead, with the
+    model from the profile's file, so a menu never starts a server; it says when there is no folder.
+  * `LoraPicker` (⋯ and New from prompt's More options): *Add a LoRA…* with the fitting ones first and
+    the rest greyed out under *Made for another model*; rows with a tick box, a strength and ✕; a
+    chosen LoRA that does not fit is turned off with its reason; *Server settings…* when the server
+    has no folder (`Studio::settingsRequested`). `AiOptions` keeps the choice per engine
+    (`editor/ai/loras`); `AiPanel::baseRequest` and New from prompt send the ticked ones with their
+    trigger words (sd.cpp's `lora` list, WebUI's tags).
+  * Tests: `tst_runtime loraFamilies` (each layout, metadata, the fit messages), `tst_canvas
+    loraPickerElsewhere` (a listing server, the request's `lora` and trigger words, untick, kept in
+    the next session) and `loraPickerFolder` (the folder read, the menu's two groups, a 9B LoRA
+    turned off with its reason, no folder, the server not started).
+  * Not yet: the AI tab has no picker of its own (its actions use the choice made in ⋯); ComfyUI does
+    not list its LoRAs; suggestions; a LoRA for FLUX.1 trained on only its first few blocks would read
+    as klein 4B.
+- [ ] Settings per model type (§18.4).
 - [ ] Classic finders (lines, specks, colour range) in `core/` with golden-image tests; *Select →
   By description…* with the rule-based parser; *Find lines* node.
 - [ ] ONNX Runtime as a managed component (pinned release, CUDA / DirectML / CPU builds, C API);
@@ -3865,7 +3913,7 @@ Decisions (October 2026, with the user):
   selection* (click and box); the *Find area* node. Tests against small ONNX test models, no GPU.
 - [ ] `FindArea` for ComfyUI (workflow template), fal.ai and Gemini, against mock servers.
 - [ ] Prompt rules per family; *Use my words as they are*; what was sent in the results' details.
-- [ ] LoRA picker and suggestions (sd.cpp, WebUI, ComfyUI).
+- [ ] LoRA suggestions; the picker for ComfyUI.
 - [ ] Planning with a vision model: `AgentRun` in the core, *Plan this change*, the proposal view.
 - [ ] Short live check (RTX 4060 8 GB): "remove the black lines" on a scanned drawing with a classic
   finder; "the cup" found and replaced with FLUX.2 [klein] and with SDXL; a klein 4B LoRA from the
