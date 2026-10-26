@@ -9,6 +9,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonObject>
 #include <QLinearGradient>
 #include <QPainter>
 #include <QPainterPath>
@@ -72,8 +73,9 @@ const QStringList &builtInOrder()
     QT_TRANSLATE_NOOP("lumen::ui::BuiltInFilters", "Remove background"),
     QT_TRANSLATE_NOOP("lumen::ui::BuiltInFilters", "Cuts out the main subject: the background becomes transparent."),
     QT_TRANSLATE_NOOP("lumen::ui::BuiltInFilters", "Upscale ×2"),
-    QT_TRANSLATE_NOOP("lumen::ui::BuiltInFilters", "Makes the picture twice as large with an AI upscaler, which adds detail. With "
-                                                   "nothing selected, the whole picture grows."),
+    QT_TRANSLATE_NOOP("lumen::ui::BuiltInFilters", "Makes the whole picture twice as large with an AI upscaler, which adds detail. "
+                                                   "With a selection, only the selected area gets the added detail; the rest is only "
+                                                   "resized."),
 };
 
 QString translated(const QString &text)
@@ -302,16 +304,61 @@ QString FilterCatalog::duplicate(const QString &path, QString *error)
     std::optional<filters::Graph> graph = load(path, error);
     if (!graph)
         return {};
-    const QString name = graph->name.isEmpty() ? QFileInfo(path).completeBaseName() : graph->name;
-    graph->name = tr("%1 copy").arg(name);
+    graph->name = uniqueName(copyName(*graph, path));
     return save(*graph, {}, error);
+}
+
+QString FilterCatalog::unchangedCopyOf(const QString &path) const
+{
+    const std::optional<filters::Graph> original = load(path);
+    if (!original)
+        return {};
+    // A copy is the same filter under the name duplicate() gave it ("Sharpen copy", "Sharpen copy 2").
+    const QString base = copyName(*original, path);
+    auto withoutName = [](const filters::Graph &g) {
+        QJsonObject json = g.toJson();
+        json.remove(QStringLiteral("name"));
+        return json;
+    };
+    const QJsonObject wanted = withoutName(*original);
+    for (const Entry &e : m_entries) {
+        if (e.builtIn || !e.error.isEmpty() || (e.name != base && !e.name.startsWith(base + QLatin1Char(' '))))
+            continue;
+        if (const std::optional<filters::Graph> g = load(e.path); g && withoutName(*g) == wanted)
+            return e.path;
+    }
+    return {};
 }
 
 QString FilterCatalog::create(const QString &name, QString *error)
 {
     filters::Graph graph = filters::Graph::createDefault();
-    graph.name = name.trimmed().isEmpty() ? tr("New filter") : name.trimmed();
+    graph.name = uniqueName(name.trimmed().isEmpty() ? tr("New filter") : name.trimmed());
     return save(graph, {}, error);
+}
+
+QString FilterCatalog::uniqueName(const QString &name, const QString &except) const
+{
+    const QString base = name.trimmed();
+    const QString skip = except.isEmpty() ? QString() : QDir::cleanPath(QFileInfo(except).absoluteFilePath());
+    auto taken = [&](const QString &candidate) {
+        return std::any_of(m_entries.begin(), m_entries.end(), [&](const Entry &e) {
+            return !e.builtIn && e.name.compare(candidate, Qt::CaseInsensitive) == 0
+                && QDir::cleanPath(QFileInfo(e.path).absoluteFilePath()) != skip;
+        });
+    };
+    if (!taken(base))
+        return base;
+    for (int i = 2;; ++i) {
+        const QString candidate = QStringLiteral("%1 %2").arg(base).arg(i);
+        if (!taken(candidate))
+            return candidate;
+    }
+}
+
+QString FilterCatalog::copyName(const filters::Graph &graph, const QString &path)
+{
+    return tr("%1 copy").arg(graph.name.isEmpty() ? QFileInfo(path).completeBaseName() : graph.name);
 }
 
 bool FilterCatalog::remove(const QString &path, QString *error)

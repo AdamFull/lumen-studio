@@ -130,7 +130,8 @@ NodeEditorWindow::NodeEditorWindow(FilterCatalog *catalog, QWidget *parent)
     saveAsAction->setToolTip(tr("Save as a new filter"));
     bar->addSeparator();
     m_runAction = bar->addAction(Icons::get(QStringLiteral("play")), tr("Run AI steps"));
-    m_runAction->setToolTip(tr("AI steps take a while, so the preview runs them only when you ask"));
+    m_runAction->setToolTip(tr("AI steps take a while, so the preview runs them only when you ask. Applying the saved filter "
+                               "to the same layer from the Filters panel then uses what they made."));
 
     // Canvas and side panel.
     auto *splitter = new QSplitter(Qt::Horizontal, this);
@@ -190,14 +191,18 @@ NodeEditorWindow::NodeEditorWindow(FilterCatalog *catalog, QWidget *parent)
     connect(m_model, &GraphModel::changed, this, &NodeEditorWindow::modelChanged);
     connect(m_model, &GraphModel::modifiedChanged, this, &NodeEditorWindow::updateTitle);
     // AI steps say whether an engine can run them, and list the engines: both change when one is
-    // added or removed.
+    // added or removed, or another becomes the one in use (the default image engine).
     if (ai::GenerationService *service = ai::filterNodeService()) {
-        connect(service->registry(), &ai::ProviderRegistry::providersChanged, this, [this] {
+        auto enginesChanged = [this] {
             m_scene->sync();
             updateProblems();
             rebuildNodeSection();
-        });
+        };
+        connect(service->registry(), &ai::ProviderRegistry::providersChanged, this, enginesChanged);
+        connect(service->registry(), &ai::ProviderRegistry::rolesChanged, this, enginesChanged);
     }
+    // A Run here serves the Filters panel's Apply of the same filter on the same layer.
+    m_evaluator->setSharedResults(m_catalog->sharedResults());
 
     m_previewTimer.setSingleShot(true);
     m_previewTimer.setInterval(60);
@@ -502,12 +507,14 @@ bool NodeEditorWindow::save(QString *error)
 
 bool NodeEditorWindow::saveAs(const QString &name, QString *error)
 {
-    const QString clean = name.trimmed();
-    if (clean.isEmpty()) {
+    if (name.trimmed().isEmpty()) {
         if (error)
             *error = tr("Give the filter a name.");
         return false;
     }
+    // A new file: when another saved filter has the name, this one gets a number, so the Filters
+    // panel can tell the two apart.
+    const QString clean = m_catalog->uniqueName(name);
     if (clean != m_model->graph().name) {
         m_model->change(tr("Rename filter"), [&](filters::Graph &g) {
             g.name = clean;

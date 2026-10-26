@@ -459,12 +459,9 @@ void AiPanel::run()
                     spec.region = ai::RegionInput{composite, selection, padding, 6, feather, colorMatch};
                 } else {
                     // Whole image: img2img / instruction edit at the model's working resolution.
-                    const QSize workSize = caps.fixedSizes.isEmpty()
-                                               ? img::fitToPixelBudget(composite.size(), std::min(caps.nativePixels, caps.maxPixels), caps.sizeMultiple)
-                                               : composite.size();
                     spec.request.mode = mode == Mode::Edit && caps.edit ? ai::GenMode::Edit : ai::GenMode::ImageToImage;
-                    spec.request.initImage = img::normalized(img::scaled(img::flatten(composite, Qt::white), workSize, true));
-                    spec.request.size = workSize;
+                    spec.request.initImage = ai::wholeImageInput(composite, caps);
+                    spec.request.size = spec.request.initImage.size();
                 }
                 Job *job = gen->submit(spec);
                 const QString name = mode == Mode::Edit ? tr("Edit: %1").arg(prompt.left(32)) : (prompt.isEmpty() ? tr("AI variation") : prompt.left(40));

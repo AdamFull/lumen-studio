@@ -471,18 +471,25 @@ The **Filters** tab on the right lists the built-in filters (*Black and white*, 
 
 * Click a filter to see its settings. With **Preview on the canvas** on, the picture shows the
   filter while you move its sliders, at a lower resolution so it stays quick. Nothing changes yet.
-* **Apply** runs the filter on the active layer at full resolution. With a selection only the
-  selected area changes, without one the whole layer. **Result on**: *A new layer* (the default:
-  the result goes on a new layer above, named after the filter, and the original stays underneath)
-  or *This layer*. One **Undo** takes it back. While it works, a bar shows the step that runs, and
-  **Cancel** stops it without changing anything.
+  While you paint or move something, the canvas shows your picture as it is; the preview comes
+  back when you stop. After **Apply** the preview stays off until you change a setting or choose
+  another filter (or turn **Preview on the canvas** off and on), so it does not show the filter
+  twice.
+* **Apply** (always at the bottom of the panel, with the line that says what will change) runs the
+  filter on the active layer at full resolution. With a selection only the selected area changes,
+  without one the whole layer. **Result on**: *A new layer* (the default: the result goes on a new
+  layer above, named after the filter, and the original stays underneath) or *This layer*. One
+  **Undo** takes it back. While it works, a bar shows the step that runs, and **Cancel** stops it
+  without changing anything. You can keep working meanwhile: what you paint on the layer outside
+  the area the filter changes stays.
 * Filters with AI steps show their preview only after **Run AI steps**, because those take a while;
   **Apply** then uses what the run made.
 
 **Filters with AI.** They use your image engine (Settings → Providers); each AI step is a job in the
-Queue, where you see how far it is and can cancel it (or press **Cancel** in the panel). When no
-engine can do a step, the panel says so in red before anything runs, for example that your model
-cannot change a picture from a description.
+Queue, where you see how far it is and can cancel it (or press **Cancel** in the panel). To run a
+step again, apply the filter again: the Queue has no **Retry** for it. When no engine can do a step,
+the panel says so in red before anything runs, for example that your model cannot change a picture
+from a description. If you remove an engine while a step of it runs, the step stops and says so.
 
 * **Colorize with AI** gives a black-and-white photo natural colours and keeps everything else as
   it is. With a selection only the selected area is coloured: the area around it is sent to the
@@ -495,13 +502,15 @@ cannot change a picture from a description.
   under the cut-out (still there, unchanged), so the transparency shows. It needs an engine that
   removes backgrounds: Stable Diffusion WebUI with its background removal extension, fal.ai or
   Stability AI.
-* **Upscale ×2** makes the picture twice as large with an AI upscaler. With nothing selected the
-  whole picture grows (every layer, in one undo step). A stable-diffusion.cpp server needs an
-  upscale model in its settings; ComfyUI, Stable Diffusion WebUI, fal.ai and Stability AI have one.
+* **Upscale ×2** makes the whole picture twice as large with an AI upscaler (every layer, in one
+  undo step). With a selection, only the selected area gets the upscaler's added detail and the
+  rest is only resized. After **Run AI steps** the panel says the size the picture becomes. A
+  stable-diffusion.cpp server needs an upscale model in its settings; ComfyUI, Stable Diffusion
+  WebUI, fal.ai and Stability AI have one.
 
 ### Building your own filters
 
-**New filter…** opens the node editor, a window of its own. A filter is a chain of nodes from
+**New filter…** opens the filter editor, a window of its own. A filter is a chain of nodes from
 **Input** (the layer, with the selection as a mask) to **Output** (the result; connect a mask to its
 *Where to apply* to limit where it goes).
 
@@ -528,13 +537,16 @@ cannot change a picture from a description.
   area* matches its colours to the picture around it; choose *As the AI made them* for changes of
   colour on purpose, such as colorizing. AI steps run when you click **Run AI steps** (or
   **Apply** in the panel), and a step that cannot run is outlined and listed under **Problems**.
+  What **Run AI steps** made in the editor is used again when you apply the saved filter to the
+  same layer from the Filters panel, so the AI step does not run twice.
 * **Save** (`Ctrl+S`) and **Save as…** write the filter into the filters folder; the Filters panel
-  shows the change at once.
+  shows the change at once. A name another of your filters has gets a number ("Mine 2").
 
 **Edit…** opens one of your filters again. Built-in filters stay as they are: **Edit a copy…** makes
-your own copy first. **Duplicate** copies a filter, **Delete** removes one of yours, and the folder
-button opens the filters folder (`Documents\Lumen\Filters`). Filters are `.lumenfilter` files: one
-put into that folder appears in the list.
+your own copy first ("Sharpen copy"), or opens the copy you made before while you have not changed
+it. **Duplicate** copies a filter, **Delete** removes one of yours, and the folder button opens the
+filters folder (`Documents\Lumen\Filters`). Filters are `.lumenfilter` files: one put into that
+folder appears in the list.
 
 ## 6. AI editing
 
@@ -626,11 +638,11 @@ LumenStudio [--project file.lumen] [--page editor|generate|create|poses|parts|li
 | Cache (thumbnails) | `%LOCALAPPDATA%\Lumen\Lumen Studio\cache` | `userdata\cache` |
 | Projects | `Documents\Lumen Studio` | `userdata\projects` |
 | Models (downloads, trained LoRAs) | `Documents\Lumen\Models` (Settings → Models can move it) | `userdata\models` |
-| Filters you saved | `Documents\Lumen\Filters` | `userdatailters` |
+| Filters you saved | `Documents\Lumen\Filters` | `userdata\filters` |
 | API keys | Windows Credential Manager | Windows Credential Manager |
 
 The environment variable `LUMEN_DATA_DIR` overrides both (useful for separate profiles); the models
-and filters folders are then `<that folder>\models` and `<that folder>ilters`.
+and filters folders are then `<that folder>\models` and `<that folder>\filters`.
 
 ## 13. Troubleshooting
 

@@ -48,6 +48,18 @@ QRect ensureMinimumSize(QRect r, const QSize &bounds, int minSide)
     return r.intersected(QRect(QPoint(0, 0), bounds));
 }
 
+// A provider owns its operations: when it is removed (Settings) while one runs, the operation goes
+// with it without finishing, and the job would wait for ever. It fails instead.
+void failWhenGone(Operation *op, Job *job)
+{
+    auto ended = std::make_shared<bool>(false);
+    QObject::connect(op, &Operation::finished, job, [ended] { *ended = true; });
+    QObject::connect(op, &QObject::destroyed, job, [job, ended] {
+        if (!*ended && !job->isFinished())
+            job->fail(GenerationService::tr("The image engine was removed before it finished."));
+    });
+}
+
 } // namespace
 
 RegionPlan planRegion(const QRect &maskBounds, const QSize &documentSize, int padding, const ImageCapabilities &caps)
@@ -120,6 +132,18 @@ ImageRequest prepareRegionRequest(const ImageRequest &base, const RegionInput &r
             c.image = img::scaled(c.image.copy(plan.rect), plan.modelSize, true);
     }
     return req;
+}
+
+QSize wholeImageWorkSize(const QSize &size, const ImageCapabilities &caps)
+{
+    if (!caps.fixedSizes.isEmpty())
+        return size;
+    return img::fitToPixelBudget(size, std::min(caps.nativePixels, caps.maxPixels), caps.sizeMultiple);
+}
+
+QImage wholeImageInput(const QImage &image, const ImageCapabilities &caps)
+{
+    return img::normalized(img::scaled(img::flatten(image, Qt::white), wholeImageWorkSize(image.size(), caps), true));
 }
 
 QImage compositeRegionResult(const QImage &generated, const RegionInput &region, const RegionPlan &plan)
@@ -264,6 +288,7 @@ void GenerationService::execute(Job *job, const GenerationSpec &specIn, OutputHa
             else
                 job->reportCancelled();
         });
+        failWhenGone(op, job);
         QObject::connect(op, &Operation::progress, job, [job](double f, const QString &s) { job->setProgress(f, s); });
         QObject::connect(op, &Operation::preview, job, [job](const QImage &img) { job->setPreview(img); });
         GenerationSpec used = spec;
@@ -456,6 +481,7 @@ Job *GenerationService::submitUtilityImpl(const QString &providerId, Utility uti
                 else
                     job->reportCancelled();
             });
+            failWhenGone(op, job);
             QObject::connect(op, &Operation::progress, job, [job](double f, const QString &s) { job->setProgress(f, s); });
             QObject::connect(op, &Operation::finished, job, [self, job, op, guard, utility, title, saveAsset, sourceAssetId] {
                 if (op->state() == Operation::State::Cancelled) {

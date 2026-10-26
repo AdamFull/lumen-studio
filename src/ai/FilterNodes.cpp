@@ -67,7 +67,7 @@ Engine engineFor(Step step, const QString &chosen)
         provider = registry->imageProvider(chosen);
         if (!provider)
             return {nullptr, Text::tr("The image engine chosen for this step is no longer set up. Choose another one for it in the "
-                                      "node editor, or “The one in use”.")};
+                                      "filter editor, or “The one in use”.")};
     }
     switch (step) {
     case Step::Upscale:
@@ -138,14 +138,24 @@ struct Pending
     QPromise<Values> promise;
     std::function<void(double, const QString &)> report;
     QPointer<Job> job;
+    // The step's connections to its job. They hold this and the step's input, so they go once the
+    // step is done: a finished job stays in the Queue until it is cleared.
+    QList<QMetaObject::Connection> connections;
     bool cancelled = false;
-    bool done = false; // the promise is finished: later news (a job retried from the Queue) is ignored
+    bool done = false; // the promise is finished: later news from the job is ignored
 
+    void release()
+    {
+        for (const QMetaObject::Connection &c : std::as_const(connections))
+            QObject::disconnect(c);
+        connections.clear();
+    }
     void finish(const Values &outputs)
     {
         if (done)
             return;
         done = true;
+        release();
         promise.addResult(outputs);
         promise.finish();
     }
@@ -154,6 +164,7 @@ struct Pending
         if (done)
             return;
         done = true;
+        release();
         promise.setException(Error(message));
         promise.finish();
     }
@@ -162,6 +173,7 @@ struct Pending
         if (done)
             return;
         done = true;
+        release();
         promise.future().cancel();
         promise.finish();
     }
@@ -227,17 +239,24 @@ Values resultOf(const StepInput &in, const GenerationOutput &out)
 void track(const std::shared_ptr<Pending> &pending, Job *job, const StepInput &in)
 {
     pending->job = job;
+    // Retry in the Queue would run the step again with nowhere for its result to go: the filter
+    // runs again from the Filters panel instead.
+    job->setRetryable(false);
     // A job removed from the Queue before it finished would leave the evaluation waiting.
-    QObject::connect(job, &QObject::destroyed, QCoreApplication::instance(), [pending] {
+    pending->connections << QObject::connect(job, &QObject::destroyed, QCoreApplication::instance(), [pending] {
         pending->fail(Text::tr("The step's job was removed from the Queue."));
     });
-    QObject::connect(job, &Job::progressChanged, job, [pending](double fraction, const QString &status) {
+    pending->connections << QObject::connect(job, &Job::progressChanged, job, [pending](double fraction, const QString &status) {
         if (pending->report && !pending->done)
             pending->report(fraction, status);
     });
-    QObject::connect(job, &Job::finished, job, [pending, in](Job *job) {
+    pending->connections << QObject::connect(job, &Job::finished, job, [pending, in](Job *job) mutable {
         if (pending->done)
             return;
+        // What the result needs moves out of this connection, which goes now (Qt keeps the
+        // function alive until it returns).
+        StepInput input = std::move(in);
+        pending->release();
         if (job->state() == Job::State::Cancelled)
             return pending->finishCancelled();
         if (job->state() == Job::State::Failed)
@@ -245,7 +264,7 @@ void track(const std::shared_ptr<Pending> &pending, Job *job, const StepInput &i
         const GenerationOutput out = GenerationService::outputOf(job);
         if (out.images.isEmpty() || out.images.first().isNull())
             return pending->fail(Text::tr("The image engine gave no picture."));
-        async::run([in, out] { return resultOf(in, out); })
+        async::run([input = std::move(input), out] { return resultOf(input, out); })
             .then(QCoreApplication::instance(), [pending](const Values &outputs) { pending->finish(outputs); })
             .onFailed(QCoreApplication::instance(), [pending](const std::exception &e) { pending->fail(describeException(e)); });
     });
@@ -319,12 +338,7 @@ void start(const std::shared_ptr<Pending> &pending, const StepInput &in)
     probe.mode = GenMode::Edit;
     const ImageCapabilities caps = engine.provider->capabilitiesFor(probe);
     QPointer<GenerationService> guard(service);
-    async::run([in, caps] {
-        const QSize work = caps.fixedSizes.isEmpty()
-                               ? img::fitToPixelBudget(in.image.size(), std::min(caps.nativePixels, caps.maxPixels), caps.sizeMultiple)
-                               : in.image.size();
-        return img::normalized(img::scaled(img::flatten(in.image, Qt::white), work, true));
-    })
+    async::run([image = in.image, caps] { return wholeImageInput(image, caps); })
         .then(QCoreApplication::instance(), [pending, in, spec, guard](const QImage &initImage) mutable {
             if (pending->done || pending->cancelled)
                 return pending->finishCancelled();

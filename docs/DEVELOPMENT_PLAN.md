@@ -2363,11 +2363,12 @@ Survey of the code, the app log and user testing (October 2026):
     `:/filters/builtin`, read-only; their names, descriptions and slider labels go through the
     translation context `lumen::ui::BuiltInFilters`) and the saved ones (the folder is watched, so a
     file put there by hand appears; one that does not load is listed with the reason). Create,
-    save (a built-in path saves a new file), duplicate (`<name> copy`, the way to edit a built-in
-    filter) and delete. Thumbnails: each classic filter on a drawn sample picture (sky, sun, hills, a
-    house) at 64 × 48, in the background; filters with AI steps and broken ones show an icon. One
-    catalog per Studio (`FilterCatalog::of`), so a save in the node editor refreshes every panel
-    (`changed`, `saved`).
+    save (a built-in path saves a new file), duplicate (`<name> copy`, then `<name> copy 2`…, the
+    way to edit a built-in filter) and delete; the names it gives saved filters are unique
+    (`uniqueName`, case ignored), so the list can tell them apart. Thumbnails: each classic filter
+    on a drawn sample picture (sky, sun, hills, a house) at 64 × 48, in the background; filters with
+    AI steps and broken ones show an icon. One catalog per Studio (`FilterCatalog::of`), so a save
+    in the node editor refreshes every panel (`changed`, `saved`).
   * Built-in filters: Black and white, Warm tones, Cool tones, Sharpen, Soft focus, Film grain, Old
     photo, each with published settings (Strength, Amount, Edge width, Softness, Grain, Brown tint
     as sliders; *Brightness from* and *Grain* as lists). No vignette: there is no gradient node yet.
@@ -2379,9 +2380,11 @@ Survey of the code, the app log and user testing (October 2026):
       longest side) with the filter on the active layer, put together as *Apply* would (on a new
       layer, or into the layer); the layers are scaled once and kept while their pixels stay the
       same. `CanvasView::setPreview` shows it instead of the document's tiles (the selection's
-      outline stays, its tint goes). A change previews after 40 ms; a stale preview stops at its
-      next node. A graph with AI steps previews with `runExpensive` off, so nothing runs until *Run
-      AI steps* (`run()`: progress, *Cancel*), which runs them at full resolution; sliders after them
+      outline stays, its tint goes). A changed setting previews after 40 ms; a change of the document
+      (a stroke, a move, an undo) takes the preview away at once, so the canvas shows the document as
+      it is while the change goes on, and previews after 40 ms; a stale preview stops at its next
+      node and is not shown. A graph with AI steps previews with `runExpensive` off, so nothing runs
+      until *Run AI steps* (`run()`: progress, *Cancel*), which runs them at full resolution; sliders after them
       then preview live. A change while a step runs previews when it ends, instead of cutting it short.
     * Apply: the filter at full resolution on the active layer, with the selection as the graph's
       *Selection* input; the selection times the graph's own mask (the Output's *Where to apply*)
@@ -2390,17 +2393,24 @@ Survey of the code, the app log and user testing (October 2026):
       the mask's bounds (an alpha-locked layer keeps its alpha; a locked layer is refused). A result
       of another size is stretched to the layer. One undo step ("Filter: …", `addLayer` or
       `applyPixels`). The preview and *Apply* share one `Evaluator`, so *Apply* after *Run* reuses
-      the AI step. After *Apply* the preview stays off until a setting or the filter changes (it
-      would filter the new layer again).
+      the AI step. After *Apply* the preview stays off until the filter, a setting, the target or the
+      document changes, or *Preview on the canvas* is turned on again (it would filter the new layer
+      again); the tab shown again does not bring it back, and an *Apply* that ends after another
+      filter was chosen leaves that one's preview alone. A layer changed while *Apply* runs (a
+      stroke, an undo: its revision or pixels differ) gets the result put together again with its
+      pixels as they are then, so nothing outside where the filter applies goes back. *Cancel* also
+      holds once the steps are done and the result is being put together.
   * `ui/filters/FiltersPanel`, the *Filters* tab of the editor's right panel (`EditorPage` adds it
     after History; its four tabs shorten their names instead of scrolling): the list (*Built in*,
     *Your filters*, thumbnails, descriptions as tooltips); *New filter…*, *Edit…* (*Edit a copy…*
     for a built-in one), *Duplicate*, *Delete* (saved ones, asked first), *Open filters folder*;
     the chosen filter's published settings (`ParamField` with the published label and range);
     *Preview on the canvas* (`filters/preview`), *Result on* a new layer or this layer
-    (`filters/target`), a line saying whether the selection or the whole layer changes, *Run AI
-    steps* when needed, *Apply*, progress with *Cancel*, the outcome or the reason in plain words.
-    The canvas shows the preview only while the tab is visible.
+    (`filters/target`); under them, in a footer that stays in view while the details scroll, a line
+    saying whether the selection or the whole layer changes (or the size the picture becomes), the
+    reason a step cannot run, *Run AI steps* when needed, *Apply*, progress with *Cancel*, the
+    outcome (naming the filter that was applied) or the reason in plain words. The canvas shows the
+    preview only while the tab is visible.
   * Node editor (`ui/filters/NodeEditorWindow`, `NodeScene`, `GraphModel`, `ParamWidgets`), a
     window of its own, owned by the main window:
     * `GraphModel`: the graph and a `QUndoStack` of whole-graph steps (`change(text, edit,
@@ -2427,7 +2437,9 @@ Survey of the code, the app log and user testing (October 2026):
       published settings (click to select the node, ✕ to remove).
     * *Save* (Ctrl+S; a filter without a file asks for a name), *Save as…*, undo and redo (Ctrl+Z,
       Ctrl+Shift+Z). Closing with changes asks, also when the main window closes. A filter opens in
-      one window at most (`openFilter` raises it); the panel opens built-in filters as a copy.
+      one window at most (`openFilter` raises it); the panel opens built-in filters as a copy (the
+      copy made before while it is unchanged, `unchangedCopyOf`). Its title and toolbar call it the
+      *Filter editor*, as the panel and the guide do.
   * Tests: `tst_filters_ui` (new, 16 functions): the folder next to the models; every built-in
     file parses, validates without a warning, publishes a setting and changes a picture, with
     thumbnails; the catalog (create, copies, refusals, a file added by hand, a broken one,
@@ -2444,7 +2456,9 @@ Survey of the code, the app log and user testing (October 2026):
     onto the layer; a locked layer; Cancel of a waiting AI step with progress, nothing changed; an AI
     filter previews after Run and Apply reuses it; New, Edit, Duplicate, Delete, the panel after a
     save in the editor); the tab in the editor page. `tst_layout filterTools`: the node editor at
-    1280 × 720 and the panel at 300 × 600, no findings (the audit's 7 findings stay as they were).
+    1280 × 720 and the panel at 300 × 540 (the side panel's minimum width, its height in a
+    1280 × 720 window; first audited at 300 × 600, where *Apply* was below the fold of the real
+    tab), no findings (the audit's 7 findings stay as they were).
   * Not yet: the filters folder cannot be moved; slider values are not remembered between sessions;
     the preview's resolution does not follow the zoom; the node editor has no copy and paste and
     does not link a new node to the selected one; a result of another size is stretched to the layer
@@ -2474,7 +2488,10 @@ Survey of the code, the app log and user testing (October 2026):
     promise. A failed job fails the step with its message ("“Edit with AI”: …"), a cancelled one
     cancels the evaluation, and `onCancel` cancels the job (sd.cpp's is cancelled on the server).
     Results come through the GUI thread's event loop, so the GUI thread never waits for an
-    evaluation with an AI step.
+    evaluation with an AI step. The job offers no *Retry* in the Queue (`Job::setRetryable`: its
+    result would go nowhere), and the step's connections to it, which hold its input and result, go
+    once the step is done. A whole picture is prepared with `ai::wholeImageInput` (shared with the AI
+    panel and the assistant).
   * `ai::registerFilterNodes(service)` adds the four types to `NodeRegistry::global()` once and makes
     the service the one they run through (the newest that still exists); `Studio`'s constructor calls
     it before any filter is loaded, so the app's catalog and every window find them.
@@ -2484,7 +2501,8 @@ Survey of the code, the app log and user testing (October 2026):
     engine without an edit model ("“SDXL” cannot change a picture from a description. Choose an
     engine with an edit model …"), none with an upscaler or a background removal (saying which have
     one). The node editor lists them under *Problems* and outlines the node (its tooltip now lists
-    every problem of the node), again when engines are added or removed; the Filters panel shows them
+    every problem of the node), again when engines are added or removed or another becomes the one
+    in use; the Filters panel shows them
     in red under the selection line, again when engines change; running anyway fails with the reason.
   * Progress: `EvalOptions::stepProgress` (a running node's own progress, from any thread, dropped
     once the evaluation has ended), `FilterRunner::stepProgress`; the panel's bar moves within the
@@ -2498,14 +2516,16 @@ Survey of the code, the app log and user testing (October 2026):
     *Instruction* published), *Clean up background* (the same with its own instruction and colour
     matching), *Remove background*, *Upscale ×2*. Their instructions stay in English, which the models
     follow best; names, descriptions and the *Instruction* label are translatable.
-  * `FilterRunner`: a result with the layer's proportions at another size, applied with nothing
-    selected and no mask from the graph, scales the whole picture first (`Document::scaleImage`, in
-    the filter's undo step), so *Upscale ×2* makes the picture twice as large instead of being
-    stretched back into the layer. A result that takes opacity away from the layer where it applies
-    (at least 0.2 % of the area turns from opaque to transparent) goes onto the new layer whole, the
-    layer mixed in outside the area, and the layer is hidden in the same undo step, so a cut-out
-    shows; the preview shows it the same way. `appliedNote()` adds either to the panel's message
-    ("The picture is now 480 × 320 pixels.", "The original layer is hidden under it …").
+  * `FilterRunner`: a result with the layer's proportions at another size scales the whole picture
+    first (`Document::scaleImage`, in the filter's undo step), so *Upscale ×2* makes the picture
+    twice as large instead of being stretched back into the layer; a selection (scaled with the
+    picture) then says where the result goes, and outside it the picture is only resized. After a
+    preview or *Run* the panel says the size the picture becomes. A result that takes opacity away
+    from the layer where it applies (at least 0.2 % of the area turns from opaque to transparent)
+    goes onto the new layer whole, the layer mixed in outside the area, and the layer is hidden in
+    the same undo step, so a cut-out shows; the preview shows it the same way. `appliedNote()` adds
+    either to the panel's message ("The picture is now 480 × 320 pixels.", "The original layer is
+    hidden under it …").
   * Tests (`tst_filters_ui`, 6 new functions, 22 in all, against one mock server for sd.cpp's native
     API with the FLUX.2 klein preset on the provider, its upscaler, and the WebUI's background
     removal): `aiNodesSayWhatTheyNeed` (the four types; no engine: the reason, the failed run with it,
@@ -2526,6 +2546,38 @@ Survey of the code, the app log and user testing (October 2026):
     `builtInFiltersValidate` checks the AI ones preview only after *Run*. `tst_layout filterTools`
     also audits the node editor with *Edit with AI* selected and the panel with *Colorize with AI*: no
     findings.
+  * Review fixes (of steps 11 and 12, October 2026):
+    * The panel's actions were below the fold at its real size (about 340 × 540 in a 1280 × 720
+      window): the selection line, the reason a step cannot run, *Run AI steps*, *Apply*, the
+      progress with *Cancel* and the outcome moved to a footer under the scrolling details.
+    * The canvas showed a stale preview while a stroke or a move went on; the preview came back over
+      the result after *Apply* when the tab was shown again; the outcome named a filter chosen while
+      another was applied, and that one did not preview; a layer painted on or undone while *Apply*
+      waited for an AI step went back to its old pixels within the selection's bounds (or, with a
+      cut-out, the new layer held its old pixels); *Cancel* was ignored once the steps were done.
+    * An image engine removed while a job of it runs: the job fails ("The image engine was removed
+      before it finished.", `GenerationService`, for every generation and utility job) instead of
+      staying *Running*; the AI step fails with it.
+    * *Upscale ×2* with a selection upscaled the whole layer and stretched the result back, which
+      changed almost nothing: the picture now grows, with the upscale through the selection.
+    * The filter editor and the Filters panel ran an AI step each: `filters::SharedResults` (in the
+      core; `Evaluator::setSharedResults`), one per catalog, keeps the newest AI results within
+      512 MB, so *Run AI steps* in the editor serves *Apply* of the saved filter on the same layer.
+    * The node editor did not follow a new engine in use (`ProviderRegistry::rolesChanged`).
+      Copies and *Save as…* gave names that were taken, and *Edit a copy…* made a new copy each
+      time. One name, *Filter editor*, in the panel, the AI steps' messages and the guide. The
+      guide's data table had form-feed bytes for `\f` in `userdata\filters`.
+    * Tests (`tst_filters_ui`, 9 new functions, 31 in all): `applyKeepsChangesMadeMeanwhile` (strokes
+      outside and inside an elliptic selection while a gated step waits, on the layer and with a
+      cut-out onto a new layer), `panelPreviewFollowsTheDocument`, `applyNamesTheFilterItApplied`,
+      `cancelWhileTheResultIsPutTogether` (cancelled from the last progress report),
+      `aiStepJobEnds` (no *Retry*, nothing sent again; the engine removed while the step runs on the
+      mock server), `upscaleWithSelection` (the size before *Apply*, the picture twice as large, the
+      upscale inside the selection only), `filterNamesStayApart`, `editorRunServesApply` (one request
+      for the editor's *Run* and the panel's *Apply*), `panelActionsInView` (at 340 × 540);
+      `aiNodesSayWhatTheyNeed` also changes the engine in use with the node editor open, and
+      `editorFiltersTab` checks the preview stays while nothing changes. Each new test was checked
+      to fail without its fix.
   * Not yet: the prompt bar (§17.2) does not use these nodes; the AI nodes take no reference images,
     seed or negative prompt of their own, and run with a new seed each time (a result is reused while
     the filter's settings stay the same); stable-diffusion.cpp has no background removal, so locally

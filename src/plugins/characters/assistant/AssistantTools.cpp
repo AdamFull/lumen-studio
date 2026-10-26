@@ -409,11 +409,8 @@ ai::ToolSet assistantTools(Studio *studio)
                       spec.request.mode = caps.edit ? ai::GenMode::Edit : ai::GenMode::ImageToImage;
                       spec.request.prompt = args.value(QStringLiteral("instruction")).toString();
                       spec.request.denoise = std::clamp(args.value(QStringLiteral("strength")).toDouble(0.6), 0.05, 1.0);
-                      const QSize work = caps.fixedSizes.isEmpty()
-                                             ? img::fitToPixelBudget(image.size(), std::min(caps.nativePixels, caps.maxPixels), caps.sizeMultiple)
-                                             : image.size();
-                      spec.request.initImage = img::normalized(img::scaled(img::flatten(image, Qt::white), work, true));
-                      spec.request.size = work;
+                      spec.request.initImage = ai::wholeImageInput(image, caps);
+                      spec.request.size = spec.request.initImage.size();
                       spec.assetKind = doc::AssetKind::Edit;
                       spec.parentAssetId = assetId;
                       spec.title = QObject::tr("Edit: %1").arg(spec.request.prompt.left(40));

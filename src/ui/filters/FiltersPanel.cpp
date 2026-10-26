@@ -82,6 +82,8 @@ FiltersPanel::FiltersPanel(Studio *studio, CanvasView *canvas, QWidget *parent, 
     , m_runner(new FilterRunner(this))
 {
     setObjectName(QStringLiteral("FiltersPanel"));
+    // AI steps that the filter editor ran on this layer are not run again by Apply.
+    m_runner->setSharedResults(m_catalog->sharedResults());
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(10, 10, 10, 10);
     layout->setSpacing(8);
@@ -100,7 +102,7 @@ FiltersPanel::FiltersPanel(Studio *studio, CanvasView *canvas, QWidget *parent, 
     auto *flow = new FlowLayout(buttons, 4, 4);
     flow->setContentsMargins(0, 0, 0, 0);
     m_newButton = new QPushButton(Icons::get(QStringLiteral("plus")), tr("New filter…"), buttons);
-    m_newButton->setToolTip(tr("Build a filter of your own in the node editor"));
+    m_newButton->setToolTip(tr("Build a filter of your own in the filter editor"));
     m_editButton = new QPushButton(Icons::get(QStringLiteral("edit")), tr("Edit…"), buttons);
     m_duplicateButton = new QPushButton(Icons::get(QStringLiteral("copy")), tr("Duplicate"), buttons);
     m_duplicateButton->setToolTip(tr("Make a copy in your filters to change"));
@@ -145,27 +147,36 @@ FiltersPanel::FiltersPanel(Studio *studio, CanvasView *canvas, QWidget *parent, 
     targetRow->addWidget(targetLabel);
     targetRow->addWidget(m_target, 1);
     details->addLayout(targetRow);
-    m_selectionHint = mutedLabel(QString(), m_details);
+    details->addStretch(1);
+
+    // What the filter will do and the actions: always in view under the details, which scroll.
+    m_footer = new QWidget(this);
+    m_footer->setObjectName(QStringLiteral("FilterActions"));
+    auto *footer = new QVBoxLayout(m_footer);
+    footer->setContentsMargins(0, 4, 0, 0);
+    footer->setSpacing(6);
+    m_selectionHint = mutedLabel(QString(), m_footer);
+    m_selectionHint->setObjectName(QStringLiteral("FilterSelectionHint"));
     m_selectionHint->setWordWrap(true);
-    details->addWidget(m_selectionHint);
-    m_availability = new QLabel(m_details);
+    footer->addWidget(m_selectionHint);
+    m_availability = new QLabel(m_footer);
     m_availability->setObjectName(QStringLiteral("FilterAvailability"));
     m_availability->setWordWrap(true);
     Theme::setRole(m_availability, QStringLiteral("error"));
     m_availability->hide();
-    details->addWidget(m_availability);
+    footer->addWidget(m_availability);
     auto *actions = new QHBoxLayout;
     actions->setSpacing(6);
-    m_runButton = new QPushButton(Icons::get(QStringLiteral("play")), tr("Run AI steps"), m_details);
+    m_runButton = new QPushButton(Icons::get(QStringLiteral("play")), tr("Run AI steps"), m_footer);
     m_runButton->setToolTip(tr("This filter has AI steps. They take a while, so the preview runs them only when you ask."));
-    m_applyButton = new QPushButton(Icons::get(QStringLiteral("check")), tr("Apply"), m_details);
+    m_applyButton = new QPushButton(Icons::get(QStringLiteral("check")), tr("Apply"), m_footer);
     m_applyButton->setProperty("role", QStringLiteral("primary"));
     m_applyButton->setToolTip(tr("Apply the filter to the active layer (only the selected area changes)"));
     actions->addWidget(m_runButton);
     actions->addStretch(1);
     actions->addWidget(m_applyButton);
-    details->addLayout(actions);
-    m_progressRow = new QWidget(m_details);
+    footer->addLayout(actions);
+    m_progressRow = new QWidget(m_footer);
     auto *progress = new QGridLayout(m_progressRow);
     progress->setContentsMargins(0, 0, 0, 0);
     progress->setHorizontalSpacing(6);
@@ -181,14 +192,14 @@ FiltersPanel::FiltersPanel(Studio *studio, CanvasView *canvas, QWidget *parent, 
     progress->addWidget(m_progressText, 1, 0);
     progress->setColumnStretch(0, 1);
     m_progressRow->hide();
-    details->addWidget(m_progressRow);
-    m_status = mutedLabel(QString(), m_details);
+    footer->addWidget(m_progressRow);
+    m_status = mutedLabel(QString(), m_footer);
     m_status->setWordWrap(true);
     m_status->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    details->addWidget(m_status);
-    details->addStretch(1);
+    footer->addWidget(m_status);
 
     // The list over the details; the line between them can be dragged, and the details scroll.
+    // The actions stay under both.
     auto *split = new QSplitter(Qt::Vertical, this);
     split->setChildrenCollapsible(false);
     auto *top = new QWidget(split);
@@ -198,10 +209,14 @@ FiltersPanel::FiltersPanel(Studio *studio, CanvasView *canvas, QWidget *parent, 
     topLayout->addWidget(m_list, 1);
     topLayout->addWidget(buttons);
     split->addWidget(top);
-    split->addWidget(verticalScroll(m_details, split));
+    QScrollArea *detailsScroll = verticalScroll(m_details, split);
+    detailsScroll->setMinimumHeight(96); // the title and a setting or two
+    split->addWidget(detailsScroll);
     split->setStretchFactor(0, 1);
     split->setStretchFactor(1, 1);
     layout->addWidget(split, 1);
+    layout->addWidget(separator(Qt::Horizontal, this));
+    layout->addWidget(m_footer);
 
     m_confirm = [this](const QString &question) {
         return QMessageBox::question(this, tr("Delete filter"), question, QMessageBox::Yes | QMessageBox::No, QMessageBox::No)
@@ -243,6 +258,8 @@ FiltersPanel::FiltersPanel(Studio *studio, CanvasView *canvas, QWidget *parent, 
     connect(m_previewCheck, &QCheckBox::toggled, this, [this](bool on) {
         Settings::instance().setValue(kPreviewKey, on);
         updatePreviewState();
+        if (on)
+            m_runner->resumePreview(); // asked for: also right after Apply
     });
     connect(m_target, &QComboBox::currentIndexChanged, this, [this] {
         Settings::instance().setValue(kTargetKey, m_target->currentData());
@@ -288,9 +305,11 @@ FiltersPanel::FiltersPanel(Studio *studio, CanvasView *canvas, QWidget *parent, 
         if (!ok || !message.isEmpty())
             setStatus(message, !ok);
     });
+    connect(m_runner, &FilterRunner::resultSizeChanged, this, &FiltersPanel::updateSelectionHint);
+    // The filter that was applied: another may have been chosen while it ran.
     connect(m_runner, &FilterRunner::applied, this, [this] {
         const QString where = m_runner->target() == FilterRunner::Target::NewLayer ? tr("on a new layer") : tr("on the layer");
-        QString text = tr("Applied “%1” %2.").arg(m_runner->name(), where);
+        QString text = tr("Applied “%1” %2.").arg(m_runner->appliedName(), where);
         if (!m_runner->appliedNote().isEmpty())
             text += QLatin1Char(' ') + m_runner->appliedNote();
         setStatus(text + QLatin1Char(' ') + tr("Undo (Ctrl+Z) takes it back."));
@@ -506,7 +525,7 @@ void FiltersPanel::updateButtons()
     m_editButton->setEnabled(entry.has_value() && !busy);
     m_editButton->setText(entry && entry->builtIn ? tr("Edit a copy…") : tr("Edit…"));
     m_editButton->setToolTip(entry && entry->builtIn ? tr("Built-in filters stay as they are: this edits a copy in your filters")
-                                                     : tr("Open the filter in the node editor"));
+                                                     : tr("Open the filter in the filter editor"));
     m_duplicateButton->setEnabled(entry && entry->error.isEmpty());
     m_deleteButton->setEnabled(entry && !entry->builtIn && !busy);
     m_deleteButton->setToolTip(entry && entry->builtIn ? tr("Built-in filters cannot be deleted") : tr("Delete the filter"));
@@ -520,12 +539,21 @@ void FiltersPanel::updateButtons()
 
 void FiltersPanel::updateSelectionHint()
 {
-    if (!m_doc)
+    const QSize size = m_runner->resultSize();
+    if (!m_doc) {
         m_selectionHint->setText(tr("Open an image to use a filter."));
-    else if (m_doc->hasSelection())
+    } else if (size.isValid()) {
+        // The filter makes the picture larger or smaller (an upscale): the whole picture changes size.
+        const QString becomes = m_runner->isResultSizeExact()
+                                    ? tr("The picture becomes %1 × %2 pixels.").arg(size.width()).arg(size.height())
+                                    : tr("The picture becomes about %1 × %2 pixels.").arg(size.width()).arg(size.height());
+        m_selectionHint->setText(m_doc->hasSelection() ? tr("%1 Only the selected area gets the filter; the rest is only resized.").arg(becomes)
+                                                       : becomes);
+    } else if (m_doc->hasSelection()) {
         m_selectionHint->setText(tr("Only the selected area changes."));
-    else
+    } else {
         m_selectionHint->setText(tr("Nothing is selected, so the whole layer changes."));
+    }
 }
 
 void FiltersPanel::setStatus(const QString &text, bool problem)
@@ -607,7 +635,10 @@ NodeEditorWindow *FiltersPanel::editSelected()
     QString path = entry->path;
     QString error;
     if (entry->builtIn) {
-        path = m_catalog->duplicate(path, &error);
+        // The copy made last time while it is unchanged, so looking at a built-in filter in the
+        // editor does not add another copy each time.
+        const QString copy = m_catalog->unchangedCopyOf(path);
+        path = copy.isEmpty() ? m_catalog->duplicate(path, &error) : copy;
         if (path.isEmpty()) {
             setStatus(error, true);
             return nullptr;

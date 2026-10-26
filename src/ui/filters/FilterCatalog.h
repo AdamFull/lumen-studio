@@ -19,8 +19,9 @@ class Studio;
 
 // The filters the Filters panel offers (M17 §17.6): built-in ones, read-only resources
 // (resources/filters, ":/filters/builtin/…"), and saved ones, .lumenfilter files in the filters
-// folder next to the models folder (paths::defaultFilters()). The node editor saves through the
+// folder next to the models folder (paths::defaultFilters()). The filter editor saves through the
 // catalog, so every panel that shows it refreshes; files added to the folder by hand appear too.
+// Names of saved filters made through it are unique, so the list can tell them apart.
 class FilterCatalog : public QObject
 {
     Q_OBJECT
@@ -55,10 +56,17 @@ public:
     // Saves to `path` (a saved filter) or, with an empty or built-in path, to a new file in the
     // folder named after the filter. Returns the path, or empty with the error.
     QString save(const filters::Graph &graph, const QString &path = {}, QString *error = nullptr);
-    // A copy in the folder named "<name> copy" (the way to edit a built-in filter). Returns its path.
+    // A copy in the folder named "<name> copy" ("<name> copy 2"… when taken; the way to edit a
+    // built-in filter). Returns its path.
     QString duplicate(const QString &path, QString *error = nullptr);
-    // A new filter (the input linked to the output) named `name`. Returns its path.
+    // A saved filter that is still an unchanged copy of the filter at `path` (made by duplicate()
+    // and not changed since): "Edit a copy…" opens it rather than making another. Empty when none.
+    QString unchangedCopyOf(const QString &path) const;
+    // A new filter (the input linked to the output) named `name` (with a number when taken).
+    // Returns its path.
     QString create(const QString &name, QString *error = nullptr);
+    // `name`, or "<name> 2", "<name> 3"… when a saved filter other than `except` has it already.
+    QString uniqueName(const QString &name, const QString &except = {}) const;
     // Deletes a saved filter's file; built-in filters cannot be deleted.
     bool remove(const QString &path, QString *error = nullptr);
     // Creates the folder when it is not there yet (before it is shown in the file manager).
@@ -72,6 +80,10 @@ public:
     // Re-reads the folder (also done by itself when files change there).
     void refresh();
 
+    // The results of AI steps that the filter editors and the Filters panels of this catalog share:
+    // a step run in the editor is not run again when the filter is applied from the panel.
+    const std::shared_ptr<filters::SharedResults> &sharedResults() const { return m_sharedResults; }
+
 signals:
     void changed();
     // A filter was saved through the catalog (the node editor): its settings may have changed.
@@ -82,6 +94,8 @@ private:
     void watchFolder();
     void scheduleRefresh();
     void startThumbnail(const Entry &e);
+    // "<name> copy", before it is made unique.
+    static QString copyName(const filters::Graph &graph, const QString &path);
 
     QString m_folder;
     QList<Entry> m_entries;
@@ -96,6 +110,7 @@ private:
     };
     QHash<QString, Thumb> m_thumbs;
     std::unique_ptr<filters::Evaluator> m_thumbEvaluator;
+    std::shared_ptr<filters::SharedResults> m_sharedResults = std::make_shared<filters::SharedResults>();
     QImage m_sample;
     // False once the destructor runs: continuations of pending thumbnails run (cancelled) while
     // QObject's destructor runs, after the members are gone.

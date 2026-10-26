@@ -63,6 +63,14 @@ RegionPlan planRegion(const QRect &maskBounds, const QSize &documentSize, int pa
 ImageRequest prepareRegionRequest(const ImageRequest &base, const RegionInput &region, const RegionPlan &plan, const ImageCapabilities &caps);
 QImage compositeRegionResult(const QImage &generated, const RegionInput &region, const RegionPlan &plan);
 
+// A whole picture (nothing selected) as an instruction edit or image-to-image request takes it:
+// flattened on white (models take no transparency) and scaled to the model's working size, which is
+// within its pixel budget (its native size, at most its maximum) in its size multiple, or the
+// picture's own size for a model with fixed sizes (the provider picks one). Worker threads; the
+// editor's AI panel, the assistant and the filters' AI steps send whole pictures through it.
+QSize wholeImageWorkSize(const QSize &size, const ImageCapabilities &caps);
+QImage wholeImageInput(const QImage &image, const ImageCapabilities &caps);
+
 // Front door for all image generation. Schedules jobs per provider, runs the region pipeline,
 // and stores results as project assets with full generation metadata.
 class GenerationService : public QObject

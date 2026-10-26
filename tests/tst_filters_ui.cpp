@@ -25,6 +25,7 @@
 #include "ui/pages/EditorPage.h"
 #include "ui/widgets/Controls.h"
 
+#include <QCheckBox>
 #include <QComboBox>
 #include <QDir>
 #include <QDoubleSpinBox>
@@ -78,6 +79,65 @@ QImage cornerSelection(const QSize &size)
 
 std::atomic<int> g_quickRuns{0};
 
+// An AI step stand-in that waits until the test opens the gate, then inverts its input (or, as a
+// cut-out, makes its right half transparent): what the document does meanwhile (a brush stroke,
+// another filter chosen) is in the test's hands.
+class Gate
+{
+public:
+    QFuture<filters::Values> wait(const QImage &input, bool cutOut)
+    {
+        QMutexLocker lock(&m_mutex);
+        m_promise = std::make_shared<QPromise<filters::Values>>();
+        m_promise->start();
+        m_input = input;
+        m_cutOut = cutOut;
+        return m_promise->future();
+    }
+    bool isWaiting() const
+    {
+        QMutexLocker lock(&m_mutex);
+        return m_promise != nullptr;
+    }
+    void open()
+    {
+        QMutexLocker lock(&m_mutex);
+        if (!m_promise)
+            return;
+        QImage result = filters::ops::invert(m_input);
+        if (m_cutOut) {
+            result = m_input.copy();
+            QPainter p(&result);
+            p.setCompositionMode(QPainter::CompositionMode_Source);
+            p.fillRect(QRect(result.width() / 2, 0, result.width() - result.width() / 2, result.height()), Qt::transparent);
+        }
+        m_promise->addResult(filters::Values{{QStringLiteral("image"), result}});
+        m_promise->finish();
+        m_promise.reset();
+    }
+    void cancel()
+    {
+        QMutexLocker lock(&m_mutex);
+        if (!m_promise)
+            return;
+        m_promise->future().cancel();
+        m_promise->finish();
+        m_promise.reset();
+    }
+
+private:
+    mutable QMutex m_mutex;
+    std::shared_ptr<QPromise<filters::Values>> m_promise;
+    QImage m_input;
+    bool m_cutOut = false;
+};
+
+Gate &gate()
+{
+    static Gate g;
+    return g;
+}
+
 // An AI step stand-in that never finishes by itself: its future ends only when cancelled.
 void registerTestNodes()
 {
@@ -109,6 +169,21 @@ void registerTestNodes()
         ++g_quickRuns;
         const QImage src = a.image(QStringLiteral("image"));
         return filters::NodeResult(async::run([src] { return filters::Values{{QStringLiteral("image"), filters::ops::invert(src)}}; }));
+    }));
+
+    filters::NodeTypeInfo gated = slow;
+    gated.id = QStringLiteral("test-gated-ai");
+    gated.name = QStringLiteral("Gated AI step");
+    r.add(filters::makeNodeType(gated, [](const filters::NodeArgs &a, filters::EvalContext &ctx) -> filters::NodeResult {
+        ctx.onCancel([] { gate().cancel(); });
+        return filters::NodeResult(gate().wait(a.image(QStringLiteral("image")), false));
+    }));
+    filters::NodeTypeInfo gatedCut = slow;
+    gatedCut.id = QStringLiteral("test-gated-cut");
+    gatedCut.name = QStringLiteral("Gated cut-out");
+    r.add(filters::makeNodeType(gatedCut, [](const filters::NodeArgs &a, filters::EvalContext &ctx) -> filters::NodeResult {
+        ctx.onCancel([] { gate().cancel(); });
+        return filters::NodeResult(gate().wait(a.image(QStringLiteral("image")), true));
     }));
 
     // A node with a colour setting (no classic node has one yet).
@@ -409,6 +484,16 @@ private slots:
     void aiStepCancel();
     void aiInpaintGraphOnSelection();
     void builtInAiFiltersEndToEnd();
+    // Review fixes (plan 17.8 "Review fixes for the node editor, the Filters panel and the AI nodes").
+    void applyKeepsChangesMadeMeanwhile();
+    void panelPreviewFollowsTheDocument();
+    void applyNamesTheFilterItApplied();
+    void cancelWhileTheResultIsPutTogether();
+    void aiStepJobEnds();
+    void upscaleWithSelection();
+    void filterNamesStayApart();
+    void editorRunServesApply();
+    void panelActionsInView();
 
 private:
     std::unique_ptr<QTemporaryDir> m_dir;
@@ -1284,6 +1369,9 @@ void TestFiltersUi::editorFiltersTab()
     QTRY_VERIFY(!page.canvas()->preview().isNull());
     // Reduced resolution: at most the preview size, and not more than the picture.
     QVERIFY(page.canvas()->preview().width() <= doc->size().width());
+    // It stays while nothing changes (the page itself does not change the document).
+    QTest::qWait(150);
+    QVERIFY(!page.canvas()->preview().isNull());
     const QString shots = qEnvironmentVariable("LUMEN_SCREENSHOT_DIR");
     if (!shots.isEmpty()) {
         QTest::qWait(50);
@@ -1391,6 +1479,16 @@ void TestFiltersUi::aiNodesSayWhatTheyNeed()
              qPrintable(w->problems().join(QLatin1Char('\n'))));
     QVERIFY(w->scene()->nodeItem(node)->toolTip().contains(QStringLiteral("cannot change")));
     QVERIFY(w->scene()->nodeItem(node)->summary().contains(QStringLiteral("Image engine: SDXL")));
+    // On "The one in use", the problems and the outline follow another engine becoming the one in use.
+    engine->setCurrentIndex(0); // before the engines change: the side panel is made again then
+    QVERIFY(!w->problems().join(QLatin1Char('\n')).contains(QStringLiteral("cannot change"))); // Klein
+    studio.providers()->setDefaultImageProvider(sdxl->instanceId());
+    QVERIFY2(w->problems().join(QLatin1Char('\n')).contains(QStringLiteral("“SDXL” cannot change a picture from a description")),
+             qPrintable(w->problems().join(QLatin1Char('\n'))));
+    QVERIFY(w->scene()->nodeItem(node)->toolTip().contains(QStringLiteral("cannot change")));
+    studio.providers()->setDefaultImageProvider(klein->instanceId());
+    QVERIFY(!w->problems().join(QLatin1Char('\n')).contains(QStringLiteral("cannot change")));
+    QVERIFY(!w->scene()->nodeItem(node)->toolTip().contains(QStringLiteral("cannot change")));
 }
 
 // "Edit with AI" sends an instruction edit to the engine as a Queue job, reports its progress, and
@@ -1729,6 +1827,412 @@ void TestFiltersUi::builtInAiFiltersEndToEnd()
     QCOMPARE(doc->size(), size);
     QCOMPARE(doc->layerCount(), 1);
     QCOMPARE(doc->activeLayer()->image, photo);
+}
+
+// ---- Review fixes --------------------------------------------------------------------------------
+
+// The layer is painted on while Apply waits for an AI step: the stroke outside the (round)
+// selection stays, inside the filter's result replaces it. On the layer itself and with a cut-out
+// onto a new layer (the hidden original keeps the stroke, the new layer shows it outside the area).
+void TestFiltersUi::applyKeepsChangesMadeMeanwhile()
+{
+    Studio studio;
+    const QSize size(64, 48);
+    const QImage photo = img::normalized(detailed(size));
+    doc::Document *doc = studio.openImageAsDocument(photo, QStringLiteral("Photo"));
+    QImage ellipse = img::createMask(size, 0);
+    {
+        QPainter p(&ellipse);
+        p.setRenderHint(QPainter::Antialiasing, false);
+        p.setPen(Qt::NoPen);
+        p.setBrush(Qt::white);
+        p.drawEllipse(QRect(8, 8, 48, 32));
+    }
+    doc->applySelection(ellipse, QStringLiteral("Select"));
+    QCOMPARE(qGray(doc->selection().pixel(10, 10)), 0); // a corner of its bounds, not selected
+    EditorState state;
+    CanvasView canvas(&state);
+    canvas.setDocument(doc);
+    FiltersPanel panel(&studio, &canvas, nullptr, m_catalog.get());
+    targetCombo(panel)->setCurrentIndex(1); // this layer
+    const QString path = m_catalog->save(chain(QStringLiteral("test-gated-ai"), QStringLiteral("Gate")));
+    QVERIFY(panel.selectFilter(path));
+    const int steps = doc->undoStack()->index();
+    QSignalSpy finished(panel.runner(), &FilterRunner::finished);
+    QVERIFY(panel.applySelected());
+    QTRY_VERIFY(gate().isWaiting());
+    // A stroke while the step waits: inside the selection's bounds, outside the selection, and at
+    // the centre (selected).
+    QImage green(4, 4, QImage::Format_ARGB32_Premultiplied);
+    green.fill(Qt::green);
+    doc->applyPixels(doc->activeLayerId(), QRect(9, 9, 4, 4), green, QStringLiteral("Paint"));
+    doc->applyPixels(doc->activeLayerId(), QRect(30, 22, 4, 4), green, QStringLiteral("Paint"));
+    const QImage painted = doc->activeLayer()->image;
+    gate().open();
+    QVERIFY(finished.wait(5000));
+    QVERIFY2(finished.first().at(0).toBool(), qPrintable(finished.first().at(1).toString()));
+    const QImage after = doc->activeLayer()->image;
+    QCOMPARE(QColor(after.pixel(10, 10)), QColor(Qt::green)); // the stroke outside the selection stays
+    QVERIFY(sameOutside(painted, after, doc->selection()));
+    // Inside, the filter's result of the layer as it was when Apply started.
+    QCOMPARE(after.pixel(32, 24), filters::ops::invert(photo).pixel(32, 24));
+    QVERIFY2(panel.statusText().contains(QStringLiteral("changed while the filter ran")), qPrintable(panel.statusText()));
+    QCOMPARE(doc->undoStack()->index(), steps + 3); // two strokes and the filter
+    doc->undoStack()->undo();
+    QCOMPARE(doc->activeLayer()->image, painted);
+    doc->undoStack()->undo();
+    doc->undoStack()->undo();
+    QCOMPARE(doc->activeLayer()->image, photo);
+
+    // A cut-out onto a new layer, which holds the layer as it is now outside the area; the original
+    // is hidden under it, with the stroke.
+    targetCombo(panel)->setCurrentIndex(0);
+    const QUuid original = doc->activeLayerId();
+    QVERIFY(panel.selectFilter(m_catalog->save(chain(QStringLiteral("test-gated-cut"), QStringLiteral("Cut")))));
+    finished.clear();
+    QVERIFY(panel.applySelected());
+    QTRY_VERIFY(gate().isWaiting());
+    doc->applyPixels(original, QRect(9, 9, 4, 4), green, QStringLiteral("Paint"));
+    gate().open();
+    QVERIFY(finished.wait(5000));
+    QVERIFY2(finished.first().at(0).toBool(), qPrintable(finished.first().at(1).toString()));
+    QCOMPARE(doc->layerCount(), 2);
+    QVERIFY(!doc->findLayer(original)->props.visible);
+    QCOMPARE(QColor(doc->findLayer(original)->image.pixel(10, 10)), QColor(Qt::green));
+    const QImage cutLayer = doc->activeLayer()->image;
+    QCOMPARE(QColor(cutLayer.pixel(10, 10)), QColor(Qt::green)); // outside the area: as the layer is now
+    QCOMPARE(qAlpha(cutLayer.pixel(44, 24)), 0);                 // the cut-out, inside the area
+    QCOMPARE(QColor(doc->flattened().pixel(10, 10)), QColor(Qt::green));
+}
+
+// The canvas follows the document while the Filters tab shows a preview: a change shows at once
+// (the preview goes until the next one is ready). After Apply, the preview stays off when the tab
+// is shown again; the check box brings it back.
+void TestFiltersUi::panelPreviewFollowsTheDocument()
+{
+    Studio studio;
+    doc::Document *doc = studio.openImageAsDocument(twoColours(), QStringLiteral("Two colours"));
+    EditorState state;
+    CanvasView canvas(&state);
+    canvas.setDocument(doc);
+    FiltersPanel panel(&studio, &canvas, nullptr, m_catalog.get());
+    panel.resize(340, 540);
+    panel.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&panel));
+    targetCombo(panel)->setCurrentIndex(0);
+    QVERIFY(panel.selectFilter(builtIn(QStringLiteral("warm-tones"))));
+    QTRY_VERIFY(!canvas.preview().isNull());
+
+    // A brush stroke: the canvas shows the document at once, then the preview of the new pixels.
+    QImage green(8, 8, QImage::Format_ARGB32_Premultiplied);
+    green.fill(Qt::green);
+    doc->applyPixels(doc->activeLayerId(), QRect(0, 0, 8, 8), green, QStringLiteral("Paint"));
+    QVERIFY(canvas.preview().isNull());
+    QTRY_VERIFY(!canvas.preview().isNull());
+    const QColor warmGreen(canvas.preview().pixel(2, 2)); // was red before the stroke
+    QVERIFY2(warmGreen.green() > warmGreen.red(), qPrintable(warmGreen.name()));
+
+    // Apply; the tab hidden and shown again (another tab, a minimised window) does not preview
+    // the filter on top of its own result.
+    QSignalSpy finished(panel.runner(), &FilterRunner::finished);
+    QVERIFY(panel.applySelected());
+    QVERIFY(finished.wait(5000));
+    QVERIFY(finished.first().at(0).toBool());
+    QVERIFY(canvas.preview().isNull());
+    panel.hide();
+    panel.show();
+    QTest::qWait(150);
+    QVERIFY(canvas.preview().isNull());
+    // Asked for with the check box, it previews again.
+    QCheckBox *check = nullptr;
+    for (QCheckBox *c : panel.findChildren<QCheckBox *>()) {
+        if (c->text() == QStringLiteral("Preview on the canvas"))
+            check = c;
+    }
+    QVERIFY(check && check->isChecked());
+    check->setChecked(false);
+    check->setChecked(true);
+    QTRY_VERIFY(!canvas.preview().isNull());
+}
+
+// Another filter chosen while Apply waits for an AI step: the message names the filter that was
+// applied, and the one chosen meanwhile previews.
+void TestFiltersUi::applyNamesTheFilterItApplied()
+{
+    Studio studio;
+    doc::Document *doc = studio.openImageAsDocument(twoColours(), QStringLiteral("Two colours"));
+    EditorState state;
+    CanvasView canvas(&state);
+    canvas.setDocument(doc);
+    FiltersPanel panel(&studio, &canvas, nullptr, m_catalog.get());
+    panel.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&panel));
+    targetCombo(panel)->setCurrentIndex(0);
+    QVERIFY(panel.selectFilter(m_catalog->save(chain(QStringLiteral("test-gated-ai"), QStringLiteral("Gate")))));
+    QSignalSpy finished(panel.runner(), &FilterRunner::finished);
+    QVERIFY(panel.applySelected());
+    QTRY_VERIFY(gate().isWaiting());
+    QVERIFY(panel.selectFilter(builtIn(QStringLiteral("sharpen"))));
+    gate().open();
+    QVERIFY(finished.wait(5000));
+    QVERIFY2(finished.first().at(0).toBool(), qPrintable(finished.first().at(1).toString()));
+    QVERIFY2(panel.statusText().startsWith(QStringLiteral("Applied “Gate”")), qPrintable(panel.statusText()));
+    QCOMPARE(doc->undoStack()->text(doc->undoStack()->index() - 1), QStringLiteral("Filter: Gate"));
+    QCOMPARE(doc->activeLayer()->props.name, QStringLiteral("Gate"));
+    QTRY_VERIFY(!canvas.preview().isNull()); // Sharpen, on the new layer
+}
+
+// Cancel once every step is done, while the result is being put together: nothing changes.
+void TestFiltersUi::cancelWhileTheResultIsPutTogether()
+{
+    Studio studio;
+    doc::Document *doc = studio.openImageAsDocument(detailed(QSize(800, 600)), QStringLiteral("Photo"));
+    EditorState state;
+    CanvasView canvas(&state);
+    canvas.setDocument(doc);
+    FiltersPanel panel(&studio, &canvas, nullptr, m_catalog.get());
+    targetCombo(panel)->setCurrentIndex(0);
+    QVERIFY(panel.selectFilter(builtIn(QStringLiteral("black-and-white"))));
+    const int layers = doc->layerCount();
+    const int steps = doc->undoStack()->index();
+    // The last progress report comes when the evaluation has ended, before the result is applied.
+    bool cancelledLate = false;
+    connect(panel.runner(), &FilterRunner::progress, &panel, [&](int done, int total, const QString &) {
+        if (done == total && !cancelledLate) {
+            cancelledLate = true;
+            panel.cancel();
+        }
+    });
+    QSignalSpy finished(panel.runner(), &FilterRunner::finished);
+    QVERIFY(panel.applySelected());
+    QVERIFY(finished.wait(5000));
+    QVERIFY(cancelledLate);
+    QVERIFY(!finished.first().at(0).toBool());
+    QVERIFY2(finished.first().at(1).toString().contains(QStringLiteral("Cancelled")), qPrintable(finished.first().at(1).toString()));
+    QCOMPARE(doc->layerCount(), layers);
+    QCOMPARE(doc->undoStack()->index(), steps);
+    QVERIFY(!panel.runner()->isBusy());
+}
+
+// An AI step's job: cancelled, the Queue offers no Retry (its result would go nowhere); when its
+// engine is removed while it runs, it fails in plain words instead of waiting for ever.
+void TestFiltersUi::aiStepJobEnds()
+{
+    Studio studio;
+    TestEngines engines(studio);
+    MockImageServer server;
+    server.hold = true;
+    ai::SdCppProvider *klein = engines.sdcpp(server);
+    QVERIFY(klein);
+    doc::Document *doc = studio.openImageAsDocument(detailed(QSize(320, 240)), QStringLiteral("Photo"));
+    EditorState state;
+    CanvasView canvas(&state);
+    canvas.setDocument(doc);
+    FiltersPanel panel(&studio, &canvas, nullptr, m_catalog.get());
+    QVERIFY(panel.selectFilter(builtIn(QStringLiteral("colorize-with-ai"))));
+    QSignalSpy finished(panel.runner(), &FilterRunner::finished);
+    auto stepJob = [&]() -> Job * {
+        Job *found = nullptr;
+        for (Job *j : studio.jobs()->jobs()) {
+            if (j->title().startsWith(QStringLiteral("Edit with AI")) && !j->isFinished())
+                found = j;
+        }
+        return found;
+    };
+
+    QVERIFY(panel.applySelected());
+    QTRY_VERIFY_WITH_TIMEOUT(server.polls >= 2, 10000);
+    QPointer<Job> job = stepJob();
+    QVERIFY(job);
+    panel.cancel();
+    QTRY_COMPARE(finished.count(), 1);
+    QTRY_COMPARE(job->state(), Job::State::Cancelled);
+    QVERIFY(!job->canRetry());
+    studio.jobs()->retry(job);
+    QTest::qWait(100);
+    QCOMPARE(job->state(), Job::State::Cancelled);
+    QCOMPARE(server.payloads.size(), 1); // nothing sent again
+
+    // The engine is removed while the step runs.
+    finished.clear();
+    QVERIFY(panel.applySelected());
+    QTRY_VERIFY_WITH_TIMEOUT(server.payloads.size() == 2 && server.polls >= 2, 10000);
+    job = stepJob();
+    QVERIFY(job);
+    studio.providers()->removeProvider(klein->instanceId());
+    QTRY_COMPARE_WITH_TIMEOUT(finished.count(), 1, 5000);
+    QVERIFY(!finished.first().at(0).toBool());
+    QVERIFY2(finished.first().at(1).toString().contains(QStringLiteral("removed")), qPrintable(finished.first().at(1).toString()));
+    QCOMPARE(job->state(), Job::State::Failed);
+    QVERIFY(!panel.runner()->isBusy());
+    QCOMPARE(doc->layerCount(), 1);
+}
+
+// Upscale ×2 with a selection: the whole picture becomes twice as large (the panel says so once the
+// AI step has run), and only the selected area gets the upscaler's result.
+void TestFiltersUi::upscaleWithSelection()
+{
+    Studio studio;
+    TestEngines engines(studio);
+    MockImageServer server;
+    QVERIFY(engines.sdcpp(server, true, true));
+    const QSize size(240, 160);
+    doc::Document *doc = studio.openImageAsDocument(img::normalized(detailed(size)), QStringLiteral("Photo"));
+    const QRect area(40, 40, 80, 60);
+    doc->applySelection(rectMask(size, area), QStringLiteral("Select"));
+    EditorState state;
+    CanvasView canvas(&state);
+    canvas.setDocument(doc);
+    FiltersPanel panel(&studio, &canvas, nullptr, m_catalog.get());
+    panel.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&panel));
+    targetCombo(panel)->setCurrentIndex(0);
+    QVERIFY(panel.selectFilter(builtIn(QStringLiteral("upscale-2x"))));
+    auto *hint = panel.findChild<QLabel *>(QStringLiteral("FilterSelectionHint"));
+    QVERIFY(hint);
+    QCOMPARE(hint->text(), QStringLiteral("Only the selected area changes."));
+    QSignalSpy finished(panel.runner(), &FilterRunner::finished);
+    buttonNamed(&panel, QStringLiteral("Run AI steps"))->click();
+    QVERIFY(finished.wait(10000));
+    QVERIFY2(finished.first().at(0).toBool(), qPrintable(finished.first().at(1).toString()));
+    QTRY_VERIFY2(hint->text().startsWith(QStringLiteral("The picture becomes 480 × 320 pixels.")), qPrintable(hint->text()));
+    QVERIFY(hint->text().contains(QStringLiteral("only resized")));
+
+    const int steps = doc->undoStack()->index();
+    finished.clear();
+    QVERIFY(panel.applySelected());
+    QVERIFY(finished.wait(10000));
+    QVERIFY2(finished.first().at(0).toBool(), qPrintable(finished.first().at(1).toString()));
+    QCOMPARE(server.upscales, 1); // Apply used what Run made
+    QCOMPARE(doc->size(), size * 2);
+    QCOMPARE(doc->layerCount(), 2);
+    QCOMPARE(doc->undoStack()->index(), steps + 1);
+    const QImage upscaled = doc->activeLayer()->image;
+    QCOMPARE(upscaled.size(), size * 2);
+    QCOMPARE(qAlpha(upscaled.pixel(area.center() * 2)), 255); // the selected area, upscaled
+    QCOMPARE(qAlpha(upscaled.pixel(400, 280)), 0);           // outside: the picture only resized
+    QVERIFY2(panel.statusText().contains(QStringLiteral("480 × 320")), qPrintable(panel.statusText()));
+    QVERIFY2(panel.statusText().contains(QStringLiteral("only resized")), qPrintable(panel.statusText()));
+    doc->undoStack()->undo();
+    QCOMPARE(doc->size(), size);
+    QCOMPARE(doc->layerCount(), 1);
+}
+
+// Copies and new filters get names of their own, so the list can tell them apart; Edit a copy… on
+// a built-in filter opens the copy made before while it is unchanged.
+void TestFiltersUi::filterNamesStayApart()
+{
+    const QString sharpen = builtIn(QStringLiteral("sharpen"));
+    const QString first = m_catalog->duplicate(sharpen);
+    const QString second = m_catalog->duplicate(sharpen);
+    QVERIFY(!first.isEmpty() && !second.isEmpty() && first != second);
+    QCOMPARE(m_catalog->entry(first)->name, QStringLiteral("Sharpen copy"));
+    QCOMPARE(m_catalog->entry(second)->name, QStringLiteral("Sharpen copy 2"));
+    const QString mine = m_catalog->create(QStringLiteral("Mine"));
+    QCOMPARE(m_catalog->entry(mine)->name, QStringLiteral("Mine"));
+    QCOMPARE(m_catalog->entry(m_catalog->create(QStringLiteral("mine")))->name, QStringLiteral("mine 2")); // case does not count
+    QCOMPARE(m_catalog->uniqueName(QStringLiteral("Mine")), QStringLiteral("Mine 3"));
+    QCOMPARE(m_catalog->uniqueName(QStringLiteral("Mine"), mine), QStringLiteral("Mine")); // its own name
+
+    // Edit a copy… opens the unchanged copy again rather than making a third.
+    Studio studio;
+    studio.openImageAsDocument(twoColours(), QStringLiteral("Two colours"));
+    EditorState state;
+    CanvasView canvas(&state);
+    FiltersPanel panel(&studio, &canvas, nullptr, m_catalog.get());
+    QVERIFY(panel.selectFilter(sharpen));
+    const qsizetype filters = m_catalog->entries().size();
+    NodeEditorWindow *editor = panel.editSelected();
+    QVERIFY(editor);
+    QCOMPARE(editor->path(), first);
+    QCOMPARE(m_catalog->entries().size(), filters);
+    // Changed and saved, it is no longer a plain copy: the next Edit a copy… makes a new one.
+    QVERIFY(editor->setParam(QStringLiteral("n2"), QStringLiteral("amount"), 120));
+    QVERIFY(editor->save());
+    QVERIFY(panel.selectFilter(sharpen));
+    NodeEditorWindow *another = panel.editSelected();
+    QVERIFY(another && another != editor);
+    QCOMPARE(another->path(), second); // the other copy, still unchanged
+    delete another;
+    QVERIFY(m_catalog->remove(second));
+    QVERIFY(panel.selectFilter(sharpen));
+    NodeEditorWindow *third = panel.editSelected();
+    QVERIFY(third);
+    QCOMPARE(third->model()->graph().name, QStringLiteral("Sharpen copy 2"));
+
+    // Save as… with a name a saved filter has: a number, in the file and in the list.
+    QString error;
+    QVERIFY2(third->saveAs(QStringLiteral("Mine"), &error), qPrintable(error));
+    QCOMPARE(third->model()->graph().name, QStringLiteral("Mine 3"));
+    QCOMPARE(m_catalog->entry(third->path())->name, QStringLiteral("Mine 3"));
+}
+
+// Run AI steps in the filter editor, then Apply of the saved filter from the Filters panel on the
+// same layer: the step is not sent to the engine again.
+void TestFiltersUi::editorRunServesApply()
+{
+    Studio studio;
+    TestEngines engines(studio);
+    MockImageServer server;
+    QVERIFY(engines.sdcpp(server));
+    doc::Document *doc = studio.openImageAsDocument(detailed(QSize(320, 240)), QStringLiteral("Photo"));
+    EditorState state;
+    CanvasView canvas(&state);
+    canvas.setDocument(doc);
+    FiltersPanel panel(&studio, &canvas, nullptr, m_catalog.get());
+    targetCombo(panel)->setCurrentIndex(0);
+    QVERIFY(panel.selectFilter(builtIn(QStringLiteral("colorize-with-ai"))));
+    NodeEditorWindow *editor = panel.editSelected(); // a copy, with the active layer as its picture
+    QVERIFY(editor);
+    QAction *run = nullptr;
+    for (QAction *a : editor->findChildren<QAction *>()) {
+        if (a->text() == QStringLiteral("Run AI steps"))
+            run = a;
+    }
+    QVERIFY(run);
+    QTRY_VERIFY(!editor->isPreviewPending());
+    run->trigger();
+    QTRY_VERIFY_WITH_TIMEOUT(server.payloads.size() == 1 && !editor->isPreviewPending(), 10000);
+    QVERIFY2(!editor->preview().isNull(), qPrintable(editor->previewText()));
+
+    QSignalSpy finished(panel.runner(), &FilterRunner::finished);
+    QCOMPARE(panel.currentPath(), editor->path());
+    QVERIFY(panel.applySelected());
+    QVERIFY(finished.wait(10000));
+    QVERIFY2(finished.first().at(0).toBool(), qPrintable(finished.first().at(1).toString()));
+    QCOMPARE(server.payloads.size(), 1);
+    QCOMPARE(doc->layerCount(), 2);
+    QCOMPARE(QColor(doc->flattened().pixel(160, 120)), kOrange);
+}
+
+// At about its size in a 1280 × 720 window, the panel shows Apply and why a filter cannot run
+// without scrolling, also for an AI filter with its instruction field.
+void TestFiltersUi::panelActionsInView()
+{
+    Studio studio;
+    studio.openImageAsDocument(twoColours(), QStringLiteral("Two colours"));
+    EditorState state;
+    CanvasView canvas(&state);
+    FiltersPanel panel(&studio, &canvas, nullptr, m_catalog.get());
+    panel.resize(340, 540);
+    panel.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&panel));
+    auto inView = [&](QWidget *w) {
+        if (!w->isVisible())
+            return false;
+        const QRect r(w->mapTo(&panel, QPoint(0, 0)), w->size());
+        return panel.rect().contains(r);
+    };
+    for (const QString &id : {QStringLiteral("soft-focus"), QStringLiteral("colorize-with-ai")}) {
+        QVERIFY(panel.selectFilter(builtIn(id)));
+        QTest::qWait(20);
+        QVERIFY2(inView(panel.applyButton()), qPrintable(id));
+    }
+    // No image engine here: the reason is in view, with Run AI steps.
+    auto *availability = panel.findChild<QLabel *>(QStringLiteral("FilterAvailability"));
+    QVERIFY(inView(availability));
+    QVERIFY(availability->text().contains(QStringLiteral("no image engine")));
+    QVERIFY(inView(buttonNamed(&panel, QStringLiteral("Run AI steps"))));
 }
 
 QTEST_MAIN(TestFiltersUi)

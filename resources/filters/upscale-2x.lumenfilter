@@ -2,7 +2,7 @@
     "format": "lumen-filter",
     "version": 1,
     "name": "Upscale ×2",
-    "description": "Makes the picture twice as large with an AI upscaler, which adds detail. With nothing selected, the whole picture grows.",
+    "description": "Makes the whole picture twice as large with an AI upscaler, which adds detail. With a selection, only the selected area gets the added detail; the rest is only resized.",
     "nodes": [
         {
             "id": "n1",

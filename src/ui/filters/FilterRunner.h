@@ -11,6 +11,7 @@
 #include <QTimer>
 #include <QUuid>
 
+#include <atomic>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -30,10 +31,13 @@ class FilterPreviewCache;
 //
 // Only the selected area changes; the graph's own mask (the Output's "Where to apply") narrows it
 // further. A result of another size than the layer is stretched to the layer, except one of the
-// same proportions (an upscale, a resize) applied with nothing selected: that scales the whole
-// picture to the result's size, in the same undo step. A result that takes opacity away from the
-// layer (a cut-out, "Remove background") goes onto the new layer whole and the layer is hidden, so
-// the transparency shows. GUI-thread object.
+// same proportions (an upscale, a resize): that scales the whole picture to the result's size, in
+// the same undo step, and the result goes on through the selection scaled with it (outside the
+// selection the picture is only resized). A result that takes opacity away from the layer (a
+// cut-out, "Remove background") goes onto the new layer whole and the layer is hidden, so the
+// transparency shows. When the layer changes while apply() runs (a brush stroke, an undo), the
+// result is put together again with the layer as it is then, so nothing outside where the filter
+// applies goes back. GUI-thread object.
 class FilterRunner : public QObject
 {
     Q_OBJECT
@@ -57,8 +61,14 @@ public:
     void setTarget(Target target);
     Target target() const { return m_target; }
 
+    // Whether the preview is wanted (the panel is shown and its check box is on). After apply()
+    // the preview stays off until the filter, a setting, the target or the document changes, or
+    // resumePreview() is called: the active layer may now be the result, and a preview would
+    // apply the filter on top of it.
     void setPreviewEnabled(bool on);
     bool isPreviewEnabled() const { return m_previewEnabled; }
+    // The preview was asked for explicitly (its check box turned on): it shows even after apply().
+    void resumePreview();
     // The longest side of the preview in pixels (the picture's own size when it is smaller).
     void setPreviewSize(int longestSide);
     int previewSize() const { return m_previewSize; }
@@ -67,6 +77,14 @@ public:
     QImage previewImage() const { return m_preview; }
     // The filter has an AI step whose result is not there yet: the preview waits for run().
     bool needsRun() const { return m_needsRun; }
+    // The size the picture gets when the filter is applied, when it changes it (an upscale or a
+    // resize), as the last preview or run() found it; invalid when the size stays or that is not
+    // known yet. Approximate (within a few pixels) when the preview was at a reduced resolution.
+    QSize resultSize() const { return m_resultSize; }
+    bool isResultSizeExact() const { return m_resultSizeExact; }
+    // AI steps that the filter editor ran on the same inputs are taken from `results` (and the
+    // ones run here are left there).
+    void setSharedResults(std::shared_ptr<filters::SharedResults> results);
 
     // Previews the filter with its AI steps (they run at full resolution, so apply() reuses them).
     bool run(QString *why = nullptr);
@@ -78,8 +96,11 @@ public:
     // What else the last apply() did, in plain words ("The picture is now 1280 × 960 pixels."); empty
     // when it only added or changed the layer.
     QString appliedNote() const { return m_appliedNote; }
+    // The name of the filter the last apply() applied (another filter may be chosen meanwhile).
+    QString appliedName() const { return m_appliedName; }
     bool isApplying() const { return m_busy == Busy::Applying; }
-    // Stops apply() or run(); nothing changes.
+    // Stops apply() or run(); apply() changes nothing, also when its steps are done and only the
+    // result is being put together.
     void cancel();
 
 signals:
@@ -96,6 +117,7 @@ signals:
     void finished(bool ok, const QString &message);
     // apply() changed the document: the new layer, or the layer that changed.
     void applied(const QUuid &layer);
+    void resultSizeChanged(const QSize &size);
 
 private:
     enum class Busy { No, Running, Applying };
@@ -104,7 +126,12 @@ private:
     void schedulePreview();
     void startPreview(bool runExpensive);
     void clearPreview();
+    // A preview on its way is of something that changed: it is not shown (and stops, unless it
+    // runs AI steps, which are not cut short).
+    void invalidatePreview();
+    void documentChanged();
     void setNeedsRun(bool needsRun);
+    void setResultSize(const QSize &size, bool exact);
     void setBusy(Busy busy);
     std::function<void(int, int, const QString &)> progressRelay() const;
     std::function<void(double, const QString &)> stepProgressRelay() const;
@@ -114,15 +141,23 @@ private:
     std::optional<filters::Graph> m_graph;
     QString m_name;
     QString m_appliedNote;
+    QString m_appliedName;
     Target m_target = Target::NewLayer;
     bool m_previewEnabled = true;
     bool m_suspended = false; // after apply(), until the filter or a setting changes
+    // Counts changes of the filter, its settings, the target and the document: an apply() that
+    // ends after one does not suspend the preview of what was chosen meanwhile.
+    int m_changes = 0;
     int m_previewSize = 1280;
     QImage m_preview;
     bool m_needsRun = false;
+    QSize m_resultSize;
+    bool m_resultSizeExact = false;
     Busy m_busy = Busy::No;
     bool m_previewPending = false; // a change while busy: preview when done
     int m_generation = 0;
+    // Set by cancel() for the apply() that runs: checked again once its steps are done.
+    std::shared_ptr<std::atomic_bool> m_cancelled = std::make_shared<std::atomic_bool>(false);
     QFuture<filters::EvalResult> m_previewFuture;
     QTimer m_previewTimer;
     std::unique_ptr<filters::Evaluator> m_evaluator;

@@ -540,7 +540,8 @@ void TestLayout::filterTools()
         m_auditor.shoot(&editor, surface);
     }
     for (const Shown &s : shown) {
-        // The side panel's minimum width, about its height in a 1280×720 window.
+        // The side panel's minimum width, and its height in a 1280×720 window (the tab's content
+        // is about 340 × 540 there).
         EditorState state;
         CanvasView canvas(&state);
         QWidget host;
@@ -549,11 +550,11 @@ void TestLayout::filterTools()
         auto *panel = new FiltersPanel(&studio, &canvas, &host, catalog);
         layout->addWidget(panel);
         panel->selectFilter(s.path);
-        host.resize(300, 600);
+        host.resize(300, 540);
         host.show();
         QVERIFY(QTest::qWaitForWindowExposed(&host));
         Auditor::settle();
-        const QString surface = QStringLiteral("Filters panel%1 300x600").arg(s.name);
+        const QString surface = QStringLiteral("Filters panel%1 300x540").arg(s.name);
         m_auditor.audit(&host, surface);
         m_auditor.shoot(&host, surface);
     }

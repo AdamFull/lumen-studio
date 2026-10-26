@@ -11,8 +11,36 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 
 namespace lumen::filters {
+
+// Results of expensive nodes (AI steps) that several evaluators share, so a step that one of them
+// ran (the filter editor's Run AI steps) is not run again by another (the Filters panel's Apply)
+// while its key is the same: the node's type, its parameter values and the keys of what feeds it,
+// the source picture and the selection included. Keeps the newest results within a memory budget
+// (the newest one always: they are full-resolution pictures). Thread-safe.
+class SharedResults
+{
+public:
+    explicit SharedResults(qint64 budgetBytes = qint64(512) << 20);
+
+    std::optional<Values> find(const QByteArray &key) const;
+    void store(const QByteArray &key, const Values &outputs);
+    int size() const;
+    void clear();
+
+private:
+    struct Item
+    {
+        QByteArray key;
+        Values outputs;
+        qint64 bytes = 0;
+    };
+    mutable QMutex m_mutex;
+    qint64 m_budget;
+    QList<Item> m_items; // oldest first
+};
 
 // What a filter is applied to.
 struct EvalInputs
@@ -91,10 +119,15 @@ public:
     void clearCache();
     int cachedResults() const; // full-size and preview results together
 
+    // Expensive nodes look in `results` too and leave theirs there (null: this evaluator's cache
+    // only). Evaluations that started before keep what they had.
+    void setSharedResults(std::shared_ptr<SharedResults> results) { m_shared = std::move(results); }
+
 private:
     struct Cache;
     class Run;
     std::shared_ptr<Cache> m_cache;
+    std::shared_ptr<SharedResults> m_shared;
     QMutex m_mutex;
     QList<std::weak_ptr<Run>> m_runs;
 };

@@ -75,12 +75,15 @@ struct PreviewOut
 {
     bool needsRun = false;
     QImage image;
+    QSize resultSize; // valid: the filter changes the picture's size to about this
+    bool resultSizeExact = false;
 };
 
 struct ApplyJob
 {
     QUuid layer;
-    QImage image;
+    QImage image;          // the layer's pixels when apply() started
+    quint64 revision = 0;  // and its revision then
     QImage selection;
     QSize docSize;
     FilterRunner::Target target = FilterRunner::Target::NewLayer;
@@ -92,6 +95,11 @@ struct ApplyOut
 {
     FilterComposite composite;
     QSize scaleTo; // valid: the picture is scaled to this size first (an upscale)
+    // The filter's result and its own mask, to put together again when the layer changed while
+    // the filter ran.
+    QImage result;
+    QImage resultMask;
+    bool cancelled = false;
 };
 
 bool isEverywhere(const QImage &mask)
@@ -226,6 +234,30 @@ namespace {
 
 QImage composePreview(const PreviewJob &job, const filters::EvalResult &r, FilterPreviewCache &cache);
 
+// What applying the filter's result to `layer` (the active layer's pixels) gives. Worker threads,
+// or the GUI thread when the layer changed while the filter ran.
+ApplyOut composeApply(const ApplyJob &job, const QImage &layer, const QImage &result, const QImage &resultMask)
+{
+    ApplyOut out;
+    out.result = result;
+    out.resultMask = resultMask;
+    // A result of the picture's proportions at another size (an upscale, a resize) makes the
+    // picture that size: every layer is scaled, and the result goes on at its own size through
+    // the selection scaled with the picture, instead of being stretched back into the layer
+    // (which would undo the upscale). Outside the selection the picture is only resized.
+    if (layer.size() == job.docSize && resultScalesPicture(layer.size(), result.size())) {
+        out.scaleTo = result.size();
+        // As Document::scaleImage scales the layer, so pixels outside the selection fit it exactly.
+        const QImage scaled = img::scaled(img::normalized(layer), out.scaleTo, true);
+        out.composite = composeFilterResult(scaled, result, combinedMask(job.selection, resultMask, out.scaleTo), job.target,
+                                            job.alphaLocked);
+        return out;
+    }
+    out.composite = composeFilterResult(layer, result, combinedMask(job.selection, resultMask, layer.size()), job.target,
+                                        job.alphaLocked);
+    return out;
+}
+
 } // namespace
 
 FilterRunner::FilterRunner(QObject *parent)
@@ -278,25 +310,51 @@ void FilterRunner::setDocument(doc::Document *doc)
         disconnect(c);
     m_docConnections.clear();
     m_doc = doc;
+    ++m_changes;
+    m_suspended = false;
+    invalidatePreview();
     clearPreview(); // the old document's
+    setResultSize({}, false);
     if (doc) {
-        auto changed = [this] { schedulePreview(); };
+        auto changed = [this] { documentChanged(); };
         m_docConnections << connect(doc, &doc::Document::pixelsChanged, this, changed)
                          << connect(doc, &doc::Document::layersChanged, this, changed)
                          << connect(doc, &doc::Document::layerPropsChanged, this, changed)
                          << connect(doc, &doc::Document::selectionChanged, this, changed)
                          << connect(doc, &doc::Document::activeLayerChanged, this, changed)
-                         << connect(doc, &doc::Document::sizeChanged, this, changed);
+                         << connect(doc, &doc::Document::sizeChanged, this, [this] {
+                                setResultSize({}, false); // known again from the next preview
+                                documentChanged();
+                            });
     }
     m_scaled->retain({});
     schedulePreview();
+}
+
+void FilterRunner::documentChanged()
+{
+    // Until the next preview the canvas shows the document as it is: a preview of the pixels
+    // before the change would hide a brush stroke, a move or an undo while it happens.
+    invalidatePreview();
+    clearPreview();
+    schedulePreview();
+}
+
+void FilterRunner::invalidatePreview()
+{
+    ++m_generation;
+    if (!isBusy() && m_previewFuture.isRunning())
+        m_previewFuture.cancel(); // stops at its next node
 }
 
 void FilterRunner::setGraph(const std::optional<filters::Graph> &graph, const QString &name)
 {
     m_graph = graph;
     m_name = name.isEmpty() && graph ? graph->name : name;
+    ++m_changes;
     m_suspended = false;
+    invalidatePreview(); // another filter's preview must not show for this one
+    setResultSize({}, false);
     setNeedsRun(m_graph && m_graph->needsExplicitRun());
     schedulePreview();
 }
@@ -305,6 +363,7 @@ bool FilterRunner::setParam(const QString &node, const QString &param, const QVa
 {
     if (!m_graph || !m_graph->setParam(node, param, value))
         return false;
+    ++m_changes;
     m_suspended = false;
     schedulePreview();
     return true;
@@ -315,15 +374,36 @@ void FilterRunner::setTarget(Target target)
     if (m_target == target)
         return;
     m_target = target;
+    ++m_changes;
+    m_suspended = false;
     schedulePreview();
 }
 
 void FilterRunner::setPreviewEnabled(bool on)
 {
+    // Not a reason to preview after apply(): the panel is shown again or the window restored.
     m_previewEnabled = on;
-    if (on)
-        m_suspended = false;
     schedulePreview();
+}
+
+void FilterRunner::resumePreview()
+{
+    m_suspended = false;
+    schedulePreview();
+}
+
+void FilterRunner::setSharedResults(std::shared_ptr<filters::SharedResults> results)
+{
+    m_evaluator->setSharedResults(std::move(results));
+}
+
+void FilterRunner::setResultSize(const QSize &size, bool exact)
+{
+    if (m_resultSize == size && m_resultSizeExact == exact)
+        return;
+    m_resultSize = size;
+    m_resultSizeExact = exact;
+    emit resultSizeChanged(size);
 }
 
 void FilterRunner::setPreviewSize(int longestSide)
@@ -423,7 +503,17 @@ void FilterRunner::startPreview(bool runExpensive)
         .then(async::pool(), [job, cache, show](const filters::EvalResult &r) {
             PreviewOut out;
             out.needsRun = r.needsRun;
-            if (!r.needsRun && show)
+            if (r.needsRun)
+                return out;
+            // The size applying gives the picture, when it changes it: the result's size relative to
+            // the layer's at the preview's scale (exact at full scale).
+            const QSize layer = scaledSize(job.docSize, job.scale);
+            if (resultScalesPicture(layer, r.image.size())) {
+                out.resultSize = QSize(int(std::lround(double(job.docSize.width()) * r.image.width() / layer.width())),
+                                       int(std::lround(double(job.docSize.height()) * r.image.height() / layer.height())));
+                out.resultSizeExact = job.scale >= 1.0;
+            }
+            if (show)
                 out.image = composePreview(job, r, *cache);
             return out;
         })
@@ -432,11 +522,14 @@ void FilterRunner::startPreview(bool runExpensive)
                 return;
             if (runExpensive)
                 setBusy(Busy::No);
-            if (generation != m_generation)
-                return;
-            setNeedsRun(out.needsRun);
-            m_preview = out.image;
-            emit previewChanged(m_preview);
+            // Something changed meanwhile (a stroke, another filter): a newer preview follows.
+            if (generation == m_generation) {
+                setNeedsRun(out.needsRun);
+                if (!out.needsRun)
+                    setResultSize(out.resultSize, out.resultSizeExact);
+                m_preview = out.image;
+                emit previewChanged(m_preview);
+            }
             if (runExpensive)
                 emit finished(true, {});
         })
@@ -512,6 +605,7 @@ bool FilterRunner::apply(Target target, QString *why)
     ApplyJob job;
     job.layer = layer->id;
     job.image = layer->image;
+    job.revision = layer->revision;
     job.selection = m_doc->selection();
     job.docSize = m_doc->size();
     job.target = target;
@@ -521,29 +615,45 @@ bool FilterRunner::apply(Target target, QString *why)
     options.progress = progressRelay();
     options.stepProgress = stepProgressRelay();
     QPointer<doc::Document> doc = m_doc;
+    m_cancelled = std::make_shared<std::atomic_bool>(false);
+    const std::shared_ptr<std::atomic_bool> cancelled = m_cancelled;
+    const int changes = m_changes;
     m_evaluator->evaluate(*m_graph, {job.image, job.selection}, options)
-        .then(async::pool(), [job](const filters::EvalResult &r) {
-            ApplyOut out;
-            const QImage where = combinedMask(job.selection, r.mask, job.image.size());
-            // An upscale with nothing selected makes the picture larger: every layer is scaled and
-            // the result goes on at its own size, instead of being stretched back to the layer.
-            if (isEverywhere(where) && job.image.size() == job.docSize && resultScalesPicture(job.image.size(), r.image.size())) {
-                out.scaleTo = r.image.size();
-                out.composite = composeFilterResult(img::scaled(img::normalized(job.image), out.scaleTo, true), r.image, {},
-                                                    job.target, job.alphaLocked);
+        .then(async::pool(), [job, cancelled](const filters::EvalResult &r) {
+            if (*cancelled) {
+                ApplyOut out;
+                out.cancelled = true;
                 return out;
             }
-            out.composite = composeFilterResult(job.image, r.image, where, job.target, job.alphaLocked);
-            return out;
+            return composeApply(job, job.image, r.image, r.mask);
         })
-        .then(this, [this, alive = m_alive, doc, job](const ApplyOut &result) {
+        .then(this, [this, alive = m_alive, doc, job, cancelled, changes](ApplyOut result) {
             if (!*alive)
                 return;
             setBusy(Busy::No);
-            if (!doc || !doc->findLayer(job.layer) || doc->size() != job.docSize) {
+            // Cancel pressed while the result was being put together.
+            if (result.cancelled || *cancelled) {
+                emit finished(false, tr("Cancelled. Nothing was changed."));
+                return;
+            }
+            const doc::LayerPtr layer = doc ? doc->findLayer(job.layer) : nullptr;
+            if (!layer || doc->size() != job.docSize) {
                 emit finished(false, tr("The picture changed while the filter ran (a layer was deleted or the size changed), "
                                         "so nothing was changed."));
                 return;
+            }
+            if (job.target == Target::Layer && layer->props.locked) {
+                emit finished(false, tr("The layer was locked while the filter ran, so nothing was changed."));
+                return;
+            }
+            QStringList notes;
+            // Painted on, undone or otherwise changed while the filter ran: put together again with
+            // the layer as it is now, so nothing outside where the filter applies goes back.
+            if (layer->revision != job.revision || layer->image.cacheKey() != job.image.cacheKey()) {
+                ApplyJob now = job;
+                now.alphaLocked = layer->props.alphaLocked;
+                result = composeApply(now, layer->image, result.result, result.resultMask);
+                notes << tr("The layer changed while the filter ran: your changes stay outside the area the filter changed.");
             }
             const FilterComposite &out = result.composite;
             const QString undoText = tr("Filter: %1").arg(job.name);
@@ -567,15 +677,23 @@ bool FilterRunner::apply(Target target, QString *why)
             }
             if (several)
                 doc->undoStack()->endMacro();
-            QStringList notes;
-            if (result.scaleTo.isValid())
+            if (result.scaleTo.isValid()) {
                 notes << tr("The picture is now %1 × %2 pixels.").arg(result.scaleTo.width()).arg(result.scaleTo.height());
+                if (!isEverywhere(job.selection))
+                    notes << tr("Outside the selection it was only resized.");
+            }
             if (out.hidesLayer)
                 notes << tr("The original layer is hidden under it, so the cut-out shows.");
             m_appliedNote = notes.join(QLatin1Char(' '));
-            // The active layer may now be the result: previewing again would apply the filter twice.
-            m_suspended = true;
+            m_appliedName = job.name;
+            // The active layer may now be the result: previewing again would apply the filter
+            // twice. Not when another filter, a setting or the document was chosen meanwhile.
+            if (changes == m_changes)
+                m_suspended = true;
+            setResultSize({}, false); // the picture has its new size now
+            invalidatePreview();
             clearPreview();
+            schedulePreview();
             emit applied(changed);
             emit finished(true, {});
         })
@@ -596,8 +714,11 @@ bool FilterRunner::apply(Target target, QString *why)
 
 void FilterRunner::cancel()
 {
-    if (isBusy())
-        m_evaluator->cancel();
+    if (!isBusy())
+        return;
+    if (isApplying())
+        *m_cancelled = true; // also once the steps are done and the result is being put together
+    m_evaluator->cancel();
 }
 
 namespace {

@@ -236,11 +236,13 @@ struct Evaluator::Cache
 class Evaluator::Run final : public EvalContext::Run, public std::enable_shared_from_this<Evaluator::Run>
 {
 public:
-    Run(Graph graph, const QStringList &order, EvalOptions options, EvalInputs inputs, std::shared_ptr<Cache> cache)
+    Run(Graph graph, const QStringList &order, EvalOptions options, EvalInputs inputs, std::shared_ptr<Cache> cache,
+        std::shared_ptr<SharedResults> shared)
         : m_graph(std::move(graph))
         , m_options(std::move(options))
         , m_inputs(std::move(inputs))
         , m_cache(std::move(cache))
+        , m_shared(std::move(shared))
         , m_steps(planSteps(m_graph, order, m_options.scale))
     {
     }
@@ -449,6 +451,12 @@ private:
             addField(hash, QByteArray::number(scale, 'g', 17));
             s.key = hash.result();
             s.cached = m_cache->find(s.node, s.lane, s.key);
+            // An AI step another evaluator ran on the same inputs (the filter editor's Run).
+            if (!s.cached && !s.scaledCopy && m_shared && info.expensive) {
+                s.cached = m_shared->find(s.key);
+                if (s.cached)
+                    m_cache->store(s.node, s.lane, s.key, *s.cached);
+            }
         }
 
         m_steps.last().needed = true;
@@ -491,6 +499,8 @@ private:
         if (!s.scaledCopy)
             ++m_ran;
         m_cache->store(s.node, s.lane, s.key, outputs);
+        if (m_shared && !s.scaledCopy && m_graph.node(s.node)->type->info().expensive)
+            m_shared->store(s.key, outputs);
         m_outputs[s.lane].insert(s.node, outputs);
         ++m_index;
         QMutexLocker lock(&m_mutex);
@@ -590,6 +600,7 @@ private:
     const EvalOptions m_options;
     const EvalInputs m_inputs;
     const std::shared_ptr<Cache> m_cache;
+    const std::shared_ptr<SharedResults> m_shared;
     QPromise<EvalResult> m_promise;
 
     QList<Step> m_steps;
@@ -609,6 +620,52 @@ private:
     QFuture<Values> m_pending;
     QList<std::function<void()>> m_cancelHandlers;
 };
+
+SharedResults::SharedResults(qint64 budgetBytes)
+    : m_budget(budgetBytes)
+{
+}
+
+std::optional<Values> SharedResults::find(const QByteArray &key) const
+{
+    QMutexLocker lock(&m_mutex);
+    for (const Item &item : m_items) {
+        if (item.key == key)
+            return item.outputs;
+    }
+    return std::nullopt;
+}
+
+void SharedResults::store(const QByteArray &key, const Values &outputs)
+{
+    qint64 bytes = 0;
+    for (const QVariant &v : outputs) {
+        if (v.typeId() == QMetaType::QImage)
+            bytes += v.value<QImage>().sizeInBytes();
+    }
+    QMutexLocker lock(&m_mutex);
+    m_items.removeIf([&](const Item &item) { return item.key == key; });
+    m_items.append({key, outputs, bytes});
+    qint64 total = 0;
+    for (const Item &item : std::as_const(m_items))
+        total += item.bytes;
+    while (m_items.size() > 1 && total > m_budget) {
+        total -= m_items.first().bytes;
+        m_items.removeFirst();
+    }
+}
+
+int SharedResults::size() const
+{
+    QMutexLocker lock(&m_mutex);
+    return int(m_items.size());
+}
+
+void SharedResults::clear()
+{
+    QMutexLocker lock(&m_mutex);
+    m_items.clear();
+}
 
 Evaluator::Evaluator()
     : m_cache(std::make_shared<Cache>())
@@ -644,7 +701,7 @@ QFuture<EvalResult> Evaluator::evaluate(const Graph &graph, const EvalInputs &in
         ids.insert(n.id);
     m_cache->retain(ids);
 
-    auto run = std::make_shared<Run>(graph, order, opts, inputs, m_cache);
+    auto run = std::make_shared<Run>(graph, order, opts, inputs, m_cache, m_shared);
     QFuture<EvalResult> future = run->start();
     {
         QMutexLocker lock(&m_mutex);

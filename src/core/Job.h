@@ -47,7 +47,10 @@ public:
     QDateTime startedAt() const { return m_started; }
     QDateTime finishedAt() const { return m_finished; }
     int attempt() const { return m_attempt; }
-    bool canRetry() const { return m_state == State::Failed || m_state == State::Cancelled; }
+    bool canRetry() const { return m_retryable && (m_state == State::Failed || m_state == State::Cancelled); }
+    // Off for work whose result has nowhere to go when it runs again (a filter's AI step: the
+    // filter is applied again from the Filters panel), so the Queue offers no Retry for it.
+    void setRetryable(bool retryable) { m_retryable = retryable; }
     QVariantMap &metadata() { return m_metadata; }
     const QVariantMap &metadata() const { return m_metadata; }
 
@@ -101,6 +104,7 @@ private:
     int m_attempt = 0;
     bool m_cancelRequested = false;
     bool m_ignoreCancel = false;
+    bool m_retryable = true;
     QVariantMap m_metadata;
 };
 
