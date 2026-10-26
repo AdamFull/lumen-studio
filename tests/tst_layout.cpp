@@ -62,7 +62,6 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QFontDatabase>
-#include <QGroupBox>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -873,7 +872,7 @@ void TestLayout::dialogs()
     {
         // The server profile dialogs as a person meets them: a program of each kind (adopted, never
         // started), and for sd.cpp FLUX.2 [klein] 4B with its VAE in the library and its text encoder
-        // missing; then with Advanced unfolded.
+        // missing, then each model type chosen by hand; then with Advanced unfolded.
         QTemporaryDir files;
         const QString klein = writeModelFile(files, QStringLiteral("diffusion_models/flux-2-klein-4b-fp8.safetensors"),
                                              {{QStringLiteral("img_in.weight"), {3072, 128}},
@@ -901,9 +900,20 @@ void TestLayout::dialogs()
                 profile.options = runtime::modelServerOptions(studio.models(), klein, runtime::VramTier::Small);
             ServerProfileDialog d(&studio, profile, true);
             m_auditor.auditDialog(&d, QStringLiteral("Server profile dialog (%1)").arg(kind));
-            auto *advanced = d.findChild<QGroupBox *>();
+            // sd.cpp with each model type chosen by hand: the fields of that type (plan §17.5).
+            if (auto *types = d.findChild<QComboBox *>(QStringLiteral("serverModelType"))) {
+                for (int i = 0; i < types->count(); ++i) {
+                    types->setCurrentIndex(i);
+                    emit types->activated(i);
+                    m_auditor.auditDialog(&d, QStringLiteral("Server profile dialog (%1, %2)").arg(kind, types->itemText(i)));
+                }
+                const int klein4b = types->findData(QStringLiteral("flux2-klein-4b"));
+                types->setCurrentIndex(klein4b);
+                emit types->activated(klein4b);
+            }
+            auto *advanced = d.findChild<QToolButton *>(QStringLiteral("serverAdvanced"));
             QVERIFY(advanced && !advanced->isChecked());
-            advanced->setChecked(true);
+            advanced->click();
             m_auditor.auditDialog(&d, QStringLiteral("Server profile dialog (%1) with Advanced").arg(kind));
         }
     }

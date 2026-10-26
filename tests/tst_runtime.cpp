@@ -246,6 +246,7 @@ private slots:
     void hubCompanions();
     void animaCompanions();
     void modelPresets();
+    void modelTypes();
     void presetProfiles();
     void trainerRecipes();
     void trainerAdopt();
@@ -3705,6 +3706,95 @@ void TestRuntime::modelPresets()
     QCOMPARE(presetOf(QStringLiteral("miaomiao3DHarem_animaLH3D10.safetensors"), anima()), QStringLiteral("anima"));
 }
 
+// The model types of the server dialog (plan §17.5): the presets grouped by the fields and files
+// they need, named in the family files, sorted by name.
+void TestRuntime::modelTypes()
+{
+    QStringList names;
+    for (const ModelType &t : lumen::runtime::modelTypes())
+        names << t.name;
+    QCOMPARE(names, (QStringList{QStringLiteral("Anima"), QStringLiteral("FLUX.1 (dev, schnell, Kontext; separate files)"),
+                                 QStringLiteral("FLUX.1 (single file)"), QStringLiteral("FLUX.2 [klein] 4B"), QStringLiteral("FLUX.2 [klein] 9B"),
+                                 QStringLiteral("Qwen-Image / Qwen-Image-Edit"), QStringLiteral("SDXL (also Illustrious, NoobAI, Pony)"),
+                                 QStringLiteral("Stable Diffusion 1.5")}));
+    // Every preset has a type, and the presets of one type need the same files and take the same
+    // add-ons.
+    for (const ModelPreset &p : lumen::runtime::modelPresets()) {
+        const ModelType *t = modelTypeOf(p);
+        QVERIFY2(t && t->contains(p), qPrintable(p.id));
+        QCOMPARE(p.components.size(), t->components.size());
+        for (int i = 0; i < p.components.size(); ++i) {
+            QCOMPARE(p.components[i].option, t->components[i].option);
+            QCOMPARE(p.components[i].kind, t->components[i].kind);
+            QCOMPARE(p.components[i].family, t->components[i].family);
+            QCOMPARE(p.components[i].variant, t->components[i].variant);
+        }
+        QCOMPARE(p.controlNetFamilies, t->controlNetFamilies);
+        QCOMPARE(p.ipAdapterFamilies, t->ipAdapterFamilies);
+        QCOMPARE(p.optionalVae, t->optionalVae);
+    }
+    auto typeOf = [](const char *preset) { return modelTypeOf(*presetById(QLatin1String(preset)))->id; };
+    QCOMPARE(typeOf("flux2-klein-base-4b"), QStringLiteral("flux2-klein-4b"));
+    QCOMPARE(typeOf("flux2-klein-base-9b"), QStringLiteral("flux2-klein-9b"));
+    QCOMPARE(typeOf("flux1-kontext-dev"), QStringLiteral("flux1"));
+    QCOMPARE(typeOf("flux1-schnell"), QStringLiteral("flux1"));
+    QCOMPARE(typeOf("flux1-checkpoint"), QStringLiteral("flux1-checkpoint"));
+    QCOMPARE(typeOf("qwen-image-edit"), QStringLiteral("qwen-image"));
+    QCOMPARE(typeOf("pony"), QStringLiteral("sdxl"));
+    QCOMPARE(typeOf("illustrious"), QStringLiteral("sdxl"));
+    QCOMPARE(typeOf("sd15"), QStringLiteral("sd15"));
+
+    // The fields of each type: the model in its slot, its components, the add-ons it can use.
+    auto fields = [](const char *type) {
+        const ModelType *t = modelTypeById(QLatin1String(type));
+        return t ? t->fileOptions(t->modelOption()).join(QLatin1Char(' ')) : QString();
+    };
+    QCOMPARE(fields("flux1"), QStringLiteral("diffusion_model vae clip_l t5xxl lora_dir upscalers_dir"));
+    QCOMPARE(fields("flux1-checkpoint"), QStringLiteral("model vae lora_dir upscalers_dir"));
+    QCOMPARE(fields("flux2-klein-4b"), QStringLiteral("diffusion_model vae llm lora_dir upscalers_dir"));
+    QCOMPARE(fields("flux2-klein-9b"), QStringLiteral("diffusion_model vae llm lora_dir upscalers_dir"));
+    QCOMPARE(fields("qwen-image"), QStringLiteral("diffusion_model vae llm lora_dir upscalers_dir"));
+    QCOMPARE(fields("anima"), QStringLiteral("diffusion_model vae llm lora_dir upscalers_dir"));
+    QCOMPARE(fields("sdxl"), QStringLiteral("model vae control_net ip_adapter clip_vision lora_dir upscalers_dir"));
+    QCOMPARE(fields("sd15"), QStringLiteral("model vae control_net ip_adapter clip_vision lora_dir upscalers_dir"));
+    // A klein file that is a complete checkpoint stays one.
+    ModelInfo kleinCheckpoint;
+    kleinCheckpoint.kind = ModelKind::Checkpoint;
+    QCOMPARE(modelTypeById(QStringLiteral("flux2-klein-4b"))->modelOption(kleinCheckpoint), QStringLiteral("model"));
+    QCOMPARE(modelTypeById(QStringLiteral("flux1"))->modelOption(kleinCheckpoint), QStringLiteral("diffusion_model"));
+    QCOMPARE(sdFileOptions().size(), 12);
+
+    // Each field says what it expects.
+    QCOMPARE(fileFieldLabel(QStringLiteral("llm"), modelTypeById(QStringLiteral("flux2-klein-4b"))), QStringLiteral("Text encoder (Qwen3 4B)"));
+    QCOMPARE(fileFieldLabel(QStringLiteral("llm"), modelTypeById(QStringLiteral("flux2-klein-9b"))), QStringLiteral("Text encoder (Qwen3 8B)"));
+    QCOMPARE(fileFieldLabel(QStringLiteral("llm"), modelTypeById(QStringLiteral("anima"))), QStringLiteral("Text encoder (Qwen3 0.6B)"));
+    QCOMPARE(fileFieldLabel(QStringLiteral("clip_l"), modelTypeById(QStringLiteral("flux1"))), QStringLiteral("Text encoder (CLIP-L)"));
+    QCOMPARE(fileFieldLabel(QStringLiteral("t5xxl"), modelTypeById(QStringLiteral("flux1"))), QStringLiteral("Text encoder (T5-XXL)"));
+    QCOMPARE(fileFieldLabel(QStringLiteral("vae"), modelTypeById(QStringLiteral("flux1"))), QStringLiteral("VAE"));
+    QCOMPARE(fileFieldLabel(QStringLiteral("vae"), modelTypeById(QStringLiteral("sdxl"))), QStringLiteral("VAE (optional)"));
+    QCOMPARE(fileFieldLabel(QStringLiteral("llm"), nullptr), QStringLiteral("Text encoder (language model)"));
+    QCOMPARE(fileFieldLabel(QStringLiteral("diffusion_model"), modelTypeById(QStringLiteral("flux1"))), QStringLiteral("Diffusion model"));
+    QCOMPARE(fileFieldLabel(QStringLiteral("model"), modelTypeById(QStringLiteral("sdxl"))), QStringLiteral("Checkpoint"));
+
+    // A preset of a type its file does not name is refused; one without a type is its own.
+    const QByteArray noType = R"({"version": 1, "presets": [{"id": "x", "name": "X model", "match": {"family": "X", "kinds": ["checkpoint"]}}]})";
+    QString error;
+    const QList<ModelPreset> own = parseModelPresets(noType, QStringLiteral("x"), &error);
+    QVERIFY2(own.size() == 1 && error.isEmpty(), qPrintable(error));
+    QCOMPARE(own.first().type, QStringLiteral("x"));
+    QCOMPARE(own.first().typeName, QStringLiteral("X model"));
+    const QByteArray unknownType =
+        R"({"version": 1, "presets": [{"id": "x", "name": "X", "type": "nope", "match": {"family": "X", "kinds": ["checkpoint"]}}]})";
+    QVERIFY(parseModelPresets(unknownType, QStringLiteral("x"), &error).isEmpty());
+    QVERIFY2(error.contains(QLatin1String("unknown type nope")), qPrintable(error));
+    const QByteArray namedType = R"({"version": 1, "types": {"xs": "X models"}, "presets": [
+        {"id": "x1", "name": "X one", "type": "xs", "match": {"family": "X", "kinds": ["checkpoint"]}}]})";
+    const QList<ModelPreset> named = parseModelPresets(namedType, QStringLiteral("x"), &error);
+    QVERIFY2(named.size() == 1 && error.isEmpty(), qPrintable(error));
+    QCOMPARE(named.first().type, QStringLiteral("xs"));
+    QCOMPARE(named.first().typeName, QStringLiteral("X models"));
+}
+
 // The two failed starts of a real session (plan §17.1), and what presets make of them.
 void TestRuntime::presetProfiles()
 {
@@ -3762,6 +3852,14 @@ void TestRuntime::presetProfiles()
             fixed.options.insert(it.key(), it.value());
     }
     QVERIFY2(checkSdProfile(&lib, fixed).isEmpty(), qPrintable(messages(checkSdProfile(&lib, fixed)).join(QLatin1Char('\n'))));
+    // The server dialog's type: klein's, and none for the profile of the log (the model in the other
+    // slot) or with a file the type has no place for.
+    QCOMPARE(profileModelType(&lib, fixed)->id, QStringLiteral("flux2-klein-4b"));
+    QVERIFY(!profileModelType(&lib, failed));
+    ServerProfile withT5 = fixed;
+    withT5.options.insert(QStringLiteral("t5xxl"), native(t5xxl));
+    QVERIFY(!profileModelType(&lib, withT5));
+    QVERIFY(!profileModelType(&lib, ServerProfile()));
     InstalledRuntime rt;
     rt.kind = QStringLiteral("sd.cpp");
     rt.executable = m_tmp.filePath(QStringLiteral("sd-server.exe"));
@@ -3777,6 +3875,12 @@ void TestRuntime::presetProfiles()
     QCOMPARE(problems.size(), 1);
     QVERIFY2(problems.first().startsWith(QLatin1String("llm: qwen_3_8b_fp8mixed.safetensors")) && problems.first().contains(QLatin1String("Qwen3 4B")),
              qPrintable(problems.first()));
+    QVERIFY2(problems.first().contains(QLatin1String("under \"Text encoder (Qwen3 4B)\"")), qPrintable(problems.first()));
+    // In a few words, for next to the field.
+    QCOMPARE(checkSdProfile(&lib, fixed).first().brief,
+             QStringLiteral("This is a Qwen3 8B text encoder; FLUX.2 [klein] 4B needs a Qwen3 4B text encoder."));
+    fixed.options.insert(QStringLiteral("llm"), native(t5xxl));
+    QCOMPARE(checkSdProfile(&lib, fixed).first().brief, QStringLiteral("This is a T5 text encoder; FLUX.2 [klein] 4B needs a Qwen3 4B text encoder."));
     // No encoder at all: what to get and how big it is.
     fixed.options.remove(QStringLiteral("llm"));
     problems = messages(checkSdProfile(&lib, fixed));
@@ -3809,6 +3913,15 @@ void TestRuntime::presetProfiles()
                     {QStringLiteral("clip_vision"), native(clipVision)}};
     QVERIFY2(checkSdProfile(&lib, sdxl).isEmpty(), qPrintable(messages(checkSdProfile(&lib, sdxl)).join(QLatin1Char('\n'))));
     QVERIFY(addonFits(*presetFor(*modelInfoOf(&lib, wai), wai), *modelInfoOf(&lib, controlNet)));
+    QCOMPARE(profileModelType(&lib, sdxl)->id, QStringLiteral("sdxl"));
+    QVERIFY(!profileModelType(&lib, animaProfile));
+    // A VAE in place of the checkpoint's own must be one for SD / SDXL.
+    sdxl.options.insert(QStringLiteral("vae"), native(flux2Vae));
+    problems = messages(checkSdProfile(&lib, sdxl));
+    QVERIFY2(problems.size() == 1 && problems.first().startsWith(QLatin1String("vae: flux2-vae.safetensors (FLUX.2 VAE) does not fit")),
+             qPrintable(problems.join(QLatin1Char('\n'))));
+    QCOMPARE(checkSdProfile(&lib, sdxl).first().brief, QStringLiteral("This is a FLUX.2 VAE; Illustrious / NoobAI (SDXL) takes only a VAE for SD / SDXL."));
+    sdxl.options.remove(QStringLiteral("vae"));
     // A checkpoint needs no components.
     options = modelServerOptions(&lib, wai);
     QCOMPARE(options, (QVariantMap{{QStringLiteral("model"), native(wai)}, {QStringLiteral("diffusion_model"), QString()}}));

@@ -62,8 +62,9 @@ private:
 
 // Model option keys of server settings → kinds of model that fit them.
 QList<runtime::ModelKind> modelKindsForOption(const QString &serverKind, const QString &optionKey);
-// A menu of library models of the given kinds; choosing one calls pick with its path.
+// A menu of library models of the given kinds; choosing one calls pick with its path. With `fits`,
+// the files it accepts come first and the others follow under a line saying they may not fit.
 void fillModelMenu(QMenu *menu, runtime::ModelLibrary *library, const QList<runtime::ModelKind> &kinds,
-                   const std::function<void(const QString &)> &pick);
+                   const std::function<void(const QString &)> &pick, const std::function<bool(const runtime::ModelEntry &)> &fits = {});
 
 } // namespace lumen::ui

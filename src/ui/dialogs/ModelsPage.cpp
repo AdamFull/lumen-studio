@@ -136,31 +136,44 @@ QList<ModelKind> modelKindsForOption(const QString &serverKind, const QString &o
     return {};
 }
 
-void fillModelMenu(QMenu *menu, runtime::ModelLibrary *library, const QList<ModelKind> &kinds, const std::function<void(const QString &)> &pick)
+void fillModelMenu(QMenu *menu, runtime::ModelLibrary *library, const QList<ModelKind> &kinds, const std::function<void(const QString &)> &pick,
+                   const std::function<bool(const ModelEntry &)> &fits)
 {
     menu->clear();
-    int count = 0;
+    QList<ModelEntry> fitting;
+    QList<ModelEntry> others;
     for (ModelKind kind : kinds) {
-        for (const ModelEntry &e : library->entries(kind)) {
-            QString label = e.name();
-            const QString family = familyText(e.info);
-            QStringList details;
-            if (!family.isEmpty())
-                details << family;
-            if (!e.info.precision.isEmpty())
-                details << e.info.precision;
-            details << sizeText(e.size);
-            label += QStringLiteral("  —  ") + details.join(QStringLiteral(" · "));
-            QAction *a = menu->addAction(label);
-            a->setToolTip(QDir::toNativeSeparators(e.path));
-            const QString path = e.path;
-            QObject::connect(a, &QAction::triggered, menu, [pick, path] { pick(QDir::toNativeSeparators(path)); });
-            ++count;
-        }
+        for (const ModelEntry &e : library->entries(kind))
+            (!fits || fits(e) ? fitting : others) << e;
     }
-    if (count == 0) {
-        QAction *none = menu->addAction(QCoreApplication::translate("lumen::ui::ModelsPage", "No matching models in the library"));
+    auto add = [menu, &pick](const ModelEntry &e) {
+        QString label = e.name();
+        const QString family = familyText(e.info);
+        QStringList details;
+        if (!family.isEmpty())
+            details << family;
+        if (!e.info.precision.isEmpty())
+            details << e.info.precision;
+        details << sizeText(e.size);
+        label += QStringLiteral("  —  ") + details.join(QStringLiteral(" · "));
+        QAction *a = menu->addAction(label);
+        a->setToolTip(QDir::toNativeSeparators(e.path));
+        const QString path = e.path;
+        QObject::connect(a, &QAction::triggered, menu, [pick, path] { pick(QDir::toNativeSeparators(path)); });
+    };
+    for (const ModelEntry &e : std::as_const(fitting))
+        add(e);
+    if (fitting.isEmpty()) {
+        QAction *none = menu->addAction(others.isEmpty() ? QCoreApplication::translate("lumen::ui::ModelsPage", "No matching models in the library")
+                                                         : QCoreApplication::translate("lumen::ui::ModelsPage", "Nothing in the library fits"));
         none->setEnabled(false);
+    }
+    if (!others.isEmpty()) {
+        menu->addSeparator();
+        QAction *heading = menu->addAction(QCoreApplication::translate("lumen::ui::ModelsPage", "Other files of this kind (they may not fit):"));
+        heading->setEnabled(false);
+        for (const ModelEntry &e : std::as_const(others))
+            add(e);
     }
     menu->setToolTipsVisible(true);
 }

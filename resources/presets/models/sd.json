@@ -2,6 +2,7 @@
   "version": 1,
   "comment": "Stable Diffusion 1.5 and SDXL single-file checkpoints (with Illustrious / NoobAI and Pony fine-tunes, told by their file names): everything is inside the file. ControlNets and IP-Adapters must be of the same family. Sampling stays the server's and the prompt style's defaults. The setup wizard's lighter choice (GPUs under 8 GB) downloads RealVisXL 5.0, a photographic SDXL fine-tune from an ungated repository (sd.cpp's docs list no GGUF for SDXL).",
   "docs": "https://github.com/leejet/stable-diffusion.cpp/blob/f89d9b13d730eabeede7314ce49dacd18d3c90c2/docs/sd.md",
+  "types": {"sdxl": "SDXL (also Illustrious, NoobAI, Pony)"},
   "files": {
     "realvisxl-5": {
       "repo": "SG161222/RealVisXL_V5.0",
@@ -16,21 +17,27 @@
     {
       "id": "illustrious",
       "name": "Illustrious / NoobAI (SDXL)",
+      "type": "sdxl",
       "match": {"family": "SDXL", "variant": "Illustrious", "kinds": ["checkpoint"]},
+      "optional_vae": "SD / SDXL",
       "can": {"generate": true, "edit": false, "inpaint": true, "negative_prompt": true, "loras": true, "control_net": ["SDXL"], "ip_adapter": ["SDXL"]},
       "sampling": {"native_resolution": 1024, "dialect": "tags"}
     },
     {
       "id": "pony",
       "name": "Pony (SDXL)",
+      "type": "sdxl",
       "match": {"family": "SDXL", "variant": "Pony", "kinds": ["checkpoint"]},
+      "optional_vae": "SD / SDXL",
       "can": {"generate": true, "edit": false, "inpaint": true, "negative_prompt": true, "loras": true, "control_net": ["SDXL"], "ip_adapter": ["SDXL"]},
       "sampling": {"native_resolution": 1024, "dialect": "tags"}
     },
     {
       "id": "sdxl",
       "name": "SDXL",
+      "type": "sdxl",
       "match": {"family": "SDXL", "kinds": ["checkpoint"]},
+      "optional_vae": "SD / SDXL",
       "download": "realvisxl-5",
       "can": {"generate": true, "edit": false, "inpaint": true, "negative_prompt": true, "loras": true, "control_net": ["SDXL"], "ip_adapter": ["SDXL"]},
       "sampling": {"native_resolution": 1024, "dialect": "natural"}
@@ -39,6 +46,7 @@
       "id": "sd15",
       "name": "Stable Diffusion 1.5",
       "match": {"family": "SD 1.5", "kinds": ["checkpoint"]},
+      "optional_vae": "SD / SDXL",
       "can": {"generate": true, "edit": false, "inpaint": true, "negative_prompt": true, "loras": true, "control_net": ["SD 1.5"], "ip_adapter": ["SD 1.5"]},
       "sampling": {"native_resolution": 512, "dialect": "natural"}
     }

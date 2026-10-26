@@ -59,6 +59,10 @@ struct ModelPreset
     QString familyFile;      // the file it came from ("flux2")
     QUrl docs;               // the sd.cpp page it follows
     QString note;            // a hint for the user (shown with the model)
+    // Its model type (ModelType below): a type its family file names ("types"), else its own id
+    // and name.
+    QString type;
+    QString typeName;
 
     // Matching a model file: its header family (and variant), kind, and words in its file name.
     QString family;
@@ -68,6 +72,9 @@ struct ModelPreset
     QStringList nameNone;    // and none of these
 
     QList<PresetSlot> components;
+    // A checkpoint carries its own VAE; a separate one of this header family may replace it
+    // ("SD / SDXL"). Empty when the model takes no other VAE than its component.
+    QString optionalVae;
     // The model file to download when the library has none (the setup wizard, §17.5), pinned like
     // the components; GGUF where sd.cpp's docs list one. Invalid for presets without one.
     PresetFile download;
@@ -107,6 +114,50 @@ const QList<ModelPreset> &modelPresets();
 QList<ModelPreset> parseModelPresets(const QByteArray &json, const QString &familyFile, QString *error = nullptr);
 const ModelPreset *presetFor(const ModelInfo &info, const QString &path);
 const ModelPreset *presetById(const QString &id);
+
+// ---- Model types (plan M17 §17.5) ----
+// What the server dialog asks for first: presets that need the same fields and the same kind of
+// files, such as FLUX.1 dev, schnell and Kontext, or SDXL with Illustrious and Pony. A family file
+// names its types ("types": {id: name}) and each preset says which one it belongs to ("type"); a
+// preset without one is a type of its own, so a new preset file adds a type without code changes.
+struct ModelType
+{
+    QString id;              // "flux1"
+    QString name;            // "FLUX.1 (dev, schnell, Kontext; separate files)"
+    QList<const ModelPreset *> presets; // in matching order
+    QList<ModelKind> kinds;  // what its model files are: Checkpoint and / or DiffusionModel
+    QList<PresetSlot> components; // the files its model files do not carry (its first preset's)
+    QString optionalVae;     // a VAE family that may replace a checkpoint's own
+    QStringList controlNetFamilies; // ControlNet / IP-Adapter families that fit any of its presets
+    QStringList ipAdapterFamilies;
+    bool loras = false;
+
+    // Where a model file of this type goes: "model" for a checkpoint (when the type takes
+    // checkpoints), else "diffusion_model" when it takes diffusion models, else "model".
+    QString modelOption(const std::optional<ModelInfo> &file = std::nullopt) const;
+    const PresetSlot *slot(const QString &option) const;
+    // The sd.cpp file options a server of this type uses, in the server dialog's order: the
+    // model's (`modelOption`), its components or an optional VAE, the add-ons it can use (a
+    // ControlNet, an IP-Adapter with its CLIP vision encoder, the LoRA folder) and the upscaler
+    // folder.
+    QStringList fileOptions(const QString &modelOption) const;
+    bool contains(const ModelPreset &preset) const;
+};
+
+// The types of the bundled presets, by name.
+const QList<ModelType> &modelTypes();
+const ModelType *modelTypeById(const QString &id);
+const ModelType *modelTypeOf(const ModelPreset &preset);
+// Every file option of an sd.cpp server (the fields of a model Lumen does not know), in the
+// server dialog's order.
+QStringList sdFileOptions();
+// The type a server profile has: its model's, or none when the model is unknown or missing, or
+// the profile sets a file option the type has no place for (a model in the other slot, an SDXL
+// ControlNet with Anima).
+const ModelType *profileModelType(const ModelLibrary *library, const ServerProfile &profile);
+// The label of an sd.cpp file field for a type: "Text encoder (Qwen3 4B)", "VAE (optional)" for
+// a checkpoint's own; the server form's label otherwise (`type` may be null).
+QString fileFieldLabel(const QString &option, const ModelType *type);
 // The pinned file with this SHA-256 in any preset, and the preset (for its licence and source).
 const PresetSlot *presetSlotForSha(const QString &sha256);
 
@@ -132,6 +183,9 @@ struct ProfileProblem
     QString option;
     QString message;
     bool missing = false;    // a component that is not there yet: downloading it fixes the profile
+    // The same in a few words, for next to the option's field ("This is a T5 text encoder; FLUX.2
+    // [klein] 4B needs a Qwen3 4B text encoder."): the field shows the file.
+    QString brief;
 };
 QList<ProfileProblem> checkSdProfile(const ModelLibrary *library, const ServerProfile &profile);
 // Whether a ControlNet or IP-Adapter file fits a preset.

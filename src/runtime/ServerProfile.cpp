@@ -8,6 +8,8 @@
 #include <QRegularExpression>
 #include <QTcpServer>
 
+#include <tuple>
+
 namespace lumen::runtime {
 
 namespace {
@@ -101,6 +103,9 @@ QList<OptionField> llamaOptions()
     return out;
 }
 
+// The files first, in the order the server dialog shows them (sdFileOptions in ModelPresets.h: the
+// model's slots, its components, add-ons, folders), then the launch settings, which the dialog
+// keeps under Advanced.
 QList<OptionField> sdOptions()
 {
     const QString models = Text::tr("Models (*.safetensors *.gguf *.ckpt *.sft)");
@@ -110,9 +115,25 @@ QList<OptionField> sdOptions()
                                  "\"Diffusion model\" with separate text encoders instead."));
     model.filter = models;
     out << model;
-    OptionField vae = field(QStringLiteral("vae"), Text::tr("VAE"), T::File, {}, Text::tr("Optional separate VAE (e.g. sdxl_vae.safetensors)."));
+    OptionField diffusion = field(QStringLiteral("diffusion_model"), Text::tr("Diffusion model"), T::File, {},
+                                  Text::tr("Standalone diffusion model (FLUX, Qwen-Image, Z-Image…), used instead of a checkpoint."));
+    diffusion.filter = models;
+    out << diffusion;
+    OptionField vae = field(QStringLiteral("vae"), Text::tr("VAE"), T::File, {},
+                            Text::tr("Decodes the images. A diffusion model needs one; a checkpoint has its own, which this replaces "
+                                     "(e.g. sdxl_vae.safetensors)."));
     vae.filter = models;
     out << vae;
+    for (const auto &[key, label, help] :
+         {std::tuple{QStringLiteral("clip_l"), Text::tr("Text encoder (CLIP-L)"), Text::tr("CLIP-L text encoder, e.g. clip_l.safetensors (FLUX.1, SD 3).")},
+          std::tuple{QStringLiteral("clip_g"), Text::tr("Text encoder (CLIP-G)"), Text::tr("CLIP-G text encoder, e.g. clip_g.safetensors (SD 3).")},
+          std::tuple{QStringLiteral("t5xxl"), Text::tr("Text encoder (T5-XXL)"), Text::tr("T5-XXL text encoder, e.g. t5xxl_fp16.safetensors (FLUX.1, SD 3).")},
+          std::tuple{QStringLiteral("llm"), Text::tr("Text encoder (language model)"),
+                     Text::tr("A language model that reads the prompt: Qwen3 for FLUX.2 [klein] and Anima, Qwen2.5-VL for Qwen-Image.")}}) {
+        OptionField f = field(key, label, T::File, {}, help);
+        f.filter = models;
+        out << f;
+    }
     OptionField cn = field(QStringLiteral("control_net"), Text::tr("ControlNet"), T::File, {},
                            Text::tr("Needed for pose control (e.g. an SDXL OpenPose ControlNet)."));
     cn.filter = models;
@@ -130,41 +151,28 @@ QList<OptionField> sdOptions()
     out << field(QStringLiteral("upscalers_dir"), Text::tr("Upscaler folder"), T::Directory, {},
                  Text::tr("Folder with ESRGAN models (e.g. RealESRGAN_x4plus_anime_6B.pth) for upscaling and hires fix; "
                           "ComfyUI's models/upscale_models works."));
+    QList<OptionField> launch;
     OptionField precision = field(QStringLiteral("weight_type"), Text::tr("Weight precision"), T::Choice, QStringLiteral("q8_0"),
                                   Text::tr("Converts the weights when loading. q8_0 halves an SDXL model with no visible change, so the "
                                            "model and a ControlNet fit in 8 GB and run faster; 'file' keeps what the file stores."));
     precision.choices = {QStringLiteral("q8_0"), QStringLiteral("q5_0"), QStringLiteral("q4_K"), QStringLiteral("f16"), QStringLiteral("file")};
-    out << precision;
-    out << field(QStringLiteral("offload_to_cpu"), Text::tr("Keep weights in RAM"), T::Boolean, true,
-                 Text::tr("Moves weights to the GPU only while generating (--offload-to-cpu). Slower, but leaves VRAM for a "
-                    "language model on the same GPU."));
+    launch << precision;
+    launch << field(QStringLiteral("offload_to_cpu"), Text::tr("Keep weights in RAM"), T::Boolean, true,
+                    Text::tr("Moves weights to the GPU only while generating (--offload-to-cpu). Slower, but leaves VRAM for a "
+                             "language model on the same GPU."));
     OptionField maxVram = field(QStringLiteral("max_vram"), Text::tr("VRAM budget (GB)"), T::Number, 0.0,
                                 Text::tr("0 = use what is free. A budget makes large models run in parts."));
     maxVram.maximum = 256;
-    out << maxVram;
-    out << field(QStringLiteral("diffusion_fa"), Text::tr("Flash attention"), T::Boolean, true, Text::tr("Less VRAM, usually faster."));
-    OptionField diffusion = field(QStringLiteral("diffusion_model"), Text::tr("Diffusion model"), T::File, {},
-                                  Text::tr("Standalone diffusion model (FLUX, Qwen-Image, Z-Image…), used instead of a checkpoint."));
-    diffusion.filter = models;
-    diffusion.advanced = true;
-    out << diffusion;
-    for (const auto &[key, label] : {std::pair{QStringLiteral("clip_l"), Text::tr("CLIP-L text encoder")},
-                                     std::pair{QStringLiteral("clip_g"), Text::tr("CLIP-G text encoder")},
-                                     std::pair{QStringLiteral("t5xxl"), Text::tr("T5-XXL text encoder")},
-                                     std::pair{QStringLiteral("llm"), Text::tr("LLM text encoder")}}) {
-        OptionField f = field(key, label, T::File);
-        f.filter = models;
-        f.advanced = true;
-        out << f;
-    }
-    OptionField clipCpu = field(QStringLiteral("clip_on_cpu"), Text::tr("Text encoders on the CPU"), T::Boolean, false);
-    clipCpu.advanced = true;
-    out << clipCpu;
+    launch << maxVram;
+    launch << field(QStringLiteral("diffusion_fa"), Text::tr("Flash attention"), T::Boolean, true, Text::tr("Less VRAM, usually faster."));
+    launch << field(QStringLiteral("clip_on_cpu"), Text::tr("Text encoders on the CPU"), T::Boolean, false,
+                    Text::tr("Runs the text encoders on the processor, which leaves the graphics card's memory to the model."));
     OptionField threads = field(QStringLiteral("threads"), Text::tr("CPU threads"), T::Integer, 0, Text::tr("0 = automatic"));
     threads.maximum = 256;
-    threads.advanced = true;
-    out << threads;
-    return out;
+    launch << threads;
+    for (OptionField &f : launch)
+        f.advanced = true;
+    return out << launch;
 }
 
 } // namespace

@@ -147,9 +147,34 @@ The steps below do the same by hand.
    size. Files are checked against the checksums GitHub publishes. Alternatively, **Add existing…**
    lists llama-server and sd-server copies it finds in Program Files, your home folder and
    Downloads, or you can browse to one.
-2. **Create a server.** **New server…** asks for the model files and the launch options. Defaults
-   suit an 8 GB GPU. The dialog shows the full command line. Leave **Add it as a provider** on, and
-   the server appears under Providers too.
+2. **Create a server.** **New server…** asks for the model files. Leave **Add it as a provider** on,
+   and the server appears under Providers too. For stable-diffusion.cpp:
+   * **Model type** says what kind of model the server runs: Stable Diffusion 1.5; SDXL (also
+     Illustrious, NoobAI and Pony); FLUX.1 dev, schnell or Kontext as separate files; FLUX.1 as a
+     single file; FLUX.2 [klein] 4B or 9B; Qwen-Image or Qwen-Image-Edit; Anima; or *Other (every
+     field)* for a model Lumen does not know. Choosing or dropping a model file sets the type from
+     the file itself. You can change it by hand.
+   * The type decides which fields you see: the model file (*Checkpoint* for SD 1.5, SDXL and a
+     single-file FLUX.1, *Diffusion model* for the others), then exactly the files that model needs,
+     each labelled with what it expects. FLUX.1 asks for a VAE, *Text encoder (CLIP-L)* and *Text
+     encoder (T5-XXL)*; FLUX.2 [klein] 4B for a VAE and *Text encoder (Qwen3 4B)*; SDXL only for an
+     optional VAE. Then the add-ons the type can use: ControlNet and IP-Adapter (with its CLIP vision
+     encoder) for SD 1.5 and SDXL, the LoRA folder and the upscaler folder. Fields of other types
+     are hidden and not saved.
+   * **Setting a file by hand**: type or paste its path, drop the file on the field, use
+     **Browse…**, or **Choose from the model library**, which lists the files that fit first and
+     the others below a line that says they may not fit. A file you choose stays as you chose it.
+     The line under each field says whether the file is found, will be downloaded, is missing (with
+     its size) or does not fit, and why, for example "This is a T5 text encoder; FLUX.2 [klein] 4B
+     needs a Qwen3 4B text encoder". A server with a file that does not fit cannot be saved.
+   * **Graphics card** applies the memory settings for your card (up to 8 GB, 12 GB, 16 GB or more);
+     **Port** is where Lumen talks to the server.
+   * **Advanced** holds the launch settings (weight precision, keeping weights in RAM, the VRAM
+     budget, flash attention, text encoders on the CPU, CPU threads, extra arguments), when the
+     server starts and stops, and the full command line. The defaults suit an 8 GB GPU.
+
+   For llama.cpp the dialog lists the server's options; the rarely changed ones, the start and stop
+   settings and the command line are under **Advanced**.
 3. **Use it.** A server set to start *When needed* starts on the first request: a chat message, a
    generation or a Critic review. The job shows "Starting …" meanwhile. Servers stop when Lumen
    closes, or after the idle time you set.
@@ -172,21 +197,24 @@ the server finishes that image in the background.
 **Models that need more than one file (FLUX, Qwen-Image, Anima).** Lumen knows what these model
 families need and fills it in when you choose the model, in the server settings or with *Use with a
 server*:
-* The model goes in the right field. A FLUX, Qwen-Image or Anima file is a *diffusion model*, not a
-  checkpoint, even when it sits in a `checkpoints` folder.
+* The model sets the model type and goes in the right field. A FLUX, Qwen-Image or Anima file is a
+  *diffusion model*, not a checkpoint, even when it sits in a `checkpoints` folder.
 * Its VAE and text encoders come from your model library: for FLUX.2 [klein] 4B the FLUX.2 VAE
   and the Qwen3 4B text encoder; for FLUX.1 the FLUX.1 VAE, CLIP-L and T5-XXL. Files are recognised
   by their contents, whatever they are called.
 * What is missing is listed with its size, and **Download missing files** fetches it from a pinned
-  Hugging Face repository. The server settings fill in when the download is done.
+  Hugging Face repository. The server settings fill in when the download is done. A file you chose
+  yourself is kept; Lumen only fills empty fields and replaces files that do not fit.
 * A ControlNet or IP-Adapter that does not fit the model (an SDXL ControlNet with FLUX or Anima) is
-  named, and the server cannot be saved with it.
+  named, and the server cannot be saved with it. The FLUX and Anima types have no ControlNet field;
+  an older server that has one opens as *Other* with every field, so you can remove it.
 * A server that cannot work says why when it is started, instead of "The server exited while
   starting".
 
 Known families: FLUX.2 [klein] 4B and 9B (and their base models), FLUX.1 dev, schnell and Kontext
 dev, Qwen-Image and Qwen-Image-Edit, Anima, SDXL (with Illustrious and Pony) and SD 1.5. Other
-models work as before, with the fields filled in by hand.
+models work as before: choose the type whose files they need, or *Other*, and fill in the fields
+by hand.
 
 **Language models with llama.cpp.**
 * **Models:** a server can offer several models. Use *More models* for further ones; each has a
@@ -279,8 +307,9 @@ character LoRAs:
 * Every file is checked against pinned checksums.
 * *Add existing…* also accepts an sd-scripts folder or a kohya_ss install that has its venv.
 
-**Tuned for.** New servers start with options for the GPU Lumen detected (up to 8 GB, 12 GB, or
-16 GB and more). Change *Tuned for* to apply another set.
+**Graphics card.** New servers start with options for the GPU Lumen detected (up to 8 GB, 12 GB, or
+16 GB and more). Change *Graphics card* in the server's settings to apply another set; it reads
+*Custom* when you changed the options under *Advanced*.
 
 The server button in the status bar shows what runs and offers start, stop, restart and the
 server's log. **Check for updates** downloads newer releases. Servers switch to them at their next

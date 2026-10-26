@@ -1995,6 +1995,19 @@ Survey of the code, the app log and user testing (October 2026):
 * **Settings → AI** shows one list: the image engine (and an optional separate edit engine), with
   status, model and *Change…*; per-field server options move under *Advanced*. The language model
   is optional and only listed when a plugin needs one; the core editor works without an LLM.
+* **The server dialog shows the fields of the model's type** (asked for by the user in October 2026:
+  "I can't set up the text encoder by hand for FLUX models"; the text encoders and the diffusion
+  model sat in a folded *Advanced* box, the same for every model). For stable-diffusion.cpp it
+  starts with a *Model type* built from the model presets (§17.3; one per group of presets that
+  need the same fields and the same kind of files: Stable Diffusion 1.5; SDXL with Illustrious,
+  NoobAI and Pony; FLUX.1 dev, schnell and Kontext; FLUX.1 as one file; FLUX.2 [klein] 4B; FLUX.2
+  [klein] 9B; Qwen-Image and Qwen-Image-Edit; Anima) and *Other* with every field. Choosing a model
+  file sets it from the file's header; it can be changed by hand. The type shows exactly its
+  fields, all in sight: the model in its slot, the components it needs labelled with what they
+  expect ("Text encoder (Qwen3 4B)"), the add-ons it can use, each file with a status line (found,
+  will be downloaded, missing, does not fit); other fields are hidden and not saved. This replaces
+  "per-field server options move under *Advanced*" for the files: *Advanced* keeps the launch
+  settings, when the server starts and stops, and the command line (step 13 of §17.8).
 * The existing supervisor and GPU release (`releaseGpu`) stay; the wizard does not start an LLM
   next to the image engine on an 8 GB GPU.
 
@@ -2690,8 +2703,9 @@ Survey of the code, the app log and user testing (October 2026):
     the model folder of a ComfyUI found running on the server page; §17.5's "per-field server
     options move under *Advanced*": the server profile dialog still shows the model, VAE and text
     encoder fields at the top (its *Advanced* group, from M12, holds only the fields marked
-    advanced), and Settings → AI sends the user to the other tabs for every setting; the German
-    translation of the new texts.
+    advanced), and Settings → AI sends the user to the other tabs for every setting (since step 13
+    the dialog shows the fields of the model's type, and *Advanced* holds the launch settings); the
+    German translation of the new texts.
 - [x] Filter graph core and classic nodes; golden-image tests per node.
   * `src/filters` (`lumen_filters`, `lumen::filters`): on `lumen_core` (`ImageOps`, `Async`) and Qt
     Gui only, no UI, AI, document or runtime code; `lumen_ui` links it. No UI yet.
@@ -3190,7 +3204,9 @@ Survey of the code, the app log and user testing (October 2026):
   * Not yet: the filter editor does not know the editor's engine choice (its *The one in use* is
     Settings → AI's); the filter's preview is computed again after the results go, not kept
     meanwhile; the German translation of the new texts.
-- [x] Fix the layout checklist (§17.9); screenshots after; then the audit runs strict in CI.
+- [x] Fix the layout checklist (§17.9); screenshots after; then the audit runs strict in CI. With it
+  §17.5's open "per-field server options move under *Advanced*" (step 9's Not yet), which the user's
+  request below replaced for the files.
   * Dialogs within the screen (§17.9 item 8): `resizeWithinScreen` / `availableWindowSize`
     (`ui/widgets/Controls`) size a window to what it asks for, never beyond the available area of
     its screen less the frame, so on 1080p at 150 % (1280 × 680 without the taskbar) a dialog opens
@@ -3198,8 +3214,9 @@ Survey of the code, the app log and user testing (October 2026):
     line with the whole name (the tab bar had no room to spare with every plugin on); each page
     scrolls only when even its minimum height does not fit (`PageScroll`: a resizable scroll area gave
     pages with wrapped text their preferred height, so they scrolled with room to spare); it opens at
-    1060 × 640 at most. The server profile dialogs ask for 640 × 720 within the screen, the pose edit
-    dialog for 760 × 860, whose canvas takes what there is.
+    1060 × 640 at most. The server profile dialogs are as tall as their content, folded or not, within
+    the screen (`fitToContent`); the pose edit dialog asks for 760 × 860 and its canvas takes what
+    there is.
   * What the screenshots showed (items 6 and 9 and new ones): `ProviderCombo` grows to the longest
     engine name where there is room and keeps the whole name in its tooltip; an empty `AutoTextEdit`
     is as tall as its whole placeholder (New from prompt's and the AI tab's *Leave out* showed one line
@@ -3223,14 +3240,78 @@ Survey of the code, the app log and user testing (October 2026):
     grows with its text is one when it shows a scroll bar before its last line. New states: the AI
     tab scrolled to its options with *Leave out*, New from prompt with a long engine name, the server
     profile dialogs as people meet them (FLUX.2 [klein] 4B with its VAE in the library and its text
-    encoder missing; *Advanced* open), Settings with its page list (every name whole, none behind a
-    scroll bar).
-  * Tests: `tst_setup settingsAi` (the page in its scroll area), `tst_canvas localServersWiring` (the
-    provider list by name); `tst_layout` and `tst_layout_150` strict and without findings at 1280 ×
-    720, 1536 × 864, 1920 × 1080 and 150 %. Checked to fail: the pose dialog at 760 × 860
-    (`tst_layout_150`).
-  * Not yet: §17.5's "per-field server options move under *Advanced*" (step 9's Not yet) in the
-    server profile dialog; the German translation of the new texts.
+    encoder missing; each model type; *Advanced* unfolded), Settings with its page list (every name
+    whole, none behind a scroll bar).
+  * **The server dialog shows the fields of the model's type** (§17.5; asked for by the user: "I can't
+    set up the text encoder by hand for FLUX models. Could you make it so that this depends on the
+    model architecture?"). Before, sd.cpp's fields came from one list, with the diffusion model and
+    every text encoder in a folded *Advanced* box, the same for every model.
+    * Model types (`runtime::ModelType`, `modelTypes()`): a family file names its types (`"types":
+      {"flux1": "FLUX.1 (dev, schnell, Kontext; separate files)"}`) and each preset its `"type"`; a
+      preset without one is a type of its own, so a new preset file adds a type without code changes.
+      The bundled types, by name: Anima; FLUX.1 (dev, schnell, Kontext; separate files); FLUX.1 (single
+      file); FLUX.2 [klein] 4B and 9B (each with its base model; they differ in the text encoder,
+      Qwen3 4B or 8B); Qwen-Image / Qwen-Image-Edit; SDXL (also Illustrious, NoobAI, Pony); Stable
+      Diffusion 1.5. A type has its presets' model kinds, components, add-on families, LoRAs and
+      `"optional_vae"` (new: a checkpoint carries its own VAE; one of this header family may replace
+      it, "SD / SDXL" for SD 1.5 and SDXL, "FLUX / SD 3" for FLUX.1 as one file). `fileOptions` are the
+      fields it shows: the model in its slot (`modelOption`: *Checkpoint* for SD 1.5, SDXL and FLUX.1
+      as one file, *Diffusion model* for the others, a checkpoint for a type that takes both), its
+      components or the optional VAE, a ControlNet, an IP-Adapter and its CLIP vision encoder where the
+      presets list fitting families, the LoRA folder where they take LoRAs, the upscaler folder.
+      `profileModelType`: the type of a profile's model, none when the model is unknown, in the other
+      slot or a file has no place in its type. `fileFieldLabel`: "Text encoder (Qwen3 4B)", "Text
+      encoder (T5-XXL)", "VAE (optional)"; sd.cpp's fields are now "Text encoder (CLIP-L)" … "Text
+      encoder (language model)", in the dialog's order, and its launch settings are `advanced`.
+    * `checkSdProfile` says each problem also in a few words for next to its field
+      (`ProfileProblem::brief`: "This is a T5 text encoder; FLUX.2 [klein] 4B needs a Qwen3 4B text
+      encoder.") and names the fields as the dialog labels them; a VAE in place of a checkpoint's own
+      must be of its optional family (a FLUX.1 VAE left over for SDXL is refused).
+    * The dialog: *Model type* (the types and *Other (every field)*), then the model's field, its
+      components and *Download missing files*, the add-ons, the graphics card and the port; under each
+      file a status line (`StatusLabel`, as tall as its text: a form gave wrapped labels the height of
+      a narrower column) saying found, will be downloaded (with the size), missing (with the file and
+      size) or does not fit (the brief, which then is not repeated below the form), or for the model
+      its preset and note. A model of another type than the one chosen says so and blocks OK. Choosing,
+      typing or dropping a model file (`PathEdit` takes a dropped file) sets the type from its header
+      and puts it in the type's slot; a file Lumen does not know keeps the type chosen. Choosing the
+      type by hand shows its fields and moves the model into its slot when it is of that kind, and a
+      model of that type gets its components where the fields are empty or do not fit. Fields of other
+      types are hidden and not saved; switching back shows what was typed there. A typed path is
+      applied once, not each time the field loses the keyboard (which set the model's launch options
+      over the user's). Each file field has *Choose from the model library*: the files that fit the
+      field (the slot's header family and variant, the type's models, the add-on families) first, then
+      the other files of that kind under "Other files of this kind (they may not fit):"
+      (`fillModelMenu`'s `fits`). *Advanced* holds the launch settings (weight precision, keeping
+      weights in RAM, VRAM budget, flash attention, text encoders on the CPU, CPU threads, extra
+      arguments), when the server starts and stops, and the command line. The tier choice is now
+      *Graphics card* ("Up to 8 GB of memory" …, *Custom* when the options differ) and sets the
+      launch settings without rebuilding the form. llama.cpp and ComfyUI show their options as before,
+      the advanced ones (and the start and stop settings and the command line) folded.
+  * Tests: `tst_runtime modelTypes` (the types by name, every preset in one, the presets of a type
+    alike, each type's fields, the labels, files with unknown, named and no types), `presetProfiles`
+    (`profileModelType` of the profiles of the log, of a fixed klein, of klein with a T5; the briefs;
+    an SDXL with a FLUX.2 VAE); `tst_canvas presetServerDialog` (rewritten: a new server is *Other*
+    with every field and *Advanced* folded; klein typed into *Checkpoint* chooses its type and slot
+    and gets its found VAE and text encoder; the provider gets the preset; a T5 for klein's encoder
+    is named next to the field, once, and OK is off; a missing encoder with its size, the download and
+    *Will be downloaded* until it is cancelled), `serverDialogModelTypes` (new: each type's exact
+    fields and labels; klein from the library chooses its type; the encoder menu lists the Qwen3 4B
+    files first; a Qwen3 8B chosen from the others is kept, named, and OK is off; a FLUX.2 encoder
+    and a FLUX.1 T5 typed by hand are kept, saved and on the command line, also after the model is
+    chosen again; a hand-chosen type changes the fields, a klein model under FLUX.1 says so; the
+    hidden encoder is not saved and comes back with its type; an SDXL checkpoint typed into
+    *Diffusion model* moves to *Checkpoint*, its leftover FLUX.1 VAE is refused, the FLUX.1 encoders
+    are not saved; the SDXL ControlNet fits first; *Other* saves every field; existing profiles open
+    with their type or *Other*; the profile of §17.1 opens as *Other* with the message by the field
+    and the klein type moves the file; a dropped file chooses the type); `tst_setup settingsAi` (the
+    page in its scroll area); `tst_canvas localServersWiring` (the provider list by name); `tst_layout`
+    and `tst_layout_150` strict and without findings at 1280 × 720, 1536 × 864, 1920 × 1080 and
+    150 %. Checked to fail: saving hidden fields (`serverDialogModelTypes`), the pose dialog at
+    760 × 860 (`tst_layout_150`).
+  * Not yet: the German translation of the new texts; the dialog does not show a type's VAE as
+    misfitting while the model is of another type (the model's line says so and OK is off); the
+    llama.cpp dialog has no plain summary of its model (vision projector) as the sd.cpp one has.
 - [x] Files like an image editor, and the remaining editor gaps (from the "Not yet" notes of steps 7,
   8 and 11 and the merge reviews).
   * A document remembers the image file it was opened from (`doc::FileLink` in `Document`: path,
@@ -3483,14 +3564,15 @@ reports). What each item became:
 8. Tall dialogs: every dialog is sized within the screen's available area and scrolls inside with its
    buttons in sight (`resizeWithinScreen`). Settings lists its pages on the left with their whole
    names, so every plugin's page has room, and each page scrolls only when its minimum does not fit;
-   the server profile dialogs and the pose edit dialog ask for their sizes within the screen, and the
-   pose dialog's canvas takes what there is.
+   the server profile dialogs are as tall as their content; the pose edit dialog's canvas takes what
+   there is. The server dialog also shows only the fields of the model's type now (§17.5).
 9. One-line text fields with a scroll bar: fixed with the prompt bar, and an empty field is as tall as
    its whole hint (*Leave out* in New from prompt and the AI tab); the status bar's margin: fixed with
    the new shell; New from prompt's aspect chips have one width.
 
 Found in the screenshots on the way: the AI tab's action buttons had uneven heights; the assistant's
-long suggestions ran past the panel's edge and its result thumbnails did not wrap. At 150 % (`tst_layout_150`, a 1920 × 1080
+long suggestions ran past the panel's edge and its result thumbnails did not wrap; the server
+dialog's status lines stood in boxes three lines high. At 150 % (`tst_layout_150`, a 1920 × 1080
 screen at 144 dpi, which Qt shows as 1280 × 720 at a device pixel ratio of 1.5) the main window, its
 panels and every dialog pass the same checks.
 

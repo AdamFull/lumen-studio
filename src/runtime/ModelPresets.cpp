@@ -70,6 +70,17 @@ QString describe(const ModelInfo &info)
     return info.variant.isEmpty() ? info.family : QStringLiteral("%1 %2").arg(info.family, info.variant);
 }
 
+// What a file is, in a few words: "T5 text encoder", "Qwen3 8B text encoder", "FLUX / SD 3 VAE".
+QString whatFileIs(const ModelInfo &info)
+{
+    const QString what = info.variant.isEmpty() ? info.family : info.variant;
+    if (info.kind == ModelKind::TextEncoder)
+        return what.isEmpty() ? Text::tr("text encoder") : Text::tr("%1 text encoder").arg(what);
+    if (info.kind == ModelKind::Vae)
+        return what.isEmpty() ? Text::tr("VAE") : Text::tr("%1 VAE").arg(what);
+    return what.isEmpty() ? modelKindLabel(info.kind) : QStringLiteral("%1 (%2)").arg(modelKindLabel(info.kind), what);
+}
+
 } // namespace
 
 QUrl PresetFile::url(const QString &huggingFaceBase) const
@@ -133,6 +144,15 @@ QList<ModelPreset> parseModelPresets(const QByteArray &json, const QString &fami
         return fail(QStringLiteral("unknown version"));
     const QUrl familyDocs(root.value(QStringLiteral("docs")).toString());
 
+    // The model types the file's presets belong to: id → name.
+    QHash<QString, QString> types;
+    const QJsonObject typeObjects = root.value(QStringLiteral("types")).toObject();
+    for (auto it = typeObjects.begin(); it != typeObjects.end(); ++it) {
+        if (it.value().toString().isEmpty())
+            return fail(QStringLiteral("type %1 needs a name").arg(it.key()));
+        types.insert(it.key(), it.value().toString());
+    }
+
     QHash<QString, PresetFile> files;
     const QJsonObject fileObjects = root.value(QStringLiteral("files")).toObject();
     for (auto it = fileObjects.begin(); it != fileObjects.end(); ++it) {
@@ -161,6 +181,16 @@ QList<ModelPreset> parseModelPresets(const QByteArray &json, const QString &fami
         p.docs = o.contains(QStringLiteral("docs")) ? QUrl(o.value(QStringLiteral("docs")).toString()) : familyDocs;
         if (p.id.isEmpty() || p.name.isEmpty())
             return fail(QStringLiteral("a preset needs an id and a name"));
+        p.type = o.value(QStringLiteral("type")).toString();
+        if (p.type.isEmpty()) {
+            p.type = p.id;
+            p.typeName = p.name;
+        } else if (!types.contains(p.type)) {
+            return fail(QStringLiteral("preset %1: unknown type %2 (name it under \"types\")").arg(p.id, p.type));
+        } else {
+            p.typeName = types.value(p.type);
+        }
+        p.optionalVae = o.value(QStringLiteral("optional_vae")).toString();
 
         const QJsonObject match = o.value(QStringLiteral("match")).toObject();
         p.family = match.value(QStringLiteral("family")).toString();
@@ -277,6 +307,135 @@ const ModelPreset *presetById(const QString &id)
     return nullptr;
 }
 
+QString ModelType::modelOption(const std::optional<ModelInfo> &file) const
+{
+    if (file && file->kind == ModelKind::Checkpoint && kinds.contains(ModelKind::Checkpoint))
+        return QStringLiteral("model");
+    return kinds.contains(ModelKind::DiffusionModel) ? QStringLiteral("diffusion_model") : QStringLiteral("model");
+}
+
+const PresetSlot *ModelType::slot(const QString &option) const
+{
+    for (const PresetSlot &s : components) {
+        if (s.option == option)
+            return &s;
+    }
+    return nullptr;
+}
+
+QStringList ModelType::fileOptions(const QString &modelOption) const
+{
+    QStringList out{modelOption};
+    // Components in the server form's order.
+    for (const QString &option : sdFileOptions()) {
+        if (slot(option) || (option == QLatin1String("vae") && !optionalVae.isEmpty()))
+            out << option;
+    }
+    if (!controlNetFamilies.isEmpty())
+        out << QStringLiteral("control_net");
+    if (!ipAdapterFamilies.isEmpty())
+        out << QStringLiteral("ip_adapter") << QStringLiteral("clip_vision");
+    if (loras)
+        out << QStringLiteral("lora_dir");
+    out << QStringLiteral("upscalers_dir");
+    return out;
+}
+
+bool ModelType::contains(const ModelPreset &preset) const
+{
+    return std::any_of(presets.cbegin(), presets.cend(), [&](const ModelPreset *p) { return p->id == preset.id; });
+}
+
+const QList<ModelType> &modelTypes()
+{
+    static const QList<ModelType> types = [] {
+        QList<ModelType> out;
+        for (const ModelPreset &p : modelPresets()) {
+            auto it = std::find_if(out.begin(), out.end(), [&](const ModelType &t) { return t.id == p.type; });
+            if (it == out.end()) {
+                ModelType t;
+                t.id = p.type;
+                t.name = p.typeName;
+                t.components = p.components;
+                out << t;
+                it = std::prev(out.end());
+            }
+            it->presets << &p;
+            for (ModelKind k : p.kinds) {
+                if (!it->kinds.contains(k))
+                    it->kinds << k;
+            }
+            if (it->optionalVae.isEmpty())
+                it->optionalVae = p.optionalVae;
+            for (const QString &f : p.controlNetFamilies) {
+                if (!it->controlNetFamilies.contains(f))
+                    it->controlNetFamilies << f;
+            }
+            for (const QString &f : p.ipAdapterFamilies) {
+                if (!it->ipAdapterFamilies.contains(f))
+                    it->ipAdapterFamilies << f;
+            }
+            it->loras = it->loras || p.loras;
+        }
+        std::stable_sort(out.begin(), out.end(), [](const ModelType &a, const ModelType &b) { return a.name.compare(b.name, Qt::CaseInsensitive) < 0; });
+        return out;
+    }();
+    return types;
+}
+
+const ModelType *modelTypeById(const QString &id)
+{
+    for (const ModelType &t : modelTypes()) {
+        if (t.id == id)
+            return &t;
+    }
+    return nullptr;
+}
+
+const ModelType *modelTypeOf(const ModelPreset &preset)
+{
+    return modelTypeById(preset.type);
+}
+
+QStringList sdFileOptions()
+{
+    return {QStringLiteral("model"),       QStringLiteral("diffusion_model"), QStringLiteral("vae"),         QStringLiteral("clip_l"),
+            QStringLiteral("clip_g"),      QStringLiteral("t5xxl"),           QStringLiteral("llm"),         QStringLiteral("control_net"),
+            QStringLiteral("ip_adapter"),  QStringLiteral("clip_vision"),     QStringLiteral("lora_dir"),    QStringLiteral("upscalers_dir")};
+}
+
+const ModelType *profileModelType(const ModelLibrary *library, const ServerProfile &profile)
+{
+    auto str = [&profile](const QString &key) { return profile.options.value(key).toString().trimmed(); };
+    const QString checkpoint = str(QStringLiteral("model"));
+    const QString diffusion = str(QStringLiteral("diffusion_model"));
+    // One model, in one slot.
+    if (checkpoint.isEmpty() == diffusion.isEmpty())
+        return nullptr;
+    const QString file = diffusion.isEmpty() ? checkpoint : diffusion;
+    const std::optional<ModelInfo> info = modelInfoOf(library, file);
+    const ModelPreset *preset = info ? presetFor(*info, file) : nullptr;
+    const ModelType *type = preset ? modelTypeOf(*preset) : nullptr;
+    if (!type)
+        return nullptr;
+    const QStringList options = type->fileOptions(type->modelOption(info));
+    for (const QString &option : sdFileOptions()) {
+        if (!str(option).isEmpty() && !options.contains(option))
+            return nullptr;
+    }
+    return type;
+}
+
+QString fileFieldLabel(const QString &option, const ModelType *type)
+{
+    const PresetSlot *slot = type ? type->slot(option) : nullptr;
+    if (option == QLatin1String("vae") && type && !slot && !type->optionalVae.isEmpty())
+        return Text::tr("VAE (optional)");
+    if (option == QLatin1String("llm") && slot && !slot->variant.isEmpty())
+        return Text::tr("Text encoder (%1)").arg(slot->variant);
+    return optionLabel(option);
+}
+
 const PresetSlot *presetSlotForSha(const QString &sha256)
 {
     if (sha256.isEmpty())
@@ -372,7 +531,7 @@ QList<ProfileProblem> checkSdProfile(const ModelLibrary *library, const ServerPr
                                QStringLiteral("ip_adapter"), QStringLiteral("clip_vision")}) {
         const QString file = str(key);
         if (!file.isEmpty() && !QFileInfo::exists(QDir::fromNativeSeparators(file)))
-            out << ProfileProblem{key, Text::tr("%1 (%2) does not exist.").arg(fileName(file), optionLabel(key))};
+            out << ProfileProblem{key, Text::tr("%1 (%2) does not exist.").arg(fileName(file), optionLabel(key)), false, Text::tr("This file does not exist.")};
     }
     if (!out.isEmpty())
         return out;
@@ -389,16 +548,24 @@ QList<ProfileProblem> checkSdProfile(const ModelLibrary *library, const ServerPr
         if (!info)
             continue;
         if (info->kind == ModelKind::DiffusionModel && key == QLatin1String("model")) {
-            out << ProfileProblem{key, Text::tr("%1 is a diffusion model (%2), not a complete checkpoint: choose it under \"%3\", with its VAE and "
-                                                "text encoder.")
-                                           .arg(fileName(file), describe(*info), optionLabel(QStringLiteral("diffusion_model")))};
+            out << ProfileProblem{key,
+                                  Text::tr("%1 is a diffusion model (%2), not a complete checkpoint: choose it under \"%3\", with its VAE and "
+                                           "text encoder.")
+                                      .arg(fileName(file), describe(*info), optionLabel(QStringLiteral("diffusion_model"))),
+                                  false,
+                                  Text::tr("This is a diffusion model (%1), not a complete checkpoint: it belongs under \"%2\".")
+                                      .arg(describe(*info), optionLabel(QStringLiteral("diffusion_model")))};
             wrongSlot = true;
         } else if (info->kind == ModelKind::Checkpoint && key == QLatin1String("diffusion_model")) {
-            out << ProfileProblem{key, Text::tr("%1 is a complete checkpoint (%2): choose it under \"%3\".")
-                                           .arg(fileName(file), describe(*info), optionLabel(QStringLiteral("model")))};
+            out << ProfileProblem{key,
+                                  Text::tr("%1 is a complete checkpoint (%2): choose it under \"%3\".")
+                                      .arg(fileName(file), describe(*info), optionLabel(QStringLiteral("model"))),
+                                  false,
+                                  Text::tr("This is a complete checkpoint (%1): it belongs under \"%2\".").arg(describe(*info), optionLabel(QStringLiteral("model")))};
             wrongSlot = true;
         } else if (info->kind != ModelKind::Checkpoint && info->kind != ModelKind::DiffusionModel && info->kind != ModelKind::Unknown) {
-            out << ProfileProblem{key, Text::tr("%1 (%2) is not an image model.").arg(fileName(file), modelKindLabel(info->kind))};
+            out << ProfileProblem{key, Text::tr("%1 (%2) is not an image model.").arg(fileName(file), modelKindLabel(info->kind)), false,
+                                  Text::tr("This is a %1, not an image model.").arg(whatFileIs(*info))};
         }
         if (!model) {
             model = info;
@@ -412,23 +579,37 @@ QList<ProfileProblem> checkSdProfile(const ModelLibrary *library, const ServerPr
         return out;
 
     // Its components: there, and of the kind it needs (after a wrong slot, whose message asks for them).
+    // The fields are named as the server dialog names them for the model's type.
+    const ModelType *type = modelTypeOf(*preset);
     for (const PresetSlot &slot : wrongSlot ? QList<PresetSlot>() : preset->components) {
         const QString file = str(slot.option);
         if (file.isEmpty()) {
             if (slot.required)
                 out << ProfileProblem{slot.option,
                                       Text::tr("%1 needs a %2 under \"%3\" (%4, %5).")
-                                          .arg(preset->name, slot.label, optionLabel(slot.option), slot.file.fileName(), formatBytes(slot.file.size)),
-                                      true};
+                                          .arg(preset->name, slot.label, fileFieldLabel(slot.option, type), slot.file.fileName(),
+                                               formatBytes(slot.file.size)),
+                                      true, Text::tr("Missing: %1 (%2).").arg(slot.file.fileName(), formatBytes(slot.file.size))};
             continue;
         }
         const auto info = modelInfoOf(library, file);
         if (!info || info->kind == ModelKind::Unknown)
             continue;
         if (info->kind != slot.kind || info->family != slot.family || (!slot.variant.isEmpty() && info->variant != slot.variant))
-            out << ProfileProblem{slot.option, Text::tr("%1 (%2: %3) does not fit: %4 needs a %5 under \"%6\".")
-                                                   .arg(fileName(file), modelKindLabel(info->kind), describe(*info), preset->name, slot.label,
-                                                        optionLabel(slot.option))};
+            out << ProfileProblem{slot.option,
+                                  Text::tr("%1 (%2: %3) does not fit: %4 needs a %5 under \"%6\".")
+                                      .arg(fileName(file), modelKindLabel(info->kind), describe(*info), preset->name, slot.label,
+                                           fileFieldLabel(slot.option, type)),
+                                  false, Text::tr("This is a %1; %2 needs a %3.").arg(whatFileIs(*info), preset->name, slot.label)};
+    }
+    // A VAE in place of a checkpoint's own: one of the family the checkpoint can take.
+    if (const QString file = str(QStringLiteral("vae")); !wrongSlot && !file.isEmpty() && !preset->slot(QStringLiteral("vae")) && !preset->optionalVae.isEmpty()) {
+        const auto info = modelInfoOf(library, file);
+        if (info && info->kind != ModelKind::Unknown && (info->kind != ModelKind::Vae || (!info->family.isEmpty() && info->family != preset->optionalVae)))
+            out << ProfileProblem{QStringLiteral("vae"),
+                                  Text::tr("%1 (%2) does not fit: %3 takes only a VAE for %4 under \"%5\".")
+                                      .arg(fileName(file), whatFileIs(*info), preset->name, preset->optionalVae, fileFieldLabel(QStringLiteral("vae"), type)),
+                                  false, Text::tr("This is a %1; %2 takes only a VAE for %3.").arg(whatFileIs(*info), preset->name, preset->optionalVae)};
     }
     // Add-ons of the model's family.
     for (const QString &key : {QStringLiteral("control_net"), QStringLiteral("ip_adapter")}) {
@@ -439,11 +620,15 @@ QList<ProfileProblem> checkSdProfile(const ModelLibrary *library, const ServerPr
         if (!info || info->family.isEmpty() || addonFits(*preset, *info))
             continue;
         const QStringList fitting = key == QLatin1String("control_net") ? preset->controlNetFamilies : preset->ipAdapterFamilies;
-        out << ProfileProblem{key, fitting.isEmpty()
-                                       ? Text::tr("%1 is for %2 models and does not work with %3. Remove it from \"%4\".")
-                                             .arg(fileName(file), info->family, preset->name, optionLabel(key))
-                                       : Text::tr("%1 is for %2 models; %3 needs one for %4.")
-                                             .arg(fileName(file), info->family, preset->name, fitting.join(QStringLiteral(", ")))};
+        out << ProfileProblem{key,
+                              fitting.isEmpty() ? Text::tr("%1 is for %2 models and does not work with %3. Remove it from \"%4\".")
+                                                      .arg(fileName(file), info->family, preset->name, optionLabel(key))
+                                                : Text::tr("%1 is for %2 models; %3 needs one for %4.")
+                                                      .arg(fileName(file), info->family, preset->name, fitting.join(QStringLiteral(", "))),
+                              false,
+                              fitting.isEmpty() ? Text::tr("This is for %1 models and does not work with %2.").arg(info->family, preset->name)
+                                                : Text::tr("This is for %1 models; %2 needs one for %3.")
+                                                      .arg(info->family, preset->name, fitting.join(QStringLiteral(", ")))};
     }
     return out;
 }

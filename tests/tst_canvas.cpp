@@ -43,6 +43,7 @@
 #include "MockHttpServer.h"
 #include "ui/dialogs/CharacterLoraDialog.h"
 #include "plugins/characters/training/CloudTrainingPage.h"
+#include "runtime/Download.h"
 #include "runtime/ModelPresets.h"
 #include "ui/dialogs/LocalServersPage.h"
 #include "plugins/characters/training/LoraDatasetDialog.h"
@@ -100,7 +101,9 @@
 #include <QSpinBox>
 #include <QScopeGuard>
 #include <QSlider>
+#include <QTcpServer>
 #include <QTemporaryDir>
+#include <QTextDocumentFragment>
 #include <QTimer>
 #include <QToolButton>
 #include <QtTest>
@@ -190,6 +193,7 @@ private slots:
     void pluginsOff();
     void legacyPageSetting();
     void presetServerDialog();
+    void serverDialogModelTypes();
     void modelsFolderSettings();
     void promptModes();
     void promptBarSelectionEdit();
@@ -3703,15 +3707,121 @@ QByteArray shapedSafetensors(const QList<QPair<QString, QList<int>>> &tensors)
     return out + json + QByteArray(2 * 1024 * 1024, '\0');
 }
 
+// The headers of the model files the presets know, as the library reads them.
+using Tensors = QList<QPair<QString, QList<int>>>;
+Tensors kleinTensors(int textWidth)
+{
+    return {{QStringLiteral("img_in.weight"), {3072, 128}},
+            {QStringLiteral("txt_in.weight"), {3072, textWidth}},
+            {QStringLiteral("double_stream_modulation_img.lin.weight"), {18432, 3072}},
+            {QStringLiteral("double_blocks.0.img_attn.qkv.weight"), {9216, 3072}}};
+}
+Tensors flux1DevTensors()
+{
+    return {{QStringLiteral("img_in.weight"), {3072, 64}},
+            {QStringLiteral("txt_in.weight"), {3072, 4096}},
+            {QStringLiteral("double_blocks.0.img_attn.qkv.weight"), {9216, 3072}},
+            {QStringLiteral("guidance_in.in_layer.weight"), {3072, 256}}};
+}
+Tensors vaeTensors(int channels)
+{
+    return {{QStringLiteral("encoder.down_blocks.0.resnets.0.conv1.weight"), {128, 128, 3, 3}},
+            {QStringLiteral("decoder.conv_in.weight"), {512, channels, 3, 3}},
+            {QStringLiteral("decoder.up_blocks.0.resnets.0.conv1.weight"), {512, 512, 3, 3}}};
+}
+Tensors qwen3Tensors(int width)
+{
+    return {{QStringLiteral("model.embed_tokens.weight"), {151936, width}}, {QStringLiteral("model.layers.0.self_attn.q_norm.weight"), {128}}};
+}
+Tensors clipTensors(int width)
+{
+    return {{QStringLiteral("text_model.embeddings.token_embedding.weight"), {49408, width}},
+            {QStringLiteral("text_model.encoder.layers.0.mlp.fc1.weight"), {width * 4, width}}};
+}
+Tensors t5Tensors()
+{
+    return {{QStringLiteral("encoder.block.0.layer.0.SelfAttention.q.weight"), {4096, 4096}}, {QStringLiteral("shared.weight"), {32128, 4096}}};
+}
+Tensors sdxlTensors()
+{
+    return {{QStringLiteral("model.diffusion_model.input_blocks.0.0.weight"), {320, 4, 3, 3}},
+            {QStringLiteral("model.diffusion_model.label_emb.0.0.weight"), {1280, 2816}},
+            {QStringLiteral("conditioner.embedders.1.model.ln_final.weight"), {1280}}};
+}
+Tensors sdxlControlNetTensors()
+{
+    return {{QStringLiteral("control_model.input_blocks.0.0.weight"), {320, 4, 3, 3}},
+            {QStringLiteral("control_model.label_emb.0.0.weight"), {1280, 2816}},
+            {QStringLiteral("control_model.input_hint_block.0.weight"), {16, 3, 3, 3}}};
+}
+
+// The server dialog as a test drives it: a field by its option, its status line, typing a path.
+struct ServerDialogDriver
+{
+    ServerProfileDialog *dlg;
+
+    QLineEdit *field(const QString &key) const
+    {
+        for (QLineEdit *e : dlg->findChildren<QLineEdit *>()) {
+            if (e->property("optionKey").toString() == key)
+                return e;
+        }
+        return nullptr;
+    }
+    QString status(const QString &key) const
+    {
+        auto *l = dlg->findChild<QLabel *>(QStringLiteral("status-%1").arg(key));
+        return l && l->isVisible() ? QTextDocumentFragment::fromHtml(l->text()).toPlainText().replace(QChar(0xA0), u' ') : QString();
+    }
+    // The file fields shown, in their order.
+    QStringList shown() const
+    {
+        QStringList out;
+        for (const QString &key : runtime::sdFileOptions()) {
+            if (field(key) && field(key)->isVisible())
+                out << key;
+        }
+        return out;
+    }
+    // A path typed or pasted in, then the field left.
+    void type(const QString &key, const QString &path) const
+    {
+        QLineEdit *e = field(key);
+        e->setText(QDir::toNativeSeparators(path));
+        e->setModified(true);
+        emit e->editingFinished();
+    }
+    void chooseType(const QString &id) const
+    {
+        auto *combo = dlg->findChild<QComboBox *>(QStringLiteral("serverModelType"));
+        const int index = combo->findData(id);
+        combo->setCurrentIndex(index);
+        emit combo->activated(index);
+    }
+    QComboBox *typeCombo() const { return dlg->findChild<QComboBox *>(QStringLiteral("serverModelType")); }
+    QPushButton *ok() const { return dlg->findChild<QDialogButtonBox *>()->button(QDialogButtonBox::Ok); }
+    QLabel *problems() const { return dlg->findChild<QLabel *>(QStringLiteral("problems")); }
+    // The library menu of a field, as it opens.
+    QList<QAction *> library(const QString &key) const
+    {
+        auto *menu = dlg->findChild<QMenu *>(QStringLiteral("library-%1").arg(key));
+        emit menu->aboutToShow();
+        return menu->actions();
+    }
+};
+
 } // namespace
 
-// Choosing FLUX.2 klein in the Checkpoint field, as in the session of plan §17.1: the dialog
-// moves it to its slot, fills its VAE and text encoder, and refuses an SDXL ControlNet.
+// The server dialog of plan §17.5 with FLUX.2 [klein] 4B, chosen in the Checkpoint field as in the
+// session of plan §17.1: it picks its type, moves to its slot and gets its VAE and text encoder, each
+// with a status line; the launch settings and the command line are under a folded Advanced; the
+// saved server's provider gets the preset; a text encoder that does not fit keeps OK off; a missing
+// one shows with its size and a download.
 void TestCanvas::presetServerDialog()
 {
     Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
     QTemporaryDir comfy;
-    auto put = [&](const QString &rel, const QList<QPair<QString, QList<int>>> &tensors) {
+    auto put = [&](const QString &rel, const Tensors &tensors) {
         const QString path = QDir::cleanPath(comfy.filePath(rel));
         QDir().mkpath(QFileInfo(path).absolutePath());
         QFile f(path);
@@ -3719,26 +3829,15 @@ void TestCanvas::presetServerDialog()
             f.write(shapedSafetensors(tensors));
         return path;
     };
-    const QString klein = put(QStringLiteral("checkpoints/flux-2-klein-4b-fp8.safetensors"),
-                              {{QStringLiteral("img_in.weight"), {3072, 128}},
-                               {QStringLiteral("txt_in.weight"), {3072, 7680}},
-                               {QStringLiteral("double_stream_modulation_img.lin.weight"), {18432, 3072}},
-                               {QStringLiteral("double_blocks.0.img_attn.qkv.weight"), {9216, 3072}}});
-    const QString vae = put(QStringLiteral("vae/flux2-vae.safetensors"),
-                            {{QStringLiteral("encoder.down_blocks.0.resnets.0.conv1.weight"), {128, 128, 3, 3}},
-                             {QStringLiteral("decoder.conv_in.weight"), {512, 32, 3, 3}},
-                             {QStringLiteral("decoder.up_blocks.0.resnets.0.conv1.weight"), {512, 512, 3, 3}}});
-    const QString qwen = put(QStringLiteral("text_encoders/qwen_3_4b.safetensors"),
-                             {{QStringLiteral("model.embed_tokens.weight"), {151936, 2560}}, {QStringLiteral("model.layers.0.self_attn.q_norm.weight"), {128}}});
-    const QString controlNet = put(QStringLiteral("controlnet/xinsir-controlnet-openpose-sdxl-1.0.safetensors"),
-                                   {{QStringLiteral("control_model.input_blocks.0.0.weight"), {320, 4, 3, 3}},
-                                    {QStringLiteral("control_model.label_emb.0.0.weight"), {1280, 2816}},
-                                    {QStringLiteral("control_model.input_hint_block.0.weight"), {16, 3, 3, 3}}});
+    const QString klein = put(QStringLiteral("checkpoints/flux-2-klein-4b-fp8.safetensors"), kleinTensors(7680));
+    const QString vae = put(QStringLiteral("vae/flux2-vae.safetensors"), vaeTensors(32));
+    const QString qwen = put(QStringLiteral("text_encoders/qwen_3_4b.safetensors"), qwen3Tensors(2560));
+    const QString t5 = put(QStringLiteral("text_encoders/t5xxl_fp16.safetensors"), t5Tensors());
 
     Studio studio;
-    QSignalSpy scanned(studio.models(), &runtime::ModelLibrary::scanFinished);
     QVERIFY(studio.models()->addRoot(comfy.path()));
-    QTRY_VERIFY_WITH_TIMEOUT(studio.models()->entry(klein) && studio.models()->entry(qwen) && !studio.models()->isScanning(), 20000);
+    QTRY_VERIFY_WITH_TIMEOUT(studio.models()->entry(klein) && studio.models()->entry(qwen) && studio.models()->entry(t5) && !studio.models()->isScanning(),
+                             20000);
     auto removeRoot = qScopeGuard([&] { studio.models()->removeRoot(comfy.path()); });
     runtime::InstalledRuntime rt;
     rt.id = QStringLiteral("adopted/test-sdcpp");
@@ -3751,35 +3850,50 @@ void TestCanvas::presetServerDialog()
     ServerProfileDialog dlg(&studio, profile, true);
     dlg.show();
     QVERIFY(QTest::qWaitForWindowExposed(&dlg));
-    auto field = [&dlg](const QString &key) -> QLineEdit * {
-        for (QLineEdit *e : dlg.findChildren<QLineEdit *>()) {
-            if (e->property("optionKey").toString() == key)
-                return e;
-        }
-        return nullptr;
-    };
-    QPushButton *ok = dlg.findChild<QDialogButtonBox *>()->button(QDialogButtonBox::Ok);
-    QVERIFY(ok);
-    auto *info = dlg.findChild<QLabel *>(QStringLiteral("modelInfo"));
-    auto *problems = dlg.findChild<QLabel *>(QStringLiteral("problems"));
-    QVERIFY(info && problems);
+    const ServerDialogDriver d{&dlg};
+    QPushButton *ok = d.ok();
+    QLabel *problems = d.problems();
+    QVERIFY(ok && problems);
 
-    // The user's choice: the klein file under Checkpoint.
-    QLineEdit *model = field(QStringLiteral("model"));
-    QVERIFY(model);
-    model->setText(QDir::toNativeSeparators(klein));
-    emit model->editingFinished();
+    // A new server without a model: the type is Other, with every field; the memory and the port. The
+    // launch settings and the command line are under Advanced, folded.
+    auto *memory = dlg.findChild<QComboBox *>(QStringLiteral("serverMemory"));
+    auto *advanced = dlg.findChild<QToolButton *>(QStringLiteral("serverAdvanced"));
+    auto *advancedOptions = dlg.findChild<QWidget *>(QStringLiteral("serverAdvancedOptions"));
+    QVERIFY(memory && advanced && advancedOptions && d.typeCombo());
+    QCOMPARE(dlg.modelType(), QString());
+    QCOMPARE(d.typeCombo()->currentText(), QStringLiteral("Other (every field)"));
+    QCOMPARE(d.shown(), runtime::sdFileOptions());
+    QVERIFY(memory->isVisible() && advanced->isVisible());
+    QVERIFY(!advanced->isChecked() && !advancedOptions->isVisible());
+    QVERIFY(!dlg.findChild<QPlainTextEdit *>()->isVisible()); // the command line
+
+    // The klein file in the Checkpoint field: its type, its slot, its VAE and its text encoder, found.
+    d.type(QStringLiteral("model"), klein);
+    QCOMPARE(dlg.modelType(), QStringLiteral("flux2-klein-4b"));
+    QCOMPARE(d.typeCombo()->currentText(), QStringLiteral("FLUX.2 [klein] 4B"));
     runtime::ServerProfile chosen = dlg.profile();
     QCOMPARE(chosen.options.value(QStringLiteral("diffusion_model")).toString(), QDir::toNativeSeparators(klein));
-    QVERIFY(chosen.options.value(QStringLiteral("model")).toString().isEmpty());
+    QVERIFY(!chosen.options.contains(QStringLiteral("model")));
     QCOMPARE(chosen.options.value(QStringLiteral("vae")).toString(), QDir::toNativeSeparators(vae));
     QCOMPARE(chosen.options.value(QStringLiteral("llm")).toString(), QDir::toNativeSeparators(qwen));
-    QVERIFY(info->isVisible());
-    QVERIFY2(info->text().contains(QLatin1String("FLUX.2 [klein] 4B")) && info->text().contains(QLatin1String("qwen_3_4b.safetensors")), qPrintable(info->text()));
+    QCOMPARE(d.shown(), (QStringList{QStringLiteral("diffusion_model"), QStringLiteral("vae"), QStringLiteral("llm"), QStringLiteral("lora_dir"),
+                                     QStringLiteral("upscalers_dir")}));
+    QCOMPARE(d.field(QStringLiteral("llm"))->accessibleName(), QStringLiteral("Text encoder (Qwen3 4B)"));
+    QVERIFY2(d.status(QStringLiteral("diffusion_model")).startsWith(QStringLiteral("✓ FLUX.2 [klein] 4B: Generates and edits")),
+             qPrintable(d.status(QStringLiteral("diffusion_model"))));
+    QCOMPARE(d.status(QStringLiteral("vae")), QStringLiteral("✓ Found"));
+    QCOMPARE(d.status(QStringLiteral("llm")), QStringLiteral("✓ Found"));
     QVERIFY(!problems->isVisible());
     QVERIFY(ok->isEnabled());
+    QVERIFY(!advancedOptions->isVisible()); // nothing unfolds by itself
     const runtime::LaunchCommand cmd = runtime::buildLaunch(chosen, rt);
     QVERIFY(cmd.arguments.contains(QStringLiteral("--diffusion-model")) && !cmd.arguments.contains(QStringLiteral("-m")));
+    advanced->click();
+    QVERIFY(advancedOptions->isVisible() && dlg.findChild<QPlainTextEdit *>()->isVisible());
+    QVERIFY(dlg.findChild<QPlainTextEdit *>()->toPlainText().contains(QLatin1String("--llm")));
+    advanced->click();
+    QVERIFY(!advancedOptions->isVisible());
 
     // Saved as a server with a provider: the provider knows the preset, so it offers instruction
     // edits and the prompt style takes klein's 4 steps at CFG 1.
@@ -3801,26 +3915,304 @@ void TestCanvas::presetServerDialog()
     QCOMPARE(kleinStyle.steps, 4);
     QCOMPARE(kleinStyle.cfg, 1.0);
 
-    // An SDXL ControlNet does not fit: named, and the server cannot be saved like that.
-    field(QStringLiteral("control_net"))->setText(QDir::toNativeSeparators(controlNet));
-    QVERIFY(problems->isVisible());
-    QVERIFY2(problems->text().contains(QLatin1String("does not work with FLUX.2 [klein] 4B")), qPrintable(problems->text()));
+    // A T5 encoder chosen for klein's text encoder does not fit: said next to the field (once), and
+    // the server cannot be saved like that. The file stays as chosen.
+    d.type(QStringLiteral("llm"), t5);
+    QCOMPARE(d.field(QStringLiteral("llm"))->text(), QDir::toNativeSeparators(t5));
+    QCOMPARE(d.status(QStringLiteral("llm")), QStringLiteral("✗ This is a T5 text encoder; FLUX.2 [klein] 4B needs a Qwen3 4B text encoder."));
+    QVERIFY(!problems->isVisible());
     QVERIFY(!ok->isEnabled());
-    field(QStringLiteral("control_net"))->clear();
+    d.type(QStringLiteral("llm"), qwen);
     QVERIFY(ok->isEnabled());
 
-    // Without a text encoder in the library: named with its size, a download is offered, and saving
+    // Without a text encoder in the library: missing with its size, a download is offered, and saving
     // stays possible.
     QVERIFY(QFile::remove(qwen));
     studio.models()->rescan();
     QTRY_VERIFY_WITH_TIMEOUT(!studio.models()->entry(qwen) && !studio.models()->isScanning(), 20000);
-    field(QStringLiteral("llm"))->clear();
-    QVERIFY(problems->isVisible());
-    QVERIFY2(problems->text().contains(QLatin1String("Qwen3 4B text encoder")), qPrintable(problems->text()));
+    d.field(QStringLiteral("llm"))->clear();
+    QCOMPARE(d.status(QStringLiteral("llm")), QStringLiteral("✗ Missing (qwen_3_4b.safetensors, 7.5 GB)"));
+    QCOMPARE(d.status(QStringLiteral("vae")), QStringLiteral("✓ Found"));
+    QVERIFY(!problems->isVisible());
     QVERIFY(ok->isEnabled());
     auto *download = dlg.findChild<QPushButton *>(QStringLiteral("downloadMissing"));
     QVERIFY(download && download->isVisible());
-    QVERIFY2(download->text().contains(QLatin1String("GB")), qPrintable(download->text()));
+    QCOMPARE(download->text(), QStringLiteral("Download missing files (7.5 GB)"));
+
+    // Downloading it (from a server that never answers): the line says it will be downloaded, until
+    // the download stops.
+    QTcpServer silent;
+    QVERIFY(silent.listen(QHostAddress::LocalHost));
+    const QString silentUrl = QStringLiteral("http://127.0.0.1:%1").arg(silent.serverPort());
+    studio.hub()->setBaseUrls(silentUrl, silentUrl);
+    QStringList parts;
+    for (const runtime::ModelCompanion &c : runtime::companionsOf(studio.models(), klein)) {
+        if (c.missing())
+            parts << runtime::FileDownload::partPath(studio.hub()->destinationFor(runtime::companionDownload(*studio.models()->entry(klein), c.file)));
+    }
+    auto removeParts = qScopeGuard([&] {
+        for (const QString &part : std::as_const(parts))
+            QFile::remove(part);
+    });
+    download->click();
+    QCOMPARE(d.status(QStringLiteral("llm")), QStringLiteral("↓ Will be downloaded (qwen_3_4b.safetensors, 7.5 GB)"));
+    QVERIFY(!download->isVisible());
+    QVERIFY(ok->isEnabled());
+    studio.jobs()->cancelAll();
+    QTRY_COMPARE(d.status(QStringLiteral("llm")), QStringLiteral("✗ Missing (qwen_3_4b.safetensors, 7.5 GB)"));
+    QVERIFY(download->isVisible());
+}
+
+// The user's request (plan §17.5): the sd.cpp server dialog shows the fields of the model's type.
+// Each type shows exactly its files; a model file chooses its type; the type can be changed by hand;
+// a text encoder chosen by hand is kept, saved and on the command line; a field the type does not
+// have is not saved; the library lists the files that fit first; an existing profile opens with its
+// type; a file can be dropped on a field.
+void TestCanvas::serverDialogModelTypes()
+{
+    Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
+    QTemporaryDir comfy;
+    auto put = [&](const QString &rel, const Tensors &tensors) {
+        const QString path = QDir::cleanPath(comfy.filePath(rel));
+        QDir().mkpath(QFileInfo(path).absolutePath());
+        QFile f(path);
+        if (f.open(QIODevice::WriteOnly))
+            f.write(shapedSafetensors(tensors));
+        return path;
+    };
+    const QString klein = put(QStringLiteral("diffusion_models/flux-2-klein-4b.safetensors"), kleinTensors(7680));
+    const QString flux1 = put(QStringLiteral("diffusion_models/flux1-dev.safetensors"), flux1DevTensors());
+    const QString sdxl = put(QStringLiteral("checkpoints/juggernautXL.safetensors"), sdxlTensors());
+    const QString flux2Vae = put(QStringLiteral("vae/flux2-vae.safetensors"), vaeTensors(32));
+    const QString flux1Vae = put(QStringLiteral("vae/ae.safetensors"), vaeTensors(16));
+    const QString qwen4b = put(QStringLiteral("text_encoders/qwen_3_4b.safetensors"), qwen3Tensors(2560));
+    const QString qwen8b = put(QStringLiteral("text_encoders/qwen_3_8b.safetensors"), qwen3Tensors(4096));
+    // Text encoders of the user's own, chosen by hand.
+    const QString myQwen = put(QStringLiteral("text_encoders/my-qwen3-4b-q8.safetensors"), qwen3Tensors(2560));
+    const QString myT5 = put(QStringLiteral("text_encoders/my-t5-encoder.safetensors"), t5Tensors());
+    const QString t5 = put(QStringLiteral("text_encoders/t5xxl_fp16.safetensors"), t5Tensors());
+    const QString clipL = put(QStringLiteral("clip/clip_l.safetensors"), clipTensors(768));
+    put(QStringLiteral("clip/clip_g.safetensors"), clipTensors(1280));
+    const QString controlNet = put(QStringLiteral("controlnet/xinsir-controlnet-openpose-sdxl-1.0.safetensors"), sdxlControlNetTensors());
+
+    Studio studio;
+    QVERIFY(studio.models()->addRoot(comfy.path()));
+    QTRY_VERIFY_WITH_TIMEOUT(studio.models()->entry(klein) && studio.models()->entry(controlNet) && studio.models()->entry(myT5)
+                                 && !studio.models()->isScanning(),
+                             20000);
+    auto removeRoot = qScopeGuard([&] { studio.models()->removeRoot(comfy.path()); });
+    runtime::InstalledRuntime rt;
+    rt.id = QStringLiteral("adopted/test-sdcpp");
+    rt.kind = QStringLiteral("sd.cpp");
+    rt.executable = comfy.filePath(QStringLiteral("sd-server.exe"));
+    studio.runtimes()->addInstalled(rt);
+    auto removeRuntime = qScopeGuard([&] { studio.runtimes()->remove(rt.id); });
+    const runtime::ServerProfile empty = studio.servers()->createProfile(rt.id, QStringLiteral("Images"));
+    auto native = [](const QString &path) { return QDir::toNativeSeparators(path); };
+    auto argument = [](const runtime::LaunchCommand &cmd, const QString &flag) {
+        const int i = int(cmd.arguments.indexOf(flag));
+        return i >= 0 ? cmd.arguments.value(i + 1) : QString();
+    };
+    const QStringList kleinFields{QStringLiteral("diffusion_model"), QStringLiteral("vae"), QStringLiteral("llm"), QStringLiteral("lora_dir"),
+                                  QStringLiteral("upscalers_dir")};
+    const QStringList flux1Fields{QStringLiteral("diffusion_model"), QStringLiteral("vae"),     QStringLiteral("clip_l"),
+                                  QStringLiteral("t5xxl"),           QStringLiteral("lora_dir"), QStringLiteral("upscalers_dir")};
+    const QStringList sdxlFields{QStringLiteral("model"),       QStringLiteral("vae"),         QStringLiteral("control_net"), QStringLiteral("ip_adapter"),
+                                 QStringLiteral("clip_vision"), QStringLiteral("lora_dir"), QStringLiteral("upscalers_dir")};
+
+    {
+        ServerProfileDialog dlg(&studio, empty, true);
+        dlg.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&dlg));
+        const ServerDialogDriver d{&dlg};
+        // Every type of the presets, by name, and Other.
+        QStringList types;
+        for (int i = 0; i < d.typeCombo()->count(); ++i)
+            types << d.typeCombo()->itemText(i);
+        QCOMPARE(types.size(), int(runtime::modelTypes().size()) + 1);
+        QCOMPARE(types.last(), QStringLiteral("Other (every field)"));
+        QVERIFY(types.contains(QStringLiteral("FLUX.1 (dev, schnell, Kontext; separate files)")) && types.contains(QStringLiteral("FLUX.2 [klein] 4B"))
+                && types.contains(QStringLiteral("SDXL (also Illustrious, NoobAI, Pony)")));
+
+        // Each type by hand: exactly its fields, labelled with what they expect.
+        d.chooseType(QStringLiteral("flux1"));
+        QCOMPARE(d.shown(), flux1Fields);
+        QCOMPARE(d.field(QStringLiteral("clip_l"))->accessibleName(), QStringLiteral("Text encoder (CLIP-L)"));
+        QCOMPARE(d.field(QStringLiteral("t5xxl"))->accessibleName(), QStringLiteral("Text encoder (T5-XXL)"));
+        d.chooseType(QStringLiteral("flux2-klein-4b"));
+        QCOMPARE(d.shown(), kleinFields);
+        QCOMPARE(d.field(QStringLiteral("llm"))->accessibleName(), QStringLiteral("Text encoder (Qwen3 4B)"));
+        d.chooseType(QStringLiteral("flux2-klein-9b"));
+        QCOMPARE(d.field(QStringLiteral("llm"))->accessibleName(), QStringLiteral("Text encoder (Qwen3 8B)"));
+        d.chooseType(QStringLiteral("sdxl"));
+        QCOMPARE(d.shown(), sdxlFields);
+        QCOMPARE(d.field(QStringLiteral("vae"))->accessibleName(), QStringLiteral("VAE (optional)"));
+        d.chooseType(QString());
+        QCOMPARE(d.shown(), runtime::sdFileOptions());
+
+        // Choosing the klein file from the library (every diffusion model is listed while the type is
+        // Other) selects its type and fills its files.
+        QAction *kleinAction = nullptr;
+        for (QAction *a : d.library(QStringLiteral("diffusion_model"))) {
+            if (a->toolTip() == native(klein))
+                kleinAction = a;
+        }
+        QVERIFY(kleinAction);
+        kleinAction->trigger();
+        QCOMPARE(dlg.modelType(), QStringLiteral("flux2-klein-4b"));
+        QCOMPARE(d.shown(), kleinFields);
+        QCOMPARE(d.field(QStringLiteral("vae"))->text(), native(flux2Vae));
+        QCOMPARE(d.field(QStringLiteral("llm"))->text(), native(qwen4b));
+
+        // The text encoder's library menu: the Qwen3 4B files first, then the other text encoders
+        // under a line that says they may not fit.
+        const QList<QAction *> encoders = d.library(QStringLiteral("llm"));
+        QStringList order;
+        int heading = -1;
+        for (int i = 0; i < encoders.size(); ++i) {
+            if (encoders[i]->isSeparator())
+                continue;
+            if (!encoders[i]->isEnabled()) {
+                QCOMPARE(encoders[i]->text(), QStringLiteral("Other files of this kind (they may not fit):"));
+                heading = int(order.size());
+                continue;
+            }
+            order << encoders[i]->toolTip();
+        }
+        QCOMPARE(heading, 2);
+        QCOMPARE(QSet<QString>(order.cbegin(), order.cbegin() + 2), (QSet<QString>{native(qwen4b), native(myQwen)}));
+        QVERIFY(order.mid(2).contains(native(qwen8b)) && order.mid(2).contains(native(t5)) && order.mid(2).contains(native(clipL)));
+        // One that does not fit can still be chosen; it is named, and OK stays off.
+        for (QAction *a : encoders) {
+            if (a->toolTip() == native(qwen8b))
+                a->trigger();
+        }
+        QCOMPARE(d.field(QStringLiteral("llm"))->text(), native(qwen8b));
+        QCOMPARE(d.status(QStringLiteral("llm")), QStringLiteral("✗ This is a Qwen3 8B text encoder; FLUX.2 [klein] 4B needs a Qwen3 4B text encoder."));
+        QVERIFY(!d.ok()->isEnabled());
+        QVERIFY(!d.problems()->isVisible()); // said once, next to its field
+
+        // A text encoder of the user's own for FLUX.2, typed in: kept, saved and on the command line.
+        d.type(QStringLiteral("llm"), myQwen);
+        QCOMPARE(d.status(QStringLiteral("llm")), QStringLiteral("✓ Found"));
+        QVERIFY(d.ok()->isEnabled());
+        runtime::ServerProfile p = dlg.profile();
+        QCOMPARE(p.options.value(QStringLiteral("llm")).toString(), native(myQwen));
+        QCOMPARE(argument(runtime::buildLaunch(p, rt), QStringLiteral("--llm")), native(myQwen));
+
+        // The type changed by hand to FLUX.1: its fields; the klein file is not a FLUX.1 model, which
+        // its line says, and the FLUX.2 text encoder is no longer saved.
+        d.chooseType(QStringLiteral("flux1"));
+        QCOMPARE(d.shown(), flux1Fields);
+        QCOMPARE(d.status(QStringLiteral("diffusion_model")),
+                 QStringLiteral("✗ This is a FLUX.2 [klein] 4B model: choose its type, FLUX.2 [klein] 4B."));
+        QVERIFY(!d.ok()->isEnabled());
+        QVERIFY(!dlg.profile().options.contains(QStringLiteral("llm")));
+        // A FLUX.1 model typed in: its VAE (the FLUX.2 one does not fit), CLIP-L and T5-XXL.
+        d.type(QStringLiteral("diffusion_model"), flux1);
+        QCOMPARE(dlg.modelType(), QStringLiteral("flux1"));
+        QCOMPARE(d.field(QStringLiteral("vae"))->text(), native(flux1Vae));
+        QCOMPARE(d.field(QStringLiteral("clip_l"))->text(), native(clipL));
+        QVERIFY(!d.field(QStringLiteral("t5xxl"))->text().isEmpty());
+        QVERIFY(d.ok()->isEnabled());
+        // A T5 encoder of the user's own for FLUX.1: kept, saved and on the command line; the FLUX.2
+        // text encoder typed before is not.
+        d.type(QStringLiteral("t5xxl"), myT5);
+        p = dlg.profile();
+        QCOMPARE(p.options.value(QStringLiteral("t5xxl")).toString(), native(myT5));
+        QVERIFY(!p.options.contains(QStringLiteral("llm")));
+        runtime::LaunchCommand cmd = runtime::buildLaunch(p, rt);
+        QCOMPARE(argument(cmd, QStringLiteral("--t5xxl")), native(myT5));
+        QCOMPARE(argument(cmd, QStringLiteral("--clip_l")), native(clipL));
+        QCOMPARE(argument(cmd, QStringLiteral("--diffusion-model")), native(flux1));
+        QVERIFY(!cmd.arguments.contains(QStringLiteral("--llm")));
+        // A new model of the same type keeps the encoder chosen by hand.
+        d.type(QStringLiteral("diffusion_model"), flux1);
+        QCOMPARE(d.field(QStringLiteral("t5xxl"))->text(), native(myT5));
+        // Back to FLUX.2 [klein] 4B by hand: what was typed there is back.
+        d.chooseType(QStringLiteral("flux2-klein-4b"));
+        QCOMPARE(d.field(QStringLiteral("llm"))->text(), native(myQwen));
+        d.chooseType(QStringLiteral("flux1"));
+
+        // An SDXL checkpoint typed into the Diffusion model field: its type, and it moves to the
+        // Checkpoint field. The FLUX.1 VAE does not fit in place of its own; the FLUX.1 encoders are
+        // not saved.
+        d.type(QStringLiteral("diffusion_model"), sdxl);
+        QCOMPARE(dlg.modelType(), QStringLiteral("sdxl"));
+        QCOMPARE(d.shown(), sdxlFields);
+        QCOMPARE(d.field(QStringLiteral("model"))->text(), native(sdxl));
+        QCOMPARE(d.status(QStringLiteral("vae")), QStringLiteral("✗ This is a FLUX / SD 3 VAE; SDXL takes only a VAE for SD / SDXL."));
+        QVERIFY(!d.ok()->isEnabled());
+        d.field(QStringLiteral("vae"))->clear();
+        QVERIFY(d.ok()->isEnabled());
+        p = dlg.profile();
+        QVERIFY(!p.options.contains(QStringLiteral("t5xxl")) && !p.options.contains(QStringLiteral("clip_l")) && !p.options.contains(QStringLiteral("diffusion_model")));
+        cmd = runtime::buildLaunch(p, rt);
+        QCOMPARE(argument(cmd, QStringLiteral("-m")), native(sdxl));
+        QVERIFY(!cmd.arguments.contains(QStringLiteral("--t5xxl")));
+        // Its ControlNet menu: the SDXL ControlNet fits.
+        const QList<QAction *> controlNets = d.library(QStringLiteral("control_net"));
+        QVERIFY(!controlNets.isEmpty() && controlNets.first()->toolTip() == native(controlNet));
+        // Other: every field again, and every one saved.
+        d.chooseType(QString());
+        QCOMPARE(d.shown(), runtime::sdFileOptions());
+        QCOMPARE(dlg.profile().options.value(QStringLiteral("t5xxl")).toString(), native(myT5));
+    }
+
+    // Existing profiles open with their model's type; Other when the model is in the other slot (the
+    // profile of plan §17.1) or a file has no place in its type (an SDXL ControlNet with FLUX.2).
+    auto openedAs = [&](const QVariantMap &options) {
+        runtime::ServerProfile p = empty;
+        p.options = options;
+        ServerProfileDialog dlg(&studio, p, false);
+        return dlg.modelType();
+    };
+    QCOMPARE(openedAs({{QStringLiteral("diffusion_model"), native(flux1)},
+                       {QStringLiteral("vae"), native(flux1Vae)},
+                       {QStringLiteral("clip_l"), native(clipL)},
+                       {QStringLiteral("t5xxl"), native(myT5)}}),
+             QStringLiteral("flux1"));
+    QCOMPARE(openedAs({{QStringLiteral("diffusion_model"), native(klein)}, {QStringLiteral("llm"), native(myQwen)}}), QStringLiteral("flux2-klein-4b"));
+    QCOMPARE(openedAs({{QStringLiteral("model"), native(sdxl)}, {QStringLiteral("control_net"), native(controlNet)}}), QStringLiteral("sdxl"));
+    QCOMPARE(openedAs({{QStringLiteral("model"), native(klein)}}), QString());
+    QCOMPARE(openedAs({{QStringLiteral("diffusion_model"), native(klein)}, {QStringLiteral("control_net"), native(controlNet)}}), QString());
+    {
+        // The profile of plan §17.1 in Other: the Checkpoint field says where the file belongs, and
+        // the type moves it there.
+        runtime::ServerProfile p = empty;
+        p.options = {{QStringLiteral("model"), native(klein)}};
+        ServerProfileDialog dlg(&studio, p, false);
+        dlg.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&dlg));
+        const ServerDialogDriver d{&dlg};
+        QCOMPARE(d.status(QStringLiteral("model")),
+                 QStringLiteral("✗ This is a diffusion model (FLUX.2 Klein 4B), not a complete checkpoint: it belongs under \"Diffusion model\"."));
+        QVERIFY(!d.ok()->isEnabled());
+        d.chooseType(QStringLiteral("flux2-klein-4b"));
+        QCOMPARE(d.field(QStringLiteral("diffusion_model"))->text(), native(klein));
+        QVERIFY(d.field(QStringLiteral("model"))->text().isEmpty());
+        QCOMPARE(d.field(QStringLiteral("vae"))->text(), native(flux2Vae));
+        QCOMPARE(d.field(QStringLiteral("llm"))->text(), native(qwen4b));
+        QVERIFY(d.ok()->isEnabled());
+    }
+    {
+        // A model file dropped on its field chooses the type too.
+        ServerProfileDialog dlg(&studio, empty, true);
+        dlg.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&dlg));
+        const ServerDialogDriver d{&dlg};
+        QMimeData mime;
+        mime.setUrls({QUrl::fromLocalFile(klein)});
+        QLineEdit *target = d.field(QStringLiteral("diffusion_model"));
+        QDragEnterEvent enter(target->rect().center(), Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
+        QCoreApplication::sendEvent(target, &enter);
+        QVERIFY(enter.isAccepted());
+        QDropEvent drop(QPointF(target->rect().center()), Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
+        QCoreApplication::sendEvent(target, &drop);
+        QCOMPARE(dlg.modelType(), QStringLiteral("flux2-klein-4b"));
+        QCOMPARE(target->text(), native(klein));
+        QCOMPARE(d.field(QStringLiteral("llm"))->text(), native(qwen4b));
+    }
 }
 
 void TestCanvas::modelsFolderSettings()

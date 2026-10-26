@@ -2,6 +2,7 @@
   "version": 1,
   "comment": "FLUX.1 dev, schnell and Kontext dev as stable-diffusion.cpp's docs/flux.md and docs/kontext.md run them: the diffusion model plus the FLUX.1 VAE (ae.safetensors), CLIP-L and T5-XXL, at CFG 1. The VAE is Black Forest Labs' ae.safetensors (Apache-2.0) from the ungated Comfy-Org copy; the text encoders from comfyanonymous/flux_text_encoders. A single-file checkpoint carries its encoders and VAE.",
   "docs": "https://github.com/leejet/stable-diffusion.cpp/blob/f89d9b13d730eabeede7314ce49dacd18d3c90c2/docs/flux.md",
+  "types": {"flux1": "FLUX.1 (dev, schnell, Kontext; separate files)"},
   "files": {
     "flux1-vae": {
       "repo": "Comfy-Org/z_image_turbo",
@@ -32,6 +33,7 @@
     {
       "id": "flux1-kontext-dev",
       "name": "FLUX.1 Kontext [dev]",
+      "type": "flux1",
       "note": "Edits an image from an instruction, at CFG 1.",
       "docs": "https://github.com/leejet/stable-diffusion.cpp/blob/f89d9b13d730eabeede7314ce49dacd18d3c90c2/docs/kontext.md",
       "match": {"family": "FLUX", "variant": "Dev", "kinds": ["diffusion_model"], "name_any": ["kontext"]},
@@ -47,6 +49,7 @@
     {
       "id": "flux1-dev",
       "name": "FLUX.1 [dev]",
+      "type": "flux1",
       "note": "Guidance-distilled: CFG 1 with distilled guidance 3.5 (no negative prompt).",
       "match": {"family": "FLUX", "variant": "Dev", "kinds": ["diffusion_model"]},
       "slots": [
@@ -61,6 +64,7 @@
     {
       "id": "flux1-schnell",
       "name": "FLUX.1 [schnell]",
+      "type": "flux1",
       "note": "4 steps at CFG 1 (no negative prompt).",
       "match": {"family": "FLUX", "variant": "Schnell", "kinds": ["diffusion_model"]},
       "slots": [
@@ -77,6 +81,7 @@
       "name": "FLUX.1 (single file)",
       "note": "A checkpoint with the text encoders and the VAE inside: CFG 1 (no negative prompt).",
       "match": {"family": "FLUX", "kinds": ["checkpoint"]},
+      "optional_vae": "FLUX / SD 3",
       "can": {"generate": true, "edit": false, "inpaint": true, "negative_prompt": false, "loras": true, "control_net": [], "ip_adapter": []},
       "sampling": {"cfg": 1.0, "sampler": "euler", "native_resolution": 1024, "dialect": "natural"},
       "vram": {"small": {"weight_type": "q4_K", "clip_on_cpu": true}, "medium": {"clip_on_cpu": true}}

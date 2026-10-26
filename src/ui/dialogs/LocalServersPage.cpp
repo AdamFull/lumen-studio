@@ -26,11 +26,11 @@
 #include <QDialogButtonBox>
 #include <QDir>
 #include <QDoubleSpinBox>
+#include <QDropEvent>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFontDatabase>
 #include <QFormLayout>
-#include <QGroupBox>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
@@ -38,9 +38,11 @@
 #include <QLocale>
 #include <QMenu>
 #include <QMessageBox>
+#include <QMimeData>
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QScrollBar>
 #include <QSpinBox>
 #include <QStandardItemModel>
 #include <QTableWidget>
@@ -838,6 +840,121 @@ void InstallRuntimeDialog::updatePlan()
 
 // ---- ServerProfileDialog --------------------------------------------------------------------------
 
+namespace {
+
+// A path field that also takes a file dropped on it (a line edit would insert its URL as text).
+class PathEdit : public QLineEdit
+{
+public:
+    PathEdit(const QString &text, QWidget *parent)
+        : QLineEdit(text, parent)
+    {
+    }
+
+    std::function<void(const QString &)> dropped;
+
+protected:
+    void dragEnterEvent(QDragEnterEvent *e) override
+    {
+        if (!localPath(e->mimeData()).isEmpty())
+            e->acceptProposedAction();
+        else
+            QLineEdit::dragEnterEvent(e);
+    }
+    void dragMoveEvent(QDragMoveEvent *e) override
+    {
+        if (!localPath(e->mimeData()).isEmpty())
+            e->acceptProposedAction();
+        else
+            QLineEdit::dragMoveEvent(e);
+    }
+    void dropEvent(QDropEvent *e) override
+    {
+        const QString path = localPath(e->mimeData());
+        if (path.isEmpty()) {
+            QLineEdit::dropEvent(e);
+            return;
+        }
+        e->acceptProposedAction();
+        setText(QDir::toNativeSeparators(path));
+        if (dropped)
+            dropped(path);
+    }
+
+private:
+    static QString localPath(const QMimeData *mime)
+    {
+        if (!mime || !mime->hasUrls() || mime->urls().size() != 1)
+            return {};
+        return mime->urls().first().toLocalFile();
+    }
+};
+
+// A field's status line under it: wrapped, and as tall as its text at the width it has (a form
+// gives a label the height of its size hint, which QLabel works out for a narrower width, so a
+// line of text stood in a box three lines high).
+class StatusLabel : public QLabel
+{
+public:
+    explicit StatusLabel(QWidget *parent)
+        : QLabel(parent)
+    {
+        setProperty("role", QStringLiteral("muted"));
+        setWordWrap(true);
+        setTextFormat(Qt::RichText);
+        setAlignment(Qt::AlignLeft | Qt::AlignTop);
+    }
+    QSize sizeHint() const override { return QSize(0, width() > 0 ? heightForWidth(width()) : QLabel::sizeHint().height()); }
+    QSize minimumSizeHint() const override { return sizeHint(); }
+
+protected:
+    void resizeEvent(QResizeEvent *e) override
+    {
+        QLabel::resizeEvent(e);
+        if (e->size().width() != e->oldSize().width())
+            updateGeometry();
+    }
+};
+
+// A field's status: a mark in the colour of its state, then the words.
+QString statusLine(const QString &mark, const QColor &color, const QString &text)
+{
+    return QStringLiteral("<span style='color:%1'>%2</span>&nbsp;%3").arg(color.name(), mark, text.toHtmlEscaped());
+}
+
+QString cleanPath(const QString &path)
+{
+    return path.trimmed().isEmpty() ? QString() : QDir::cleanPath(QDir::fromNativeSeparators(path.trimmed()));
+}
+
+QFormLayout *newForm()
+{
+    auto *form = new QFormLayout;
+    form->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    return form;
+}
+
+bool isFileField(const OptionField &f)
+{
+    return f.type == OptionField::Type::File || f.type == OptionField::Type::Directory;
+}
+
+// sd.cpp's two slots for the model file.
+bool isModelSlot(const QString &key)
+{
+    return key == QLatin1String("model") || key == QLatin1String("diffusion_model");
+}
+
+// sd.cpp file options that are add-ons rather than the model's own files.
+bool isAddon(const QString &key)
+{
+    static const QStringList addons{QStringLiteral("control_net"), QStringLiteral("ip_adapter"), QStringLiteral("clip_vision"),
+                                    QStringLiteral("lora_dir"), QStringLiteral("upscalers_dir")};
+    return addons.contains(key);
+}
+
+} // namespace
+
 ServerProfileDialog::ServerProfileDialog(Studio *studio, const runtime::ServerProfile &profile, bool isNew, QWidget *parent)
     : QDialog(parent)
     , m_studio(studio)
@@ -845,113 +962,143 @@ ServerProfileDialog::ServerProfileDialog(Studio *studio, const runtime::ServerPr
     , m_isNew(isNew)
 {
     setWindowTitle(isNew ? tr("New server") : tr("Server settings"));
-    // Within the screen (1080p at 150 % leaves 1280 × 680): the fields scroll, the buttons stay.
-    resizeWithinScreen(this, QSize(640, 720));
     auto *outer = new QVBoxLayout(this);
-    auto *scroll = new QScrollArea(this);
-    scroll->setWidgetResizable(true);
-    scroll->setFrameShape(QFrame::NoFrame);
-    auto *content = new QWidget(scroll);
-    scroll->setWidget(content);
-    outer->addWidget(scroll, 1);
-    auto *v = new QVBoxLayout(content);
+    // Everything but the buttons scrolls, so they stay in sight on a small screen.
+    m_content = new QWidget(this);
+    m_scroll = verticalScroll(m_content, this);
+    outer->addWidget(m_scroll, 1);
+    auto *v = new QVBoxLayout(m_content);
     v->setContentsMargins(4, 4, 4, 4);
+    v->setSpacing(8);
 
-    auto *form = new QFormLayout;
-    form->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    m_name = new QLineEdit(profile.name, content);
-    form->addRow(tr("Name"), m_name);
-    m_runtime = new QComboBox(content);
+    m_form = newForm();
+    m_name = new QLineEdit(profile.name, m_content);
+    m_form->addRow(tr("Name"), m_name);
+    m_runtime = new QComboBox(m_content);
     for (const runtime::InstalledRuntime &rt : m_studio->runtimes()->runtimes())
         m_runtime->addItem(Icons::get(QStringLiteral("server")), rt.displayName(), rt.id);
     m_runtime->setCurrentIndex(std::max(0, m_runtime->findData(profile.runtimeId)));
-    form->addRow(tr("Program"), m_runtime);
-    m_port = new QSpinBox(content);
-    m_port->setRange(1024, 65535);
-    m_port->setValue(profile.port);
-    form->addRow(tr("Port"), m_port);
-    m_start = new QComboBox(content);
-    for (runtime::StartPolicy p : {runtime::StartPolicy::OnDemand, runtime::StartPolicy::AtStartup, runtime::StartPolicy::Manual})
-        m_start->addItem(startLabel(p), runtime::startPolicyKey(p));
-    m_start->setCurrentIndex(std::max(0, m_start->findData(runtime::startPolicyKey(profile.startPolicy))));
-    m_start->setToolTip(tr("“When needed” starts the server on the first request that uses it."));
-    form->addRow(tr("Starts"), m_start);
-    m_idle = new QSpinBox(content);
-    m_idle->setRange(0, 24 * 60);
-    m_idle->setSuffix(tr(" min"));
-    m_idle->setSpecialValueText(tr("Never"));
-    m_idle->setValue(profile.idleStopMinutes);
-    m_idle->setToolTip(tr("Stops the server after it was unused for this long, freeing memory."));
-    form->addRow(tr("Stop when idle"), m_idle);
-    m_form = form;
-    m_preset = new QComboBox(content);
-    m_preset->addItem(tr("Custom"), -1);
-    m_preset->addItem(tr("GPUs up to 8 GB"), int(runtime::VramTier::Small));
-    m_preset->addItem(tr("GPUs with 12 GB"), int(runtime::VramTier::Medium));
-    m_preset->addItem(tr("GPUs with 16 GB or more"), int(runtime::VramTier::Large));
-    m_preset->setToolTip(tr("Fills in memory-related options for a GPU size. Measured on an 8 GB laptop GPU."));
-    form->addRow(tr("Tuned for"), m_preset);
-    v->addLayout(form);
+    m_form->addRow(tr("Program"), m_runtime);
+    v->addLayout(m_form);
 
-    m_optionsHost = new QWidget(content);
+    // The program's fields: for sd.cpp the model's type, the files it needs and the add-ons it can
+    // use (buildOptions).
+    m_optionsHost = new QWidget(m_content);
     auto *hostLayout = new QVBoxLayout(m_optionsHost);
     hostLayout->setContentsMargins(0, 0, 0, 0);
     v->addWidget(m_optionsHost);
 
-    v->addWidget(sectionLabel(tr("Command line"), content));
-    m_preview = new QPlainTextEdit(content);
-    m_preview->setReadOnly(true);
-    m_preview->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
-    m_preview->setFixedHeight(84);
-    v->addWidget(m_preview);
-    // What the chosen model is and needs, with a download for what is missing.
-    m_modelInfo = new QLabel(content);
-    m_modelInfo->setObjectName(QStringLiteral("modelInfo"));
-    m_modelInfo->setWordWrap(true);
-    m_modelInfo->setTextFormat(Qt::RichText);
-    m_modelInfo->setVisible(false);
-    v->addWidget(m_modelInfo);
-    m_downloadMissing = new QPushButton(Icons::get(QStringLiteral("download")), QString(), content);
-    m_downloadMissing->setObjectName(QStringLiteral("downloadMissing"));
-    m_downloadMissing->setVisible(false);
-    v->addWidget(m_downloadMissing, 0, Qt::AlignLeft);
-    connect(m_downloadMissing, &QPushButton::clicked, this, &ServerProfileDialog::downloadMissing);
-    // A finished download fills its slot.
-    connect(m_studio->hub(), &runtime::ModelHub::downloaded, this, [this] {
-        if (!modelPath().isEmpty())
-            applyModel(QString(), modelPath());
-    });
-    m_problem = new QLabel(content);
+    v->addWidget(sectionLabel(tr("Server"), m_content));
+    m_memoryForm = newForm();
+    m_preset = new QComboBox(m_content);
+    m_preset->setObjectName(QStringLiteral("serverMemory"));
+    m_preset->addItem(tr("Up to 8 GB of memory"), int(runtime::VramTier::Small));
+    m_preset->addItem(tr("12 GB of memory"), int(runtime::VramTier::Medium));
+    m_preset->addItem(tr("16 GB of memory or more"), int(runtime::VramTier::Large));
+    m_preset->addItem(tr("Custom (set under Advanced)"), -1);
+    m_preset->setToolTip(tr("Sets the memory options under Advanced for a graphics card with this much memory. Measured on an 8 GB "
+                            "laptop GPU."));
+    m_memoryForm->addRow(tr("Graphics card"), m_preset);
+    m_port = new QSpinBox(m_content);
+    m_port->setRange(1024, 65535);
+    m_port->setValue(profile.port);
+    m_port->setToolTip(tr("Lumen talks to the server at this port of this computer."));
+    m_memoryForm->addRow(tr("Port"), m_port);
+    v->addLayout(m_memoryForm);
+    if (isNew) {
+        m_createProvider = new QCheckBox(tr("Add it as a provider"), m_content);
+        m_createProvider->setChecked(true);
+        v->addWidget(m_createProvider);
+    }
+    // What keeps the server from working and has no field of its own to stand next to.
+    m_problem = new QLabel(m_content);
     m_problem->setObjectName(QStringLiteral("problems"));
     m_problem->setWordWrap(true);
     m_problem->setTextFormat(Qt::RichText);
     Theme::setRole(m_problem, QStringLiteral("error"));
     v->addWidget(m_problem);
-    if (isNew) {
-        m_createProvider = new QCheckBox(tr("Add it as a provider"), content);
-        m_createProvider->setChecked(true);
-        v->addWidget(m_createProvider);
-    }
+
+    // Folded: the launch settings, when the server starts and stops, and its command line.
+    m_advancedToggle = new QToolButton(m_content);
+    m_advancedToggle->setObjectName(QStringLiteral("serverAdvanced"));
+    m_advancedToggle->setText(tr("Advanced"));
+    m_advancedToggle->setToolTip(tr("Memory and speed settings, extra arguments, when the server starts and stops, and its command line"));
+    m_advancedToggle->setCheckable(true);
+    m_advancedToggle->setAutoRaise(true);
+    m_advancedToggle->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    m_advancedToggle->setArrowType(Qt::RightArrow);
+    v->addWidget(m_advancedToggle);
+    m_advanced = new QWidget(m_content);
+    m_advanced->setObjectName(QStringLiteral("serverAdvancedOptions"));
+    auto *av = new QVBoxLayout(m_advanced);
+    av->setContentsMargins(0, 0, 0, 0);
+    av->setSpacing(8);
+    m_advancedHost = new QWidget(m_advanced);
+    auto *advancedHostLayout = new QVBoxLayout(m_advancedHost);
+    advancedHostLayout->setContentsMargins(0, 0, 0, 0);
+    av->addWidget(m_advancedHost);
+    av->addWidget(sectionLabel(tr("Starting and stopping"), m_advanced));
+    QFormLayout *life = newForm();
+    m_start = new QComboBox(m_advanced);
+    for (runtime::StartPolicy p : {runtime::StartPolicy::OnDemand, runtime::StartPolicy::AtStartup, runtime::StartPolicy::Manual})
+        m_start->addItem(startLabel(p), runtime::startPolicyKey(p));
+    m_start->setCurrentIndex(std::max(0, m_start->findData(runtime::startPolicyKey(profile.startPolicy))));
+    m_start->setToolTip(tr("“When needed” starts the server on the first request that uses it."));
+    life->addRow(tr("Starts"), m_start);
+    m_idle = new QSpinBox(m_advanced);
+    m_idle->setRange(0, 24 * 60);
+    m_idle->setSuffix(tr(" min"));
+    m_idle->setSpecialValueText(tr("Never"));
+    m_idle->setValue(profile.idleStopMinutes);
+    m_idle->setToolTip(tr("Stops the server after it was unused for this long, freeing memory."));
+    life->addRow(tr("Stop when idle"), m_idle);
+    av->addLayout(life);
+    av->addWidget(sectionLabel(tr("Command line"), m_advanced));
+    m_preview = new QPlainTextEdit(m_advanced);
+    m_preview->setReadOnly(true);
+    m_preview->setAccessibleName(tr("Command line"));
+    m_preview->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
+    m_preview->setFixedHeight(84);
+    av->addWidget(m_preview);
+    m_advanced->setVisible(false);
+    v->addWidget(m_advanced);
     v->addStretch();
 
-    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
-    outer->addWidget(buttons);
-    connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
-    connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
-    m_ok = buttons->button(QDialogButtonBox::Ok);
+    m_buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
+    outer->addWidget(m_buttons);
+    connect(m_buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
+    connect(m_buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+    m_ok = m_buttons->button(QDialogButtonBox::Ok);
     m_ok->setEnabled(m_runtime->count() > 0);
 
+    connect(m_advancedToggle, &QToolButton::toggled, this, &ServerProfileDialog::showAdvanced);
+    // A finished download fills its field (the launch settings stay as they are).
+    connect(m_studio->hub(), &runtime::ModelHub::downloaded, this, [this] {
+        const QString path = modelPath();
+        if (path.isEmpty())
+            return;
+        for (const QString &key : {QStringLiteral("diffusion_model"), QStringLiteral("model")}) {
+            if (cleanPath(fieldText(key)) == path) {
+                applyModel(key, path, false);
+                return;
+            }
+        }
+    });
     connect(m_runtime, &QComboBox::currentIndexChanged, this, [this] {
         m_profile = this->profile(); // keep typed values
         buildOptions();
+        fitToContent();
     });
     connect(m_name, &QLineEdit::textChanged, this, &ServerProfileDialog::updatePreview);
-    connect(m_preset, &QComboBox::activated, this, &ServerProfileDialog::applyPreset);
+    connect(m_preset, &QComboBox::activated, this, [this] {
+        m_tierPicked = true;
+        applyPreset();
+    });
     if (isNew) {
-        // New servers start tuned for this computer's GPU.
+        // New servers start tuned for this computer's GPU, unless a size was chosen meanwhile.
         QPointer<ServerProfileDialog> self(this);
         runtime::probeHardware().then(this, [self](runtime::HardwareInfo hw) {
-            if (!self || self->m_preset->currentData().toInt() != -1)
+            if (!self || self->m_tierPicked)
                 return;
             self->m_preset->setCurrentIndex(self->m_preset->findData(int(runtime::vramTierFor(hw.maxVram()))));
             self->applyPreset();
@@ -959,31 +1106,128 @@ ServerProfileDialog::ServerProfileDialog(Studio *studio, const runtime::ServerPr
     }
     connect(m_port, &QSpinBox::valueChanged, this, &ServerProfileDialog::updatePreview);
     buildOptions();
+    fitToContent();
+}
+
+QVariantMap ServerProfileDialog::tierOptions(int tier) const
+{
+    if (tier < 0)
+        return {};
+    QVariantMap out = runtime::presetOptions(kind(), runtime::VramTier(tier));
+    // The model's own settings for the size (FLUX.1 on 8 GB: q4_K, text encoders on the CPU).
+    const QString path = modelPath();
+    if (kind() == QLatin1String("sd.cpp") && !path.isEmpty()) {
+        if (const std::optional<runtime::ModelInfo> mi = runtime::modelInfoOf(m_studio->models(), path)) {
+            if (const runtime::ModelPreset *preset = runtime::presetFor(*mi, path))
+                out.insert(preset->vram.value(runtime::VramTier(tier)));
+        }
+    }
+    return out;
 }
 
 void ServerProfileDialog::applyPreset()
 {
     const int tier = m_preset->currentData().toInt();
     if (tier < 0)
-        return;
-    m_profile = profile();
-    const QVariantMap preset = runtime::presetOptions(kind(), runtime::VramTier(tier));
+        return; // Custom: the options under Advanced stay as they are
+    const QVariantMap preset = tierOptions(tier);
     for (auto it = preset.cbegin(); it != preset.cend(); ++it)
-        m_profile.options.insert(it.key(), it.value());
-    m_builtFor.clear(); // rebuild the fields with the new values
-    buildOptions();
+        setField(it.key(), it.value());
+    updatePreview();
+}
+
+void ServerProfileDialog::selectTier()
+{
+    const runtime::ServerProfile p = profile();
+    const QString k = kind();
+    int found = -1;
+    for (runtime::VramTier tier : {runtime::VramTier::Small, runtime::VramTier::Medium, runtime::VramTier::Large}) {
+        const QVariantMap expected = tierOptions(int(tier));
+        if (expected.isEmpty())
+            continue;
+        bool same = true;
+        for (auto it = expected.cbegin(); it != expected.cend() && same; ++it)
+            same = p.option(it.key(), k).toString() == it.value().toString();
+        if (same) {
+            found = int(tier);
+            break;
+        }
+    }
+    const QSignalBlocker block(m_preset);
+    m_preset->setCurrentIndex(std::max(0, m_preset->findData(found)));
 }
 
 void ServerProfileDialog::updatePresetRow()
 {
     const bool hasPresets = !runtime::presetOptions(kind(), runtime::VramTier::Small).isEmpty();
-    m_form->setRowVisible(m_preset, hasPresets);
+    m_memoryForm->setRowVisible(m_preset, hasPresets);
 }
 
 QString ServerProfileDialog::kind() const
 {
     const auto rt = m_studio->runtimes()->runtime(m_runtime->currentData().toString());
     return rt ? rt->kind : QString();
+}
+
+QString ServerProfileDialog::modelType() const
+{
+    const runtime::ModelType *type = currentType();
+    return type ? type->id : QString();
+}
+
+void ServerProfileDialog::showAdvanced(bool on)
+{
+    m_advancedToggle->setArrowType(on ? Qt::DownArrow : Qt::RightArrow);
+    m_advanced->setVisible(on);
+    fitToContent();
+    if (!on)
+        return;
+    // What unfolds comes into sight (once the content has its new height).
+    QMetaObject::invokeMethod(
+        this,
+        [this] {
+            QScrollBar *bar = m_scroll->verticalScrollBar();
+            if (m_advanced->geometry().bottom() > bar->value() + m_scroll->viewport()->height())
+                bar->setValue(std::min(bar->maximum(), m_advancedToggle->y() - 8));
+        },
+        Qt::QueuedConnection);
+}
+
+void ServerProfileDialog::alignForms()
+{
+    // The labels of every form (name and program, the files, the add-ons, the server, Advanced) in
+    // one column, as wide as the widest shown.
+    QList<QLabel *> labels;
+    int width = 0;
+    for (QFormLayout *form : m_content->findChildren<QFormLayout *>()) {
+        for (int row = 0; row < form->rowCount(); ++row) {
+            QLayoutItem *item = form->itemAt(row, QFormLayout::LabelRole);
+            auto *label = item ? qobject_cast<QLabel *>(item->widget()) : nullptr;
+            if (!label)
+                continue;
+            label->setMinimumWidth(0);
+            labels << label;
+            if (!label->isHidden())
+                width = std::max(width, label->sizeHint().width());
+        }
+    }
+    for (QLabel *label : std::as_const(labels)) {
+        label->setMinimumWidth(width);
+        label->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    }
+}
+
+void ServerProfileDialog::fitToContent()
+{
+    const QMargins m = layout()->contentsMargins();
+    const QSize content = m_content->sizeHint();
+    // Room for the scroll bar, so the fields keep their width when the content scrolls.
+    const int w = std::max({640, content.width() + style()->pixelMetric(QStyle::PM_ScrollBarExtent) + m.left() + m.right(),
+                            isVisible() ? width() : 0});
+    // Wrapped text as tall as it is at that width.
+    const int contentHeight = m_content->hasHeightForWidth() ? m_content->heightForWidth(w - m.left() - m.right()) : content.height();
+    const int h = contentHeight + m_buttons->sizeHint().height() + layout()->spacing() + m.top() + m.bottom();
+    resizeWithinScreen(this, QSize(w, h));
 }
 
 void ServerProfileDialog::buildOptions()
@@ -995,157 +1239,101 @@ void ServerProfileDialog::buildOptions()
     }
     m_builtFor = k;
     m_fields.clear();
-    updatePresetRow();
-    auto *host = m_optionsHost->layout();
-    while (QLayoutItem *item = host->takeAt(0)) {
-        delete item->widget();
-        delete item;
+    m_rows.clear();
+    m_status.clear();
+    m_type = nullptr;
+    m_fileForm = nullptr;
+    m_addonForm = nullptr;
+    m_addonsLabel = nullptr;
+    m_downloadMissing = nullptr;
+    m_downloadRow = nullptr;
+    for (QWidget *host : {m_optionsHost, m_advancedHost}) {
+        while (QLayoutItem *item = host->layout()->takeAt(0)) {
+            delete item->widget();
+            delete item;
+        }
     }
+    updatePresetRow();
     auto *box = new QWidget(m_optionsHost);
     auto *bv = new QVBoxLayout(box);
     bv->setContentsMargins(0, 0, 0, 0);
-    bv->addWidget(sectionLabel(tr("%1 options").arg(runtimeName(k)), box));
-    auto *form = new QFormLayout;
-    form->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    bv->addLayout(form);
-    auto *advancedBox = new QGroupBox(tr("Advanced"), box);
-    advancedBox->setCheckable(true);
-    advancedBox->setChecked(false);
-    auto *advancedInner = new QWidget(advancedBox);
-    auto *advancedForm = new QFormLayout(advancedInner);
-    advancedForm->setContentsMargins(0, 0, 0, 0);
-    advancedForm->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    auto *abl = new QVBoxLayout(advancedBox);
-    abl->addWidget(advancedInner);
-    advancedInner->setVisible(false);
-    connect(advancedBox, &QGroupBox::toggled, advancedInner, &QWidget::setVisible);
-    bool anyAdvanced = false;
-
-    for (const OptionField &f : runtime::serverOptions(k)) {
-        const QVariant value = m_profile.option(f.key, k);
-        QWidget *w = nullptr;
-        QWidget *row = nullptr;
-        switch (f.type) {
-        case OptionField::Type::File:
-        case OptionField::Type::Directory: {
-            row = new QWidget(box);
-            auto *h = new QHBoxLayout(row);
-            h->setContentsMargins(0, 0, 0, 0);
-            auto *edit = new QLineEdit(value.toString(), row);
-            edit->setProperty("optionKey", f.key);
-            edit->setPlaceholderText(f.required ? tr("required") : tr("none"));
-            edit->setMinimumWidth(320);
-            auto *browse = iconButton(QStringLiteral("folder"), tr("Browse…"), row);
-            h->addWidget(edit, 1);
-            const QList<runtime::ModelKind> libraryKinds = modelKindsForOption(k, f.key);
-            if (!libraryKinds.isEmpty()) {
-                auto *library = iconButton(QStringLiteral("layers"), tr("Choose from the model library"), row);
-                library->setPopupMode(QToolButton::InstantPopup);
-                auto *menu = new QMenu(library);
-                library->setMenu(menu);
-                connect(menu, &QMenu::aboutToShow, this, [this, menu, libraryKinds, edit] {
-                    fillModelMenu(menu, m_studio->models(), libraryKinds, [this, edit](const QString &path) {
-                        edit->setText(path);
-                        applyModel(edit->property("optionKey").toString(), path);
-                    });
-                });
-                h->addWidget(library);
-            }
-            h->addWidget(browse);
-            const bool dir = f.type == OptionField::Type::Directory;
-            const QString filter = f.filter;
-            connect(browse, &QToolButton::clicked, this, [this, edit, dir, filter, label = f.label] {
-                const QString start = edit->text().isEmpty()
-                                          ? Settings::instance().value(QStringLiteral("servers/lastModelDir")).toString()
-                                          : QFileInfo(edit->text()).absolutePath();
-                const QString path = dir ? QFileDialog::getExistingDirectory(this, label, start)
-                                         : QFileDialog::getOpenFileName(this, label, start, filter + QStringLiteral(";;") + tr("All files (*)"));
-                if (path.isEmpty())
-                    return;
-                edit->setText(QDir::toNativeSeparators(path));
-                Settings::instance().setValue(QStringLiteral("servers/lastModelDir"), dir ? path : QFileInfo(path).absolutePath());
-                applyModel(edit->property("optionKey").toString(), path);
-                // A vision model's projector usually sits next to it.
-                if (edit->property("optionKey").toString() == QLatin1String("model")) {
-                    if (auto *mmproj = qobject_cast<QLineEdit *>(m_fields.value(QStringLiteral("mmproj"))); mmproj && mmproj->text().isEmpty())
-                        mmproj->setText(QDir::toNativeSeparators(runtime::findProjector(path)));
-                }
-            });
-            connect(edit, &QLineEdit::textChanged, this, &ServerProfileDialog::updatePreview);
-            // A path typed or pasted in is applied like a chosen one.
-            connect(edit, &QLineEdit::editingFinished, this, [this, edit] {
-                if (!edit->text().trimmed().isEmpty())
-                    applyModel(edit->property("optionKey").toString(), edit->text().trimmed());
-            });
-            w = edit;
-            break;
-        }
-        case OptionField::Type::Integer: {
-            auto *s = new QSpinBox(box);
-            s->setRange(int(f.maximum > f.minimum ? f.minimum : 0), int(f.maximum > f.minimum ? f.maximum : 1000000));
-            s->setValue(value.toInt());
-            if (f.key == QLatin1String("gpu_layers"))
-                s->setSpecialValueText(tr("Automatic"));
-            connect(s, &QSpinBox::valueChanged, this, &ServerProfileDialog::updatePreview);
-            w = s;
-            break;
-        }
-        case OptionField::Type::Number: {
-            auto *s = new QDoubleSpinBox(box);
-            s->setRange(f.maximum > f.minimum ? f.minimum : 0, f.maximum > f.minimum ? f.maximum : 1e6);
-            s->setDecimals(1);
-            s->setValue(value.toDouble());
-            connect(s, &QDoubleSpinBox::valueChanged, this, &ServerProfileDialog::updatePreview);
-            w = s;
-            break;
-        }
-        case OptionField::Type::Boolean: {
-            auto *c = new QCheckBox(f.label, box);
-            c->setChecked(value.toBool());
-            connect(c, &QCheckBox::toggled, this, &ServerProfileDialog::updatePreview);
-            w = c;
-            break;
-        }
-        case OptionField::Type::Choice: {
-            auto *c = new QComboBox(box);
-            c->addItems(f.choices);
-            c->setCurrentText(value.toString());
-            connect(c, &QComboBox::currentTextChanged, this, &ServerProfileDialog::updatePreview);
-            w = c;
-            break;
-        }
-        case OptionField::Type::Text: {
-            auto *e = new QLineEdit(value.toString(), box);
-            connect(e, &QLineEdit::textChanged, this, &ServerProfileDialog::updatePreview);
-            w = e;
-            break;
-        }
-        case OptionField::Type::ModelList:
-            w = new ModelListEditor(value.toList(), f.filter + QStringLiteral(";;") + tr("All files (*)"), [this] { updatePreview(); }, box,
-                                    m_studio->models());
-            break;
-        }
-        if (!f.help.isEmpty()) {
-            w->setToolTip(f.help);
-            if (row)
-                row->setToolTip(f.help);
-        }
-        m_fields.insert(f.key, w);
+    bv->setSpacing(8);
+    auto *advancedBox = new QWidget(m_advancedHost);
+    QFormLayout *advanced = newForm();
+    advancedBox->setLayout(advanced);
+    advanced->setContentsMargins(0, 0, 0, 0);
+    auto addOption = [this](QFormLayout *form, const OptionField &f, QWidget *parent) {
         // Check boxes carry their own label.
         const QString label = f.type == OptionField::Type::Boolean ? QString() : f.label + (f.required ? QStringLiteral(" *") : QString());
-        if (f.advanced) {
-            anyAdvanced = true;
-            advancedForm->addRow(label, row ? row : w);
-        } else {
-            form->addRow(label, row ? row : w);
+        form->addRow(label, isFileField(f) ? fileField(f, parent) : optionField(f, parent));
+    };
+
+    const QList<OptionField> fields = runtime::serverOptions(k);
+    if (k == QLatin1String("sd.cpp")) {
+        // The model's type decides which of the files show (plan §17.5): the model in its slot, the
+        // components its preset needs, the add-ons it can use. Each file has a status line under it.
+        bv->addWidget(sectionLabel(tr("Model"), box));
+        m_fileForm = newForm();
+        bv->addLayout(m_fileForm);
+        m_type = new QComboBox(box);
+        m_type->setObjectName(QStringLiteral("serverModelType"));
+        m_type->setAccessibleName(tr("Model type"));
+        m_type->setToolTip(tr("What kind of model the server runs: it decides which files are asked for. Choosing a model file sets it; "
+                              "Other shows every field, for models Lumen does not know."));
+        for (const runtime::ModelType &t : runtime::modelTypes())
+            m_type->addItem(t.name, t.id);
+        m_type->addItem(tr("Other (every field)"), QString());
+        m_fileForm->addRow(tr("Model type"), m_type);
+        m_addonsLabel = sectionLabel(tr("Add-ons"), box);
+        m_addonForm = newForm();
+        for (const OptionField &f : fields) {
+            if (!isFileField(f)) {
+                addOption(advanced, f, advancedBox);
+                continue;
+            }
+            QFormLayout *form = isAddon(f.key) ? m_addonForm : m_fileForm;
+            form->addRow(f.label, fileField(f, box));
+            auto *status = new StatusLabel(box);
+            status->setObjectName(QStringLiteral("status-%1").arg(f.key));
+            m_status.insert(f.key, status);
+            form->addRow(QString(), status);
+            form->setRowVisible(status, false);
+            if (f.key == QLatin1String("llm")) {
+                // After the components: what is missing, in one download.
+                m_downloadRow = new QWidget(box);
+                auto *h = new QHBoxLayout(m_downloadRow);
+                h->setContentsMargins(0, 0, 0, 0);
+                m_downloadMissing = new QPushButton(Icons::get(QStringLiteral("download")), QString(), m_downloadRow);
+                m_downloadMissing->setObjectName(QStringLiteral("downloadMissing"));
+                h->addWidget(m_downloadMissing);
+                h->addStretch();
+                m_fileForm->addRow(QString(), m_downloadRow);
+                m_fileForm->setRowVisible(m_downloadRow, false);
+                connect(m_downloadMissing, &QPushButton::clicked, this, &ServerProfileDialog::downloadMissing);
+            }
+        }
+        bv->addWidget(m_addonsLabel);
+        bv->addLayout(m_addonForm);
+        connect(m_type, &QComboBox::activated, this, &ServerProfileDialog::typeChosen);
+        // An existing profile opens with its model's type; Other when Lumen does not know the model
+        // or the profile has files its type has no place for.
+        const runtime::ModelType *type = runtime::profileModelType(m_studio->models(), m_profile);
+        const QSignalBlocker block(m_type);
+        m_type->setCurrentIndex(std::max(0, m_type->findData(type ? type->id : QString())));
+    } else {
+        bv->addWidget(sectionLabel(tr("%1 options").arg(runtimeName(k)), box));
+        QFormLayout *form = newForm();
+        bv->addLayout(form);
+        for (const OptionField &f : fields) {
+            if (f.advanced)
+                addOption(advanced, f, advancedBox);
+            else
+                addOption(form, f, box);
         }
     }
-    if (anyAdvanced)
-        bv->addWidget(advancedBox);
-    else
-        delete advancedBox;
-    host->addWidget(box);
-    // The model name defaults to the file name.
+    m_optionsHost->layout()->addWidget(box);
+    m_advancedHost->layout()->addWidget(advancedBox);
+    // A llama.cpp model name defaults to the file name.
     auto *modelEdit = qobject_cast<QLineEdit *>(m_fields.value(QStringLiteral("model")));
     auto *nameEdit = qobject_cast<QLineEdit *>(m_fields.value(QStringLiteral("model_name")));
     if (modelEdit && nameEdit) {
@@ -1161,7 +1349,228 @@ void ServerProfileDialog::buildOptions()
         m_createProvider->setChecked(available);
         m_createProvider->setToolTip(available ? QString() : tr("Lumen has no provider for %1 yet.").arg(runtimeName(k)));
     }
+    showType();
+    alignForms();
     updatePreview();
+}
+
+QWidget *ServerProfileDialog::fileField(const OptionField &f, QWidget *parent)
+{
+    const QString k = kind();
+    auto *row = new QWidget(parent);
+    auto *h = new QHBoxLayout(row);
+    h->setContentsMargins(0, 0, 0, 0);
+    auto *edit = new PathEdit(m_profile.option(f.key, k).toString(), row);
+    edit->setProperty("optionKey", f.key);
+    edit->setPlaceholderText(f.required ? tr("required") : tr("none"));
+    edit->setAccessibleName(f.label);
+    edit->setMinimumWidth(260);
+    h->addWidget(edit, 1);
+    if (!modelKindsForOption(k, f.key).isEmpty()) {
+        // The library's files that fit this field first (fillLibraryMenu).
+        auto *library = iconButton(QStringLiteral("layers"), tr("Choose from the model library"), row);
+        library->setPopupMode(QToolButton::InstantPopup);
+        auto *menu = new QMenu(library);
+        menu->setObjectName(QStringLiteral("library-%1").arg(f.key));
+        library->setMenu(menu);
+        connect(menu, &QMenu::aboutToShow, this, [this, menu, key = f.key] { fillLibraryMenu(menu, key); });
+        h->addWidget(library);
+    }
+    auto *browse = iconButton(QStringLiteral("folder"), tr("Browse…"), row);
+    h->addWidget(browse);
+    const bool dir = f.type == OptionField::Type::Directory;
+    connect(browse, &QToolButton::clicked, this, [this, edit, dir, filter = f.filter, label = f.label, key = f.key] {
+        const QString start = edit->text().isEmpty() ? Settings::instance().value(QStringLiteral("servers/lastModelDir")).toString()
+                                                     : QFileInfo(QDir::fromNativeSeparators(edit->text())).absolutePath();
+        const QString path = dir ? QFileDialog::getExistingDirectory(this, label, start)
+                                 : QFileDialog::getOpenFileName(this, label, start, filter + QStringLiteral(";;") + tr("All files (*)"));
+        if (path.isEmpty())
+            return;
+        Settings::instance().setValue(QStringLiteral("servers/lastModelDir"), dir ? path : QFileInfo(path).absolutePath());
+        chooseFile(key, path);
+    });
+    edit->dropped = [this, key = f.key](const QString &path) { chooseFile(key, path); };
+    connect(edit, &QLineEdit::textChanged, this, &ServerProfileDialog::updatePreview);
+    // A path typed or pasted in is used like a chosen one, once: not again each time the field loses
+    // the keyboard, which would set the model's launch options over the ones chosen since.
+    connect(edit, &QLineEdit::editingFinished, this, [this, edit, key = f.key] {
+        if (!edit->isModified())
+            return;
+        edit->setModified(false);
+        if (!edit->text().trimmed().isEmpty())
+            chooseFile(key, edit->text());
+    });
+    if (!f.help.isEmpty()) {
+        edit->setToolTip(f.help);
+        row->setToolTip(f.help);
+    }
+    m_fields.insert(f.key, edit);
+    m_rows.insert(f.key, row);
+    return row;
+}
+
+QWidget *ServerProfileDialog::optionField(const OptionField &f, QWidget *parent)
+{
+    const QVariant value = m_profile.option(f.key, kind());
+    QWidget *w = nullptr;
+    switch (f.type) {
+    case OptionField::Type::Integer: {
+        auto *s = new QSpinBox(parent);
+        s->setRange(int(f.maximum > f.minimum ? f.minimum : 0), int(f.maximum > f.minimum ? f.maximum : 1000000));
+        s->setValue(value.toInt());
+        if (f.key == QLatin1String("gpu_layers"))
+            s->setSpecialValueText(tr("Automatic"));
+        connect(s, &QSpinBox::valueChanged, this, &ServerProfileDialog::updatePreview);
+        w = s;
+        break;
+    }
+    case OptionField::Type::Number: {
+        auto *s = new QDoubleSpinBox(parent);
+        s->setRange(f.maximum > f.minimum ? f.minimum : 0, f.maximum > f.minimum ? f.maximum : 1e6);
+        s->setDecimals(1);
+        s->setValue(value.toDouble());
+        connect(s, &QDoubleSpinBox::valueChanged, this, &ServerProfileDialog::updatePreview);
+        w = s;
+        break;
+    }
+    case OptionField::Type::Boolean: {
+        auto *c = new QCheckBox(f.label, parent);
+        c->setChecked(value.toBool());
+        connect(c, &QCheckBox::toggled, this, &ServerProfileDialog::updatePreview);
+        w = c;
+        break;
+    }
+    case OptionField::Type::Choice: {
+        auto *c = new QComboBox(parent);
+        c->addItems(f.choices);
+        c->setCurrentText(value.toString());
+        connect(c, &QComboBox::currentTextChanged, this, &ServerProfileDialog::updatePreview);
+        w = c;
+        break;
+    }
+    case OptionField::Type::ModelList:
+        w = new ModelListEditor(value.toList(), f.filter + QStringLiteral(";;") + tr("All files (*)"), [this] { updatePreview(); }, parent,
+                                m_studio->models());
+        break;
+    case OptionField::Type::Text:
+    case OptionField::Type::File:
+    case OptionField::Type::Directory: {
+        auto *e = new QLineEdit(value.toString(), parent);
+        connect(e, &QLineEdit::textChanged, this, &ServerProfileDialog::updatePreview);
+        w = e;
+        break;
+    }
+    }
+    if (!f.help.isEmpty())
+        w->setToolTip(f.help);
+    m_fields.insert(f.key, w);
+    return w;
+}
+
+const runtime::ModelType *ServerProfileDialog::currentType() const
+{
+    return m_type ? runtime::modelTypeById(m_type->currentData().toString()) : nullptr;
+}
+
+QString ServerProfileDialog::typeModelOption() const
+{
+    const runtime::ModelType *type = currentType();
+    if (!type)
+        return {};
+    // A checkpoint of a type that also takes them stays a checkpoint (FLUX.2 [klein] as one file).
+    for (const QString &key : {QStringLiteral("diffusion_model"), QStringLiteral("model")}) {
+        if (const QString file = fieldText(key); !file.isEmpty())
+            return type->modelOption(runtime::modelInfoOf(m_studio->models(), file));
+    }
+    return type->modelOption();
+}
+
+QStringList ServerProfileDialog::shownFileOptions() const
+{
+    if (!m_type)
+        return {};
+    const runtime::ModelType *type = currentType();
+    return type ? type->fileOptions(typeModelOption()) : runtime::sdFileOptions();
+}
+
+void ServerProfileDialog::selectType(const runtime::ModelType *type)
+{
+    if (!m_type)
+        return;
+    const QSignalBlocker block(m_type);
+    m_type->setCurrentIndex(std::max(0, m_type->findData(type ? type->id : QString())));
+    showType();
+}
+
+void ServerProfileDialog::showType()
+{
+    if (!m_type)
+        return;
+    const runtime::ModelType *type = currentType();
+    const QStringList shown = shownFileOptions();
+    const QString modelOption = typeModelOption();
+    for (const QString &key : runtime::sdFileOptions()) {
+        QWidget *row = m_rows.value(key);
+        if (!row)
+            continue;
+        QFormLayout *form = isAddon(key) ? m_addonForm : m_fileForm;
+        const bool on = shown.contains(key);
+        form->setRowVisible(row, on);
+        if (!on)
+            form->setRowVisible(m_status.value(key), false);
+        // Labelled with what the type expects ("Text encoder (Qwen3 4B)", "VAE (optional)").
+        const QString label = runtime::fileFieldLabel(key, type);
+        if (auto *l = qobject_cast<QLabel *>(form->labelForField(row)))
+            l->setText(label);
+        m_fields.value(key)->setAccessibleName(label);
+        const runtime::PresetSlot *slot = type ? type->slot(key) : nullptr;
+        QString placeholder = tr("none");
+        if (key == modelOption || (slot && slot->required))
+            placeholder = tr("required");
+        else if (key == QLatin1String("vae") && type && !slot)
+            placeholder = tr("the checkpoint's own");
+        qobject_cast<QLineEdit *>(m_fields.value(key))->setPlaceholderText(placeholder);
+    }
+    m_addonsLabel->setVisible(std::any_of(shown.cbegin(), shown.cend(), [](const QString &key) { return isAddon(key); }));
+    alignForms();
+}
+
+void ServerProfileDialog::typeChosen()
+{
+    const runtime::ModelType *type = currentType();
+    // The model file moves to the new type's slot (unless something was typed there before), and a
+    // model of this type gets the components it needs where their fields are empty or do not fit.
+    QString from;
+    for (const QString &key : {QStringLiteral("diffusion_model"), QStringLiteral("model")}) {
+        if (!fieldText(key).isEmpty()) {
+            from = key;
+            break;
+        }
+    }
+    if (type && !from.isEmpty()) {
+        const QString path = cleanPath(fieldText(from));
+        const std::optional<runtime::ModelInfo> info = runtime::modelInfoOf(m_studio->models(), path);
+        const QString to = type->modelOption(info);
+        // Only into a slot of its kind: a FLUX diffusion model does not become an SDXL checkpoint (it
+        // stays in its field, hidden, until a type that has one is chosen again).
+        const bool fits = !info || info->kind == runtime::ModelKind::Unknown || runtime::mainModelOption(*info) == to;
+        if (to != from && fits && fieldText(to).isEmpty()) {
+            setField(to, fieldText(from));
+            setField(from, QString());
+        }
+        const runtime::ModelPreset *preset = info ? runtime::presetFor(*info, path) : nullptr;
+        if (preset && type->contains(*preset) && cleanPath(fieldText(to)) == path)
+            applyModel(to, path, false);
+    }
+    showType();
+    updatePreview();
+    fitToContent();
+}
+
+QString ServerProfileDialog::fieldText(const QString &key) const
+{
+    auto *e = qobject_cast<QLineEdit *>(m_fields.value(key));
+    return e ? e->text().trimmed() : QString();
 }
 
 void ServerProfileDialog::setField(const QString &key, const QVariant &value)
@@ -1181,36 +1590,111 @@ void ServerProfileDialog::setField(const QString &key, const QVariant &value)
 
 QString ServerProfileDialog::modelPath() const
 {
+    if (const QString option = typeModelOption(); !option.isEmpty())
+        return cleanPath(fieldText(option));
     for (const QString &key : {QStringLiteral("diffusion_model"), QStringLiteral("model")}) {
-        if (auto *e = qobject_cast<QLineEdit *>(m_fields.value(key)); e && !e->text().trimmed().isEmpty())
-            return QDir::cleanPath(QDir::fromNativeSeparators(e->text().trimmed()));
+        if (const QString file = fieldText(key); !file.isEmpty())
+            return cleanPath(file);
     }
     return {};
 }
 
-void ServerProfileDialog::applyModel(const QString &key, const QString &path)
+void ServerProfileDialog::chooseFile(const QString &key, const QString &path)
 {
-    if (kind() != QLatin1String("sd.cpp") || (!key.isEmpty() && key != QLatin1String("model") && key != QLatin1String("diffusion_model")))
-        return;
+    const QString native = QDir::toNativeSeparators(cleanPath(path));
+    if (kind() == QLatin1String("sd.cpp") && isModelSlot(key)) {
+        // A model file Lumen does not know as an image model stays where it was chosen.
+        if (!applyModel(key, path))
+            setField(key, native);
+    } else {
+        // Any other file is kept as chosen (a text encoder chosen by hand stays).
+        setField(key, native);
+        // A vision model's projector usually sits next to it.
+        if (kind() == QLatin1String("llama.cpp") && key == QLatin1String("model")) {
+            if (auto *mmproj = qobject_cast<QLineEdit *>(m_fields.value(QStringLiteral("mmproj"))); mmproj && mmproj->text().isEmpty())
+                mmproj->setText(QDir::toNativeSeparators(runtime::findProjector(path)));
+        }
+    }
+    updatePreview();
+}
+
+bool ServerProfileDialog::applyModel(const QString &key, const QString &path, bool launchOptions)
+{
+    if (kind() != QLatin1String("sd.cpp") || !isModelSlot(key))
+        return false;
+    const QString clean = cleanPath(path);
     const int tier = m_preset->currentData().toInt();
-    const QVariantMap options = runtime::modelServerOptions(m_studio->models(), QDir::cleanPath(QDir::fromNativeSeparators(path)),
-                                                            tier < 0 ? std::nullopt : std::optional(runtime::VramTier(tier)));
-    const runtime::ServerProfile current = profile();
+    const QVariantMap options = runtime::modelServerOptions(m_studio->models(), clean, tier < 0 ? std::nullopt : std::optional(runtime::VramTier(tier)));
+    if (options.isEmpty())
+        return false;
+    const std::optional<runtime::ModelInfo> info = runtime::modelInfoOf(m_studio->models(), clean);
+    const runtime::ModelPreset *preset = info ? runtime::presetFor(*info, clean) : nullptr;
+    // The type from its header. A model Lumen has no preset for keeps the type chosen by hand,
+    // unless that type has no place for it (a checkpoint for a FLUX.2 type): then every field.
+    const runtime::ModelType *type = preset ? runtime::modelTypeOf(*preset) : currentType();
+    if (!preset && type && type->modelOption(info) != runtime::mainModelOption(*info))
+        type = nullptr;
+    // The model in its slot (the other slot cleared), then the type's fields.
+    for (const QString &slot : {QStringLiteral("model"), QStringLiteral("diffusion_model")})
+        setField(slot, options.value(slot));
+    selectType(type);
+    // A component replaces an empty field or a file that does not fit; a file chosen by hand that
+    // fits stays. The preset's launch options are set.
     const QStringList problemOptions = [&] {
         QStringList out;
-        for (const runtime::ProfileProblem &p : runtime::checkSdProfile(m_studio->models(), current))
+        for (const runtime::ProfileProblem &p : runtime::checkSdProfile(m_studio->models(), profile()))
             out << p.option;
         return out;
     }();
+    const QStringList files = runtime::sdFileOptions();
     for (auto it = options.begin(); it != options.end(); ++it) {
-        const bool mainSlot = it.key() == QLatin1String("model") || it.key() == QLatin1String("diffusion_model");
-        auto *edit = qobject_cast<QLineEdit *>(m_fields.value(it.key()));
-        // The model's slot is set (the other cleared); a component replaces an empty field or a file
-        // that does not fit; launch options of the preset are set.
-        if (mainSlot || !edit || edit->text().trimmed().isEmpty() || problemOptions.contains(it.key()))
+        if (isModelSlot(it.key()))
+            continue;
+        if (!files.contains(it.key())) {
+            if (launchOptions)
+                setField(it.key(), it.value());
+        } else if (fieldText(it.key()).isEmpty() || problemOptions.contains(it.key())) {
             setField(it.key(), it.value());
+        }
     }
     updatePreview();
+    return true;
+}
+
+void ServerProfileDialog::fillLibraryMenu(QMenu *menu, const QString &key)
+{
+    const QString k = kind();
+    std::function<bool(const runtime::ModelEntry &)> fits;
+    if (k == QLatin1String("sd.cpp")) {
+        const runtime::ModelType *type = currentType();
+        const QString model = modelPath();
+        const std::optional<runtime::ModelInfo> info = model.isEmpty() ? std::nullopt : runtime::modelInfoOf(m_studio->models(), model);
+        const runtime::ModelPreset *preset = info ? runtime::presetFor(*info, model) : nullptr;
+        if (preset && type && !type->contains(*preset))
+            preset = nullptr; // a model of another type: what the chosen type needs
+        if (isModelSlot(key)) {
+            // The models of the type.
+            if (type) {
+                fits = [type](const runtime::ModelEntry &e) {
+                    const runtime::ModelPreset *p = runtime::presetFor(e.info, e.path);
+                    return p && type->contains(*p);
+                };
+            }
+        } else if (const runtime::PresetSlot *slot = preset ? preset->slot(key) : type ? type->slot(key) : nullptr) {
+            // A component: the slot's header family and variant.
+            fits = [s = *slot](const runtime::ModelEntry &e) {
+                return e.info.kind == s.kind && e.info.family == s.family && (s.variant.isEmpty() || e.info.variant == s.variant);
+            };
+        } else if (key == QLatin1String("vae") && type && !type->optionalVae.isEmpty()) {
+            fits = [family = type->optionalVae](const runtime::ModelEntry &e) { return e.info.family == family; };
+        } else if ((key == QLatin1String("control_net") || key == QLatin1String("ip_adapter")) && (preset || type)) {
+            const bool cn = key == QLatin1String("control_net");
+            const QStringList families = preset ? (cn ? preset->controlNetFamilies : preset->ipAdapterFamilies)
+                                                : (cn ? type->controlNetFamilies : type->ipAdapterFamilies);
+            fits = [families](const runtime::ModelEntry &e) { return families.contains(e.info.family); };
+        }
+    }
+    fillModelMenu(menu, m_studio->models(), modelKindsForOption(k, key), [this, key](const QString &path) { chooseFile(key, path); }, fits);
 }
 
 void ServerProfileDialog::downloadMissing()
@@ -1219,16 +1703,24 @@ void ServerProfileDialog::downloadMissing()
     const std::optional<runtime::ModelEntry> e = m_studio->models()->entry(path);
     if (!e)
         return;
+    const QStringList shown = shownFileOptions();
     QStringList names;
     for (const runtime::ModelCompanion &c : runtime::companionsOf(m_studio->models(), path)) {
-        if (!c.missing())
+        // Only for the type's empty fields (a file chosen by hand stays), once.
+        if (!c.missing() || (!c.option.isEmpty() && (!shown.contains(c.option) || !fieldText(c.option).isEmpty()))
+            || (m_downloads.value(c.option) && !m_downloads.value(c.option)->isFinished()))
             continue;
-        m_studio->hub()->download(runtime::companionDownload(*e, c.file));
+        Job *job = m_studio->hub()->download(runtime::companionDownload(*e, c.file));
+        if (!c.option.isEmpty() && job) {
+            m_downloads.insert(c.option, job);
+            // A failed or cancelled download is missing again.
+            connect(job, &Job::finished, this, &ServerProfileDialog::updatePreview);
+        }
         names << c.file.fileName();
     }
     if (names.isEmpty())
         return;
-    m_downloadMissing->setEnabled(false);
+    updatePreview();
     m_studio->notify(tr("Downloading %1 — progress is shown in the Queue. The server form fills in when it is done.").arg(names.join(QStringLiteral(", "))));
 }
 
@@ -1242,8 +1734,12 @@ runtime::ServerProfile ServerProfileDialog::profile() const
     p.idleStopMinutes = m_idle->value();
     if (m_builtFor != kind())
         return p;
+    // Files of other model types are not saved: no T5 encoder left on a FLUX.2 server.
+    const QStringList shown = shownFileOptions();
     QVariantMap options;
     for (const OptionField &f : runtime::serverOptions(m_builtFor)) {
+        if (m_type && isFileField(f) && !shown.contains(f.key))
+            continue;
         QWidget *w = m_fields.value(f.key);
         QVariant v;
         if (auto *e = qobject_cast<QLineEdit *>(w))
@@ -1272,6 +1768,89 @@ bool ServerProfileDialog::createProvider() const
     return m_createProvider && m_createProvider->isEnabled() && m_createProvider->isChecked();
 }
 
+void ServerProfileDialog::updateFileStatus(const runtime::ServerProfile &p, QStringList *problems, bool *blocking, qint64 *missingBytes,
+                                           int *missingFiles)
+{
+    const Palette &pal = Theme::palette();
+    const QString ok = QStringLiteral("✓");
+    const QString bad = QStringLiteral("✗");
+    runtime::ModelLibrary *library = m_studio->models();
+    const runtime::ModelType *type = currentType();
+    const QStringList shown = shownFileOptions();
+    const QString model = modelPath();
+    const std::optional<runtime::ModelInfo> info = model.isEmpty() ? std::nullopt : runtime::modelInfoOf(library, model);
+    const runtime::ModelPreset *preset = info ? runtime::presetFor(*info, model) : nullptr;
+    const bool otherType = preset && type && !type->contains(*preset);
+    // What can be downloaded for the model (a file in the library).
+    QHash<QString, runtime::ModelCompanion> downloadable;
+    if (preset && !otherType && library->entry(model)) {
+        for (const runtime::ModelCompanion &c : runtime::companionsOf(library, model)) {
+            if (c.missing() && !c.option.isEmpty())
+                downloadable.insert(c.option, c);
+        }
+    }
+    // What is wrong stands next to its field; what has no field shown goes below the form.
+    QHash<QString, runtime::ProfileProblem> byOption;
+    for (const runtime::ProfileProblem &pp : runtime::checkSdProfile(library, p)) {
+        *blocking = *blocking || !pp.missing;
+        if (!shown.contains(pp.option))
+            *problems << pp.message.toHtmlEscaped();
+        else if (!byOption.contains(pp.option))
+            byOption.insert(pp.option, pp);
+    }
+    for (const QString &key : runtime::sdFileOptions()) {
+        QLabel *status = m_status.value(key);
+        if (!status)
+            continue;
+        const QString file = p.options.value(key).toString().trimmed();
+        const runtime::ProfileProblem problem = byOption.value(key);
+        QString text;
+        if (!shown.contains(key)) {
+            // hidden with its field
+        } else if (isModelSlot(key) && !file.isEmpty() && otherType) {
+            // A model of another type than the one chosen: its components have no fields here.
+            text = statusLine(bad, pal.danger, tr("This is a %1 model: choose its type, %2.").arg(preset->name, runtime::modelTypeOf(*preset)->name));
+            *blocking = true;
+        } else if (!problem.option.isEmpty() && !problem.missing) {
+            text = statusLine(bad, pal.danger, problem.brief.isEmpty() ? problem.message : problem.brief);
+        } else if (isModelSlot(key)) {
+            if (file.isEmpty()) {
+            } else if (preset) {
+                text = statusLine(ok, pal.success, preset->note.isEmpty() ? preset->name : tr("%1: %2").arg(preset->name, preset->note));
+            } else if (!info || info->kind == runtime::ModelKind::Unknown) {
+                text = statusLine(QStringLiteral("?"), pal.textMuted, tr("Lumen cannot tell what this file is; it is used as chosen."));
+            } else {
+                text = statusLine(QStringLiteral("?"), pal.textMuted, tr("Lumen does not know this model: choose the files it needs by hand."));
+            }
+        } else if (!file.isEmpty()) {
+            const bool folder = key == QLatin1String("lora_dir") || key == QLatin1String("upscalers_dir");
+            if (folder && !QFileInfo(QDir::fromNativeSeparators(file)).isDir())
+                text = statusLine(bad, pal.warning, tr("This folder does not exist."));
+            else
+                text = statusLine(ok, pal.success, tr("Found"));
+        } else if (const runtime::PresetSlot *slot = model.isEmpty() ? nullptr : preset && !otherType ? preset->slot(key) : type ? type->slot(key) : nullptr;
+                   slot && slot->required) {
+            // A component the model needs: being downloaded, or missing (with the download below).
+            const runtime::ModelCompanion c = downloadable.value(key);
+            const QString name = c.file.path.isEmpty() ? slot->file.fileName() : c.file.fileName();
+            const qint64 size = c.file.size > 0 ? c.file.size : slot->file.size;
+            const QString what = size > 0 ? QStringLiteral("%1, %2").arg(name, runtime::formatBytes(size)) : name;
+            const QPointer<Job> job = m_downloads.value(key);
+            if (job && !job->isFinished()) {
+                text = statusLine(QStringLiteral("↓"), pal.accent, tr("Will be downloaded (%1)").arg(what));
+            } else {
+                text = statusLine(bad, pal.warning, tr("Missing (%1)").arg(what));
+                if (downloadable.contains(key)) {
+                    *missingBytes += std::max<qint64>(0, c.file.size);
+                    ++*missingFiles;
+                }
+            }
+        }
+        status->setText(text);
+        (isAddon(key) ? m_addonForm : m_fileForm)->setRowVisible(status, !text.isEmpty());
+    }
+}
+
 void ServerProfileDialog::updatePreview()
 {
     const runtime::ServerProfile p = profile();
@@ -1279,6 +1858,7 @@ void ServerProfileDialog::updatePreview()
     if (!rt) {
         m_preview->setPlainText(QString());
         m_problem->setText(tr("Choose a program."));
+        m_problem->setVisible(true);
         return;
     }
     const runtime::LaunchCommand cmd = runtime::buildLaunch(p, *rt);
@@ -1288,51 +1868,26 @@ void ServerProfileDialog::updatePreview()
         if (other.id != p.id && other.port == p.port && problem.isEmpty())
             problem = tr("Port %1 is already used by the server '%2'.").arg(p.port).arg(other.name);
     }
-    // An sd.cpp model: its preset, its components, and what keeps it from working.
-    bool blocking = false;
     QStringList problems;
     if (!problem.isEmpty())
         problems << problem.toHtmlEscaped();
-    QString info;
+    // An sd.cpp model: what each file field holds, and what keeps the server from working. Files in
+    // the wrong slot or of the wrong family cannot be saved; missing components can (the start says
+    // what to download).
+    bool blocking = false;
     qint64 missingBytes = 0;
     int missingFiles = 0;
-    if (rt->kind == QLatin1String("sd.cpp")) {
-        for (const runtime::ProfileProblem &pp : runtime::checkSdProfile(m_studio->models(), p)) {
-            problems << pp.message.toHtmlEscaped();
-            blocking = blocking || !pp.missing;
-        }
-        const QString path = modelPath();
-        const std::optional<runtime::ModelInfo> mi = path.isEmpty() ? std::nullopt : runtime::modelInfoOf(m_studio->models(), path);
-        if (const runtime::ModelPreset *preset = mi ? runtime::presetFor(*mi, path) : nullptr) {
-            QStringList lines{QStringLiteral("<b>%1</b>").arg(preset->name.toHtmlEscaped())};
-            if (!preset->note.isEmpty())
-                lines << preset->note.toHtmlEscaped();
-            for (const runtime::PresetSlot &slot : preset->components) {
-                const QString file = p.options.value(slot.option).toString();
-                lines << (file.isEmpty() ? tr("%1: missing").arg(slot.label.toHtmlEscaped())
-                                         : tr("%1: %2").arg(slot.label.toHtmlEscaped(), QFileInfo(QDir::fromNativeSeparators(file)).fileName().toHtmlEscaped()));
-            }
-            if (m_studio->models()->entry(path)) {
-                for (const runtime::ModelCompanion &c : runtime::companionsOf(m_studio->models(), path)) {
-                    if (c.missing() && p.options.value(c.option).toString().isEmpty()) {
-                        missingBytes += std::max<qint64>(0, c.file.size);
-                        ++missingFiles;
-                    }
-                }
-            }
-            info = lines.join(QStringLiteral("<br>"));
-        }
+    if (m_type && m_builtFor == rt->kind)
+        updateFileStatus(p, &problems, &blocking, &missingBytes, &missingFiles);
+    if (m_downloadMissing) {
+        m_downloadMissing->setText(tr("Download missing files (%1)").arg(runtime::formatBytes(missingBytes)));
+        m_fileForm->setRowVisible(m_downloadRow, missingFiles > 0);
     }
-    m_modelInfo->setText(info);
-    m_modelInfo->setVisible(!info.isEmpty());
-    m_downloadMissing->setText(tr("Download missing files (%1)").arg(runtime::formatBytes(missingBytes)));
-    m_downloadMissing->setVisible(missingFiles > 0);
     m_problem->setText(problems.join(QStringLiteral("<br>")));
     m_problem->setVisible(!problems.isEmpty());
-    // Files in the wrong slot or of the wrong family cannot be saved; missing components can (the
-    // start says what to download).
     if (m_ok)
         m_ok->setEnabled(!blocking);
+    selectTier();
 }
 
 // ---- ServerLogDialog ------------------------------------------------------------------------------
