@@ -95,8 +95,10 @@ Engine engineFor(Step step, const QString &chosen)
     }
     case Step::Edit:
     case Step::Inpaint: {
+        // A change of a picture: the engine for changes of Settings → AI (the image engine unless
+        // another is chosen there), as for the editor's prompt bar and AI panel.
         if (!provider)
-            provider = registry->defaultImageProvider();
+            provider = registry->imageProviderFor(true);
         if (!provider)
             return {nullptr, noEngine()};
         ImageRequest probe;
@@ -444,7 +446,8 @@ filters::ParamSpec textParam(const QString &id, const QString &label, const QStr
 filters::ParamSpec engineParam()
 {
     return textParam(filter_nodes::EngineParam, Text::tr("Image engine"), QString(), filter_nodes::EngineEditor,
-                     Text::tr("Which of your image engines runs this step. “The one in use” is your default image engine."));
+                     Text::tr("Which of your image engines runs this step. “The one in use” is the one Settings → AI uses for "
+                              "changes of a picture."));
 }
 
 filters::ParamSpec numberParam(const QString &id, const QString &label, double defaultValue, double minimum, double maximum,

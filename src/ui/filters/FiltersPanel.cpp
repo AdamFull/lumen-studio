@@ -155,6 +155,14 @@ FiltersPanel::FiltersPanel(Studio *studio, CanvasView *canvas, QWidget *parent, 
     auto *footer = new QVBoxLayout(m_footer);
     footer->setContentsMargins(0, 4, 0, 0);
     footer->setSpacing(6);
+    // AI results to choose from (the strip above the prompt bar) show on the canvas instead of the
+    // preview; said where it stays in view.
+    m_previewNote = mutedLabel(tr("The canvas shows the AI results to choose from. Keep or discard them to see the filter there."),
+                               m_footer);
+    m_previewNote->setObjectName(QStringLiteral("FilterPreviewNote"));
+    m_previewNote->setWordWrap(true);
+    m_previewNote->hide();
+    footer->addWidget(m_previewNote);
     m_selectionHint = mutedLabel(QString(), m_footer);
     m_selectionHint->setObjectName(QStringLiteral("FilterSelectionHint"));
     m_selectionHint->setWordWrap(true);
@@ -268,7 +276,7 @@ FiltersPanel::FiltersPanel(Studio *studio, CanvasView *canvas, QWidget *parent, 
     m_runner->setTarget(m_target->currentIndex() == 1 ? FilterRunner::Target::Layer : FilterRunner::Target::NewLayer);
     connect(m_runner, &FilterRunner::previewChanged, this, [this](const QImage &image) {
         if (m_canvas)
-            m_canvas->setPreview(image);
+            m_canvas->setPreview(CanvasView::Preview::Filter, image);
     });
     connect(m_runner, &FilterRunner::previewFailed, this, [this](const QString &message) { setStatus(message, true); });
     connect(m_runner, &FilterRunner::needsRunChanged, this, &FiltersPanel::updateButtons);
@@ -315,6 +323,12 @@ FiltersPanel::FiltersPanel(Studio *studio, CanvasView *canvas, QWidget *parent, 
         setStatus(text + QLatin1Char(' ') + tr("Undo (Ctrl+Z) takes it back."));
     });
     connect(studio, &Studio::activeDocumentChanged, this, &FiltersPanel::setDocument);
+    if (m_canvas) {
+        connect(m_canvas, &CanvasView::previewChanged, this, [this](CanvasView::Preview kind) {
+            if (kind == CanvasView::Preview::Result)
+                updatePreviewState();
+        });
+    }
     // Whether the AI steps can run depends on the image engines that are set up.
     connect(studio->providers(), &ai::ProviderRegistry::providersChanged, this, &FiltersPanel::updateAvailability);
     connect(studio->providers(), &ai::ProviderRegistry::rolesChanged, this, &FiltersPanel::updateAvailability);
@@ -328,7 +342,7 @@ FiltersPanel::FiltersPanel(Studio *studio, CanvasView *canvas, QWidget *parent, 
 FiltersPanel::~FiltersPanel()
 {
     if (m_canvas)
-        m_canvas->setPreview({});
+        m_canvas->setPreview(CanvasView::Preview::Filter, {});
 }
 
 void FiltersPanel::setDocument(doc::Document *doc)
@@ -337,7 +351,7 @@ void FiltersPanel::setDocument(doc::Document *doc)
         disconnect(m_doc, nullptr, this, nullptr);
     m_doc = doc;
     if (m_canvas)
-        m_canvas->setPreview({}); // the old document's preview must not show over the new one
+        m_canvas->setPreview(CanvasView::Preview::Filter, {}); // the old document's preview must not show over the new one
     m_runner->setDocument(doc);
     if (doc) {
         connect(doc, &doc::Document::selectionChanged, this, &FiltersPanel::updateSelectionHint);
@@ -570,7 +584,11 @@ QString FiltersPanel::statusText() const
 
 void FiltersPanel::updatePreviewState()
 {
-    const bool on = m_shown && m_previewCheck->isChecked();
+    // AI results to choose from win over the filter's preview: it waits until they are kept (it
+    // then shows the filter on the new picture) or discarded.
+    const bool results = m_canvas && !m_canvas->preview(CanvasView::Preview::Result).isNull();
+    m_previewNote->setVisible(results && m_previewCheck->isChecked());
+    const bool on = m_shown && m_previewCheck->isChecked() && !results;
     if (m_canvas && on) {
         // About the canvas's size on the screen: sharp enough, still quick.
         const double dpr = m_canvas->devicePixelRatioF();
@@ -579,7 +597,7 @@ void FiltersPanel::updatePreviewState()
     }
     m_runner->setPreviewEnabled(on);
     if (!on && m_canvas)
-        m_canvas->setPreview({});
+        m_canvas->setPreview(CanvasView::Preview::Filter, {});
 }
 
 void FiltersPanel::showEvent(QShowEvent *e)

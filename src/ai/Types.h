@@ -104,8 +104,8 @@ struct ImageRequest
     qint64 seed = -1;
     int steps = 28;
     double cfg = 6.0;
-    // The user chose `cfg` (Generate page); otherwise the model's recommended value applies
-    // (PromptStyle::cfg, set by GenerationService).
+    // The user chose `cfg` (no page sets it since the Generate page went); otherwise the model's
+    // recommended value applies (PromptStyle::cfg, set by GenerationService).
     bool cfgChosen = false;
     // Likewise for `steps`: otherwise the model preset's (PromptStyle::steps; FLUX.2 klein takes 4).
     bool stepsChosen = false;

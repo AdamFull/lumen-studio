@@ -30,7 +30,6 @@ public:
     bool sampleMerged() const { return m_sampleMerged; }
     bool showSelectionOverlay() const { return m_overlay; }
     bool showPoseOverlay() const { return m_poseOverlay; }
-    bool showContextBar() const { return m_contextBar; }
 
     void setBrushSize(double v);
     void setBrushHardness(double v);
@@ -44,7 +43,6 @@ public:
     void setSampleMerged(bool v);
     void setShowSelectionOverlay(bool v);
     void setShowPoseOverlay(bool v);
-    void setShowContextBar(bool v);
 
 signals:
     void changed();
@@ -66,7 +64,6 @@ private:
     bool m_sampleMerged = true;
     bool m_overlay = true;
     bool m_poseOverlay = true;
-    bool m_contextBar = true;
 };
 
 } // namespace lumen::ui

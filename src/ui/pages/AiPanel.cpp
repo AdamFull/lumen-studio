@@ -2,14 +2,16 @@
 
 #include "ai/PromptStyle.h"
 #include "core/Async.h"
+#include "core/Error.h"
 #include "core/ImageOps.h"
 #include "core/JobQueue.h"
 #include "pose/PoseRenderer.h"
 #include "ui/Icons.h"
-#include "ui/Shortcuts.h"
 #include "ui/Studio.h"
 #include "ui/Theme.h"
 #include "ui/dialogs/CharacterLoraDialog.h"
+#include "ui/pages/AiOptions.h"
+#include "ui/pages/PromptPlan.h"
 #include "ui/widgets/CharacterChip.h"
 #include "ui/widgets/Controls.h"
 #include "ui/widgets/JobCard.h"
@@ -25,6 +27,7 @@
 #include <QPainter>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QSignalBlocker>
 #include <QSpinBox>
 #include <QTimer>
 #include <QToolButton>
@@ -32,9 +35,10 @@
 
 namespace lumen::ui {
 
-AiPanel::AiPanel(Studio *studio, QWidget *parent)
+AiPanel::AiPanel(Studio *studio, AiOptions *options, QWidget *parent)
     : QWidget(parent)
     , m_studio(studio)
+    , m_options(options)
 {
     auto *outer = new QVBoxLayout(this);
     outer->setContentsMargins(0, 0, 0, 0);
@@ -48,7 +52,7 @@ AiPanel::AiPanel(Studio *studio, QWidget *parent)
     v->setContentsMargins(12, 12, 12, 12);
     v->setSpacing(10);
 
-    v->addWidget(sectionLabel(tr("Provider")));
+    v->addWidget(sectionLabel(tr("Image engine")));
     m_provider = new ProviderCombo(studio->providers(), ai::ProviderKind::Image, content);
     m_provider->setUse(ProviderCombo::Use::Changes); // every action here changes the image
     v->addWidget(m_provider);
@@ -57,18 +61,29 @@ AiPanel::AiPanel(Studio *studio, QWidget *parent)
     m_capsWarning->setWordWrap(true);
     v->addWidget(m_capsWarning);
 
+    // The project's character: the Characters plugin's (it makes them), so only while it is on.
+    m_characterRow = new QWidget(content);
+    auto *characterRow = new QHBoxLayout(m_characterRow);
+    characterRow->setContentsMargins(0, 0, 0, 0);
+    characterRow->addWidget(sectionLabel(tr("Character"), m_characterRow));
+    characterRow->addStretch();
+    m_character = new CharacterChip(studio, QStringLiteral("editor"), m_characterRow);
+    characterRow->addWidget(m_character);
+    m_charactersOn = studio->hasPage(QStringLiteral("create"));
+    m_characterRow->setVisible(m_charactersOn);
+    v->addWidget(m_characterRow);
+
     v->addWidget(sectionLabel(tr("Action")));
     auto *grid = new QGridLayout;
     grid->setSpacing(6);
     m_modes = new QButtonGroup(this);
+    // Changing an area or the whole image from a description is the prompt bar's; these are the rest.
     const QList<std::tuple<Mode, QString, QString, QString>> modes = {
-        {Mode::Inpaint, QStringLiteral("mask"), tr("Fill selection"), tr("Regenerate the selected / masked area from the prompt (inpainting).")},
         {Mode::Variation, QStringLiteral("variation"), tr("Variation"), tr("Re-imagine the image (or the selection) while keeping its structure.")},
-        {Mode::Edit, QStringLiteral("wand"), tr("Instruct edit"), tr("Describe the change in words (e.g. 'make it night', 'add a red scarf').")},
-        {Mode::Expand, QStringLiteral("outpaint"), tr("Expand"), tr("Extend the canvas and let the model paint the new area (outpainting).")},
-        {Mode::Upscale, QStringLiteral("upscale"), tr("Upscale"), tr("Increase resolution with an AI upscaler (opens a new document).")},
-        {Mode::RemoveBackground, QStringLiteral("scissors"), tr("Remove BG"), tr("Cut out the subject onto a transparent layer.")},
-        {Mode::DetectPose, QStringLiteral("person"), tr("Detect pose"), tr("Extract an editable OpenPose skeleton from the image.")},
+        {Mode::Expand, QStringLiteral("outpaint"), tr("Expand"), tr("Make the canvas larger and let the image engine paint the new area.")},
+        {Mode::Upscale, QStringLiteral("upscale"), tr("Upscale"), tr("A larger, sharper copy of the image, as a new document.")},
+        {Mode::RemoveBackground, QStringLiteral("scissors"), tr("Remove background"), tr("Cut out the subject onto a transparent layer.")},
+        {Mode::DetectPose, QStringLiteral("person"), tr("Detect pose"), tr("Find the pose of the people in the image.")},
     };
     int i = 0;
     for (const auto &[mode, icon, label, tip] : modes) {
@@ -87,36 +102,25 @@ AiPanel::AiPanel(Studio *studio, QWidget *parent)
         b->setStyleSheet(QStringLiteral("QToolButton { border-radius: 9px; font-size: %1pt; }").arg(pointSize));
         b->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         m_modes->addButton(b, static_cast<int>(mode));
+        // Poses are the Poses plugin's: without it nothing shows or edits a detected pose.
+        if (mode == Mode::DetectPose) {
+            m_detectPose = b;
+            if (!studio->hasPage(QStringLiteral("poses"))) {
+                b->hide();
+                continue;
+            }
+        }
         grid->addWidget(b, i / 3, i % 3);
         ++i;
     }
     for (int c = 0; c < 3; ++c)
         grid->setColumnStretch(c, 1);
-    m_modes->button(0)->setChecked(true);
     v->addLayout(grid);
     m_modeHint = mutedLabel(QString(), content);
     v->addWidget(m_modeHint);
 
-    m_promptBox = new QWidget(content);
-    auto *pv = new QVBoxLayout(m_promptBox);
-    pv->setContentsMargins(0, 0, 0, 0);
-    pv->setSpacing(6);
-    auto *promptHead = new QHBoxLayout;
-    promptHead->addWidget(sectionLabel(tr("Prompt")));
-    promptHead->addStretch();
-    m_character = new CharacterChip(studio, QStringLiteral("editor"), m_promptBox);
-    promptHead->addWidget(m_character);
-    pv->addLayout(promptHead);
-    m_prompt = new AutoTextEdit(m_promptBox, 3, 8);
-    m_prompt->setPlaceholderText(tr("Describe what should appear…"));
-    pv->addWidget(m_prompt);
-    m_negative = new AutoTextEdit(m_promptBox, 1, 4);
-    m_negative->setPlaceholderText(tr("Negative prompt (optional)"));
-    pv->addWidget(m_negative);
-    v->addWidget(m_promptBox);
-
-    m_strength = new SliderField(tr("Strength"), 0.05, 1.0, 0.75, 2, QString(), content);
-    m_strength->setToolTip(tr("How much the model may change the area (denoising strength)."));
+    m_strength = new SliderField(tr("Strength"), 0.05, 1.0, options->variationStrength(), 2, QString(), content);
+    m_strength->setToolTip(tr("How much the variation may change the image: low keeps more of it."));
     v->addWidget(m_strength);
 
     m_expandBox = new QWidget(content);
@@ -133,6 +137,7 @@ AiPanel::AiPanel(Studio *studio, QWidget *parent)
     m_expandAmount->setSingleStep(64);
     m_expandAmount->setValue(256);
     m_expandAmount->setSuffix(QStringLiteral(" px"));
+    m_expandAmount->setAccessibleName(tr("Expand by"));
     eg->addWidget(m_expandTop, 0, 1);
     eg->addWidget(m_expandLeft, 1, 0);
     eg->addWidget(m_expandAmount, 1, 1);
@@ -145,63 +150,143 @@ AiPanel::AiPanel(Studio *studio, QWidget *parent)
     uh->setContentsMargins(0, 0, 0, 0);
     uh->addWidget(new QLabel(tr("Factor"), m_upscaleBox));
     m_upscaleFactor = new QComboBox(m_upscaleBox);
+    m_upscaleFactor->setAccessibleName(tr("Factor"));
     m_upscaleFactor->addItem(QStringLiteral("2×"), 2.0);
     m_upscaleFactor->addItem(QStringLiteral("3×"), 3.0);
     m_upscaleFactor->addItem(QStringLiteral("4×"), 4.0);
     uh->addWidget(m_upscaleFactor, 1);
     v->addWidget(m_upscaleBox);
 
-    m_refsBox = new QWidget(content);
-    auto *rv = new QVBoxLayout(m_refsBox);
-    rv->setContentsMargins(0, 0, 0, 0);
-    rv->addWidget(sectionLabel(tr("References")));
-    m_refs = new ReferenceStrip(studio, m_refsBox);
-    m_refs->setCompact(true);
-    rv->addWidget(m_refs);
-    m_usePose = new QCheckBox(tr("Use the document's control pose"), m_refsBox);
-    m_usePose->setChecked(true);
-    rv->addWidget(m_usePose);
-    v->addWidget(m_refsBox);
-
-    v->addWidget(sectionLabel(tr("Options")));
-    auto *variantsRow = new QHBoxLayout;
-    variantsRow->addWidget(new QLabel(tr("Variants"), content));
-    m_variants = new QSpinBox(content);
-    m_variants->setRange(1, 8);
-    m_variants->setValue(2);
-    variantsRow->addWidget(m_variants);
-    variantsRow->addStretch();
-    v->addLayout(variantsRow);
-    m_padding = new SliderField(tr("Context"), 0, 512, 64, 0, QStringLiteral(" px"), content);
-    m_padding->setToolTip(tr("Surrounding area sent to the model along with the selection."));
-    v->addWidget(m_padding);
-    m_feather = new SliderField(tr("Blend edge"), 0, 128, 16, 0, QStringLiteral(" px"), content);
-    v->addWidget(m_feather);
-    m_colorMatch = new QCheckBox(tr("Match colours to the surroundings"), content);
-    m_colorMatch->setChecked(true);
-    v->addWidget(m_colorMatch);
-
-    m_run = new QPushButton(Icons::get(QStringLiteral("sparkles")), tr("Generate"), content);
+    m_run = new QPushButton(Icons::get(QStringLiteral("sparkles")), tr("Make a variation"), content);
     Theme::setRole(m_run, QStringLiteral("primary"));
     m_run->setMinimumHeight(36);
-    Shortcuts::instance().bindButton(m_run, QStringLiteral("editor.ai-run"), tr("Editor"), QStringLiteral("editor"),
-                                     QKeySequence(QStringLiteral("Ctrl+Return")), tr("Run the AI action"));
     v->addWidget(m_run);
-
     m_jobs = new QVBoxLayout;
     m_jobs->setSpacing(6);
     v->addLayout(m_jobs);
+
+    // What the prompt bar uses too.
+    v->addSpacing(6);
+    v->addWidget(sectionLabel(tr("Options")));
+    v->addWidget(mutedLabel(tr("These also apply to the prompt bar under the canvas."), content));
+    m_refsBox = new QWidget(content);
+    auto *rv = new QVBoxLayout(m_refsBox);
+    rv->setContentsMargins(0, 0, 0, 0);
+    rv->addWidget(new QLabel(tr("Reference images"), m_refsBox));
+    m_refs = new ReferenceStrip(studio, m_refsBox);
+    m_refs->setCompact(true);
+    rv->addWidget(m_refs);
+    v->addWidget(m_refsBox);
+    m_usePose = new QCheckBox(tr("Follow the document's control pose"), content);
+    m_usePose->setChecked(options->usePose());
+    v->addWidget(m_usePose);
+
+    auto *form = new QGridLayout;
+    form->setHorizontalSpacing(8);
+    form->addWidget(new QLabel(tr("Variants"), content), 0, 0);
+    m_variants = new QSpinBox(content);
+    m_variants->setAccessibleName(tr("Variants"));
+    m_variants->setRange(1, AiOptions::kMaxVariants);
+    m_variants->setToolTip(tr("How many results each run makes to choose from."));
+    form->addWidget(m_variants, 0, 1);
+    form->addWidget(new QLabel(tr("Steps"), content), 1, 0);
+    m_steps = new QSpinBox(content);
+    m_steps->setAccessibleName(tr("Steps"));
+    m_steps->setRange(0, 150);
+    m_steps->setSpecialValueText(tr("Model's choice"));
+    m_steps->setToolTip(tr("More steps can add detail and take longer. The model's choice is right for most models."));
+    form->addWidget(m_steps, 1, 1);
+    form->addWidget(new QLabel(tr("Seed"), content), 2, 0);
+    auto *seedRow = new QHBoxLayout;
+    m_seed = new QSpinBox(content);
+    m_seed->setAccessibleName(tr("Seed"));
+    m_seed->setRange(0, 2147483647);
+    m_seed->setToolTip(tr("The same seed, words and settings give the same result again."));
+    m_randomSeed = new QCheckBox(tr("Random"), content);
+    seedRow->addWidget(m_seed, 1);
+    seedRow->addWidget(m_randomSeed);
+    form->addLayout(seedRow, 2, 1);
+    form->setColumnStretch(1, 1);
+    v->addLayout(form);
+    m_negativeBox = new QWidget(content);
+    auto *nv = new QVBoxLayout(m_negativeBox);
+    nv->setContentsMargins(0, 0, 0, 0);
+    nv->addWidget(new QLabel(tr("Leave out"), m_negativeBox));
+    m_negative = new AutoTextEdit(m_negativeBox, 2, 4);
+    m_negative->setAccessibleName(tr("Negative prompt"));
+    m_negative->setPlaceholderText(tr("Things that should not be in the result"));
+    nv->addWidget(m_negative);
+    v->addWidget(m_negativeBox);
+    m_areaStrength = new SliderField(tr("Area strength"), 0.05, 1.0, options->regionStrength(), 2, QString(), content);
+    m_areaStrength->setToolTip(tr("How much a selected area may change when the prompt bar paints it anew: low keeps more of what "
+                                  "is there."));
+    v->addWidget(m_areaStrength);
+    m_padding = new SliderField(tr("Context"), 0, 512, options->padding(), 0, QStringLiteral(" px"), content);
+    m_padding->setToolTip(tr("Surrounding area sent to the model along with the selection."));
+    v->addWidget(m_padding);
+    m_feather = new SliderField(tr("Blend edge"), 0, 128, options->feather(), 0, QStringLiteral(" px"), content);
+    m_feather->setToolTip(tr("How wide the edge is over which a result blends into the image around the selection."));
+    v->addWidget(m_feather);
+    m_colorMatch = new QCheckBox(tr("Match colours to the surroundings"), content);
+    v->addWidget(m_colorMatch);
     v->addStretch();
 
     connect(m_modes, &QButtonGroup::idClicked, this, [this](int id) { setMode(static_cast<Mode>(id)); });
-    connect(m_run, &QPushButton::clicked, this, &AiPanel::run);
-    connect(m_prompt, &AutoTextEdit::submitted, this, &AiPanel::run);
-    connect(m_provider, &ProviderCombo::providerChanged, this, &AiPanel::updateUi);
-    connect(studio, &Studio::promptRequested, this, [this](const QString &prompt, const QString &negative) {
-        m_prompt->setPlainText(prompt);
-        m_negative->setPlainText(negative);
+    connect(m_run, &QPushButton::clicked, this, [this] { run(m_mode); });
+    // Only a choice of the user's picks the engine (ProviderCombo::picked); one nobody chose follows
+    // the engine for changes of Settings → AI.
+    connect(m_provider, &ProviderCombo::picked, this, [this] {
+        m_options->setProviderId(m_provider->pinnedProviderId());
+        updateUi();
     });
-    setMode(Mode::Inpaint);
+    connect(studio->providers(), &ai::ProviderRegistry::providersChanged, this, &AiPanel::syncFromOptions);
+    connect(studio->providers(), &ai::ProviderRegistry::rolesChanged, this, &AiPanel::syncFromOptions);
+    connect(m_strength, &SliderField::valueChanged, m_options, &AiOptions::setVariationStrength);
+    connect(m_areaStrength, &SliderField::valueChanged, m_options, &AiOptions::setRegionStrength);
+    connect(m_usePose, &QCheckBox::toggled, m_options, &AiOptions::setUsePose);
+    connect(m_variants, &QSpinBox::valueChanged, m_options, &AiOptions::setVariants);
+    connect(m_steps, &QSpinBox::valueChanged, m_options, &AiOptions::setSteps);
+    connect(m_seed, &QSpinBox::valueChanged, this, [this](int seed) {
+        if (!m_randomSeed->isChecked())
+            m_options->setSeed(seed);
+    });
+    connect(m_randomSeed, &QCheckBox::toggled, this, [this](bool random) { m_options->setSeed(random ? -1 : m_seed->value()); });
+    connect(m_negative, &QPlainTextEdit::textChanged, this, [this] { m_options->setNegative(m_negative->text()); });
+    connect(m_padding, &SliderField::valueChanged, this, [this](double px) { m_options->setPadding(int(px)); });
+    connect(m_feather, &SliderField::valueChanged, this, [this](double px) { m_options->setFeather(int(px)); });
+    connect(m_colorMatch, &QCheckBox::toggled, m_options, &AiOptions::setColorMatch);
+    connect(m_options, &AiOptions::changed, this, &AiPanel::syncFromOptions);
+    // "Use as reference" (Browse project images) lands here.
+    connect(studio, &Studio::referenceRequested, m_refs, &ReferenceStrip::addAsset);
+    syncFromOptions();
+    setMode(Mode::Variation);
+}
+
+void AiPanel::syncFromOptions()
+{
+    {
+        // The engine runs go to: the chosen one, else the engine for changes.
+        const QSignalBlocker b(m_provider);
+        m_provider->setPinnedProviderId(m_options->providerId());
+    }
+    const QSignalBlocker b1(m_strength), b2(m_usePose), b3(m_variants), b4(m_steps), b5(m_seed), b6(m_randomSeed), b7(m_padding),
+        b8(m_feather), b9(m_colorMatch), b10(m_areaStrength);
+    m_strength->setValue(m_options->variationStrength());
+    m_areaStrength->setValue(m_options->regionStrength());
+    m_usePose->setChecked(m_options->usePose());
+    m_variants->setValue(m_options->variants());
+    m_steps->setValue(m_options->steps());
+    m_randomSeed->setChecked(m_options->seed() < 0);
+    m_seed->setEnabled(m_options->seed() >= 0);
+    if (m_options->seed() >= 0)
+        m_seed->setValue(int(std::min<qint64>(m_options->seed(), m_seed->maximum())));
+    m_padding->setValue(m_options->padding());
+    m_feather->setValue(m_options->feather());
+    m_colorMatch->setChecked(m_options->colorMatch());
+    // Not blocked: the field fits its height to the text (setting the same words back changes nothing).
+    if (m_negative->text() != m_options->negative())
+        m_negative->setPlainText(m_options->negative());
+    updateUi();
 }
 
 void AiPanel::setDocument(doc::Document *doc)
@@ -209,32 +294,29 @@ void AiPanel::setDocument(doc::Document *doc)
     if (m_doc)
         m_doc->disconnect(this);
     m_doc = doc;
-    if (doc)
+    if (doc) {
         connect(doc, &doc::Document::selectionChanged, this, &AiPanel::updateUi);
+        connect(doc, &doc::Document::controlPoseChanged, this, &AiPanel::updateUi);
+    }
     updateUi();
 }
 
 void AiPanel::setMode(Mode mode)
 {
+    // Fill selection and instruction edits are the prompt bar's.
+    if (mode == Mode::Inpaint || mode == Mode::Edit)
+        mode = Mode::Variation;
     m_mode = mode;
     if (QAbstractButton *b = m_modes->button(static_cast<int>(mode)))
         b->setChecked(true);
     updateUi();
 }
 
-void AiPanel::runFromCanvas(Mode mode, const QString &prompt, bool withCharacter)
+void AiPanel::withCharacter(ai::ImageRequest request, ai::CharacterUse use, bool skip, ai::ImageProvider *provider,
+                            std::function<void(ai::ImageRequest, QJsonObject)> then)
 {
-    setMode(mode);
-    m_prompt->setPlainText(prompt);
-    m_skipCharacter = !withCharacter;
-    run();
-    m_skipCharacter = false;
-}
-
-void AiPanel::withCharacter(ai::ImageRequest request, ai::CharacterUse use, std::function<void(ai::ImageRequest, QJsonObject)> then)
-{
-    const QString id = m_skipCharacter ? QString() : m_character->characterId();
-    ai::ImageProvider *provider = m_provider->imageProvider();
+    // Characters are the Characters plugin's: while it is off, none is drawn in.
+    const QString id = skip || !m_charactersOn ? QString() : m_character->characterId();
     if (id.isEmpty() || !provider)
         return then(std::move(request), {});
     const ai::ImageCapabilities caps = provider->capabilities();
@@ -254,87 +336,85 @@ void AiPanel::withCharacter(ai::ImageRequest request, ai::CharacterUse use, std:
             self->m_studio->notify(note);
         }
         then(std::move(request), applied.any() ? applied.toJson(c) : QJsonObject());
+    }).onFailed(this, [self, request, then](const std::exception &e) {
+        // The character's pictures could not be read: the run goes on without it.
+        if (!self)
+            return;
+        self->m_studio->notify(describeException(e), QStringLiteral("warning"));
+        then(request, {});
     });
 }
 
-QString AiPanel::prompt() const
+bool AiPanel::takesNegative(const ai::ImageProvider *provider) const
 {
-    return m_prompt->text();
+    // Only models that take one (FLUX and most online services do not).
+    return provider && provider->capabilities().negativePrompt && ai::promptStyleFor(provider).supportsNegative;
 }
 
 void AiPanel::updateUi()
 {
-    const bool prompt = m_mode == Mode::Inpaint || m_mode == Mode::Variation || m_mode == Mode::Edit || m_mode == Mode::Expand;
-    m_promptBox->setVisible(prompt);
-    m_strength->setVisible(m_mode == Mode::Inpaint || m_mode == Mode::Variation);
+    const bool prompt = m_mode == Mode::Variation || m_mode == Mode::Expand;
+    m_strength->setVisible(m_mode == Mode::Variation);
     m_expandBox->setVisible(m_mode == Mode::Expand);
     m_upscaleBox->setVisible(m_mode == Mode::Upscale);
-    m_refsBox->setVisible(prompt);
-    m_padding->setVisible(m_mode == Mode::Inpaint || m_mode == Mode::Variation || m_mode == Mode::Edit);
-    m_feather->setVisible(prompt);
-    m_colorMatch->setVisible(prompt);
-    m_variants->parentWidget()->setVisible(true);
-    m_variants->setEnabled(prompt);
-    m_strength->setValue(m_mode == Mode::Variation ? 0.45 : (m_strength->value() < 0.5 ? 0.75 : m_strength->value()));
-    m_prompt->setPlaceholderText(m_mode == Mode::Edit ? tr("Describe the change, e.g. 'turn the jacket red'") : tr("Describe what should appear…"));
     QStringList hints;
     hints << m_modes->button(static_cast<int>(m_mode))->toolTip();
-    const bool hasSel = m_doc && m_doc->hasSelection() && !m_doc->selectionBounds().isEmpty();
-    if (m_mode == Mode::Inpaint && !hasSel)
-        hints << tr("Paint a mask (Q) or make a selection first.");
+    if (prompt)
+        hints << tr("It uses the words in the prompt bar under the canvas, if any.");
     m_modeHint->setText(hints.join(u' '));
 
-    ai::ImageProvider *provider = m_provider->imageProvider();
+    // Every action here changes the picture: the engine for changes unless one is chosen.
+    ai::ImageProvider *provider = m_options->provider(m_studio->providers(), true);
+    const ai::ImageCapabilities caps = provider ? provider->capabilities() : ai::ImageCapabilities();
     QString warning;
     if (provider) {
-        const ai::ImageCapabilities caps = provider->capabilities();
-        if (m_mode == Mode::Edit && !caps.edit)
-            warning = tr("%1 has no instruction editing; the change will be done by inpainting.").arg(provider->displayName());
-        else if ((m_mode == Mode::Upscale && !provider->supportsUtility(ai::Utility::Upscale))
-                 || (m_mode == Mode::RemoveBackground && !provider->supportsUtility(ai::Utility::RemoveBackground))
-                 || (m_mode == Mode::DetectPose && !provider->supportsUtility(ai::Utility::DetectPose))) {
+        if ((m_mode == Mode::Upscale && !provider->supportsUtility(ai::Utility::Upscale))
+            || (m_mode == Mode::RemoveBackground && !provider->supportsUtility(ai::Utility::RemoveBackground))
+            || (m_mode == Mode::DetectPose && !provider->supportsUtility(ai::Utility::DetectPose))) {
             ai::ImageProvider *other = m_studio->generation()->providerForUtility(
                 m_mode == Mode::Upscale ? ai::Utility::Upscale : m_mode == Mode::RemoveBackground ? ai::Utility::RemoveBackground : ai::Utility::DetectPose);
-            warning = other ? tr("Will use %1 for this action.").arg(other->displayName())
-                            : tr("No configured provider supports this action.");
-        } else if (!caps.inpaint && !caps.edit && m_mode == Mode::Inpaint) {
-            warning = tr("%1 has no native inpainting; Lumen blends an img2img result into the selection.").arg(provider->displayName());
+            warning = other ? tr("Will use %1 for this action.").arg(imageEngineName(other))
+                            : tr("No image engine you have set up can do this (Help → Set up AI…).");
+        } else if (m_mode == Mode::Variation && !caps.imageToImage && !caps.inpaint && !caps.edit) {
+            warning = tr("%1 only makes new images; it cannot make a variation of this one.").arg(imageEngineName(provider));
         }
-        if (caps.maxReferences == 0)
-            m_refs->setEnabled(false);
-        else
-            m_refs->setEnabled(true);
+        m_refs->setEnabled(caps.maxReferences > 0);
         m_refs->setMaximum(std::max(1, caps.maxReferences));
     }
     m_capsWarning->setText(warning);
     m_capsWarning->setVisible(!warning.isEmpty());
-    m_run->setEnabled(m_doc != nullptr && (m_mode != Mode::Inpaint || hasSel));
+    m_negativeBox->setVisible(takesNegative(provider));
+    m_usePose->setVisible(caps.poseControl && m_doc && m_doc->controlPose());
+    m_steps->setEnabled(!provider || caps.steps);
+    m_run->setEnabled(m_doc != nullptr);
     const QString runText = m_mode == Mode::Upscale ? tr("Upscale")
                           : m_mode == Mode::RemoveBackground ? tr("Remove background")
                           : m_mode == Mode::DetectPose ? tr("Detect pose")
                           : m_mode == Mode::Expand ? tr("Expand canvas")
-                                                   : tr("Generate");
+                                                   : tr("Make a variation");
     m_run->setText(runText);
 }
 
-ai::ImageRequest AiPanel::baseRequest() const
+ai::ImageRequest AiPanel::baseRequest(const ai::ImageProvider *provider, const QString &prompt, bool styled) const
 {
     ai::ImageRequest r;
-    ai::ImageProvider *provider = m_provider->imageProvider();
     const ai::PromptStyle style = ai::promptStyleFor(provider);
-    r.prompt = m_prompt->text().trimmed();
-    if (m_mode != Mode::Edit)
-        r.prompt = style.apply(r.prompt);
-    r.negativePrompt = m_negative->text().trimmed();
+    // Instruction edits take the user's words as they are; the style's tags would read as orders.
+    r.prompt = styled ? style.apply(prompt) : prompt;
+    r.negativePrompt = takesNegative(provider) ? m_options->negative().trimmed() : QString();
     if (r.negativePrompt.isEmpty() && style.supportsNegative)
         r.negativePrompt = style.defaultNegative;
-    r.denoise = m_strength->value();
-    r.batchCount = m_variants->value();
+    r.batchCount = m_options->variants();
+    r.seed = m_options->seed();
     r.references = m_refs->references();
     if (provider) {
         const ai::ImageCapabilities caps = provider->capabilities();
+        if (m_options->steps() > 0 && caps.steps) {
+            r.steps = m_options->steps();
+            r.stepsChosen = true;
+        }
         r.references = r.references.mid(0, caps.maxReferences);
-        if (m_usePose->isChecked() && m_doc && m_doc->controlPose() && caps.poseControl) {
+        if (m_options->usePose() && m_doc && m_doc->controlPose() && caps.poseControl) {
             ai::ControlInput c;
             c.type = ai::ControlType::OpenPose;
             c.image = pose::renderOpenPose(*m_doc->controlPose(), m_doc->size());
@@ -346,14 +426,18 @@ ai::ImageRequest AiPanel::baseRequest() const
 
 void AiPanel::submitWithComposite(std::function<void(QImage)> fn)
 {
-    if (!m_doc)
-        return;
-    const doc::DocumentSnapshot snap = m_doc->snapshot();
-    const QSize size = m_doc->size();
+    if (m_doc)
+        submitWithComposite(m_doc, std::move(fn));
+}
+
+void AiPanel::submitWithComposite(doc::Document *doc, std::function<void(QImage)> fn)
+{
+    const doc::DocumentSnapshot snap = doc->snapshot();
+    const QSize size = doc->size();
     async::run([snap, size] { return doc::flatten(snap, size); }).then(this, std::move(fn));
 }
 
-void AiPanel::addResultLayers(doc::Document *doc, const QList<QImage> &images, const QString &name, const QJsonObject &meta)
+void AiPanel::addResultLayers(Studio *studio, doc::Document *doc, const QList<QImage> &images, const QString &name, const QJsonObject &meta)
 {
     if (images.isEmpty())
         return;
@@ -378,7 +462,7 @@ void AiPanel::addResultLayers(doc::Document *doc, const QList<QImage> &images, c
     if (!ids.isEmpty())
         doc->setActiveLayer(ids.first());
     if (images.size() > 1)
-        m_studio->notify(tr("%1 variants were added as layers - toggle their visibility to compare.").arg(images.size()));
+        studio->notify(tr("%1 variants were added as layers - toggle their visibility to compare.").arg(images.size()));
 }
 
 void AiPanel::trackJob(Job *job, std::function<void(doc::Document *, const ai::GenerationOutput &)> apply)
@@ -388,9 +472,7 @@ void AiPanel::trackJob(Job *job, std::function<void(doc::Document *, const ai::G
     connect(card, &JobCard::dismissed, card, &QObject::deleteLater);
     QPointer<doc::Document> doc = m_doc;
     QPointer<JobCard> cardGuard(card);
-    emit runningJobsChanged(++m_running);
     connect(job, &Job::finished, this, [this, doc, apply, cardGuard](Job *j) {
-        emit runningJobsChanged(--m_running);
         if (j->state() == Job::State::Succeeded && doc)
             apply(doc, ai::GenerationService::outputOf(j));
         else if (j->state() == Job::State::Failed)
@@ -408,72 +490,130 @@ void AiPanel::trackJob(Job *job, std::function<void(doc::Document *, const ai::G
     }
 }
 
-void AiPanel::run()
+void AiPanel::submitPrompt(const PromptRun &run)
 {
     if (!m_doc)
         return;
-    const QString providerId = m_provider->providerId();
-    if (providerId.isEmpty()) {
-        m_studio->notify(tr("Add an image provider in Settings → Providers first."), QStringLiteral("warning"));
+    // The engine the bar planned with, else the editor's for this kind of run: a new image goes to
+    // the engine for new images, a change to the engine for changes (Settings → AI).
+    ai::ImageProvider *provider = run.providerId.isEmpty()
+                                      ? m_options->provider(m_studio->providers(), run.mode != ai::GenMode::TextToImage)
+                                      : m_studio->providers()->imageProvider(run.providerId);
+    if (!provider) {
+        m_studio->notify(tr("Set up an image engine first: Help → Set up AI…"), QStringLiteral("warning"));
         return;
     }
     QPointer<doc::Document> doc = m_doc;
-    const QString prompt = m_prompt->text().trimmed();
-    const QString title = prompt.isEmpty() ? m_run->text() : prompt.left(60);
-    ai::GenerationService *gen = m_studio->generation();
-
-    switch (m_mode) {
-    case Mode::Inpaint:
-    case Mode::Variation:
-    case Mode::Edit: {
-        const bool hasSel = doc->hasSelection() && !doc->selectionBounds().isEmpty();
-        if (m_mode == Mode::Inpaint && !hasSel) {
-            m_studio->notify(tr("Paint a mask or make a selection first."), QStringLiteral("warning"));
-            return;
-        }
-        if (m_mode == Mode::Edit && prompt.isEmpty()) {
-            m_studio->notify(tr("Describe the change you want."), QStringLiteral("warning"));
-            return;
-        }
-        const QImage selection = hasSel ? doc->selection() : QImage();
-        const Mode mode = m_mode;
-        const int padding = int(m_padding->value());
-        const int feather = int(m_feather->value());
-        const bool colorMatch = m_colorMatch->isChecked();
-        ai::ImageProvider *provider = m_provider->imageProvider();
-        const ai::ImageCapabilities caps = provider ? provider->capabilities() : ai::ImageCapabilities();
-        // A region gets the character's LoRA (or reference) only; the prompt describes the region.
-        const ai::CharacterUse use = mode == Mode::Edit ? ai::CharacterUse::Edit : hasSel ? ai::CharacterUse::Region : ai::CharacterUse::Full;
-        withCharacter(baseRequest(), use, [=, this](const ai::ImageRequest &req, const QJsonObject &character) {
-            submitWithComposite([=, this](QImage composite) {
-                if (!doc)
-                    return;
-                ai::GenerationSpec spec;
-                spec.providerId = providerId;
-                spec.request = req;
-                spec.title = title;
-                spec.assetKind = doc::AssetKind::Edit;
-                spec.meta = QJsonObject{{QStringLiteral("document"), doc->id()}, {QStringLiteral("action"), static_cast<int>(mode)}};
-                if (!character.isEmpty())
-                    spec.meta.insert(QStringLiteral("character"), character);
-                if (!selection.isNull()) {
-                    spec.region = ai::RegionInput{composite, selection, padding, 6, feather, colorMatch};
+    if (m_preparing)
+        m_preparing(doc);
+    // Told once the jobs are out, or that there are none (the document closed meanwhile).
+    QPointer<AiPanel> self(this);
+    auto giveUp = [self, doc, name = run.name] {
+        if (self && self->m_results)
+            self->m_results(doc, {}, name, 0);
+    };
+    const QString providerId = provider->instanceId();
+    const ai::ImageCapabilities caps = provider->capabilities();
+    const bool region = run.region && doc->hasSelection() && !doc->selectionBounds().isEmpty();
+    const QImage selection = region ? doc->selection() : QImage();
+    const int padding = m_options->padding();
+    const int feather = m_options->feather();
+    const bool colorMatch = m_options->colorMatch();
+    const int variants = m_options->variants();
+    const ai::GenMode mode = run.mode;
+    ai::ImageRequest base = baseRequest(provider, run.prompt, mode != ai::GenMode::Edit);
+    base.mode = mode;
+    base.denoise = run.strength;
+    // A region gets the character's LoRA (or reference) only; the prompt describes the region.
+    const ai::CharacterUse use = mode == ai::GenMode::Edit ? ai::CharacterUse::Edit : region ? ai::CharacterUse::Region : ai::CharacterUse::Full;
+    withCharacter(base, use, !run.withCharacter, provider, [=, this](const ai::ImageRequest &req, const QJsonObject &character) {
+        if (!doc)
+            return giveUp();
+        submitWithComposite(doc, [=, this](QImage composite) {
+            if (!doc)
+                return giveUp();
+            ai::GenerationSpec spec;
+            spec.providerId = providerId;
+            spec.request = req;
+            spec.title = run.prompt.isEmpty() ? run.name : run.prompt.left(60);
+            spec.assetKind = mode == ai::GenMode::TextToImage ? doc::AssetKind::Generation : doc::AssetKind::Edit;
+            spec.meta = QJsonObject{{QStringLiteral("document"), doc->id()}, {QStringLiteral("user_prompt"), run.prompt}};
+            if (run.action)
+                spec.meta.insert(QStringLiteral("action"), static_cast<int>(*run.action));
+            if (!character.isEmpty())
+                spec.meta.insert(QStringLiteral("character"), character);
+            if (region) {
+                spec.region = ai::RegionInput{composite, selection, padding, 6, feather, colorMatch};
+            } else {
+                // The whole image, or a new one, at the model's working resolution; the results are
+                // scaled back to the canvas.
+                if (mode == ai::GenMode::TextToImage) {
+                    spec.request.size = workingSize(composite.size(), caps);
                 } else {
-                    // Whole image: img2img / instruction edit at the model's working resolution.
-                    spec.request.mode = mode == Mode::Edit && caps.edit ? ai::GenMode::Edit : ai::GenMode::ImageToImage;
+                    spec.request.mode = mode == ai::GenMode::Edit && caps.edit ? ai::GenMode::Edit : ai::GenMode::ImageToImage;
                     spec.request.initImage = ai::wholeImageInput(composite, caps);
                     spec.request.size = spec.request.initImage.size();
+                    // The results come back at the picture's size with its fine detail where the engine
+                    // kept its shapes (a colorized photo stays as sharp as it was).
+                    spec.detailSource = composite;
                 }
-                Job *job = gen->submit(spec);
-                const QString name = mode == Mode::Edit ? tr("Edit: %1").arg(prompt.left(32)) : (prompt.isEmpty() ? tr("AI variation") : prompt.left(40));
-                trackJob(job, [this, name](doc::Document *d, const ai::GenerationOutput &out) {
+            }
+            // Engines that make one image per request get one job per variant, each with its own seed.
+            spec.request.batchCount = variants;
+            const QList<Job *> jobs = m_studio->generation()->submitVariants(spec);
+            if (m_results) {
+                m_results(doc, jobs, run.name, variants);
+                return;
+            }
+            for (Job *job : std::as_const(jobs)) {
+                trackJob(job, [this, name = run.name](doc::Document *d, const ai::GenerationOutput &out) {
                     QJsonObject meta{{QStringLiteral("generated"), true}};
                     if (!out.assets.isEmpty())
                         meta.insert(QStringLiteral("asset"), out.assets.first().id);
                     addResultLayers(d, out.images, name, meta);
                 });
-            });
+            }
         });
+    });
+}
+
+void AiPanel::upscale(double factor)
+{
+    const int index = m_upscaleFactor->findData(factor);
+    if (index >= 0)
+        m_upscaleFactor->setCurrentIndex(index);
+    run(Mode::Upscale);
+}
+
+void AiPanel::run(Mode mode)
+{
+    if (!m_doc)
+        return;
+    ai::ImageProvider *provider = m_options->provider(m_studio->providers(), true);
+    if (!provider) {
+        m_studio->notify(tr("Set up an image engine first: Help → Set up AI…"), QStringLiteral("warning"));
+        return;
+    }
+    QPointer<doc::Document> doc = m_doc;
+    const QString providerId = provider->instanceId();
+    const QString prompt = m_options->prompt().trimmed();
+    const QString title = prompt.isEmpty() ? m_run->text() : prompt.left(60);
+    ai::GenerationService *gen = m_studio->generation();
+
+    switch (mode) {
+    case Mode::Inpaint:
+    case Mode::Edit:
+    case Mode::Variation: {
+        // A variation of the selection (inpainted at a low strength), else of the whole image.
+        const bool hasSel = doc->hasSelection() && !doc->selectionBounds().isEmpty();
+        PromptRun run;
+        run.mode = ai::GenMode::ImageToImage;
+        run.region = hasSel;
+        run.prompt = prompt;
+        run.strength = m_options->variationStrength();
+        run.name = prompt.isEmpty() ? tr("AI variation") : prompt.simplified().left(40);
+        run.action = Mode::Variation;
+        submitPrompt(run);
         break;
     }
     case Mode::Expand: {
@@ -503,11 +643,11 @@ void AiPanel::run()
                                          m_expandRight->isChecked() ? -overlap : 0, m_expandBottom->isChecked() ? -overlap : 0),
                        Qt::black);
         }
-        ai::ImageRequest base = baseRequest();
+        ai::ImageRequest base = baseRequest(provider, prompt, true);
         base.denoise = 1.0;
-        const int feather = int(m_feather->value());
-        const bool colorMatch = m_colorMatch->isChecked();
-        withCharacter(base, ai::CharacterUse::Region, [=, this](const ai::ImageRequest &req, const QJsonObject &character) {
+        const int feather = m_options->feather();
+        const bool colorMatch = m_options->colorMatch();
+        withCharacter(base, ai::CharacterUse::Region, false, provider, [=, this](const ai::ImageRequest &req, const QJsonObject &character) {
             submitWithComposite([=, this](QImage composite) {
                 if (!doc)
                     return;
@@ -563,7 +703,7 @@ void AiPanel::run()
                 if (auto pose = pose::Pose::fromOpenPoseJson(json, nullptr, d->size()); pose && !pose->isEmpty()) {
                     d->setControlPose(*pose);
                     if (m_studio->hasPage(QStringLiteral("poses"))) {
-                        m_studio->notify(tr("Pose detected - it is now the document's control pose. Open the Poses page to edit it."));
+                        m_studio->notify(tr("Pose detected - it is now the document's control pose, and open in the Poses window to edit."));
                         m_studio->editPose(*pose, d->name());
                     } else {
                         m_studio->notify(tr("Pose detected - it is now the document's control pose."));

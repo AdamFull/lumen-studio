@@ -33,7 +33,9 @@ class Studio;
 // on the active layer, through the selection, onto a new layer (or the layer itself) as one undo
 // step, in the background with progress and Cancel. New filter…, Edit…, Duplicate and Delete
 // manage the saved filters (Edit opens the filter editor, NodeEditorWindow); built-in filters are
-// edited as a copy. The actions stay in view under the details, which scroll.
+// edited as a copy. The actions stay in view under the details, which scroll. AI results to choose
+// from (the results strip) show on the canvas instead of the preview until they are kept or
+// discarded.
 class FiltersPanel : public QWidget
 {
     Q_OBJECT
@@ -112,6 +114,7 @@ private:
     QVBoxLayout *m_settingsLayout;
     QList<ParamField *> m_fields;
     QCheckBox *m_previewCheck;
+    QLabel *m_previewNote; // while the canvas shows AI results instead
     QComboBox *m_target;
     QWidget *m_footer; // the line about the selection, the reason it cannot run, the actions
     QLabel *m_selectionHint;

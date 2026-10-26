@@ -185,8 +185,10 @@ PosePage::PosePage(Studio *studio, QWidget *parent)
     th->addGroup(modeButtons);
     m_aspect = new QComboBox(toolbar);
     m_aspect->addItems(kAspects);
+    m_aspect->setAccessibleName(tr("Canvas"));
     th->addGroup({new QLabel(tr("Canvas"), toolbar), m_aspect});
     m_people = new QComboBox(toolbar);
+    m_people->setAccessibleName(tr("Person"));
     m_people->setSizeAdjustPolicy(QComboBox::AdjustToContents);
     auto *addPerson = iconButton(QStringLiteral("plus"), tr("Add a person"), toolbar);
     auto *removePerson = iconButton(QStringLiteral("trash"), tr("Remove the selected person"), toolbar);
@@ -223,7 +225,8 @@ PosePage::PosePage(Studio *studio, QWidget *parent)
     more->setMenu(fileMenu);
     auto *toDoc = new QPushButton(Icons::get(QStringLiteral("brush")), tr("To document"), bottom);
     toDoc->setToolTip(tr("Use as the control pose of the active editor document"));
-    auto *toGen = new QPushButton(Icons::get(QStringLiteral("sparkles")), tr("Use in Generate"), bottom);
+    auto *toGen = new QPushButton(Icons::get(QStringLiteral("sparkles")), tr("New image with this pose"), bottom);
+    toGen->setToolTip(tr("Describe a new image in the editor's New from prompt; it is drawn in this pose"));
     Theme::setRole(toGen, QStringLiteral("primary"));
     bh->setAlignment(bh->addGroup({more, toDoc, toGen}), Qt::AlignRight);
     cv->addWidget(bottom);

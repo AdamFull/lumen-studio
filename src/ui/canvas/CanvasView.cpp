@@ -162,6 +162,11 @@ void CanvasView::setDocument(doc::Document *doc)
     m_doc = doc;
     m_contour = QPainterPath();
     m_antsTimer.stop();
+    // A preview belongs to the document it was made of.
+    const bool hadFilter = !m_filterPreview.isNull(), hadResult = !m_resultPreview.isNull();
+    m_filterPreview = QImage();
+    m_resultPreview = QImage();
+    m_previewScaled = QImage();
     m_fitPending = true;
     if (doc) {
         m_overlay.reset(doc->size());
@@ -175,6 +180,10 @@ void CanvasView::setDocument(doc::Document *doc)
         rebuildSelectionOverlay(doc->bounds());
         QTimer::singleShot(0, this, &CanvasView::fitToView);
     }
+    if (hadFilter)
+        emit previewChanged(Preview::Filter);
+    if (hadResult)
+        emit previewChanged(Preview::Result);
     emit documentChanged(doc);
     updateAll();
 }
@@ -205,6 +214,17 @@ void CanvasView::setCursorOverride(const QCursor &cursor)
     m_surface->setCursor(cursor);
 }
 
+void CanvasView::setPreview(Preview kind, const QImage &image)
+{
+    QImage &slot = kind == Preview::Result ? m_resultPreview : m_filterPreview;
+    if (image.isNull() && slot.isNull())
+        return;
+    slot = image;
+    m_previewScaled = QImage();
+    emit previewChanged(kind);
+    updateAll();
+}
+
 // ---- view transform -----------------------------------------------------------------------------
 
 QPointF CanvasView::mapToDoc(const QPointF &widgetPos) const
@@ -233,6 +253,7 @@ void CanvasView::setZoom(double zoom, const QPointF &anchor)
     const QPointF docAnchor = mapToDoc(anchor);
     m_zoom = zoom;
     m_pan = anchor - docAnchor * m_zoom;
+    m_fitted = false;
     clampPan();
     emit zoomChanged(m_zoom);
     emit viewChanged();
@@ -257,6 +278,7 @@ void CanvasView::fitToView()
         return;
     }
     m_fitPending = false;
+    m_fitted = true;
     const QSizeF avail = QSizeF(m_surface->size()) * 0.92;
     const QSize s = m_doc->size();
     m_zoom = std::clamp(std::min(avail.width() / s.width(), avail.height() / s.height()), kMinZoom, kMaxZoom);
@@ -274,6 +296,7 @@ void CanvasView::actualPixels()
 void CanvasView::panBy(const QPointF &delta)
 {
     m_pan += delta;
+    m_fitted = false;
     clampPan();
     emit viewChanged();
     updateAll();
@@ -303,7 +326,8 @@ void CanvasView::updateAll()
 void CanvasView::resizeEvent(QResizeEvent *e)
 {
     QWidget::resizeEvent(e);
-    if (m_fitPending)
+    // A fitted picture stays whole (e.g. when the results strip takes some of the height).
+    if (m_fitPending || m_fitted)
         QTimer::singleShot(0, this, &CanvasView::fitToView);
     emit viewChanged();
 }
@@ -345,14 +369,6 @@ void CanvasView::scheduleContour()
             self->m_antsTimer.stop();
         self->updateAll();
     });
-}
-
-void CanvasView::setPreview(const QImage &image)
-{
-    if (image.isNull() && m_preview.isNull())
-        return;
-    m_preview = image;
-    updateAll();
 }
 
 // ---- rendering --------------------------------------------------------------------------------------
@@ -407,8 +423,23 @@ void CanvasView::render(QPainter &p, const QRect &widgetRect)
         const QPointF br = mapFromDoc(QPointF(docRect.right() + 1, docRect.bottom() + 1));
         return QRectF(QPointF(std::round(tl.x()), std::round(tl.y())), QPointF(std::round(br.x()), std::round(br.y())));
     };
-    if (!m_preview.isNull()) {
-        p.drawImage(docWidget, m_preview);
+    // A result to choose from or a filter's preview instead of the document's pixels (its
+    // transparency shows the checkerboard). Below 100 % a copy at the current zoom is drawn as it
+    // is, so that the repaints of the marching ants stay cheap.
+    const QImage &shown = preview();
+    if (!shown.isNull()) {
+        const double scale = m_zoom * devicePixelRatioF();
+        if (scale < 1.0) {
+            const QSize target = (QSizeF(m_doc->size()) * scale).toSize().expandedTo(QSize(1, 1));
+            if (m_previewScaled.size() != target)
+                m_previewScaled = shown.scaled(target, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+            p.drawImage(docWidget, m_previewScaled);
+        } else {
+            const double sx = double(shown.width()) / m_doc->size().width();
+            const double sy = double(shown.height()) / m_doc->size().height();
+            const QRectF source(visible.left() * sx, visible.top() * sy, visible.width() * sx, visible.height() * sy);
+            p.drawImage(mapFromDoc(visible), shown, source);
+        }
     } else {
         for (int r = r0; r <= r1; ++r) {
             for (int c = c0; c <= c1; ++c) {
@@ -419,8 +450,8 @@ void CanvasView::render(QPainter &p, const QRect &widgetRect)
         }
     }
 
-    // Selection tint.
-    if (m_doc->hasSelection() && m_state->showSelectionOverlay() && m_preview.isNull()) {
+    // Selection tint (not over a preview, whose colours it would hide).
+    if (m_doc->hasSelection() && m_state->showSelectionOverlay() && shown.isNull()) {
         const QImage &sel = m_doc->selection();
         const QColor tint = pal.accent;
         m_overlay.update(visibleDoc, level, [&sel, tint](QImage &target, const QRect &rect) {
@@ -687,6 +718,11 @@ void CanvasView::handleKey(QKeyEvent *e, bool press)
         return;
     }
     if (press && m_tool && m_tool->key(this, e)) {
+        e->accept();
+        return;
+    }
+    // The tool comes first (the move tool's arrows, the transform and crop tools' Enter and Esc).
+    if (press && m_keyFallback && m_keyFallback(e)) {
         e->accept();
         return;
     }

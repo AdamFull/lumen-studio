@@ -51,6 +51,7 @@ private slots:
     void psdRoundTrip();
     void psdComponentsPerformance();
     void edgeColorsRemoveDrift();
+    void restoreDetail();
 };
 
 void TestMasks::components()
@@ -318,6 +319,48 @@ void TestMasks::edgeColorsRemoveDrift()
     QImage all(size, QImage::Format_Grayscale8);
     all.fill(255);
     QCOMPARE(img::matchEdgeColors(generated, reference, all, 24, 36), generated);
+}
+
+// An edit made at half the size gets the original's fine detail back where it kept the picture, and
+// none where it changed what is there (no ghost of a removed object), also when the edit made the
+// whole picture lighter.
+void TestMasks::restoreDetail()
+{
+    const QSize full(400, 400);
+    QImage original(full, QImage::Format_ARGB32);
+    for (int y = 0; y < full.height(); ++y) {
+        for (int x = 0; x < full.width(); ++x) {
+            const int l = (x + y) % 2 ? 160 : 100; // a checker that halving the size turns flat
+            original.setPixel(x, y, qRgb(l, l, l));
+        }
+    }
+    QImage edited = original.scaled(200, 200, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    for (int y = 0; y < edited.height(); ++y) {
+        for (int x = 0; x < edited.width(); ++x) {
+            const int l = std::min(255, qGray(edited.pixel(x, y)) + 20); // lighter, and warm
+            edited.setPixel(x, y, qRgb(std::min(255, l + 20), l, std::max(0, l - 20)));
+        }
+    }
+    QPainter(&edited).fillRect(QRect(60, 60, 80, 80), QColor(20, 30, 200)); // something else in the middle
+    const QImage restored = img::restoreDetail(edited, original);
+    QCOMPARE(restored.size(), full);
+    // How much neighbouring pixels differ: the checker's 60 levels, or nothing.
+    auto texture = [&restored](const QRect &r) {
+        double sum = 0;
+        int n = 0;
+        for (int y = r.top(); y <= r.bottom(); ++y) {
+            for (int x = r.left(); x < r.right(); ++x, ++n)
+                sum += std::abs(qGray(restored.pixel(x, y)) - qGray(restored.pixel(x + 1, y)));
+        }
+        return sum / n;
+    };
+    QVERIFY2(texture(QRect(20, 20, 60, 60)) > 45, qPrintable(QString::number(texture(QRect(20, 20, 60, 60)))));
+    QVERIFY2(texture(QRect(150, 150, 100, 100)) < 3, qPrintable(QString::number(texture(QRect(150, 150, 100, 100)))));
+    // The edit's colours stay: lighter and warm outside, blue in the middle.
+    QVERIFY(qRed(restored.pixel(30, 31)) > qBlue(restored.pixel(30, 31)) + 20);
+    QVERIFY(qBlue(restored.pixel(200, 200)) > 180);
+    // Not made smaller: only scaled.
+    QCOMPARE(img::restoreDetail(original, original).pixel(10, 11), original.pixel(10, 11));
 }
 
 QTEST_MAIN(TestMasks)

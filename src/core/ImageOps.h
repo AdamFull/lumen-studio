@@ -70,6 +70,13 @@ QImage colorMatch(const QImage &generated, const QImage &reference, const QImage
 // `inner` pixels inside it, so a blended-in edit shows no halo while the edited content keeps the
 // model's colours. Returns a corrected copy of `generated`.
 QImage matchEdgeColors(const QImage &generated, const QImage &reference, const QImage &mask, int radius, int inner);
+// `result`, an edit of `original` made at a smaller size, brought back to the original's size with
+// the original's fine detail where the result kept its shapes: the detail that scaling the original
+// down took away is added to the result scaled up, as far as the result's brightness follows the
+// scaled-down original around a pixel (where the edit changed what is there, the old detail would
+// show as a ghost, so none is added). A colorized photo stays as sharp as it was. Opaque (the
+// original is seen on white, as an engine sees it).
+QImage restoreDetail(const QImage &result, const QImage &original);
 // Fills the transparent/new area of an outpaint canvas by smearing edge pixels (gives models context).
 QImage fillTransparentFromEdges(const QImage &image);
 // Flattens onto a solid colour (removes alpha).

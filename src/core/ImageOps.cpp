@@ -640,6 +640,73 @@ QImage matchEdgeColors(const QImage &generated, const QImage &reference, const Q
     return out.convertToFormat(generated.format());
 }
 
+QImage restoreDetail(const QImage &result, const QImage &original)
+{
+    const QSize full = original.size();
+    if (result.isNull() || full.isEmpty())
+        return result;
+    const QSize work = result.size();
+    const QImage up = flatten(scaled(result, full, true), Qt::white);
+    // Not made smaller than the original: there is no lost detail to bring back.
+    if (work.width() * 10 >= full.width() * 9 && work.height() * 10 >= full.height() * 9)
+        return normalized(up);
+    const QImage source = flatten(original, Qt::white);
+    const QImage small = flatten(scaled(source, work, true), Qt::white); // what the engine was shown
+    const QImage low = flatten(scaled(small, full, true), Qt::white);    // the same at full size
+    const QImage edited = flatten(result, Qt::white);
+
+    // How far the result's brightness strays from the input's, at the working size, beyond a shift
+    // of the whole picture (an edit may make everything lighter or darker). The shift is the median,
+    // so that a large changed area does not count as one.
+    auto luma = [](QRgb p) { return (qRed(p) * 77 + qGreen(p) * 150 + qBlue(p) * 29) >> 8; };
+    QImage diff(work, QImage::Format_Grayscale8);
+    std::vector<int> delta(size_t(work.width()) * size_t(work.height()));
+    std::vector<qint64> histogram(511, 0);
+    for (int y = 0; y < work.height(); ++y) {
+        const auto *a = reinterpret_cast<const QRgb *>(edited.constScanLine(y));
+        const auto *b = reinterpret_cast<const QRgb *>(small.constScanLine(y));
+        for (int x = 0; x < work.width(); ++x) {
+            const int d = luma(a[x]) - luma(b[x]);
+            delta[size_t(y) * size_t(work.width()) + size_t(x)] = d;
+            ++histogram[size_t(d + 255)];
+        }
+    }
+    int shift = 0;
+    for (qint64 seen = 0, half = qint64(delta.size()) / 2; shift < 510; ++shift) {
+        seen += histogram[size_t(shift)];
+        if (seen > half)
+            break;
+    }
+    shift -= 255;
+    // Full detail up to a difference of 12 levels, none from 40 on.
+    constexpr int kKeep = 12, kDrop = 40;
+    for (int y = 0; y < work.height(); ++y) {
+        uchar *w = diff.scanLine(y);
+        for (int x = 0; x < work.width(); ++x) {
+            const int d = std::abs(delta[size_t(y) * size_t(work.width()) + size_t(x)] - shift);
+            w[x] = uchar(std::clamp((kDrop - d) * 255 / (kDrop - kKeep), 0, 255));
+        }
+    }
+    // Smoothed, so that the weight follows areas rather than single noisy pixels.
+    const QImage weight = scaled(blurMask(diff, 2), full, true).convertToFormat(QImage::Format_Grayscale8);
+
+    QImage out(full, QImage::Format_ARGB32_Premultiplied);
+    for (int y = 0; y < full.height(); ++y) {
+        const auto *u = reinterpret_cast<const QRgb *>(up.constScanLine(y));
+        const auto *s = reinterpret_cast<const QRgb *>(source.constScanLine(y));
+        const auto *l = reinterpret_cast<const QRgb *>(low.constScanLine(y));
+        const uchar *w = weight.constScanLine(y);
+        auto *o = reinterpret_cast<QRgb *>(out.scanLine(y));
+        for (int x = 0; x < full.width(); ++x) {
+            const int k = w[x];
+            auto channel = [k](int up, int src, int lo) { return std::clamp(up + (src - lo) * k / 255, 0, 255); };
+            o[x] = qRgb(channel(qRed(u[x]), qRed(s[x]), qRed(l[x])), channel(qGreen(u[x]), qGreen(s[x]), qGreen(l[x])),
+                        channel(qBlue(u[x]), qBlue(s[x]), qBlue(l[x])));
+        }
+    }
+    return out;
+}
+
 QImage fillTransparentFromEdges(const QImage &image)
 {
     // Push-pull fill: build a mip pyramid of premultiplied colour (ignoring transparent pixels),

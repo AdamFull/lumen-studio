@@ -1451,6 +1451,17 @@ void TestFiltersUi::aiNodesSayWhatTheyNeed()
     studio.providers()->setDefaultImageProvider(klein->instanceId());
     QVERIFY(edit->unavailableReason({}).isEmpty());
     QTRY_VERIFY(availability->isHidden());
+    // A step changes a picture: the one in use is the engine for changes of Settings → AI (the
+    // image engine unless another is chosen for changes), as for the editor's prompt bar.
+    studio.providers()->setEditImageProvider(sdxl->instanceId());
+    QVERIFY(edit->unavailableReason({}).contains(QStringLiteral("“SDXL” cannot change a picture from a description")));
+    QTRY_VERIFY(!availability->isHidden());
+    studio.providers()->setDefaultImageProvider(sdxl->instanceId());
+    studio.providers()->setEditImageProvider(klein->instanceId());
+    QVERIFY(edit->unavailableReason({}).isEmpty());
+    QTRY_VERIFY(availability->isHidden());
+    studio.providers()->setDefaultImageProvider(klein->instanceId());
+    studio.providers()->setEditImageProvider(QString());
     // An empty instruction is refused when the step runs, before anything is sent.
     error = waitFor(evaluator.evaluate(chain(fn::Edit, QStringLiteral("Empty")), {twoColours(), {}}));
     QVERIFY2(error.contains(QStringLiteral("“Instruction” is empty")), qPrintable(error));

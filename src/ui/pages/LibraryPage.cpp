@@ -282,26 +282,26 @@ LibraryPage::LibraryPage(Studio *studio, QWidget *parent)
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
 
-    // Toolbar.
+    // Toolbar (the window's title names the page: File → Browse project images).
     auto *bar = new QWidget(this);
     bar->setObjectName(QStringLiteral("Panel"));
     auto *bh = new FlowLayout(bar);
     bh->setContentsMargins(16, 10, 16, 10);
-    auto *title = new QLabel(tr("Library"), bar);
-    Theme::setRole(title, QStringLiteral("title"));
-    bh->addWidget(title);
     m_kinds = new QButtonGroup(this);
-    const QList<QPair<QString, int>> kinds = {
+    QList<QPair<QString, int>> kinds = {
         {tr("All"), kAllFilter},
         {tr("Generated"), static_cast<int>(doc::AssetKind::Generation)},
         {tr("Edited"), static_cast<int>(doc::AssetKind::Edit)},
         {tr("References"), static_cast<int>(doc::AssetKind::Reference)},
         {tr("Imported"), static_cast<int>(doc::AssetKind::Import)},
-        {tr("Poses"), static_cast<int>(doc::AssetKind::Pose)},
         {tr("Exports"), static_cast<int>(doc::AssetKind::Export)},
-        {tr("Parts"), static_cast<int>(doc::AssetKind::Part)},
         {tr("Documents"), kDocumentsFilter},
     };
+    // Poses and sliced parts are made by plugins: their kinds show while those are on.
+    if (studio->hasPage(QStringLiteral("poses")))
+        kinds.insert(5, {tr("Poses"), static_cast<int>(doc::AssetKind::Pose)});
+    if (studio->hasPage(QStringLiteral("parts")))
+        kinds.insert(kinds.size() - 1, {tr("Parts"), static_cast<int>(doc::AssetKind::Part)});
     for (const auto &k : kinds) {
         auto *chip = new QToolButton(bar);
         chip->setText(k.first);
@@ -350,7 +350,7 @@ LibraryPage::LibraryPage(Studio *studio, QWidget *parent)
     gv->setContentsMargins(0, 0, 0, 0);
     gv->addWidget(m_view, 1);
     auto *empty = new QLabel(tr("<h3>No images yet</h3><p>Generated images, edits, references and imports of this project appear here.<br>"
-                                "Drag images in, use Import, or create something on the Generate and Create pages.</p>"), gallery);
+                                "Drag images in, use Import, or make one with File → New from prompt.</p>"), gallery);
     empty->setAlignment(Qt::AlignCenter);
     empty->setStyleSheet(QStringLiteral("color: %1;").arg(Theme::palette().textMuted.name()));
     gv->addWidget(empty, 1);
@@ -391,34 +391,57 @@ LibraryPage::LibraryPage(Studio *studio, QWidget *parent)
     m_meta = mutedLabel(QString(), inspector);
     m_meta->setTextInteractionFlags(Qt::TextSelectableByMouse);
     iv->addWidget(m_meta);
-    iv->addWidget(sectionLabel(tr("Prompt")));
-    m_prompt = new QPlainTextEdit(inspector);
-    m_prompt->setReadOnly(true);
-    m_prompt->setAccessibleName(tr("Prompt"));
-    m_prompt->setMaximumHeight(110);
-    iv->addWidget(m_prompt);
-    iv->addWidget(sectionLabel(tr("Parameters")));
-    m_params = new QPlainTextEdit(inspector);
-    m_params->setReadOnly(true);
-    m_params->setAccessibleName(tr("Parameters"));
-    iv->addWidget(m_params, 1);
+    // What can be done with it, right under the picture (in reach on a small screen).
     auto *actions = new QGridLayout;
     actions->setSpacing(6);
     auto *open = new QPushButton(Icons::get(QStringLiteral("brush")), tr("Open in editor"), inspector);
     Theme::setRole(open, QStringLiteral("primary"));
     auto *asRef = new QPushButton(Icons::get(QStringLiteral("link")), tr("Use as reference"), inspector);
+    asRef->setToolTip(tr("Add to the reference images of the editor's AI panel"));
     auto *usePrompt = new QPushButton(Icons::get(QStringLiteral("text")), tr("Reuse prompt"), inspector);
-    auto *rerun = new QPushButton(Icons::get(QStringLiteral("refresh")), tr("Re-run"), inspector);
+    usePrompt->setToolTip(tr("Put the image's prompt into the editor's prompt bar"));
+    auto *rerun = new QPushButton(Icons::get(QStringLiteral("refresh")), tr("Make another like this"), inspector);
+    rerun->setObjectName(QStringLiteral("rerun"));
+    rerun->setToolTip(tr("New from prompt with the image's words, size and seed"));
     auto *exportBtn = new QPushButton(Icons::get(QStringLiteral("download")), tr("Export…"), inspector);
     auto *del = new QPushButton(Icons::get(QStringLiteral("trash")), tr("Delete"), inspector);
     Theme::setRole(del, QStringLiteral("danger"));
     actions->addWidget(open, 0, 0, 1, 2);
-    actions->addWidget(asRef, 1, 0);
-    actions->addWidget(usePrompt, 1, 1);
-    actions->addWidget(rerun, 2, 0);
-    actions->addWidget(exportBtn, 2, 1);
-    actions->addWidget(del, 3, 0, 1, 2);
+    actions->addWidget(rerun, 1, 0, 1, 2);
+    actions->addWidget(asRef, 2, 0);
+    actions->addWidget(usePrompt, 2, 1);
+    actions->addWidget(exportBtn, 3, 0);
+    actions->addWidget(del, 3, 1);
     iv->addLayout(actions);
+    // The words it was made from, and how, when it has them.
+    m_promptBox = new QWidget(inspector);
+    auto *pv = new QVBoxLayout(m_promptBox);
+    pv->setContentsMargins(0, 6, 0, 0);
+    pv->addWidget(sectionLabel(tr("Prompt"), m_promptBox));
+    m_prompt = new QPlainTextEdit(m_promptBox);
+    m_prompt->setReadOnly(true);
+    m_prompt->setAccessibleName(tr("Prompt"));
+    m_prompt->setMaximumHeight(110);
+    pv->addWidget(m_prompt);
+    iv->addWidget(m_promptBox);
+    m_detailsToggle = new QToolButton(inspector);
+    m_detailsToggle->setObjectName(QStringLiteral("imageDetails"));
+    m_detailsToggle->setText(tr("Details"));
+    m_detailsToggle->setCheckable(true);
+    m_detailsToggle->setAutoRaise(true);
+    m_detailsToggle->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    m_detailsToggle->setArrowType(Qt::RightArrow);
+    iv->addWidget(m_detailsToggle);
+    m_details = mutedLabel(QString(), inspector);
+    m_details->setObjectName(QStringLiteral("imageDetailsText"));
+    m_details->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    m_details->hide();
+    iv->addWidget(m_details);
+    iv->addStretch();
+    connect(m_detailsToggle, &QToolButton::toggled, this, [this](bool on) {
+        m_detailsToggle->setArrowType(on ? Qt::DownArrow : Qt::RightArrow);
+        m_details->setVisible(on && !m_details->text().isEmpty());
+    });
     splitter->addWidget(m_center);
     m_inspector = verticalScroll(inspector, splitter);
     m_inspector->setObjectName(QStringLiteral("Panel"));
@@ -467,20 +490,21 @@ LibraryPage::LibraryPage(Studio *studio, QWidget *parent)
     connect(asRef, &QPushButton::clicked, this, [this] {
         for (const QString &id : selectedIds())
             m_studio->useAsReference(id);
-        m_studio->notify(tr("Added to the references of the Generate page."));
+        m_studio->notify(tr("Added to the references in the editor's AI panel."));
     });
     connect(usePrompt, &QPushButton::clicked, this, [this] {
         const auto info = m_studio->project() ? m_studio->project()->asset(m_currentId) : std::nullopt;
         if (info) {
-            m_studio->usePrompt(info->prompt(), info->metadata.value(QStringLiteral("negative_prompt")).toString());
-            m_studio->showPage(pages::Generate);
+            // The words the user wrote, without the quality tags Lumen added, when known.
+            const QString words = info->metadata.value(QStringLiteral("user_prompt")).toString();
+            m_studio->usePrompt(words.isEmpty() ? info->prompt() : words, info->metadata.value(QStringLiteral("negative_prompt")).toString());
+            m_studio->showPage(pages::Editor);
         }
     });
+    // New from prompt, with the image's prompt, size and seed.
     connect(rerun, &QPushButton::clicked, this, [this] {
-        if (!m_currentId.isEmpty()) {
+        if (!m_currentId.isEmpty())
             m_studio->rerunAsset(m_currentId);
-            m_studio->showPage(pages::Generate);
-        }
     });
     connect(exportBtn, &QPushButton::clicked, this, &LibraryPage::exportSelected);
     connect(del, &QPushButton::clicked, this, &LibraryPage::deleteSelected);
@@ -570,7 +594,7 @@ void LibraryPage::runBatchUtility(ai::Utility utility, const QJsonObject &params
         const QString name = info ? QStringLiteral("%1: %2").arg(title, info->name) : title;
         gen->submitUtilityForAsset(QString(), utility, id, params, name);
     }
-    m_studio->notify(tr("Queued %n job(s). The results appear in the library.", nullptr, int(ids.size())), QStringLiteral("info"));
+    m_studio->notify(tr("Queued %n job(s). The results appear in the project images.", nullptr, int(ids.size())), QStringLiteral("info"));
 }
 
 QStringList LibraryPage::selectedIds() const
@@ -597,7 +621,10 @@ void LibraryPage::showInspector()
         m_name->clear();
         m_meta->clear();
         m_prompt->clear();
-        m_params->clear();
+        m_details->clear();
+        m_promptBox->hide();
+        m_detailsToggle->hide();
+        m_details->hide();
         return;
     }
     m_name->setText(info->name);
@@ -615,13 +642,15 @@ void LibraryPage::showInspector()
     if (ids.size() > 1)
         meta << tr("%1 selected").arg(ids.size());
     m_meta->setText(meta.join(QStringLiteral("  ·  ")));
-    m_prompt->setPlainText(info->prompt());
-    QJsonObject params = info->metadata;
-    params.remove(QStringLiteral("prompt"));
-    params.remove(QStringLiteral("parameters"));
-    m_params->setPlainText(info->metadata.value(QStringLiteral("parameters")).toString().isEmpty()
-                               ? json::pretty(params)
-                               : info->metadata.value(QStringLiteral("parameters")).toString());
+    // The words the user wrote, when known (without the tags Lumen added).
+    const QString words = info->metadata.value(QStringLiteral("user_prompt")).toString();
+    m_prompt->setPlainText(words.isEmpty() ? info->prompt() : words);
+    m_promptBox->setVisible(!m_prompt->toPlainText().trimmed().isEmpty());
+    m_details->setText(detailsText(*info));
+    // The settings as other tools write them, for copying into one.
+    m_details->setToolTip(info->metadata.value(QStringLiteral("parameters")).toString());
+    m_detailsToggle->setVisible(!m_details->text().isEmpty());
+    m_details->setVisible(m_detailsToggle->isChecked() && !m_details->text().isEmpty());
     m_preview->setText(tr("Loading…"));
     const quint64 generation = ++m_previewGeneration;
     QPointer<LibraryPage> self(this);
@@ -634,6 +663,45 @@ void LibraryPage::showInspector()
         scaled.setDevicePixelRatio(self->devicePixelRatioF());
         self->m_preview->setPixmap(scaled);
     });
+}
+
+QString LibraryPage::detailsText(const doc::AssetInfo &info)
+{
+    const QJsonObject m = info.metadata;
+    QStringList lines;
+    QString engine = m.value(QStringLiteral("provider")).toString();
+    const QString model = m.value(QStringLiteral("model")).toString();
+    if (!model.isEmpty())
+        engine = engine.isEmpty() ? model : QStringLiteral("%1 (%2)").arg(engine, model);
+    if (!engine.isEmpty())
+        lines << tr("Made with: %1").arg(engine);
+    const QString utility = m.value(QStringLiteral("utility")).toString();
+    const QString mode = m.value(QStringLiteral("mode")).toString();
+    QString how;
+    if (!utility.isEmpty())
+        how = utility == QLatin1String("upscale") ? tr("Upscaled") : utility == QLatin1String("remove_background") ? tr("Background removed") : utility;
+    else if (mode == QLatin1String("txt2img"))
+        how = tr("A new image from a description");
+    else if (mode == QLatin1String("edit"))
+        how = tr("Changed from a description");
+    else if (mode == QLatin1String("inpaint"))
+        how = tr("An area painted anew");
+    else if (mode == QLatin1String("img2img"))
+        how = tr("Redrawn from the picture");
+    if (!how.isEmpty())
+        lines << tr("How: %1").arg(how);
+    const int w = m.value(QStringLiteral("width")).toInt(), h = m.value(QStringLiteral("height")).toInt();
+    if (w > 0 && h > 0 && QSize(w, h) != info.size)
+        lines << tr("Drawn at: %1 × %2 px").arg(w).arg(h);
+    if (m.contains(QStringLiteral("denoise")) && utility.isEmpty() && mode != QLatin1String("edit"))
+        lines << tr("How much could change: %1 %").arg(qRound(m.value(QStringLiteral("denoise")).toDouble() * 100));
+    if (const int steps = m.value(QStringLiteral("steps")).toInt(); steps > 0)
+        lines << tr("Steps: %1").arg(steps);
+    if (const qint64 seed = qint64(m.value(QStringLiteral("seed")).toDouble(-1)); seed >= 0)
+        lines << tr("Seed: %1").arg(seed);
+    if (const QString negative = m.value(QStringLiteral("negative_prompt")).toString().trimmed(); !negative.isEmpty())
+        lines << tr("Left out: %1").arg(negative);
+    return lines.join(u'\n');
 }
 
 void LibraryPage::exportSelected()

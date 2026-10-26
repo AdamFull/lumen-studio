@@ -24,10 +24,15 @@
 #include "ui/dialogs/AiSettingsPage.h"
 #include "ui/dialogs/LocalServersPage.h"
 #include "ui/dialogs/LocalSetupDialog.h"
+#include "ui/dialogs/NewFromPromptDialog.h"
 #include "ui/dialogs/SettingsDialog.h"
 #include "ui/dialogs/SetupWizard.h"
 #include "ui/ext/Extension.h"
+#include "ui/pages/AiOptions.h"
 #include "ui/pages/AiPanel.h"
+#include "ui/pages/EditorPage.h"
+#include "ui/pages/PromptBar.h"
+#include "ui/pages/StartScreen.h"
 #include "ui/widgets/Controls.h"
 #include "ui/widgets/ProviderCombo.h"
 
@@ -47,6 +52,7 @@
 #include <QStandardPaths>
 #include <QTabWidget>
 #include <QTemporaryDir>
+#include <QToolButton>
 #include <QTreeWidget>
 #include <QtTest>
 
@@ -203,6 +209,7 @@ private slots:
     void onlineService();
     void runningServer();
     void settingsAi();
+    void pluginOffers();
     void entryPoints();
 
 private:
@@ -525,10 +532,10 @@ void TestSetup::localReusesFiles()
     QCOMPARE(tree->topLevelItem(2)->text(0), QStringLiteral("FLUX.2 VAE — flux2-vae.safetensors"));
     QCOMPARE(tree->topLevelItem(3)->text(0), QStringLiteral("Qwen3 4B text encoder — qwen_3_4b.safetensors"));
     QVERIFY(named<QLabel>(&wizard, QStringLiteral("setupSummary"))->text().contains(QLatin1String("nothing to download")));
-    // Plugins that need a language model are on, but 8 GB gets none by default.
+    // No language model is offered: no plugin that needs one is on (plugins are off by default;
+    // pluginOffers checks one that is on).
     auto *language = named<QCheckBox>(&wizard, QStringLiteral("setupLanguage"));
-    QVERIFY(language->isVisibleTo(&wizard));
-    QVERIFY(!language->isChecked());
+    QVERIFY(!language->isVisibleTo(&wizard));
     auto *start = named<QPushButton>(&wizard, QStringLiteral("setupStart"));
     QCOMPARE(start->text(), QStringLiteral("Set up"));
     QVERIFY(start->isEnabled());
@@ -832,7 +839,8 @@ void TestSetup::onlineService()
     ai::Provider *other = studio.providers()->addProvider(QStringLiteral("sdcpp"), QStringLiteral("Other sd-server"),
                                                           {{QStringLiteral("url"), QStringLiteral("http://127.0.0.1:9")}});
     QVERIFY(other);
-    AiPanel panel(&studio);
+    AiOptions options;
+    AiPanel panel(&studio, &options);
     auto *panelEngine = panel.findChild<ProviderCombo *>();
     QVERIFY(panelEngine);
     QCOMPARE(panelEngine->providerId(), other->instanceId());
@@ -877,13 +885,16 @@ void TestSetup::onlineService()
     QCOMPARE(studio.providers()->providers().size(), 2);
     studio.providers()->setEnabled(id, true);
 
-    // Picked by hand in the panel, a provider stays when the engine changes; picking the engine of
-    // Settings → AI again follows it. The panel changes images, so it follows the engine for changes.
+    // Picked by hand in the panel, a provider stays when the engine changes (the editor's options
+    // keep it); picking the engine of Settings → AI again follows it. The panel changes images, so
+    // it follows the engine for changes.
     panelEngine->setProviderId(other->instanceId());
+    QCOMPARE(options.providerId(), other->instanceId());
     studio.providers()->setDefaultImageProvider(id);
     QCOMPARE(panelEngine->providerId(), other->instanceId());
     panelEngine->setProviderId(id);
     QVERIFY(panelEngine->followsSettings());
+    QVERIFY(options.providerId().isEmpty());
     studio.providers()->setEditImageProvider(other->instanceId());
     QCOMPARE(panelEngine->providerId(), other->instanceId());
     studio.providers()->setEditImageProvider(QString());
@@ -1028,9 +1039,13 @@ void TestSetup::settingsAi()
 
     Studio studio;
     reset(studio);
+    // The Characters plugin, which needs a language model, is on for this test (plugins are off by
+    // default), and back to the default afterwards.
+    ext::Extensions::instance().setEnabled(QStringLiteral("characters"), true);
+    ext::Extensions::instance().refresh();
     auto guard = qScopeGuard([&] {
         reset(studio);
-        ext::Extensions::instance().setEnabled(QStringLiteral("characters"), true);
+        Settings::instance().remove(QStringLiteral("plugins/characters/enabled"));
         ext::Extensions::instance().refresh();
     });
     {
@@ -1139,6 +1154,43 @@ void TestSetup::settingsAi()
     QVERIFY(!named<QFrame>(&without, QStringLiteral("aiLanguage"))->isVisibleTo(&without));
 }
 
+// What only plugins need shows only with them: by default (every plugin off) the wizard offers no
+// language model and no model set for Characters, and Settings → AI has no language model row; with
+// the Characters plugin on they show, and an 8 GB card still gets no language model unless asked.
+void TestSetup::pluginOffers()
+{
+    Studio studio;
+    reset(studio);
+    auto guard = qScopeGuard([&] {
+        reset(studio);
+        Settings::instance().remove(QStringLiteral("plugins/characters/enabled"));
+        ext::Extensions::instance().refresh();
+    });
+    QVERIFY(!ext::Extensions::instance().isEnabled(QStringLiteral("characters")));
+    QVERIFY(ext::Extensions::instance().needingLanguageModel().isEmpty());
+    auto offers = [&](bool characters) {
+        SetupWizard wizard(&studio);
+        wizard.hardwareOverride = rtx4060();
+        wizard.searchFolders = QStringList();
+        QSignalSpy planned(&wizard, &SetupWizard::localPlanReady);
+        wizard.show();
+        wizard.showPage(SetupWizard::Page::Local);
+        QTRY_VERIFY_WITH_TIMEOUT(planned.size() == 1, 20000);
+        auto *language = named<QCheckBox>(&wizard, QStringLiteral("setupLanguage"));
+        QCOMPARE(language->isVisibleTo(&wizard), characters);
+        QVERIFY(!language->isChecked());
+        QCOMPARE(buttonWithText(&wizard, QStringLiteral("Model set for Characters (pose control)…")) != nullptr, characters);
+        SettingsDialog settings(&studio);
+        settings.show();
+        settings.showTab(QStringLiteral("ai"));
+        QCOMPARE(named<QFrame>(&settings, QStringLiteral("aiLanguage"))->isVisibleTo(&settings), characters);
+    };
+    offers(false);
+    ext::Extensions::instance().setEnabled(QStringLiteral("characters"), true);
+    ext::Extensions::instance().refresh();
+    offers(true);
+}
+
 // ---- Where the wizard opens -------------------------------------------------------------------------------
 
 void TestSetup::entryPoints()
@@ -1216,9 +1268,67 @@ void TestSetup::entryPoints()
     {
         // Not again on the next start.
         MainWindow window(&studio);
+        window.resize(1280, 720);
         window.show();
         QTest::qWait(700);
         QVERIFY(!openWizard());
+
+        // Every other "Set up AI" while there is no image engine opens it, on its first page.
+        auto opened = [&](const char *where) {
+            SetupWizard *w = openWizard();
+            if (!w)
+                qWarning("No setup wizard from %s", where);
+            const bool ok = w && w->currentPage() == SetupWizard::Page::Choose;
+            if (w)
+                w->close();
+            return ok;
+        };
+        // The start screen's card.
+        EditorPage *editor = window.editor();
+        QVERIFY(editor->showsStartScreen());
+        auto *card = editor->startScreen()->findChild<QFrame *>(QStringLiteral("setUpAiCard"));
+        QVERIFY(card && card->isVisible());
+        buttonWithText(card, QStringLiteral("Set up AI…"))->click();
+        QVERIFY(opened("the start screen"));
+        // The status bar's "No image engine – Set up AI".
+        auto *engine = window.findChild<QToolButton *>(QStringLiteral("imageEngine"));
+        QCOMPARE(engine->text(), QStringLiteral("No image engine – Set up AI"));
+        engine->click();
+        QVERIFY(opened("the status bar"));
+        // New from prompt's Set up AI…: over the dialog, which stays open with its words.
+        NewFromPromptDialog *fromPrompt = window.newFromPrompt();
+        QVERIFY(fromPrompt->isVisible());
+        named<QPushButton>(fromPrompt, QStringLiteral("newFromPromptSetUpAi"))->click();
+        QTRY_VERIFY(openWizard());
+        QCOMPARE(openWizard()->parentWidget(), fromPrompt);
+        QVERIFY(fromPrompt->isVisible());
+        QVERIFY(opened("New from prompt"));
+        fromPrompt->reject();
+        // The prompt bar's main button, on an open picture.
+        studio.newDocument(QSize(64, 48), QStringLiteral("Blank"));
+        QTRY_VERIFY(!editor->showsStartScreen());
+        auto *generate = editor->promptBar()->findChild<QPushButton *>(QStringLiteral("promptGenerate"));
+        QTRY_COMPARE(generate->text(), QStringLiteral("Set up AI…"));
+        generate->click();
+        QVERIFY(opened("the prompt bar"));
+        // The wizard set up an engine: the status bar names it, and a click opens Settings → AI.
+        ai::Provider *added = studio.providers()->addProvider(QStringLiteral("sdcpp"), QStringLiteral("Set up here"),
+                                                              {{QStringLiteral("url"), QStringLiteral("http://127.0.0.1:9")}});
+        QVERIFY(added);
+        studio.providers()->setDefaultImageProvider(added->instanceId());
+        QCOMPARE(engine->text(), QStringLiteral("Set up here"));
+        QString tab;
+        QTimer::singleShot(200, &window, [&tab] {
+            if (auto *settings = qobject_cast<SettingsDialog *>(QApplication::activeModalWidget())) {
+                auto *tabs = settings->findChild<QTabWidget *>();
+                tab = tabs->tabText(tabs->currentIndex()).remove(u'&');
+                settings->reject();
+            }
+        });
+        engine->click();
+        QCOMPARE(tab, QStringLiteral("AI"));
+        QVERIFY(!openWizard());
+        studio.closeDocument(studio.activeDocument());
     }
     // The Local servers page's button opens it on "Run on this computer".
     LocalServersPage page(&studio);

@@ -161,8 +161,8 @@
     </message>
     <message numerus="yes">
         <location line="+49" />
-        <source>Queued %n job(s). The results appear in the library.</source>
-        <translation><numerusform>Queued %n job. The results appear in the library.</numerusform><numerusform>Queued %n jobs. The results appear in the library.</numerusform></translation>
+        <source>Queued %n job(s). The results appear in the project images.</source>
+        <translation><numerusform>Queued %n job. The results appear in the project images.</numerusform><numerusform>Queued %n jobs. The results appear in the project images.</numerusform></translation>
     </message>
     <message numerus="yes">
         <location line="+83" />
@@ -404,6 +404,14 @@ The models of the earlier version are in %2 (%n files, %3). Move them to the new
         <location filename="../src/ui/dialogs/SetupWizard.cpp" line="+1" />
         <source>Found %n server(s).</source>
         <translation><numerusform>Found %n server.</numerusform><numerusform>Found %n servers.</numerusform></translation>
+    </message>
+</context>
+<context>
+    <name>lumen::ui::PromptBar</name>
+    <message numerus="yes">
+        <location filename="../src/ui/pages/PromptBar.cpp" line="+1" />
+        <source>%n picture(s) in the AI panel…</source>
+        <translation><numerusform>%n picture in the AI panel…</numerusform><numerusform>%n pictures in the AI panel…</numerusform></translation>
     </message>
 </context>
 </TS>

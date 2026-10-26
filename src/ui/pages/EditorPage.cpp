@@ -10,36 +10,41 @@
 #include "ui/Theme.h"
 #include "ui/Shortcuts.h"
 #include "ui/canvas/CanvasView.h"
-#include "ui/canvas/ContextBar.h"
 #include "ui/canvas/EditorState.h"
 #include "ui/canvas/Tools.h"
 #include "ui/canvas/TransformTool.h"
+#include "ui/dialogs/NewCanvasDialog.h"
 #include "ui/filters/FiltersPanel.h"
+#include "ui/pages/AiOptions.h"
 #include "ui/pages/AiPanel.h"
+#include "ui/pages/PromptBar.h"
+#include "ui/pages/StartScreen.h"
+#include "ui/pages/VariantStrip.h"
 #include "ui/widgets/Controls.h"
 #include "ui/widgets/LayersPanel.h"
 #include "ui/widgets/ReferenceStrip.h"
 
+#include <QAbstractItemView>
+#include <QAbstractSlider>
+#include <QAbstractSpinBox>
 #include <QAction>
 #include <QActionGroup>
 #include <QApplication>
 #include <QClipboard>
 #include <QComboBox>
-#include <QDialog>
-#include <QDialogButtonBox>
 #include <QDragEnterEvent>
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
-#include <QFormLayout>
 #include <QImageReader>
 #include <QImageWriter>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMimeData>
 #include <QPainter>
-#include <QSpinBox>
+#include <QPlainTextEdit>
 #include <QSplitter>
+#include <QStackedWidget>
 #include <QTabBar>
 #include <QTabWidget>
 #include <QToolButton>
@@ -52,9 +57,18 @@ EditorPage::EditorPage(Studio *studio, QWidget *parent)
     : QWidget(parent)
     , m_studio(studio)
     , m_state(new EditorState(this))
+    , m_aiOptions(new AiOptions(this))
 {
     setAcceptDrops(true);
-    auto *root = new QVBoxLayout(this);
+    auto *outer = new QVBoxLayout(this);
+    outer->setContentsMargins(0, 0, 0, 0);
+    m_stack = new QStackedWidget(this);
+    outer->addWidget(m_stack);
+    m_start = new StartScreen(studio, m_stack);
+    m_stack->addWidget(m_start);
+    m_body = new QWidget(m_stack);
+    m_stack->addWidget(m_body);
+    auto *root = new QVBoxLayout(m_body);
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
 
@@ -71,8 +85,10 @@ EditorPage::EditorPage(Studio *studio, QWidget *parent)
     m_tabs->setExpanding(false);
     m_tabs->setDocumentMode(true);
     m_tabs->setElideMode(Qt::ElideRight);
+    // No base line: it ran on past the last tab, up to the + button.
+    m_tabs->setDrawBase(false);
     tabLayout->addWidget(m_tabs);
-    auto *newDoc = iconButton(QStringLiteral("plus"), tr("New document (Ctrl+N)"), tabRow);
+    auto *newDoc = iconButton(QStringLiteral("plus"), tr("New blank canvas (Ctrl+N)"), tabRow);
     tabLayout->addWidget(newDoc);
     tabLayout->addStretch();
     root->addWidget(tabRow);
@@ -160,6 +176,10 @@ EditorPage::EditorPage(Studio *studio, QWidget *parent)
     cv->setSpacing(0);
     m_canvas = new CanvasView(m_state, center);
     cv->addWidget(m_canvas, 1);
+    m_strip = new VariantStrip(studio, m_canvas, center);
+    cv->addWidget(m_strip);
+    // ←/→, Enter and Esc reach the results while the canvas has the keyboard, after the tool.
+    m_canvas->setKeyFallback([this](QKeyEvent *e) { return m_strip->handleKey(e); });
     auto *status = new QWidget(center);
     status->setObjectName(QStringLiteral("Panel"));
     auto *sh = new QHBoxLayout(status);
@@ -183,21 +203,33 @@ EditorPage::EditorPage(Studio *studio, QWidget *parent)
     sh->addWidget(fit);
     cv->addWidget(status);
 
-    // Side panel.
+    // Side panel: Layers, History and Filters; the AI panel (every option) when the prompt bar asks
+    // for it.
     m_side = new QTabWidget(splitter);
     m_side->setMinimumWidth(300);
     m_side->setDocumentMode(true);
-    m_ai = new AiPanel(studio, m_side);
+    m_ai = new AiPanel(studio, m_aiOptions, m_side);
     m_layers = new LayersPanel(m_side);
     m_history = new QUndoView(m_side);
     m_history->setEmptyLabel(tr("Original"));
-    m_side->addTab(m_ai, Icons::get(QStringLiteral("sparkles")), tr("AI"));
     m_side->addTab(m_layers, Icons::get(QStringLiteral("layers")), tr("Layers"));
     m_side->addTab(m_history, Icons::get(QStringLiteral("history")), tr("History"));
-    m_side->addTab(new FiltersPanel(studio, m_canvas, m_side), Icons::get(QStringLiteral("adjust")), tr("Filters"));
-    // Four tabs share a narrow panel: they shorten their names rather than hide behind arrows.
+    m_filters = new FiltersPanel(studio, m_canvas, m_side);
+    m_side->addTab(m_filters, Icons::get(QStringLiteral("adjust")), tr("Filters"));
+    // Four tabs (with the AI panel) share a narrow panel: they shorten their names rather than hide
+    // behind arrows.
     m_side->setUsesScrollButtons(false);
     m_side->setElideMode(Qt::ElideRight);
+    const int aiTab = m_side->addTab(m_ai, Icons::get(QStringLiteral("sparkles")), tr("AI"));
+    auto *closeAi = iconButton(QStringLiteral("close"), tr("Close the AI panel"), m_side->tabBar());
+    closeAi->setIconSize(QSize(12, 12));
+    m_side->tabBar()->setTabButton(aiTab, QTabBar::RightSide, closeAi);
+    m_side->setTabVisible(aiTab, false);
+    connect(closeAi, &QToolButton::clicked, this, &EditorPage::hideAiPanel);
+
+    // The prompt bar under the canvas, its results above it.
+    m_bar = new PromptBar(studio, m_aiOptions, m_ai, m_strip, center);
+    cv->insertWidget(cv->indexOf(status), m_bar);
 
     splitter->addWidget(palette);
     splitter->addWidget(center);
@@ -215,17 +247,30 @@ EditorPage::EditorPage(Studio *studio, QWidget *parent)
         if (m_doc)
             m_doc->undoStack()->redo();
     });
-    // Contextual generative toolbar next to the selection.
-    m_contextBar = new ContextBar(m_canvas);
-    m_contextBar->setEnabledByUser(m_state->showContextBar());
-    connect(m_contextBar, &ContextBar::generateRequested, this, [this](const QString &prompt) {
-        m_ai->runFromCanvas(AiPanel::Mode::Inpaint, prompt);
+    // The prompt bar's runs (and the AI panel's variations) end in the results strip; they count as
+    // running from the click on, so a second one does not start while the first is prepared.
+    m_ai->setResultsHandler([this](doc::Document *doc, const QList<Job *> &jobs, const QString &name,
+                                   int results) { m_strip->track(doc, jobs, name, results); },
+                            [this](doc::Document *doc) { m_strip->expect(doc); });
+    connect(m_bar, &PromptBar::allOptionsRequested, this, [this] { showAiPanel(); });
+    connect(m_bar, &PromptBar::selectAreaRequested, this, [this] {
+        selectTool(QStringLiteral("select-rect"));
+        m_canvas->setFocus();
     });
-    connect(m_contextBar, &ContextBar::removeRequested, this, [this] {
-        m_ai->runFromCanvas(AiPanel::Mode::Inpaint, QStringLiteral("empty background, seamless continuation of the surroundings"), false);
+    // Arrow keys, Enter and Esc go to the results once they are there, unless the user is typing (the
+    // next words in the prompt field, local runs take a while; a layer's name, a number) or uses the
+    // keys in a list, a slider or a choice (the filters and their settings in the Filters panel).
+    connect(m_strip, &VariantStrip::resultsArrived, this, [this] {
+        QWidget *focus = QApplication::focusWidget();
+        const bool inUse = qobject_cast<QPlainTextEdit *>(focus) || qobject_cast<QLineEdit *>(focus)
+                           || qobject_cast<QAbstractSpinBox *>(focus) || qobject_cast<QComboBox *>(focus)
+                           || qobject_cast<QAbstractSlider *>(focus) || qobject_cast<QAbstractItemView *>(focus);
+        if (!focus || (isAncestorOf(focus) && !inUse))
+            m_strip->setFocus();
     });
-    connect(m_contextBar, &ContextBar::moreRequested, this, [this] { m_side->setCurrentWidget(m_ai); });
-    connect(m_ai, &AiPanel::runningJobsChanged, m_contextBar, &ContextBar::setRunning);
+    // The plugins' panels and the Queue lie over the editor above the bar and its results.
+    m_strip->installEventFilter(this);
+    m_bar->installEventFilter(this);
     connect(zoomIn, &QToolButton::clicked, m_canvas, &CanvasView::zoomIn);
     connect(zoomOut, &QToolButton::clicked, m_canvas, &CanvasView::zoomOut);
     connect(fit, &QToolButton::clicked, m_canvas, &CanvasView::fitToView);
@@ -245,13 +290,22 @@ EditorPage::EditorPage(Studio *studio, QWidget *parent)
             m_studio->closeDocument(m_studio->documents().at(index));
     });
     connect(studio, &Studio::documentsChanged, this, &EditorPage::rebuildTabs);
+    connect(studio, &Studio::documentsChanged, this, &EditorPage::updateStack);
     connect(studio, &Studio::activeDocumentChanged, this, &EditorPage::setDocument);
+    // "Use as reference" goes to the AI panel's references, "Reuse prompt" to the prompt bar (with no
+    // document open, the main window opens New from prompt instead).
+    connect(studio, &Studio::referenceRequested, this, [this] { showAiPanel(); });
+    connect(studio, &Studio::promptRequested, this, [this](const QString &prompt, const QString &negative) {
+        if (!m_studio->documents().isEmpty())
+            m_bar->setPrompt(prompt, negative);
+    });
 
     // Shortcuts.
     // Page shortcuts (customisable in Settings → Shortcuts).
     auto shortcut = [this](const QString &id, const QString &name, const QStringList &keys, std::function<void()> fn) {
-        auto *a = new QAction(this);
+        auto *a = new QAction(name, this);
         a->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+        m_actions.insert(id, a);
         connect(a, &QAction::triggered, this, std::move(fn));
         addAction(a);
         QList<QKeySequence> defaults;
@@ -279,10 +333,74 @@ EditorPage::EditorPage(Studio *studio, QWidget *parent)
              [this] { if (m_doc) m_doc->duplicateLayer(m_doc->activeLayerId()); });
     shortcut(QStringLiteral("merge-down"), tr("Merge down"), {QStringLiteral("Ctrl+E")},
              [this] { if (m_doc) m_doc->mergeDown(m_doc->activeLayerId()); });
+    // Enter in the prompt bar's words runs it too; this works wherever the keyboard is in the editor.
+    shortcut(QStringLiteral("ai-run"), tr("Generate from the prompt bar"), {QStringLiteral("Ctrl+Return")}, [this] { m_bar->generate(); });
 
-    selectTool(QStringLiteral("mask"));
+    // Selecting an area is where changing a picture with words starts, as in other editors.
+    selectTool(QStringLiteral("select-rect"));
     rebuildTabs();
     setDocument(studio->activeDocument());
+    updateStack();
+}
+
+QAction *EditorPage::editorAction(const QString &id) const
+{
+    return m_actions.value(id);
+}
+
+int EditorPage::overlayBottom(const QWidget *in) const
+{
+    // Above the results strip when it shows, else above the prompt bar (with a document open).
+    for (const QWidget *w : {static_cast<const QWidget *>(m_strip), static_cast<const QWidget *>(m_bar)}) {
+        if (w->isVisible() && in)
+            return w->mapTo(window(), QPoint(0, 0)).y() - in->mapTo(window(), QPoint(0, 0)).y();
+    }
+    return in ? in->height() : height();
+}
+
+bool EditorPage::eventFilter(QObject *watched, QEvent *event)
+{
+    if ((watched == m_strip || watched == m_bar)
+        && (event->type() == QEvent::Show || event->type() == QEvent::Hide || event->type() == QEvent::Move || event->type() == QEvent::Resize))
+        emit bottomAreaChanged();
+    return QWidget::eventFilter(watched, event);
+}
+
+void EditorPage::showAiPanel(std::optional<AiPanel::Mode> mode)
+{
+    const int index = m_side->indexOf(m_ai);
+    m_side->setTabVisible(index, true);
+    m_side->setCurrentIndex(index);
+    if (mode)
+        m_ai->setMode(*mode);
+}
+
+void EditorPage::hideAiPanel()
+{
+    const int index = m_side->indexOf(m_ai);
+    if (m_side->currentIndex() == index)
+        m_side->setCurrentWidget(m_layers);
+    m_side->setTabVisible(index, false);
+}
+
+bool EditorPage::isAiPanelShown() const
+{
+    return m_side->isTabVisible(m_side->indexOf(m_ai));
+}
+
+void EditorPage::showFiltersPanel()
+{
+    m_side->setCurrentWidget(m_filters);
+}
+
+bool EditorPage::showsStartScreen() const
+{
+    return m_stack->currentWidget() == m_start;
+}
+
+void EditorPage::updateStack()
+{
+    m_stack->setCurrentWidget(m_studio->documents().isEmpty() ? static_cast<QWidget *>(m_start) : m_body);
 }
 
 void EditorPage::selectTool(const QString &id)
@@ -309,8 +427,6 @@ void EditorPage::selectTool(const QString &id)
             h->addStretch();
         m_optionsHost->addWidget(m_options);
         m_hintLabel->setText(tool->hint());
-        if (id == QLatin1String("mask") || id.startsWith(QLatin1String("select")) || id == QLatin1String("lasso"))
-            m_side->setCurrentWidget(m_ai);
         return;
     }
 }
@@ -319,6 +435,8 @@ void EditorPage::setDocument(doc::Document *doc)
 {
     m_doc = doc;
     m_canvas->setDocument(doc);
+    m_strip->setDocument(doc);
+    m_bar->setDocument(doc);
     m_layers->setDocument(doc);
     m_ai->setDocument(doc);
     m_history->setStack(doc ? doc->undoStack() : nullptr);
@@ -379,47 +497,9 @@ void EditorPage::deleteSelectionPixels()
 
 void EditorPage::newDocumentDialog()
 {
-    QDialog dlg(this);
-    dlg.setWindowTitle(tr("New document"));
-    auto *form = new QFormLayout(&dlg);
-    auto *name = new QLineEdit(tr("Untitled"), &dlg);
-    auto *preset = new QComboBox(&dlg);
-    const QList<QPair<QString, QSize>> presets = {
-        {tr("Square 1024"), QSize(1024, 1024)},   {tr("Portrait 832 × 1216 (2:3)"), QSize(832, 1216)},
-        {tr("Landscape 1216 × 832 (3:2)"), QSize(1216, 832)}, {tr("Live2D sheet 2048 × 3072"), QSize(2048, 3072)},
-        {tr("Full HD 1920 × 1080"), QSize(1920, 1080)}, {tr("4K 3840 × 2160"), QSize(3840, 2160)},
-    };
-    for (const auto &p : presets)
-        preset->addItem(p.first, p.second);
-    auto *w = new QSpinBox(&dlg);
-    auto *h = new QSpinBox(&dlg);
-    for (QSpinBox *s : {w, h}) {
-        s->setRange(16, 16384);
-        s->setSuffix(QStringLiteral(" px"));
-    }
-    w->setValue(1024);
-    h->setValue(1024);
-    connect(preset, &QComboBox::currentIndexChanged, &dlg, [preset, w, h] {
-        const QSize s = preset->currentData().toSize();
-        w->setValue(s.width());
-        h->setValue(s.height());
-    });
-    auto *bg = new QComboBox(&dlg);
-    bg->addItem(tr("White"), QColor(Qt::white));
-    bg->addItem(tr("Black"), QColor(Qt::black));
-    bg->addItem(tr("Transparent"), QColor(Qt::transparent));
-    bg->addItem(tr("Grey"), QColor(0x808080));
-    form->addRow(tr("Name"), name);
-    form->addRow(tr("Preset"), preset);
-    form->addRow(tr("Width"), w);
-    form->addRow(tr("Height"), h);
-    form->addRow(tr("Background"), bg);
-    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
-    form->addRow(buttons);
-    connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
-    connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+    NewCanvasDialog dlg(m_studio, this);
     if (dlg.exec() == QDialog::Accepted)
-        m_studio->newDocument(QSize(w->value(), h->value()), name->text(), bg->currentData().value<QColor>());
+        m_studio->newDocument(dlg.canvasSize(), dlg.name(), dlg.background());
 }
 
 void EditorPage::exportImage()
@@ -464,7 +544,7 @@ void EditorPage::saveToLibrary()
     async::run([snap, size] { return doc::flatten(snap, size); }).then(this, [this, project, name](QImage img) {
         if (project)
             project->addAsset(img, doc::AssetKind::Export, name).then(this, [this](doc::AssetInfo) {
-                m_studio->notify(tr("Saved to the library."), QStringLiteral("success"));
+                m_studio->notify(tr("Saved to the project images (File → Browse project images)."), QStringLiteral("success"));
             });
     });
 }
@@ -498,6 +578,16 @@ void EditorPage::pasteAsLayer()
     p.drawImage((m_doc->size().width() - scaled.width()) / 2, (m_doc->size().height() - scaled.height()) / 2, scaled);
     p.end();
     m_doc->addLayer(tr("Pasted"), placed, {}, -1, tr("Paste"));
+}
+
+void EditorPage::pasteAsNewDocument()
+{
+    const QImage img = QApplication::clipboard()->image();
+    if (img.isNull()) {
+        m_studio->notify(tr("The clipboard has no picture. Copy one first (for example from a browser or a screenshot)."));
+        return;
+    }
+    m_studio->openImageAsDocument(img, tr("Pasted image"));
 }
 
 void EditorPage::importAsLayer()

@@ -49,14 +49,17 @@ QRect ensureMinimumSize(QRect r, const QSize &bounds, int minSide)
 }
 
 // A provider owns its operations: when it is removed (Settings) while one runs, the operation goes
-// with it without finishing, and the job would wait for ever. It fails instead.
+// with it without finishing, and the job would wait for ever (the prompt bar would stay on "Working
+// on it…", a filter's AI step would not end). It fails instead.
 void failWhenGone(Operation *op, Job *job)
 {
-    auto ended = std::make_shared<bool>(false);
+    if (!op)
+        return;
+    auto ended = std::make_shared<bool>(op->isFinished());
     QObject::connect(op, &Operation::finished, job, [ended] { *ended = true; });
     QObject::connect(op, &QObject::destroyed, job, [job, ended] {
         if (!*ended && !job->isFinished())
-            job->fail(GenerationService::tr("The image engine was removed before it finished."));
+            job->fail(GenerationService::tr("The image engine was removed while it was working."));
     });
 }
 
@@ -256,6 +259,23 @@ Job *GenerationService::submit(const GenerationSpec &specIn)
     return job;
 }
 
+QList<Job *> GenerationService::submitVariants(const GenerationSpec &spec)
+{
+    ImageProvider *provider = spec.providerId.isEmpty() ? m_registry->defaultImageProvider() : m_registry->imageProvider(spec.providerId);
+    const int variants = std::max(1, spec.request.batchCount);
+    if (!provider || variants <= 1 || provider->capabilitiesFor(spec.request).batch)
+        return {submit(spec)};
+    QList<Job *> jobs;
+    for (int i = 0; i < variants; ++i) {
+        GenerationSpec one = spec;
+        one.request.batchCount = 1;
+        if (spec.request.seed >= 0)
+            one.request.seed = spec.request.seed + i;
+        jobs << submit(one);
+    }
+    return jobs;
+}
+
 QString GenerationService::groupFor(const QString &providerId) const
 {
     ImageProvider *provider = providerId.isEmpty() ? m_registry->defaultImageProvider() : m_registry->imageProvider(providerId);
@@ -315,7 +335,7 @@ void GenerationService::execute(Job *job, const GenerationSpec &specIn, OutputHa
             }
             const ImageResult result = op->result();
             job->metadata().insert(QStringLiteral("request"), request.describe());
-            if (!spec.region) {
+            if (!spec.region && spec.detailSource.isNull()) {
                 GenerationOutput out;
                 for (const GeneratedImage &g : result.images) {
                     out.images << g.image;
@@ -324,6 +344,24 @@ void GenerationService::execute(Job *job, const GenerationSpec &specIn, OutputHa
                 out.text = result.text;
                 out.info = result.info;
                 onOutput(job, spec, out);
+                return;
+            }
+            if (!spec.region) {
+                // A change of the whole picture made at the engine's size: back at the picture's size.
+                job->setProgress(-1.0, tr("Restoring detail..."));
+                const QImage source = spec.detailSource;
+                async::run([result, source] {
+                    GenerationOutput out;
+                    out.text = result.text;
+                    out.info = result.info;
+                    for (const GeneratedImage &g : result.images) {
+                        out.rawImages << g.image;
+                        out.images << img::restoreDetail(g.image, source);
+                    }
+                    return out;
+                }).then(job, [job, spec, onOutput](GenerationOutput out) {
+                    onOutput(job, spec, out);
+                }).onFailed(job, [job](const std::exception &e) { job->fail(describeException(e)); });
                 return;
             }
             job->setProgress(-1.0, tr("Blending result..."));

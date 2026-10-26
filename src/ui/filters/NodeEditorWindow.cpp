@@ -191,7 +191,7 @@ NodeEditorWindow::NodeEditorWindow(FilterCatalog *catalog, QWidget *parent)
     connect(m_model, &GraphModel::changed, this, &NodeEditorWindow::modelChanged);
     connect(m_model, &GraphModel::modifiedChanged, this, &NodeEditorWindow::updateTitle);
     // AI steps say whether an engine can run them, and list the engines: both change when one is
-    // added or removed, or another becomes the one in use (the default image engine).
+    // added or removed, or another becomes the one in use (the engine for changes of Settings → AI).
     if (ai::GenerationService *service = ai::filterNodeService()) {
         auto enginesChanged = [this] {
             m_scene->sync();

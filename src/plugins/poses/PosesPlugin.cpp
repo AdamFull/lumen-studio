@@ -14,8 +14,8 @@ QString PosesPlugin::name() const
 QString PosesPlugin::description() const
 {
     return QCoreApplication::translate("lumen::plugins::PosesPlugin",
-                                       "A pose editor and library: pose people with a 3D rig or joint by joint, detect a pose in an "
-                                       "image, and use it to control generation.");
+                                       "Tools → Poses: a pose editor and library. Pose people with a 3D rig or joint by joint, detect "
+                                       "a pose in an image, and start a new image in that pose.");
 }
 
 QList<ui::ext::PageSpec> PosesPlugin::pages() const

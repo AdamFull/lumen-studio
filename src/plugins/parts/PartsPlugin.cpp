@@ -14,8 +14,8 @@ QString PartsPlugin::name() const
 QString PartsPlugin::description() const
 {
     return QCoreApplication::translate("lumen::plugins::PartsPlugin",
-                                       "Slices a character illustration into parts for Live2D Cubism, completes the hidden areas of "
-                                       "every part, previews the result as a puppet and exports a layered PSD.");
+                                       "Tools → Parts: slices a character illustration into parts for Live2D Cubism, completes the "
+                                       "hidden areas of every part, previews the result as a puppet and exports a layered PSD.");
 }
 
 QList<ui::ext::PageSpec> PartsPlugin::pages() const

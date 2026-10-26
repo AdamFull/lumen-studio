@@ -1,12 +1,16 @@
-// Layout audit: opens every page, panel and dialog at common window sizes and reports controls that
-// are cut off, squeezed below their minimum size, overlap a sibling, or stick out of their parent.
+// Layout audit: opens the main window (the start screen and the editor), every plugin page's window,
+// the panels and the dialogs at common window sizes and reports controls that are cut off, squeezed
+// below their minimum size, overlap a sibling, or stick out of their parent.
 //
 // Report-only by default (the M17 checklist is built from it); LUMEN_LAYOUT_STRICT=1 fails on any
 // finding. With LUMEN_SCREENSHOT_DIR, every state is saved as a PNG next to layout-report.md.
 
 #include "core/JobQueue.h"
 #include "core/Settings.h"
+#include "doc/Project.h"
 #include "plugins/BuiltInPlugins.h"
+#include "plugins/characters/assistant/AssistantPanel.h"
+#include "pose/PosePresets.h"
 #include "pose/Skeleton.h"
 #include "runtime/Download.h"
 #include "runtime/ModelHub.h"
@@ -22,15 +26,24 @@
 #include "ui/dialogs/LocalServersPage.h"
 #include "ui/dialogs/LocalSetupDialog.h"
 #include "ui/dialogs/ModelHubDialog.h"
+#include "ui/dialogs/NewFromPromptDialog.h"
+#include "ui/dialogs/NewCanvasDialog.h"
 #include "ui/dialogs/PoseEditDialog.h"
 #include "ui/dialogs/SettingsDialog.h"
 #include "ui/dialogs/SetupWizard.h"
 #include "ui/filters/FilterCatalog.h"
 #include "ui/filters/FiltersPanel.h"
 #include "ui/filters/NodeEditorWindow.h"
+#include "ui/ext/Extension.h"
+#include "core/ImageOps.h"
+#include "ui/pages/EditorPage.h"
+#include "ui/pages/PromptBar.h"
+#include "ui/pages/StartScreen.h"
+#include "ui/pages/VariantStrip.h"
 
 #include <QAbstractButton>
 #include <QAbstractScrollArea>
+#include <QAction>
 #include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
@@ -50,6 +63,7 @@
 #include <QTabBar>
 #include <QTabWidget>
 #include <QTcpServer>
+#include <QTemporaryDir>
 #include <QTextDocumentFragment>
 #include <QToolButton>
 #include <QVBoxLayout>
@@ -193,7 +207,10 @@ public:
             } else if (const auto *b = qobject_cast<QAbstractButton *>(w); b && !b->text().isEmpty()) {
                 const auto *tb = qobject_cast<const QToolButton *>(b);
                 const bool textShown = !tb || tb->toolButtonStyle() != Qt::ToolButtonIconOnly;
-                const int textWidth = b->fontMetrics().horizontalAdvance(b->text().remove(QLatin1Char('&')));
+                // The widest line (a tile's name may take two).
+                int textWidth = 0;
+                for (const QString &line : b->text().remove(QLatin1Char('&')).split(u'\n'))
+                    textWidth = std::max(textWidth, b->fontMetrics().horizontalAdvance(line));
                 if (textShown && (b->sizeHint().width() > b->width() + 2 || textWidth > b->width()))
                     add(QStringLiteral("text cut"), w, QStringLiteral("needs %1 px width, has %2").arg(b->sizeHint().width()).arg(b->width()));
             } else if (const auto *c = qobject_cast<QComboBox *>(w); c && !c->isEditable() && !c->currentText().isEmpty()) {
@@ -273,10 +290,13 @@ public:
         w->grab().save(QDir(m_shots).filePath(name.toLower() + QStringLiteral(".png")));
     }
 
+    // Lets pending layouts and the widgets' own short timers run (the prompt bar updates 30 ms after
+    // a change, the selection's outline 90 ms after), so a screenshot shows the state it is named after.
     static void settle()
     {
         QCoreApplication::sendPostedEvents(nullptr, QEvent::LayoutRequest);
-        QTest::qWait(30);
+        QTest::qWait(120);
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::LayoutRequest);
     }
 
     void setShotDir(const QString &dir) { m_shots = dir; }
@@ -314,13 +334,83 @@ QImage sampleImage()
     return im;
 }
 
-QAbstractButton *railButton(QWidget *window, const QString &name)
+QAction *actionNamed(QWidget *window, const QString &name)
 {
-    for (QAbstractButton *b : window->findChildren<QAbstractButton *>()) {
-        if (b->accessibleName() == name)
-            return b;
+    return window->findChild<QAction *>(name);
+}
+
+// Every plugin on for the audit (they are off by default), as before the next test.
+struct AllPlugins
+{
+    AllPlugins()
+    {
+        for (const ext::Extension *e : ext::Extensions::instance().all())
+            ext::Extensions::instance().setEnabled(e->id(), true);
+        ext::Extensions::instance().refresh();
+    }
+    ~AllPlugins()
+    {
+        for (const ext::Extension *e : ext::Extensions::instance().all())
+            Settings::instance().remove(QStringLiteral("plugins/%1/enabled").arg(e->id()));
+        ext::Extensions::instance().refresh();
+    }
+};
+
+// An image engine for the editor's states (a stable-diffusion.cpp server that is never asked: a
+// model without instruction edits, so the prompt bar offers a variation), removed again afterwards.
+struct ImageEngine
+{
+    explicit ImageEngine(Studio *studio)
+        : m_studio(studio)
+    {
+        m_id = studio->providers()
+                   ->addProvider(QStringLiteral("sdcpp"), QStringLiteral("Local image server"), {{QStringLiteral("url"), QStringLiteral("http://127.0.0.1:9")}})
+                   ->instanceId();
+    }
+    ~ImageEngine() { m_studio->providers()->removeProvider(m_id); }
+
+private:
+    Studio *m_studio;
+    QString m_id;
+};
+
+// Four results to choose from, as a prompt run leaves them above the prompt bar.
+void showResults(MainWindow &window, doc::Document *doc)
+{
+    QList<QImage> results;
+    for (int i = 0; i < 4; ++i) {
+        QImage im = sampleImage().scaled(doc->size());
+        if (i % 2)
+            im.invertPixels();
+        results << im;
+    }
+    window.editor()->variantStrip()->addVariants(doc, results, QStringLiteral("a long description of what should change in the picture"));
+}
+
+// The editor's right panel (Layers, History, Filters and the AI panel).
+QTabWidget *sidePanel(MainWindow &window)
+{
+    for (QTabWidget *t : window.editor()->findChildren<QTabWidget *>()) {
+        if (t->indexOf(window.editor()->filtersPanel()) >= 0)
+            return t;
     }
     return nullptr;
+}
+
+// The Filters tab with Old photo chosen (two sliders) and its preview on the canvas.
+void showFilters(MainWindow &window)
+{
+    window.editor()->showFiltersPanel();
+    QVERIFY(window.editor()->filtersPanel()->selectFilter(QStringLiteral(":/filters/builtin/old-photo.lumenfilter")));
+    QTRY_VERIFY(!window.editor()->canvas()->preview(CanvasView::Preview::Filter).isNull());
+}
+
+// Report and screenshot names of the plugin windows.
+QString pageName(const QString &id)
+{
+    static const QHash<QString, QString> names = {
+        {QStringLiteral("create"), QStringLiteral("Create")}, {QStringLiteral("poses"), QStringLiteral("Poses")}, {QStringLiteral("parts"), QStringLiteral("Parts")}};
+    return names.value(id, id);
 }
 
 } // namespace
@@ -384,76 +474,217 @@ void TestLayout::cleanupTestCase()
         QVERIFY2(m_auditor.findings().isEmpty(), qPrintable(report));
 }
 
+// The main window (the start screen, the editor with a document, its results, the AI panel and the
+// Filters tab, the queue and the assistant over it), the plugin pages' windows and Browse project
+// images, at each window size.
 void TestLayout::mainWindow()
 {
+    AllPlugins plugins;
+    QTemporaryDir dir;
     Studio studio;
-    studio.openImageAsDocument(sampleImage(), QStringLiteral("Sample"));
+    // A project with images and a saved document, so the start screen shows its recent row.
+    studio.openProject(dir.filePath(QStringLiteral("layout.lumen")));
+    QTRY_VERIFY_WITH_TIMEOUT(studio.isProjectOpen(), 5000);
+    for (int i = 0; i < 4; ++i) {
+        QImage im = sampleImage().scaled(800, 500 + 150 * i);
+        if (i % 2)
+            im.invertPixels();
+        auto added = studio.project()->addAsset(im, doc::AssetKind::Generation, QStringLiteral("A sample with a long name %1").arg(i + 1));
+        QTRY_VERIFY_WITH_TIMEOUT(added.isFinished(), 5000);
+    }
+    {
+        doc::Document *saved = studio.openImageAsDocument(sampleImage(), QStringLiteral("Saved document"));
+        auto done = studio.project()->saveDocument(saved);
+        QTRY_VERIFY_WITH_TIMEOUT(done.isFinished(), 5000);
+        studio.closeDocument(saved);
+    }
     MainWindow window(&studio);
     window.show();
     QVERIFY(QTest::qWaitForWindowExposed(&window));
-    // Report and screenshot names as before plugins ("Edit page", not "editor").
-    const QHash<QString, QString> names = {{QStringLiteral("create"), QStringLiteral("Create")}, {QStringLiteral("generate"), QStringLiteral("Generate")},
-                                           {QStringLiteral("editor"), QStringLiteral("Edit")},   {QStringLiteral("poses"), QStringLiteral("Poses")},
-                                           {QStringLiteral("parts"), QStringLiteral("Parts")},   {QStringLiteral("library"), QStringLiteral("Library")}};
     for (const QSize &size : kWindowSizes) {
         window.resize(size);
         const QString res = QStringLiteral("%1x%2").arg(size.width()).arg(size.height());
+        auto auditWindow = [&](const QString &what) {
+            Auditor::settle();
+            const QString surface = QStringLiteral("%1 %2").arg(what, res);
+            m_auditor.audit(&window, surface);
+            m_auditor.shoot(&window, surface);
+        };
+        // No document open: the start screen (with "Set up AI": no image engine in the test).
+        const auto open = studio.documents();
+        for (doc::Document *d : open)
+            studio.closeDocument(d);
+        QTRY_VERIFY(window.editor()->showsStartScreen());
+        // The saved document, the four images, and the samples of the earlier sizes (saved on close).
+        QTRY_VERIFY(window.editor()->startScreen()->recentTiles().size() >= 5);
+        auditWindow(QStringLiteral("Start screen"));
+        // The editor with a document (no image engine: the prompt bar offers to set one up), with an
+        // engine that cannot change the whole image from words (it offers a variation), with a
+        // selection and four results, the prompt bar's ⋯ menu, the AI panel, and the queue and the
+        // assistant over it.
+        doc::Document *doc = studio.openImageAsDocument(sampleImage(), QStringLiteral("Sample"));
+        QVERIFY(!window.editor()->showsStartScreen());
+        PromptBar *bar = window.editor()->promptBar();
+        auto *generate = bar->findChild<QPushButton *>(QStringLiteral("promptGenerate"));
+        QTRY_COMPARE(generate->text(), QStringLiteral("Set up AI…"));
+        auditWindow(QStringLiteral("Editor"));
+        {
+            ImageEngine engine(&studio);
+            QTRY_VERIFY(bar->plan().action == PromptAction::CannotEditImage);
+            // What the screenshot is named after, on screen (not only the plan).
+            QTRY_COMPARE(generate->text(), QStringLiteral("Make a variation"));
+            QTRY_VERIFY(bar->findChild<QPushButton *>(QStringLiteral("promptSelectArea"))->isVisible());
+            auditWindow(QStringLiteral("Editor with an engine without edits"));
+            QImage mask = img::createMask(doc->size());
+            {
+                QPainter p(&mask);
+                p.setPen(Qt::NoPen);
+                p.setBrush(Qt::white);
+                p.drawEllipse(QRect(600, 300, 400, 400));
+            }
+            doc->applySelection(mask, QStringLiteral("Select"));
+            QTRY_VERIFY(bar->plan().region);
+            QTRY_VERIFY(bar->findChild<QPushButton *>(QStringLiteral("promptRemove"))->isVisible());
+            showResults(window, doc);
+            QVERIFY(window.editor()->variantStrip()->isVisible());
+            // The strip takes some of the canvas's height; the picture stays whole.
+            QTRY_VERIFY(QRectF(window.editor()->canvas()->focusProxy()->rect())
+                            .contains(window.editor()->canvas()->mapFromDoc(QRectF(doc->bounds()))));
+            auditWindow(QStringLiteral("Editor with results"));
+            bar->showOptions();
+            QWidget *popup = bar->optionsPopup();
+            QVERIFY(QTest::qWaitForWindowExposed(popup));
+            Auditor::settle();
+            m_auditor.audit(popup, QStringLiteral("Prompt bar options %1").arg(res));
+            m_auditor.shoot(popup, QStringLiteral("Prompt bar options %1").arg(res));
+            popup->hide();
+            window.editor()->showAiPanel();
+            auditWindow(QStringLiteral("Editor with the AI panel"));
+            window.editor()->hideAiPanel();
+            window.editor()->variantStrip()->discard();
+            doc->clearSelection();
+            // The Filters tab next to Layers and History, with a filter's preview on the canvas, and
+            // with results over it (they show instead; the panel says so).
+            showFilters(window);
+            auditWindow(QStringLiteral("Editor with the Filters tab"));
+            showResults(window, doc);
+            QTRY_VERIFY(window.editor()->canvas()->preview(CanvasView::Preview::Filter).isNull());
+            auditWindow(QStringLiteral("Editor with the Filters tab and results"));
+            window.editor()->variantStrip()->discard();
+            sidePanel(window)->setCurrentIndex(0);
+        }
+        QTRY_COMPARE(generate->text(), QStringLiteral("Set up AI…"));
+        QTRY_VERIFY(!bar->findChild<QPushButton *>(QStringLiteral("promptRemove"))->isVisible());
+        // The queue and the assistant lie over the editor, above the prompt bar (whose buttons they
+        // would hide).
+        auto clearOfBar = [&](QWidget *overlay, const QString &what) {
+            const int top = bar->mapTo(window.centralWidget(), QPoint(0, 0)).y();
+            QVERIFY2(overlay->geometry().bottom() < top,
+                     qPrintable(QStringLiteral("%1 at %2 reaches %3, the prompt bar starts at %4").arg(what, res).arg(overlay->geometry().bottom()).arg(top)));
+        };
+        window.setQueueVisible(true);
+        auditWindow(QStringLiteral("Editor with the queue"));
+        clearOfBar(window.queuePanel(), QStringLiteral("The queue"));
+        window.setQueueVisible(false);
+        QAction *assistant = actionNamed(&window, QStringLiteral("panel-assistant"));
+        QVERIFY(assistant);
+        assistant->setChecked(true);
+        auditWindow(QStringLiteral("Editor with the assistant"));
+        clearOfBar(window.findChild<AssistantPanel *>(), QStringLiteral("The assistant"));
+        assistant->setChecked(false);
+
+        // The plugin pages, each in its window, at the same size.
         for (const QString &page : window.pageIds()) {
+            if (page == pages::Editor)
+                continue;
             window.showPage(page);
+            QWidget *w = window.pageWindow(page);
+            QVERIFY2(w, qPrintable(page));
+            QVERIFY(QTest::qWaitForWindowExposed(w));
+            w->resize(size);
             Auditor::settle();
-            const QString surface = QStringLiteral("%1 page %2").arg(names.value(page, page), res);
-            m_auditor.audit(&window, surface);
-            m_auditor.shoot(&window, surface);
+            const QString surface = QStringLiteral("%1 window %2").arg(pageName(page), res);
+            m_auditor.audit(w, surface);
+            m_auditor.shoot(w, surface);
         }
-        // The editor with the queue and the assistant open over it.
-        window.showPage(pages::Editor);
-        for (const QString &panel : {QStringLiteral("Queue"), QStringLiteral("Assistant")}) {
-            QAbstractButton *b = railButton(&window, panel);
-            QVERIFY2(b, qPrintable(panel));
-            b->click();
-            Auditor::settle();
-            const QString surface = QStringLiteral("Edit page with %1 %2").arg(panel.toLower(), res);
-            m_auditor.audit(&window, surface);
-            m_auditor.shoot(&window, surface);
-            b->click();
-            Auditor::settle();
-        }
+        // Browse project images.
+        QDialog *images = window.browseProjectImages();
+        QVERIFY(QTest::qWaitForWindowExposed(images));
+        images->resize(size);
+        Auditor::settle();
+        m_auditor.audit(images, QStringLiteral("Browse project images %1").arg(res));
+        m_auditor.shoot(images, QStringLiteral("Browse project images %1").arg(res));
+        images->hide();
     }
 }
 
-// Not report-only: every page fits a 1080p screen at 150 % (1280×720), with the queue and the
-// assistant open too. The page stack's minimum is that of its largest page, shown or not.
+// Not report-only: the main window fits a 1080p screen at 150 % (1280×720) with the start screen,
+// with a document (its prompt bar, results, the AI panel and the Filters tab), and with the queue and
+// the assistant open;
+// so do the prompt bar's ⋯ menu, the plugin pages' windows and Browse project images.
 void TestLayout::mainWindowFitsSmallScreen()
 {
+    AllPlugins plugins;
     Studio studio;
-    studio.openImageAsDocument(sampleImage(), QStringLiteral("Sample"));
     MainWindow window(&studio);
     window.resize(1280, 720);
     window.show();
     QVERIFY(QTest::qWaitForWindowExposed(&window));
     const QSize screen(1280, 720);
-    auto check = [&](const QString &what) {
+    auto check = [&](QWidget *w, const QString &what) {
         Auditor::settle();
-        const QSize need = window.minimumSizeHint();
+        const QSize need = w->minimumSizeHint().expandedTo(w->minimumSize());
         QVERIFY2(need.width() <= screen.width() && need.height() <= screen.height(),
                  qPrintable(QStringLiteral("%1 needs %2×%3").arg(what).arg(need.width()).arg(need.height())));
     };
-    QCOMPARE(window.pageIds().size(), 6);
-    for (const QString &page : window.pageIds()) {
+    QVERIFY(window.editor()->showsStartScreen());
+    check(&window, QStringLiteral("the start screen"));
+    doc::Document *doc = studio.openImageAsDocument(sampleImage(), QStringLiteral("Sample"));
+    check(&window, QStringLiteral("the editor"));
+    {
+        // The prompt bar with its offers, four results above it, its ⋯ menu and the AI panel.
+        ImageEngine engine(&studio);
+        QTRY_VERIFY(window.editor()->promptBar()->plan().action == PromptAction::CannotEditImage);
+        check(&window, QStringLiteral("the prompt bar"));
+        showResults(window, doc);
+        check(&window, QStringLiteral("the results"));
+        window.editor()->promptBar()->showOptions();
+        check(window.editor()->promptBar()->optionsPopup(), QStringLiteral("the prompt bar's options"));
+        window.editor()->promptBar()->optionsPopup()->hide();
+        window.editor()->showAiPanel();
+        check(&window, QStringLiteral("the AI panel"));
+        window.editor()->hideAiPanel();
+        window.editor()->variantStrip()->discard();
+        showFilters(window);
+        check(&window, QStringLiteral("the Filters tab"));
+        showResults(window, doc);
+        check(&window, QStringLiteral("the Filters tab with results"));
+        window.editor()->variantStrip()->discard();
+        sidePanel(window)->setCurrentIndex(0);
+    }
+    window.setQueueVisible(true);
+    check(&window, QStringLiteral("the queue"));
+    window.setQueueVisible(false);
+    QAction *assistant = actionNamed(&window, QStringLiteral("panel-assistant"));
+    QVERIFY(assistant);
+    assistant->setChecked(true);
+    check(&window, QStringLiteral("the assistant"));
+    assistant->setChecked(false);
+    QCOMPARE(window.pageIds(), (QStringList{QStringLiteral("editor"), QStringLiteral("create"), QStringLiteral("poses"), QStringLiteral("parts")}));
+    const QSize available = QGuiApplication::primaryScreen()->availableGeometry().size();
+    for (const QString &page : window.pageIds().mid(1)) {
         window.showPage(page);
-        check(QStringLiteral("page %1").arg(page));
+        QWidget *w = window.pageWindow(page);
+        QVERIFY(w);
+        check(w, QStringLiteral("the %1 window").arg(page));
+        // It opens within the screen.
+        QVERIFY(w->width() <= available.width() && w->height() <= available.height());
     }
-    window.showPage(pages::Editor);
-    for (const QString &panel : {QStringLiteral("Queue"), QStringLiteral("Assistant")}) {
-        QAbstractButton *b = railButton(&window, panel);
-        QVERIFY(b);
-        b->click();
-        check(panel);
-        b->click();
-    }
+    QDialog *images = window.browseProjectImages();
+    check(images, QStringLiteral("Browse project images"));
+    QVERIFY(images->width() <= available.width() && images->height() <= available.height());
     // A new window takes at most the screen it opens on.
     MainWindow fresh(&studio);
-    const QSize available = QGuiApplication::primaryScreen()->availableGeometry().size();
     QVERIFY(fresh.width() <= available.width() && fresh.height() <= available.height());
 }
 
@@ -514,6 +745,22 @@ void TestLayout::dialogs()
         pose::Pose pose;
         PoseEditDialog d(&studio, pose, std::nullopt, QString());
         m_auditor.auditDialog(&d, QStringLiteral("Pose edit dialog"));
+    }
+    {
+        NewFromPromptDialog d(&studio);
+        m_auditor.auditDialog(&d, QStringLiteral("New from prompt dialog"));
+    }
+    {
+        NewCanvasDialog d(&studio);
+        m_auditor.auditDialog(&d, QStringLiteral("New blank canvas dialog"));
+    }
+    {
+        // With everything it can show: a pose ("New image with this pose") and the more options.
+        NewFromPromptDialog d(&studio);
+        d.setPrompt(QStringLiteral("A lighthouse on a cliff at sunset"), QStringLiteral("text, watermark"));
+        pose::Pose pose = pose::findBuiltInPreset(QStringLiteral("standing"))->toPose(QSize(832, 1216));
+        d.setPose(pose);
+        m_auditor.auditDialog(&d, QStringLiteral("New from prompt dialog with a pose"));
     }
     // The setup wizard's pages (§17.5), for an 8 GB GPU with nothing installed: no hardware probe,
     // no folders read, no ports or GitHub asked.

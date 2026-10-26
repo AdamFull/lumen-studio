@@ -25,8 +25,10 @@
 
 namespace lumen::ui {
 
-// Ids of the core pages. Plugins add their own (ext::PageSpec), e.g. "poses" or "parts"; the core
-// names those only to ask whether they exist (Studio::hasPage).
+// What Studio::showPage opens: the editor (the main window), New from prompt ("generate") and Browse
+// project images ("library"), ids kept from the pages they replace. Plugins add their own pages
+// (ext::PageSpec), e.g. "poses" or "parts", each in a window of its own; the core names those only
+// to ask whether they exist (Studio::hasPage).
 namespace pages {
 inline constexpr QLatin1StringView Generate{"generate"};
 inline constexpr QLatin1StringView Editor{"editor"};
@@ -120,13 +122,25 @@ public:
     static constexpr int kIdleSaveMs = 4000;
 
     // ---- cross-page actions -------------------------------------------------------------------
+    // Shows the editor, opens New from prompt or Browse project images, or opens (and raises) a
+    // plugin page's window (see pages).
     void showPage(const QString &id) { emit pageRequested(id); }
     // Whether a page exists in this session: a core page, or one of a plugin that is on.
     bool hasPage(const QString &id) const;
+    // Adds an image to the references of the editor's generation (the AI panel).
     void useAsReference(const QString &assetId) { emit referenceRequested(assetId); }
+    // A new image with this pose: New from prompt, with the pose as the new document's control pose.
     void usePoseForGeneration(const pose::Pose &pose) { emit poseForGenerationRequested(pose); }
-    void editPose(const pose::Pose &pose, const QString &context = QString()) { emit poseEditRequested(pose, context); }
+    // Opens the pose in the Poses plugin's editor. Its window is built on first use, so it is opened
+    // before the request goes out.
+    void editPose(const pose::Pose &pose, const QString &context = QString())
+    {
+        showPage(QStringLiteral("poses"));
+        emit poseEditRequested(pose, context);
+    }
+    // Puts a prompt into the editor's prompt field.
     void usePrompt(const QString &prompt, const QString &negative) { emit promptRequested(prompt, negative); }
+    // New from prompt with the prompt, negative prompt, size and seed of an image.
     void rerunAsset(const QString &assetId) { emit rerunRequested(assetId); }
     // Starts a part slicing session (Live2D) from an image asset.
     void sliceAsset(const QString &assetId)

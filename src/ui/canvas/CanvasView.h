@@ -10,6 +10,8 @@
 #include <QTimer>
 #include <QWidget>
 
+#include <functional>
+
 namespace lumen::ui {
 
 class Tool;
@@ -62,11 +64,24 @@ public:
 
     void setCursorOverride(const QCursor &cursor);
 
-    // Shows `image` instead of the document's pixels, stretched over the document (a filter's
-    // preview at reduced resolution, M17 §17.6); the selection's outline stays, its tint goes so
-    // the colours read right. A null image shows the document again.
-    void setPreview(const QImage &image);
-    const QImage &preview() const { return m_preview; }
+    // A picture shown instead of the document's pixels, without changing the document; the
+    // selection's outline stays, its tint goes so the colours read right. Two can be set: a
+    // filter's preview (the Filters panel, at reduced resolution, stretched over the document, M17
+    // §17.6) and a result to choose from (the results strip, at the document's size). The result
+    // wins while there is one; the filter's preview shows again when the results are kept or
+    // discarded. A null image removes one; showing another document removes both.
+    enum class Preview { Filter, Result };
+    void setPreview(Preview kind, const QImage &image);
+    // What shows instead of the document: the result, else the filter's preview; null for none.
+    const QImage &preview() const { return m_resultPreview.isNull() ? m_filterPreview : m_resultPreview; }
+    const QImage &preview(Preview kind) const { return kind == Preview::Result ? m_resultPreview : m_filterPreview; }
+
+    // Keys the tool does not use while the canvas has the keyboard (the results strip's ←/→, Enter
+    // and Esc); true when the fallback used the key.
+    void setKeyFallback(std::function<bool(QKeyEvent *)> fallback) { m_keyFallback = std::move(fallback); }
+    // Whether the whole document is fitted into the view; it stays fitted when the view changes size
+    // (the results strip appears, the window is resized) until the user zooms or pans.
+    bool isFitted() const { return m_fitted; }
 
     // Renders the surface into a widget painter (called by the drawing surface).
     void render(QPainter &p, const QRect &widgetRect);
@@ -80,6 +95,8 @@ signals:
     void viewChanged();
     // A tool gesture (mouse/pen pressed) started or ended.
     void interactionChanged(bool active);
+    // A preview was set or removed (setPreview, or another document shown).
+    void previewChanged(CanvasView::Preview kind);
 
 protected:
     void resizeEvent(QResizeEvent *e) override;
@@ -104,6 +121,8 @@ private:
     double m_zoom = 1.0;
     QPointF m_pan;            // widget position of document origin
     bool m_fitPending = true;
+    bool m_fitted = false;
+    std::function<bool(QKeyEvent *)> m_keyFallback;
     bool m_spacePan = false;
     bool m_panning = false;
     QPointF m_lastPanPos;
@@ -117,7 +136,9 @@ private:
     int m_antsOffset = 0;
     quint64 m_contourGeneration = 0;
     QPixmap m_checker;
-    QImage m_preview;
+    QImage m_filterPreview;
+    QImage m_resultPreview;
+    QImage m_previewScaled; // below 100 %: the picture shown instead of the document, at the current zoom
 };
 
 } // namespace lumen::ui

@@ -52,10 +52,10 @@ class MaskBrushTool : public Tool
 public:
     explicit MaskBrushTool(EditorState *state, QObject *parent = nullptr);
     QString id() const override { return QStringLiteral("mask"); }
-    QString name() const override { return tr("Mask brush"); }
+    QString name() const override { return tr("Selection brush"); }
     QString iconName() const override { return QStringLiteral("mask-brush"); }
     QString shortcut() const override { return QStringLiteral("Q"); }
-    QString hint() const override { return tr("Paint the area to regenerate. Alt or right button erases the mask."); }
+    QString hint() const override { return tr("Paint over what should change; Alt or the right button takes it out of the selection."); }
     void press(CanvasView *view, const ToolEvent &ev) override;
     void move(CanvasView *view, const ToolEvent &ev) override;
     void release(CanvasView *view, const ToolEvent &ev) override;

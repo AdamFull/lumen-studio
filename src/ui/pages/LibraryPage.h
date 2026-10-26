@@ -69,6 +69,9 @@ class LibraryPage : public QWidget
 public:
     explicit LibraryPage(Studio *studio, QWidget *parent = nullptr);
 
+    // How an image was made, in plain lines (engine, kind of change, size, seed…).
+    static QString detailsText(const doc::AssetInfo &info);
+
 private:
     void showInspector();
     QStringList selectedIds() const;
@@ -93,8 +96,11 @@ private:
     QLabel *m_preview;
     QLineEdit *m_name;
     QLabel *m_meta;
+    QWidget *m_promptBox;
     QPlainTextEdit *m_prompt;
-    QPlainTextEdit *m_params;
+    // How an image was made, in plain lines (engine, size, seed…), folded away until asked for.
+    QToolButton *m_detailsToggle;
+    QLabel *m_details;
     QToolButton *m_star;
     QWidget *m_inspector;
     QString m_currentId;

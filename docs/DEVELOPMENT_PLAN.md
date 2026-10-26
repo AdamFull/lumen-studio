@@ -1983,7 +1983,8 @@ Survey of the code, the app log and user testing (October 2026):
 
 #### 17.5 Setting up AI
 
-* **First-run wizard** (also *Help → Set up AI*), three choices:
+* **First-run wizard** (also *Help → Set up AI* and every *Set up AI* button of the editor), three
+  choices:
   1. *Run on this computer*: detects the GPU and VRAM (`runtime/Hardware`), recommends one preset
      (FLUX.2 klein 4B on 8 GB; SDXL-class models as the lighter option), shows the download size,
      installs the sd.cpp runtime and the model files, starts the server and runs a test image.
@@ -2024,8 +2025,8 @@ Survey of the code, the app log and user testing (October 2026):
   The core never includes a plugin header; CMake links plugins against the core, never the
   reverse, and a configure check fails on a reverse dependency.
 * Built-in plugins are static libraries registered at start (no DLL loading yet); Settings →
-  Plugins switches each on or off (restart needed at first). Off by default once the new shell
-  lands; on until then, so the pages stay where users know them.
+  Plugins switches each on or off (restart needed at first). Off by default since the new shell
+  (§17.8); on until then, so the pages stay where users know them.
 * Moved out of the core:
   * **Characters**: character library, active character and cast (M14, M16), Create page /
     Director, Assistant; the rest of M16 continues there.
@@ -2036,13 +2037,17 @@ Survey of the code, the app log and user testing (October 2026):
 * **First cut (step 3)**: the hooks that exist are rail pages (`PageSpec`: id, icon, label, order,
   a fixed default `Alt` key), rail panels over the page area (`PanelSpec`, the assistant) and
   Settings tabs (`SettingsTabSpec`); the other hooks come with the features that need them (prompt
-  bar §17.2, filter nodes §17.6, request decorators with the Characters work below). Differences
+  bar §17.2, filter nodes §17.6, request decorators with the Characters work below). Since the new
+  shell (§17.8) a `PageSpec` is a Tools menu action that opens the page in a window of its own, a
+  `PanelSpec` a checkable View menu action, and the plugins are off by default. Differences
   from the list above:
   * **Character LoRA** is part of **Characters**: the dataset builder is built on director
     sessions and only opens from the Create page.
   * Still in the core until request decorators exist: the character library, the active character
-    and cast, `CharacterChip` and `CharacterLoraDialog` (the Generate page, the AI panel and the
-    Parts page use them), and `ai::Director` (the Generate page's prompt enhancer uses it).
+    and cast, `CharacterChip` and `CharacterLoraDialog` (the AI panel, while the Characters plugin
+    is on, and the Parts page use them), and `ai::Director`, for `sizeForAspect` (New from prompt,
+    the pose dialog) and the Characters plugin's director; it can move to the plugin once
+    `sizeForAspect` is a core helper.
   * The pose canvas and the pose dialog stay in the core (the director's shot cards use them); the
     Poses plugin has the page.
 
@@ -2235,13 +2240,326 @@ Survey of the code, the app log and user testing (October 2026):
     without a preset), `tst_services regionEditMode` and `localRegionEditEndToEnd` (a klein edit of a
     selection: the request, and no pixel outside the feathered selection changes),
     `tst_canvas presetServerDialog` (a saved server's provider gets the preset).
-  * The current editor uses this through the AI panel's *Instruct edit*; the prompt bar of §17.2
-    picks it automatically later.
-- [ ] New shell: start screen, the editor as the main window, status bar with jobs, *New from
+  * The editor used this through the AI panel's *Instruct edit*; since step 8 the prompt bar of
+    §17.2 picks it automatically.
+- [x] New shell: start screen, the editor as the main window, status bar with jobs, *New from
   prompt*, *Browse project images*; the navigation rail and the Generate and Library pages go.
-- [ ] Prompt bar (§17.2): selection, whole-image and blank-canvas modes, *Remove*, variants strip,
+  * `MainWindow` is the editor: `EditorPage` fills it; the Queue popup, the plugins' panels and
+    the toasts lie over it in a wrapper (outside the editor, so its `WidgetWithChildrenShortcut`
+    keys stay out of the assistant's text fields). The navigation rail, the page stack,
+    `PageFactory` / `corePages` and `GeneratePage` are gone.
+  * Menus. *File*: New blank canvas… (`Ctrl+N`), New from prompt… (`Alt+2`), Open image…
+    (`Ctrl+O`), Paste from clipboard (a new document; no key, `Ctrl+V` stays the editor's paste as
+    layer), Browse project images… (`Alt+6`), *Save to project* (`Ctrl+S`, was *Save all*), export,
+    *Save a copy to project images* (was *Save image to library*, `Ctrl+Shift+S`), close document,
+    projects and recent projects, quit. *Edit*: Undo, Redo, then as before. *Select*: Select all,
+    Deselect, Invert selection, Delete selected pixels. *View*: zoom in and out, fit, actual pixels,
+    Job queue (`Ctrl+Shift+Q`, checkable), one checkable action per `PanelSpec` (the assistant,
+    `Ctrl+Shift+A`), the theme. The editor's commands in the menus are its own shortcut actions
+    (`EditorPage::editorAction`), so customised keys show and work there. *Tools*: one action per
+    `PageSpec` (Create `Alt+1`, Poses `Alt+4`, Parts `Alt+5`) and *Plugins…* (Settings → Plugins).
+    *Help*: Set up AI… (on this branch the `OnboardingDialog`, reworded "Set up an image engine";
+    since the merge below the setup wizard of §17.5, and the dialog is Providers → *Detect local*
+    again), models and log folders, about. The merge adds *View → Filters* and *Tools → New
+    filter…* / *Filter editor…*. The ComfyUI workflow folder is a button of the ComfyUI provider's
+    settings. Menu items end in "…". The actions
+    that replace rail pages keep the rail's shortcut ids (`nav.sparkles`, `nav.gallery`,
+    `nav.<icon>` of plugin pages), so customised keys carry over; `nav.brush` (`Alt+3`, *Go to
+    Edit*) went, since the editor is the window. *File → Import images to library…* went: Browse
+    project images has *Import*.
+  * Start screen (`ui/pages/StartScreen`): the editor page shows it in a stack while
+    `Studio::documents()` is empty; the main window answers its requests. Open image…, Paste from
+    clipboard, New from prompt…, New blank canvas…; a *Set up AI* card while no image engine is on
+    (`imageEngineInUse`); up to 6 saved documents (newest first, their thumbnails) and then the
+    newest images (not sliced parts), 12 tiles at most, a click opens one
+    (`openStoredDocument` / `openAssetInEditor`), rebuilt when it is seen after the project
+    changed; *Browse project images…*. Results of prompt runs (`user_prompt`) show only once kept
+    (*Keep* marks the asset `kept`); documents carry a *Layers* badge; names take two lines. An image file dropped on it opens (the editor page's drop
+    handling). Scrolls instead of setting the window's minimum height.
+  * Plugin pages (`ext::PageSpec`) open in windows of their own (`PageWindow`, no parent and no
+    `WA_QuitOnClose`, so a tool window can go behind the editor and does not keep Lumen running):
+    built by the first `showPage`, raised afterwards, closed with the main window, size and place
+    in `ui/windows/<id>/geometry`, with their own toasts (`Studio::notification` goes to the
+    active window's). `Studio::showPage`: `editor` raises the main window, `generate` opens New from
+    prompt, `library` Browse project images, a plugin id its window, an id of a plugin that is off
+    nothing. `Studio::editPose` opens the Poses window before its request, because the page
+    connects to it when it is built (`sliceAsset` did so already for Parts); `main` opens the Parts
+    window before `--slice` and `--cubism`, and `--page` opens a window after the editor is shown.
+    `MainWindow::pageWidget` gives a plugin page once its window was opened. The remembered page
+    (`ui/page`) is no longer used and is removed at start.
+  * Plugins are off by default (`ext::Extensions::kEnabledByDefault = false`); tests that need one
+    switch it on (`PluginsOn` in `tst_canvas`, `AllPlugins` in `tst_layout`).
+  * *New from prompt* (`ui/dialogs/NewFromPromptDialog`, window-modal, opened with `open()` so
+    other flows can fill it): prompt; size as aspect chips 1:1 … 16:9 at the engine's native pixels
+    (`Director::sizeForAspect`), shown in the width / height fields, or a custom size; variants
+    1–4; the image engine (`ProviderCombo`); *More options*: the negative prompt ("Leave out", only
+    for models that take one) and the seed. The aspect and the variants are remembered
+    (`newFromPrompt/*`). *Create* (`Ctrl+Enter`) makes a document of that size named after the
+    prompt and submits text-to-image with the prompt style's tags (one job per image for engines
+    without `batch`, `GenerationService::submitVariants`, as the prompt bar does); steps, CFG and
+    the sampler come from the model preset and the provider (nothing is "chosen"). Without an
+    engine it says so with a *Set up AI…* button (since the merge the setup wizard opens over the
+    dialog, which stays with its words and follows the new engine). Its engine list follows the
+    engine for new images of Settings → AI. "Variants"
+    reads *Images to make*. The results become layers
+    through `AiPanel::addResultLayers` (now static and shared): scaled to the document, the first
+    visible, the others hidden, one undo step. The prompt bar of the next step takes them over
+    with its variants strip.
+  * Every way into the Generate page has a new home: *Use as reference* (`referenceRequested`) →
+    the AI panel's references (the AI tab comes to the front); *Reuse prompt* (`promptRequested`)
+    → the AI panel's prompt (a mode with a prompt), or New from prompt while no document is open;
+    it now sends the words the user wrote (`user_prompt`). *Re-run* (`rerunRequested`) → New from
+    prompt with the image's words, negative prompt, size and seed. The Poses plugin's *Use in
+    Generate*, now *New image with this pose* (`poseForGenerationRequested`) → New from prompt with
+    the pose: the aspect closest to the pose's canvas, the pose fitted to the size becomes the new
+    document's control pose, and goes as OpenPose control when the engine has a ControlNet.
+  * The Generate page's controls and where each went:
+    * Provider → New from prompt's *Image engine*. Model (list, *Load models from the provider*)
+      → gone: the model is the server's (its preset) or the provider's default in Settings →
+      Providers.
+    * Prompt → New from prompt. *Enhance* (the prompt writer) → gone from the core, which needs no
+      language model (§17.5); the Characters plugin's director still writes prompts.
+    * Negative prompt → *More options*, only for models that take one.
+    * Aspect chips, *Custom* width × height and the size note → New from prompt.
+    * Steps, CFG, Sampler, Scheduler → the model preset's and the provider's defaults (§17.4);
+      steps come back in the prompt bar's *⋯* menu.
+    * Images (1–16) → *Variants* (1–4). Seed and *Random* → *More options*.
+    * Quality (OpenAI's tiers) → the provider's default. *Transparent background* → gone.
+    * References → the AI panel's references (*Use as reference*), later the prompt bar's *⋯* menu.
+    * Pose control (*Preset…*, *Edit…*, *Clear*, *Strength*) → the Poses plugin (*New image with
+      this pose*); the dialog shows the pose with *No pose*; the strength is 1.
+    * *Start from an image (img2img)* and *Denoise* → the editor: open the image, AI panel
+      *Variation* with *Strength*.
+    * Character chip (with the character's LoRA) → the AI panel and the Characters plugin; New
+      from prompt draws no character (request decorators of the Characters plugin, §17.7).
+    * Results grid (*Open in editor*, *Use as reference*, *Use as start image*, *Re-run*) and its
+      job cards → the results are layers of the new document and images of the project (Browse
+      project images has *Open in editor*, *Use as reference*, *Re-run*); jobs are in the Queue.
+    * `Ctrl+Return` (`generate.run`) → `Ctrl+Enter` in the dialog's prompt.
+  * *Browse project images*: `LibraryPage` in a window of its own (`ProjectImagesDialog`, no
+    parent, so *Open in editor* brings the editor in front of it; size and place remembered), from
+    File (`Alt+6`), the start screen and the reference strip's *From library*. Batch background
+    removal and upscaling are unchanged. Its title label went (the window's title names it); the
+    texts that named the Generate page now name the AI panel and New from prompt. The inspector
+    has the actions under the preview (*Re-run* is *Make another like this*), the words, and a
+    folded *Details* of plain lines (`LibraryPage::detailsText`: engine and model, the kind of
+    change, the size drawn at, steps, seed, what was left out) in place of the raw parameters; the
+    *Poses* and *Parts* kinds show with their plugins.
+  * Status bar: the project (`ElidedLabel`, "Project: My Studio", the path as tooltip); the image
+    engine in plain words (here `imageEngineInUse`, the default image provider when it is on, else
+    the first one on; since the merge the engine the prompt bar uses, `PromptBar::engine`;
+    `imageEngineName`: "FLUX.2 [klein] 4B on this computer" for a server Lumen runs with a preset,
+    "<provider> on this computer" without one, else the provider's name, as the engine lists
+    (`ProviderCombo`) name them; "No image engine – Set up AI" without one, and then a click runs
+    Set up AI, else Settings → Providers, since the merge Settings → AI); the local servers button
+    and *Safe for work* (with its name) as before; the jobs ("No jobs running", "1 running · 0
+    queued") as a checkable button that opens the Queue popup (left of an open plugin panel;
+    "Nothing is running…" and its buttons off while there is nothing to act on; as tall as its
+    jobs), in step with View → Job queue. The Queue and the plugins' panels end above the prompt bar
+    and the results strip (`EditorPage::overlayBottom`). The zoom stays in the editor's bottom row.
+    The status bar has an 8 px side margin (§17.9 item 9).
+  * Found on the way: quitting did nothing when no document needed saving (the save future was
+    already finished, so its continuation called `close()` inside the close event, where Qt ignores
+    it); the close is queued now. The accessibility test only looked at the page shown last; now
+    that it checks every window, unnamed controls got names: `SliderField`'s slider and number box
+    take its label, `ProviderCombo` is "Image engine" / "Language model", the AI panel's and the
+    Create page's variants, the Poses page's canvas and person lists, the Parts page's part layout;
+    a scroll area's own scroll bars count as its parts.
+  * Tests (`tst_canvas`): `newFromPrompt` (replaces `generatePageCharacter`; File → New from prompt…
+    on the start screen, *Create* disabled without words, 3:2 and two variants: a document of the
+    native-pixel size named after the prompt, the request's size, `batch_count` and seed, two layers
+    scaled to the document with the second hidden, one undo step, the images in the project with
+    `user_prompt`, the choices kept; *Re-run* fills words, negative prompt, size and seed into the
+    request; *New image with this pose*: portrait, the control pose and `control_image`; *Reuse
+    prompt* and *Use as reference* in the AI panel, and New from prompt with no document open),
+    `startScreen` (*Set up AI* follows the providers; recent tiles, a click opens the image or the
+    document, the start screen after the last document closes; paste; a dropped file; New from
+    prompt and Browse project images), `shellStatusBar` (project, engine names, default and
+    switched-off providers, the click to Settings → Providers (→ AI since the merge), the jobs
+    summary and the Queue in step with View → Job queue), `pluginWindows` (the Tools menu, a window
+    built on first use and raised afterwards, its place remembered in the next session, `editPose`
+    builds the Poses window, `showPage` of editor, generate and library, View → Assistant and its
+    close button, quitting closes the windows), `pluginsOff` (off by default; only the editor, no
+    tool or panel actions, `showPage` of an off plugin opens nothing; editing; Settings; the record
+    survives), `legacyPageSetting` (`ui/page` 3 or "poses": the editor, no window, the setting
+    removed), `accessibleNames` (start screen, editor with a document, each plugin window, Browse
+    project images, New from prompt), `shortcutsHaveNoConflicts` (every plugin on and its window
+    opened; `Alt+2`, `Alt+6`, `Ctrl+Shift+A`). Removed: `generatePageCharacter` (the Generate page's
+    character chip and *Re-run* restoring the character went with the page; the AI panel's chip is
+    `editorCharacter`'s) and the part of `safeContent` that moved the Generate page's CFG slider
+    (the recommended CFG is still checked through requests there). `tst_layout`: the start screen,
+    the editor, with the queue and with the assistant, the Create, Poses and Parts windows and
+    Browse project images at the three sizes; New from prompt (plain, and with a pose and *More
+    options*) with the dialogs; `mainWindowFitsSmallScreen` stays strict for the start screen, the
+    editor, the queue, the assistant, each plugin window and Browse project images. Findings: 7 → 4
+    (the four tall dialogs of §17.9 item 8; item 6 went with the Generate page and the rail).
+    `tst_live characterEverywhere` builds its new-image requests without the page.
+  * Not yet: characters in new images (the Characters plugin's request decorators); the German
+    translation of the new texts; the main window's menu shortcuts do not work while a plugin window
+    is active, and open plugin windows are not reopened at the next start.
+- [x] Prompt bar (§17.2): selection, whole-image and blank-canvas modes, *Remove*, variants strip,
   results as masked layers. Test with the mock server: a selection edit leaves every pixel
   outside the feathered mask unchanged.
+  * `PromptBar` (`ui/pages/PromptBar`), docked under the canvas while a document is open: a line
+    saying what Generate does now or why it cannot (an `ElidedLabel`, the full text as tooltip), the
+    words (`AutoTextEdit`, one to three lines; Enter runs, Shift+Enter starts a line, and
+    `Ctrl+Enter` (`editor.ai-run`, the AI panel's old key) runs it from anywhere in the editor),
+    *Generate*, *Remove* (with a selection) and *⋯*. It replaces the floating `ContextBar` (deleted,
+    with *View → Generative toolbar on the canvas*, `EditorState::showContextBar` and the setting
+    `editor/contextBar`, which is removed at start) and the AI panel's *Fill selection* and
+    *Instruct edit*.
+  * What Generate does is the pure `promptPlan(selection, blank canvas, capabilities)`
+    (`ui/pages/PromptPlan`). With a selection: an instruction edit of the area (`GenMode::Edit`
+    through the region pipeline) when the engine has `edit` and `regionEdit`, else inpainting
+    (`inpaint`, or a cloud `edit`, which the pipeline inpaints), else img2img of the area. Without
+    one: an instruction edit of the whole image when the engine has `edit`, else "This engine cannot
+    change the whole picture from words…" with *Select an area* (the rectangle selection tool), and
+    the main button and Enter make a variation (img2img of the whole image at the variation
+    strength, for engines with img2img). On a blank canvas (`isBlankCanvas`: every layer empty or one flat
+    colour): text to image at `workingSize` (the canvas's shape at the engine's pixels, or its
+    closest fixed size), scaled to the canvas. A selection wins over a blank canvas. The other
+    cases: no engine (*Set up AI…*), an engine that only makes new images, a blank canvas and an
+    engine that cannot draw from words. *Remove* (`removalRequest`): for edit models the
+    instruction "Remove the object in the middle of the picture and fill its place with what is
+    around it…", else inpainting (or img2img) with "empty background, seamless continuation of the
+    surroundings"; at strength 1 and without the project's character.
+  * `AiOptions` (`ui/pages/AiOptions`): one model of the options, shown by the bar's *⋯* menu and by
+    the AI panel: the engine (empty = the one in use; since the merge the one Settings → AI names
+    for the run, `AiOptions::provider(registry, changes)`), the area strength (0.75) and the variation
+    strength (0.45) kept apart, steps (0 = the model's, else `stepsChosen`), the seed (-1 = random),
+    variants (1–4, remembered in `editor/ai/variants`), the negative prompt, the control pose
+    switch, and the selection's context, blend edge and colour matching; also the bar's words
+    (`promptChanged`), which the panel's Variation and Expand use. The *⋯* menu (a popup above its
+    button) shows only what applies: *How much may change* (in per cent) when the request uses a
+    strength, *Results per run*, *Leave out* for models with a negative prompt, *References* (the
+    count; it opens the AI panel, where they are) when the engine takes some, the control pose with
+    pose control and a pose, the engine, steps and seed under *Advanced* when the engine takes them,
+    and *All AI options…*.
+  * Requests: `AiPanel::submitPrompt(PromptRun)` builds them as the panel did (the prompt style,
+    the negative prompt, the references, the OpenPose control, and the character of the panel's
+    `CharacterChip` unless the run or the chip says no, as `CharacterUse::Edit`, `Region` or
+    `Full`), with a `RegionInput` for a selection and the working size for the whole image or a new
+    one. Engines without `batch` get one job per variant (a fixed seed counts up). The jobs go to
+    the panel's results handler, the strip; without one (the panel alone, `tst_live`) they become
+    layers as before. The images record `user_prompt` and the `action`.
+  * `VariantStrip` (`ui/pages/VariantStrip`) above the bar, per document: `track(doc, jobs, name,
+    results)` turns the jobs' images into results (scaled to the document; the thumbnails of a
+    selection's results show the engine's picture of the area). The canvas shows the current one over the
+    document (`CanvasView::setPreview`: drawn above the composite, from a copy at the current zoom
+    below 100 %, without the selection tint; cleared when another document is shown; since the
+    merge the canvas's *Result* preview, which wins over a filter's), so nothing
+    changes until one is kept. `←`/`→` (also while the canvas has the keyboard, after its tool) or a
+    thumbnail pick one; *Keep* or Enter adds it as a layer on top
+    (`addLayer` at the top index: one undo step; the region pipeline's result is masked already);
+    *Discard* or Esc drops them and stops what still runs. The strip takes the keyboard when results
+    arrive, unless the user is typing (a text field has it; since the merge also a list, a slider or
+    a choice). A new run replaces the results on show, or
+    joins a run that still goes; results go when their document changes its size or closes. While
+    jobs run, the bar shows "Working on 2 results… <status>" and a progress bar, and Generate is
+    *Cancel* (`VariantStrip::stop`). New from prompt hands its job to the strip
+    (`NewFromPromptDialog::generationStarted`; a dialog nobody listens to still adds layers), in
+    place of the shell step's interim layers.
+  * The AI panel is the advanced panel: a hidden third tab of the right panel (which shows Layers
+    and History; since the merge a fourth, after Filters), opened by *All AI options…* (⋯ and the AI
+    menu), ⋯ *References*, *Use as reference* and *Expand canvas…*, closed by the ✕ on its tab. It
+    keeps the engine, the character chip, the actions that are not a description (Variation, Expand,
+    Upscale, Remove BG, Detect pose) with their settings, and every option of `AiOptions`, with
+    *Steps*, *Seed* and *Area strength* new. Its job cards stay for its own actions; `run(Mode)` and
+    `upscale(factor)` are public.
+  * The **AI** menu (between View and Tools), enabled with a document open: *Upscale* 2× / 3× / 4×,
+    *Remove background*, *Expand canvas…* (the AI panel on Expand), *Variation* (to the strip),
+    *Detect pose*, *All AI options…*.
+  * *Reuse prompt* fills the bar's words and the negative prompt (New from prompt with no document
+    open); *Use as reference* adds to the AI panel's references and opens it.
+  * Found on the way: `AutoTextEdit` reserved 18 px around its lines, less than the style sheet's
+    border and padding (14 px), the document's margins (8 px) and the pixel the plain text layout
+    keeps free, so a one-line field showed a scroll bar (§17.9 item 9's negative prompt fields). It
+    measures its frame once laid out now.
+  * Tests (`tst_canvas`): `promptModes` (the mode table over seven kinds of engine, Remove's
+    requests, blank canvases, the working size); `promptBarSelectionEdit` (mock sd.cpp with the
+    FLUX.2 klein preset: the whole image without a selection; a selection edit through the bar with
+    Enter: the request (`ref_images`, no `init_image` or mask, `batch_count` 2, 4 steps), two results
+    previewed while the document stays as it is, ←/→ on the strip and on the canvas; Enter keeps the
+    second: one layer on top named after the words, one undo step, no pixel of it outside the
+    feathered selection and the picture unchanged wherever it is clear, gone with one undo; Esc on
+    the canvas drops them; a held job shows *Cancel* and its progress and is cancelled; *Remove*
+    sends the instruction; results stay with their document; the fitted canvas stays whole with the
+    strip; the strip has the keyboard after Enter in the words); `promptBarNewImage` (a 768 × 512
+    blank canvas: text to image at the working size, the kept layer at the canvas's size, then the
+    whole image); `promptBarWithoutEdits` (sd.cpp without a preset: the message, *Select an area*,
+    *Make a variation* at the strength from ⋯; inpainting of a selection at the area strength,
+    masked to it; *Remove* with a mask at strength 1); `aiMenuAndPanel` (the AI menu needs a
+    document; the panel hidden until asked for, *Expand canvas…*; ⋯ and the panel share variants and
+    steps; only the rows that apply; *References* opens the panel; the menu's Variation with the
+    bar's words, three results at 8 steps). Updated: `newFromPrompt` (the results in the strip, the
+    second kept; *Reuse prompt* in the bar, *Use as reference* opens the AI panel),
+    `editorCharacter` (through `submitPrompt` and `run`), `accessibleNames` (the ⋯ menu, results,
+    the AI panel), `shortcutsHaveNoConflicts` (`editor.ai-run` is `Ctrl+Return`, no `context-bar`).
+    Removed: `contextBarFollowsSelection` (the floating bar is gone). `tst_layout`: the editor
+    without an engine (*Set up AI…*), with an engine without edits (its offers), with a selection and
+    four results, the ⋯ menu and the AI panel, at the three sizes; `mainWindowFitsSmallScreen` checks
+    the bar, the results, the ⋯ menu and the AI panel at 1280×720. Findings stay at 4.
+  * Review fixes (October 2026):
+    * Results that arrive no longer take the keyboard from a text field (the next words in the
+      prompt field, a layer's name, a number): typing stays there and Enter runs the new words. The
+      strip takes it from what else in the editor has it (the canvas, a button) or nothing; since the
+      merge not from a list, a slider or a choice either. Its line names the keys only
+      while they work ("click one to compare" otherwise), says "Keep it (Enter) or discard it (Esc)"
+      for one result and "Generate again replaces these" for several.
+    * The canvas hands the results only the keys its tool does not use (`CanvasView::setKeyFallback`
+      in place of the strip's event filter): the move tool's arrows nudge, the transform and crop
+      tools' Enter and Esc apply and revert.
+    * A run counts as running from the click (`VariantStrip::expect`, the AI panel's
+      `PreparingHandler`): a second Enter or click while the character and the picture are read
+      started a second run; Cancel then stops the jobs when they come; a run that cannot be
+      submitted (its document closed) ends it.
+    * A job of the strip retried from the Queue joins its document's results again (they were
+      dropped after a failure or a cancel).
+    * A job whose engine is removed while it works fails ("The image engine was removed…"): the
+      provider's operation went without finishing, and the bar stayed on "Working on it…". (Step 12
+      fixed the same; since the merge one function, `failWhenGone`.)
+    * The engine nobody chose follows the one in use: the combos of ⋯ and the AI panel set
+      `AiOptions::providerId` only on a choice of the user's (`activated`; choosing the one in use
+      leaves it empty), show the engine runs go to, and follow `rolesChanged`. Before, the combo's
+      reload pinned the first engine set up while the editor was open. (Since the merge through
+      step 9's `ProviderCombo` follow, `picked` and `pinnedProviderId`.)
+    * A whole-image change comes back at the picture's size with its fine detail where the engine
+      kept its shapes (`GenerationSpec::detailSource`, `img::restoreDetail`: the detail the scaling
+      down removed is added to the result scaled up, weighted by how close the result's brightness
+      stays to the input's beyond a median shift, so a changed object leaves no ghost). A 12 MP photo
+      was replaced by a 1 MP result scaled up.
+    * The canvas stays fitted when the strip takes some of its height (`CanvasView::isFitted`,
+      until the user zooms or pans): the bottom of the picture was under the strip.
+    * The main button says what it does: *Set up AI…* without an engine, *Make a variation* (and
+      Enter) for an engine without edits, where Generate stayed off under words it invited; *Select
+      an area* is a bordered button; *Remove* is *Remove object*; the no-engine hint is "AI editing
+      needs an image engine…".
+    * ⋯: *How much may change* in per cent, *Results per run*, steps and seed under *Advanced*,
+      *References: Add in the AI panel…*. The AI panel's texts lost their technical terms
+      ("(inpainting)", "Remove BG", "OpenPose skeleton"), and its *Character* row and *Detect pose*
+      (also in the AI menu) show only with the Characters and Poses plugins.
+    * The mask brush is the *Selection brush* ("Paint over what should change…", *Tint the
+      selection*, history "Paint selection" / "Erase from selection"); documents open with the
+      rectangle selection. The tab bar draws no base line past the last tab.
+    * Tests (`tst_canvas`): `promptBarKeepsTyping` (typing survives results, Enter runs the words,
+      the tool's keys first, the line), `promptBarRuns` (two Enters make one run, Cancel and Retry
+      in the Queue, the engine removed mid-run), `promptBarEngine` (the first engine set up and a
+      new default are followed, a choice pins), `wholeImageKeepsDetail` (a 2400 × 1600 photo edited
+      at 1 MP by an echoing mock keeps its brightness pixel for pixel), `editorMenus`,
+      `newFromPromptEngines` (the *Set up AI…* button; three jobs for Stability), `recentAndDetails`;
+      `pluginsOff`, `pluginWindows` (the assistant above the bar), `shellStatusBar` (the click
+      without an engine, the empty Queue), `promptBarWithoutEdits`, `aiMenuAndPanel` and
+      `editorCharacter` (with the Characters plugin) updated. `tst_masks restoreDetail`.
+      `tst_layout`: `settle()` lets the bar's and the outline's timers run and the states are
+      checked on screen (the screenshots showed stale states), no overlay reaches the prompt bar,
+      the whole picture shows with results, the New blank canvas dialog (`NewCanvasDialog`, with
+      *Create*; Live2D sheet only with the parts plugin) is audited, and a button's text is measured
+      by its widest line. Findings stay at 4.
+  * Not yet: prompt-bar actions of plugins (§17.7); a result is previewed whole (no before/after
+    view); Remove's instruction for edit models names "the object in the middle", since the model
+    does not see the selection; the start screen lists the project's images, not files opened from
+    disk, and a picture is saved only by Export (no *Save over original*); the German translation of
+    the new texts.
 - [x] Setup wizard and Settings → AI (§17.5).
   * `ui/dialogs/SetupWizard` replaces the first-run `OnboardingDialog` (which stays as Providers →
     *Detect local*, now titled *Find servers on this computer*). One entry point,
@@ -2251,7 +2569,9 @@ Survey of the code, the app log and user testing (October 2026):
     instead of closing with it. Else it belongs to the main window. It opens at the first start
     (`MainWindow::maybeShowOnboarding`, once, `app/onboarded`), from *Help → Set up AI…*, and on
     *Run on this computer* from the Local servers page's *Set up local AI…* and the *Detect local*
-    dialog; the start screen's card calls it after the merge. The first page offers the three ways
+    dialog; since the merge also from the start screen's card, the prompt bar's and New from
+    prompt's *Set up AI…* and the status bar's "No image engine – Set up AI"
+    (`MainWindow::setUpAi`). The first page offers the three ways
     with what they cost in time, size and money, the suggested model and the servers found; each way
     ends on a result page with a test image (`saveAssets` off; quality "low" where a service charges
     by quality), its progress (the job's status under the heading: the theme's progress bars show no
@@ -2327,7 +2647,8 @@ Survey of the code, the app log and user testing (October 2026):
     Settings → AI for its use (`Use::NewImages`, `Use::Changes`) and follows it on `rolesChanged`
     until a provider is picked in it by hand (picking that engine again follows it again); the AI
     panel uses the engine for changes, and so do the assistant's `edit_image` and `inpaint_region`
-    (`imageProviderFor(true)`). The Settings tab "Models & roles" is now "Roles", and the tab bar
+    (`imageProviderFor(true)`), and since the merge the prompt bar's changes and the filters' AI
+    edit steps. The Settings tab "Models & roles" is now "Roles", and the tab bar
     shortens labels instead of scrolling, so the AI tab does not push Plugins out of sight.
   * English plural forms of the new texts in `translations/lumen_en.ts` (also those of the models
     folder step); the German file keeps its translations of the renamed texts.
@@ -2361,12 +2682,11 @@ Survey of the code, the app log and user testing (October 2026):
     closes, the Local servers page). `tst_layout`: the wizard's pages (also the test image and the
     setup's progress, against a server that never answers), Settings → AI with an engine, no
     findings; every Settings tab fits the tab bar (strict).
-  * Not yet: the start screen card (new shell); the prompt bar of §17.2 should choose its engine
-    with `imageProviderFor` as the AI panel does; Qwen3 4B as a GGUF text encoder (unsloth's Q8_0,
-    4.0 GB instead of 7.5 GB) is untested with the pinned sd.cpp, so klein's download stays 11.8 GB;
-    the per-image times are from the 8 GB live check only (AMD / Vulkan untested); the online
-    services keep their default models; using the model folder of a ComfyUI found running on the
-    server page; the German translation of the new texts.
+  * Not yet: Qwen3 4B as a GGUF text encoder (unsloth's Q8_0, 4.0 GB instead of 7.5 GB) is untested
+    with the pinned sd.cpp, so klein's download stays 11.8 GB; the per-image times are from the 8 GB
+    live check only (AMD / Vulkan untested); the online services keep their default models; using
+    the model folder of a ComfyUI found running on the server page; the German translation of the
+    new texts.
 - [x] Filter graph core and classic nodes; golden-image tests per node.
   * `src/filters` (`lumen_filters`, `lumen::filters`): on `lumen_core` (`ImageOps`, `Async`) and Qt
     Gui only, no UI, AI, document or runtime code; `lumen_ui` links it. No UI yet.
@@ -2503,12 +2823,14 @@ Survey of the code, the app log and user testing (October 2026):
       longest side) with the filter on the active layer, put together as *Apply* would (on a new
       layer, or into the layer); the layers are scaled once and kept while their pixels stay the
       same. `CanvasView::setPreview` shows it instead of the document's tiles (the selection's
-      outline stays, its tint goes). A changed setting previews after 40 ms; a change of the document
-      (a stroke, a move, an undo) takes the preview away at once, so the canvas shows the document as
-      it is while the change goes on, and previews after 40 ms; a stale preview stops at its next
-      node and is not shown. A graph with AI steps previews with `runExpensive` off, so nothing runs
-      until *Run AI steps* (`run()`: progress, *Cancel*), which runs them at full resolution; sliders after them
-      then preview live. A change while a step runs previews when it ends, instead of cutting it short.
+      outline stays, its tint goes; since the merge the canvas's *Filter* preview, which waits while
+      results of the prompt bar are on show). A changed setting previews after 40 ms; a change of
+      the document (a stroke, a move, an undo) takes the preview away at once, so the canvas shows
+      the document as it is while the change goes on, and previews after 40 ms; a stale preview
+      stops at its next node and is not shown. A graph with AI steps previews with `runExpensive`
+      off, so nothing runs until *Run AI steps* (`run()`: progress, *Cancel*), which runs them at
+      full resolution; sliders after them then preview live. A change while a step runs previews
+      when it ends, instead of cutting it short.
     * Apply: the filter at full resolution on the active layer, with the selection as the graph's
       *Selection* input; the selection times the graph's own mask (the Output's *Where to apply*)
       says where the result goes. On a worker, the result is masked into a new layer above
@@ -2524,16 +2846,16 @@ Survey of the code, the app log and user testing (October 2026):
       pixels as they are then, so nothing outside where the filter applies goes back. *Cancel* also
       holds once the steps are done and the result is being put together.
   * `ui/filters/FiltersPanel`, the *Filters* tab of the editor's right panel (`EditorPage` adds it
-    after History; its four tabs shorten their names instead of scrolling): the list (*Built in*,
-    *Your filters*, thumbnails, descriptions as tooltips); *New filter…*, *Edit…* (*Edit a copy…*
-    for a built-in one), *Duplicate*, *Delete* (saved ones, asked first), *Open filters folder*;
-    the chosen filter's published settings (`ParamField` with the published label and range);
-    *Preview on the canvas* (`filters/preview`), *Result on* a new layer or this layer
-    (`filters/target`); under them, in a footer that stays in view while the details scroll, a line
-    saying whether the selection or the whole layer changes (or the size the picture becomes), the
-    reason a step cannot run, *Run AI steps* when needed, *Apply*, progress with *Cancel*, the
+    after History, before the AI panel's tab; the tabs shorten their names instead of scrolling):
+    the list (*Built in*, *Your filters*, thumbnails, descriptions as tooltips); *New filter…*,
+    *Edit…* (*Edit a copy…* for a built-in one), *Duplicate*, *Delete* (saved ones, asked first),
+    *Open filters folder*; the chosen filter's published settings (`ParamField` with the published
+    label and range); *Preview on the canvas* (`filters/preview`), *Result on* a new layer or this
+    layer (`filters/target`); under them, in a footer that stays in view while the details scroll, a
+    line saying whether the selection or the whole layer changes (or the size the picture becomes),
+    the reason a step cannot run, *Run AI steps* when needed, *Apply*, progress with *Cancel*, the
     outcome (naming the filter that was applied) or the reason in plain words. The canvas shows the
-    preview only while the tab is visible.
+    preview only while the tab is visible (and, since the merge, no results wait to be chosen).
   * Node editor (`ui/filters/NodeEditorWindow`, `NodeScene`, `GraphModel`, `ParamWidgets`), a
     window of its own, owned by the main window:
     * `GraphModel`: the graph and a `QUndoStack` of whole-graph steps (`change(text, edit,
@@ -2599,9 +2921,11 @@ Survey of the code, the app log and user testing (October 2026):
     * *Upscale with AI* (`ai-upscale`): the engine's upscaler, brought to the factor asked for (an
       ESRGAN model gives 4×). *Remove background* (`ai-remove-background`): the cut-out and its
       *Subject* mask. What was transparent stays so (the engine sees the picture on white).
-    * Each has an *Image engine* setting (a provider id; empty for the one in use, the default image
-      provider). An empty area returns the picture unchanged; one that covers everything (no
-      selection) edits the whole picture.
+    * Each has an *Image engine* setting (a provider id; empty for the one in use: the default image
+      provider, since the merge the engine for changes for *Edit with AI* and *Fill area with AI*,
+      and the first engine with an upscaler or a background removal for those steps). An empty area
+      returns the picture unchanged; one that covers everything (no selection) edits the whole
+      picture.
   * How a step runs: `evaluate()` (on a worker) copies its inputs, queues the start to the GUI thread
     and returns the future of a promise. On the GUI thread the step picks its engine and submits a
     `GenerationService` job (`submit` with `saveAssets` off, or `submitUtility`), so it is in the
@@ -2680,7 +3004,8 @@ Survey of the code, the app log and user testing (October 2026):
       cut-out, the new layer held its old pixels); *Cancel* was ignored once the steps were done.
     * An image engine removed while a job of it runs: the job fails ("The image engine was removed
       before it finished.", `GenerationService`, for every generation and utility job) instead of
-      staying *Running*; the AI step fails with it.
+      staying *Running*; the AI step fails with it. (Step 8 fixed the same; since the merge one
+      function, `failWhenGone`, and "…removed while it was working.")
     * *Upscale ×2* with a selection upscaled the whole layer and stretched the result back, which
       changed almost nothing: the picture now grows, with the upscale through the selection.
     * The filter editor and the Filters panel ran an AI step each: `filters::SharedResults` (in the
@@ -2701,12 +3026,97 @@ Survey of the code, the app log and user testing (October 2026):
       `aiNodesSayWhatTheyNeed` also changes the engine in use with the node editor open, and
       `editorFiltersTab` checks the preview stays while nothing changes. Each new test was checked
       to fail without its fix.
-  * Not yet: the prompt bar (§17.2) does not use these nodes; the AI nodes take no reference images,
-    seed or negative prompt of their own, and run with a new seed each time (a result is reused while
-    the filter's settings stay the same); stable-diffusion.cpp has no background removal, so locally
-    *Remove background* needs Stable Diffusion WebUI; a result of the same proportions scales the
-    other layers too, which is right for an upscale or a resize but not for a 45° rotation of a
-    square picture (its canvas should grow instead); the German translation of the new texts.
+  * Not yet: the prompt bar (§17.2) runs its own requests, not these nodes (since the merge both
+    send a whole picture through `ai::wholeImageInput` and use the engine for changes); the AI nodes
+    take no reference images, seed or negative prompt of their own, and run with a new seed each
+    time (a result is reused while the filter's settings stay the same); stable-diffusion.cpp has no
+    background removal, so locally *Remove background* needs Stable Diffusion WebUI; a result of the
+    same proportions scales the other layers too, which is right for an upscale or a resize but not
+    for a 45° rotation of a square picture (its canvas should grow instead); the German translation
+    of the new texts.
+- [x] Merge (October 2026): the new shell and the prompt bar (steps 7 and 8) were built next to the
+  setup wizard (step 9) and the filters (steps 11 and 12), from the same commit; one application
+  again.
+  * Set up AI: every way in opens the setup wizard (`MainWindow::setUpAi`, `ui::openSetupWizard`,
+    which also sets `app/onboarded`): the first start (once), *Help → Set up AI…*, the start
+    screen's card, the prompt bar's *Set up AI…*, the status bar's "No image engine – Set up AI"
+    and New from prompt's *Set up AI…*. New from prompt no longer closes for it: the wizard opens
+    over the dialog (it is modal), which keeps the words and shows the engine once it is set up.
+    With an engine a click on the status bar's engine opens Settings → AI. Step 7's welcome dialog
+    is step 9's Providers → *Detect local* again ("Find servers on this computer", every local
+    server, language models too); its *Use an online service…* opens the wizard's online page
+    instead of a second Settings dialog, *Set up local AI…* its local page.
+  * One engine routing. `imageEngineInUse(registry, changes)`: the engine of Settings → AI for new
+    images or for changes when it is on, else the first one on. `AiOptions::provider(registry,
+    changes)`: the engine chosen in ⋯ or the AI panel (for every run), else that one. The prompt
+    bar's engine (`PromptBar::engine`) is the engine for new images on a blank canvas, and with no
+    document (New from prompt), and the engine for changes otherwise (a selection is a change, also
+    on a blank canvas); the plan is made for it and the run carries it (`PromptRun::providerId`),
+    so *Generate*, *Remove object* and *Make a variation* go where the plan says. The AI panel and
+    the AI menu use the engine for changes, New from prompt the engine for new images. The status
+    bar names `PromptBar::engine` (`engineChanged`). The filters' *Edit with AI* and *Fill area
+    with AI* take the engine for changes too, as their help text says.
+  * One `ProviderCombo`: step 9's follow of Settings → AI per use (`Use::NewImages` /
+    `Use::Changes`, on `rolesChanged`) with step 8's engine names and pinning only on a user's
+    choice. `picked` (on `activated`, or `setProviderId` as the user would) and `pinnedProviderId` /
+    `setPinnedProviderId` let the ⋯ menu and the AI panel keep one choice in `AiOptions`;
+    `settingsChoice` uses `imageEngineInUse`, so a combo shows where the runs go also when the
+    engine of Settings → AI is off. The ⋯ combo switches its use with the bar's engine (`setUse`
+    leaves a pin as it is).
+  * One "engine removed mid-run": `failWhenGone` (step 12's name, step 8's checks for no operation
+    and one that finished already), "The image engine was removed while it was working." for every
+    generation and utility job; `promptBarRuns` and `aiStepJobEnds` both pass.
+  * A whole picture is changed at one size: the prompt bar's whole-image changes go through
+    `ai::wholeImageInput` (as the AI steps and the assistant), with `detailSource` for
+    `img::restoreDetail`; `workingSize` keeps the closest fixed size for new images and takes
+    `ai::wholeImageWorkSize` otherwise.
+  * Two previews on the canvas, which both sides had added as one `setPreview`:
+    `CanvasView::setPreview(Preview::Filter | Preview::Result, image)`, `preview()` the one shown
+    (a result wins), `previewChanged(kind)`. One drawing path: instead of the composite, so a
+    preview's transparency shows the checkerboard; from a copy at the current zoom below 100 %;
+    without the selection tint; both cleared with another document. The Filters panel stops its
+    preview while a result is on show (`previewChanged`) and says so in its footer ("The canvas
+    shows the AI results to choose from…"); when they go it previews again: the unchanged picture
+    after *Discard*, the picture with the kept layer after *Keep* (a document change). The filter's
+    preview and the results both draw over the fitted view, which stays fitted when the strip comes
+    and goes.
+  * Keys: results take the keyboard when they arrive unless a text field, a number, a choice, a list
+    or a slider has it, so a filter's slider and the filter list keep their arrows; on the canvas
+    the tool gets a key first, then the results, as in step 8.
+  * The Filters tab is the right panel's third (Layers, History, Filters; the AI panel's tab is
+    fourth, hidden until asked for). *View → Filters* (with a document) shows it; *Tools → New
+    filter…* and *Filter editor…* (the filter chosen in the panel, a built-in one as a copy, as
+    *Edit a copy…*) come before the plugin pages. The filter editor's windows belong to the main
+    window and close with it on quit, after their question about unsaved changes.
+  * Plugins are off by default: `tst_setup` assumed Characters on (and its `settingsAi` left it on
+    for later tests). The wizard's language model check box and *Model set for Characters (pose
+    control)…* and Settings → AI's language model row show only with a plugin that needs one, as
+    step 9 built them; `pluginOffers` checks both ways.
+  * Tests: `tst_canvas` `engineRouting` (new: a separate engine for new images where nothing answers
+    and the mock klein server for changes; the start screen, New from prompt, a photo's edit,
+    *Remove object* and the AI menu's variation, a blank canvas's new image, a choice in ⋯ for every
+    run and back, Settings → AI without an engine for changes; the status bar each time),
+    `filtersInTheShell` (new: the tabs, *View → Filters*, the filter's preview drawn on the fitted
+    canvas, results instead of it and its note, the canvas's keys to the results, *Discard* and
+    *Keep* bringing it back, a filter's slider keeping the keyboard and its arrows when results
+    arrive, *Tools → Filter editor…* and *New filter…* owned by the main window and closed with it),
+    `accessibleNames` (also the Filters tab, the filter editor, the wizard's four pages and Settings
+    → AI), `shellStatusBar` (the click opens Settings → AI), `pluginWindows` (the Tools menu),
+    `newFromPromptEngines` (the dialog stays), `promptBarEngine`; `tst_setup` `entryPoints` (also
+    the start screen, the status bar, New from prompt over its dialog and the prompt bar; with an
+    engine the status bar opens Settings → AI), `pluginOffers` (new), `settingsAi`,
+    `localReusesFiles` and `onlineService` (the panel's choice kept in `AiOptions`); `tst_filters_ui
+    aiNodesSayWhatTheyNeed` (the engine for changes). `engineRouting` and `filtersInTheShell` were
+    checked to fail with the routing and the focus rule undone. `tst_layout`: the editor with the
+    Filters tab, and with results over it, at the three sizes; `mainWindowFitsSmallScreen` with the
+    Filters tab with and without results (strict). Findings stay at 4 (§17.9 item 8). The whole
+    suite passes (Qt's totals over the 20 binaries: 378 passed, 28 skipped: the live checks and one
+    runtime test).
+  * `translations/lumen_en.ts`: the English plural forms of the shell's texts with `%n` (the ⋯
+    menu's references; Browse project images' queued jobs, which now name the project images).
+  * Not yet: the filter editor does not know the editor's engine choice in ⋯ (its *The one in use*
+    is Settings → AI's); the filter's preview is computed again after the results go, not kept
+    meanwhile; the German translation of the new texts.
 - [ ] Fix the layout checklist (§17.9); screenshots after; then the audit runs strict in CI.
 - [ ] User guide and README rewritten around the editor; plugins documented separately.
 - [ ] Short live check (RTX 4060 8 GB, FLUX.2 klein 4B through sd.cpp): one selection edit, one
@@ -2788,6 +3198,30 @@ Root cause first; most findings follow from it.
 Items 2, 3, 5 and 7 are on pages that become plugins (§17.7), and the Generate and Library pages
 are replaced by the new shell; their fixes belong to those steps. Item 1 stays relevant until the
 new shell lands, and items 3, 6, 8 and 9 are shared widgets and dialogs that the redesign keeps.
+
+**New shell** (October 2026): with the editor as the main window and the plugin pages in windows
+of their own, the audit covers the start screen, the editor (with the queue and the assistant),
+the Create, Poses and Parts windows, Browse project images and New from prompt. Its findings went
+from 7 to 4: item 6 went with the Generate page (and the AI panel is wider without the rail), the
+status bar has its side margin (item 9) and the Generate page's chips and negative prompt went with
+it; the four tall dialogs of item 8 remain.
+
+**Prompt bar** (October 2026): the audit adds the editor without an engine, with an engine that
+cannot edit the whole image, with a selection and four results, the prompt bar's ⋯ menu and the AI
+panel; no new findings. One-line text fields no longer show a scroll bar (item 9: `AutoTextEdit`
+measures its frame and padding).
+
+**Prompt bar review** (October 2026): what only the screenshots showed, fixed: the plugins' panels
+and the Queue covered the prompt bar's buttons (they end above it, and the audit checks it); the
+bottom of a fitted picture went under the results strip (it stays fitted); some screenshots showed
+the state before the bar's 30 ms update (`settle()` waits for it); the document tabs' base line ran
+past the last tab; the empty Queue was a 540 px box. The New blank canvas dialog is audited. A
+button's text is measured by its widest line (the start screen's names take two). Findings stay at
+4 (item 8).
+
+**Merge** (October 2026): the audit adds the editor with the Filters tab, and with results over its
+preview, at the three sizes, and `mainWindowFitsSmallScreen` checks both at 1280×720; the setup
+wizard and Settings → AI are audited as in step 9. Findings stay at 4 (item 8).
 
 ---
 

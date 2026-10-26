@@ -8,17 +8,21 @@
 #include <QSet>
 #include <QWidget>
 
+#include <functional>
+#include <optional>
+
+class QAbstractButton;
 class QButtonGroup;
 class QCheckBox;
 class QComboBox;
 class QLabel;
 class QPushButton;
 class QSpinBox;
-class QStackedWidget;
 class QVBoxLayout;
 
 namespace lumen::ui {
 
+class AiOptions;
 class AutoTextEdit;
 class CharacterChip;
 class ProviderCombo;
@@ -26,46 +30,99 @@ class ReferenceStrip;
 class SliderField;
 class Studio;
 
-// Generative editing panel of the editor: inpaint selection, variations, instruction edits,
-// outpainting, upscaling, background removal and pose detection on the active document.
+// The editor's advanced AI panel (opened from the prompt bar's ⋯ menu, "All AI options…"): the
+// image engine (the engine for changes of Settings → AI unless one is chosen), the project's character, the actions that are not "describe a change" (variation,
+// expand canvas, upscale, remove background, detect pose; also in the AI menu) and every option of
+// the prompt bar (AiOptions). It also runs the prompt bar's requests (submitPrompt), so both go
+// through the same character handling and region pipeline.
 class AiPanel : public QWidget
 {
     Q_OBJECT
 public:
+    // Inpaint and Edit are no longer the panel's own actions (the prompt bar picks them); the values
+    // stay, since images record the action they were made with.
     enum class Mode { Inpaint, Variation, Edit, Expand, Upscale, RemoveBackground, DetectPose };
 
-    explicit AiPanel(Studio *studio, QWidget *parent = nullptr);
+    // A request of the prompt bar (or of the panel's Variation). The other values (steps, seed,
+    // variants, negative prompt, control pose, the region's context and edge) come from the
+    // options, the references from the panel.
+    struct PromptRun
+    {
+        // The engine the bar planned the run for; empty: the options' engine for this kind of run
+        // (the engine for new images for TextToImage, else the engine for changes).
+        QString providerId;
+        ai::GenMode mode = ai::GenMode::Edit; // Edit, Inpaint, ImageToImage or TextToImage
+        bool region = false;                  // through the selection (the region pipeline)
+        QString prompt;                       // the user's words
+        double strength = 0.75;               // inpainting and img2img only
+        bool withCharacter = true;            // false when removing an object
+        QString name;                         // of the result layer
+        std::optional<Mode> action;           // recorded with the images
+    };
+    // Where the jobs of a prompt run go (the variants strip of the prompt bar), with the number of
+    // results they make; called once per run, with no jobs when the run could not be submitted.
+    // Without a handler their results become layers, the first visible.
+    using ResultsHandler = std::function<void(doc::Document *doc, const QList<Job *> &jobs, const QString &name, int results)>;
+    // Told when a run starts being prepared (the character and the picture are read first), before
+    // the results handler gets its jobs.
+    using PreparingHandler = std::function<void(doc::Document *doc)>;
+
+    AiPanel(Studio *studio, AiOptions *options, QWidget *parent = nullptr);
     void setDocument(doc::Document *doc);
     void setMode(Mode mode);
-    // Runs an action with this prompt (the contextual canvas toolbar); the panel's other options apply.
-    // `withCharacter` false keeps the project's character out (removing an object).
-    void runFromCanvas(Mode mode, const QString &prompt, bool withCharacter = true);
-    QString prompt() const;
-    int runningJobs() const { return m_running; }
+    Mode mode() const { return m_mode; }
+    // Runs one of the panel's actions with the panel's settings (the AI menu and the panel's button).
+    void run(Mode mode);
+    // The AI menu's Upscale 2× / 3× / 4×.
+    void upscale(double factor);
+    // Submits a prompt run on the panel's document, with the project's character unless the run or
+    // the character button says otherwise. The jobs go to the results handler.
+    void submitPrompt(const PromptRun &run);
+    void setResultsHandler(ResultsHandler handler, PreparingHandler preparing = {})
+    {
+        m_results = std::move(handler);
+        m_preparing = std::move(preparing);
+    }
+    ReferenceStrip *references() const { return m_refs; }
+    AiOptions *options() const { return m_options; }
 
-signals:
-    void runningJobsChanged(int count);
+    // Adds generated images to a document as new layers (scaled to its size) in one undo step;
+    // only the first stays visible, the others are variants to compare.
+    static void addResultLayers(Studio *studio, doc::Document *doc, const QList<QImage> &images, const QString &name,
+                                const QJsonObject &meta);
 
 private:
-    void run();
     void updateUi();
+    void syncFromOptions();
+    // The picture of the panel's document (or of `doc`), flattened on a worker thread.
     void submitWithComposite(std::function<void(QImage composite)> fn);
-    // Adds the page's character (if any) to the request for this use, then continues with the
-    // request and the metadata of what went in (empty without a character).
-    void withCharacter(ai::ImageRequest request, ai::CharacterUse use, std::function<void(ai::ImageRequest, QJsonObject)> then);
+    void submitWithComposite(doc::Document *doc, std::function<void(QImage composite)> fn);
+    // Adds the page's character (if any) to the request for this use on `provider`, then continues
+    // with the request and the metadata of what went in (empty without a character).
+    void withCharacter(ai::ImageRequest request, ai::CharacterUse use, bool skip, ai::ImageProvider *provider,
+                       std::function<void(ai::ImageRequest, QJsonObject)> then);
     void trackJob(Job *job, std::function<void(doc::Document *, const ai::GenerationOutput &)> apply);
-    void addResultLayers(doc::Document *doc, const QList<QImage> &images, const QString &name, const QJsonObject &meta);
-    ai::ImageRequest baseRequest() const;
+    void addResultLayers(doc::Document *doc, const QList<QImage> &images, const QString &name, const QJsonObject &meta)
+    {
+        addResultLayers(m_studio, doc, images, name, meta);
+    }
+    // The request values shared by every prompt run: words, negative prompt, steps, seed, variants,
+    // references and the control pose.
+    ai::ImageRequest baseRequest(const ai::ImageProvider *provider, const QString &prompt, bool styled) const;
+    bool takesNegative(const ai::ImageProvider *provider) const;
 
     Studio *m_studio;
+    AiOptions *m_options;
     QPointer<doc::Document> m_doc;
-    Mode m_mode = Mode::Inpaint;
+    Mode m_mode = Mode::Variation;
+    ResultsHandler m_results;
+    PreparingHandler m_preparing;
+    QWidget *m_characterRow = nullptr;
+    bool m_charactersOn = false; // the Characters plugin is on
+    QAbstractButton *m_detectPose = nullptr;
     ProviderCombo *m_provider;
     QButtonGroup *m_modes;
     QLabel *m_modeHint;
-    AutoTextEdit *m_prompt;
-    AutoTextEdit *m_negative;
-    QWidget *m_promptBox;
     SliderField *m_strength;
     QWidget *m_expandBox;
     QCheckBox *m_expandLeft, *m_expandRight, *m_expandTop, *m_expandBottom;
@@ -76,16 +133,20 @@ private:
     QWidget *m_refsBox;
     QCheckBox *m_usePose;
     QSpinBox *m_variants;
+    QSpinBox *m_steps;
+    QSpinBox *m_seed;
+    QCheckBox *m_randomSeed;
+    QWidget *m_negativeBox;
+    AutoTextEdit *m_negative;
+    SliderField *m_areaStrength;
     SliderField *m_padding;
     SliderField *m_feather;
     QCheckBox *m_colorMatch;
     QPushButton *m_run;
     QVBoxLayout *m_jobs;
     QLabel *m_capsWarning;
-    int m_running = 0;
     CharacterChip *m_character;
     QSet<QString> m_notes;
-    bool m_skipCharacter = false;
 };
 
 } // namespace lumen::ui

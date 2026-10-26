@@ -10,6 +10,7 @@
 #include "ai/ProviderRegistry.h"
 #include "core/Async.h"
 #include "core/Error.h"
+#include "core/Paths.h"
 #include "core/SecretStore.h"
 #include "core/Settings.h"
 #include "runtime/Catalog.h"
@@ -148,6 +149,18 @@ ProviderForm::ProviderForm(Studio *studio, ai::Provider *provider, QWidget *pare
     auto *saveBtn = new QPushButton(Icons::get(QStringLiteral("check")), tr("Save"), content);
     Theme::setRole(saveBtn, QStringLiteral("primary"));
     buttons->addWidget(testBtn);
+    // ComfyUI's own workflows (was in the Help menu).
+    if (type.id == QLatin1String("comfyui")) {
+        auto *workflows = new QPushButton(Icons::get(QStringLiteral("folder")),
+                                          QCoreApplication::translate("lumen::ui::MainWindow", "Open ComfyUI workflow folder"), content);
+        workflows->setToolTip(tr("Workflows (.json, API format) put here are offered for this provider"));
+        connect(workflows, &QPushButton::clicked, this, [] {
+            const QString dir = paths::appData() + QStringLiteral("/workflows/comfyui");
+            QDir().mkpath(dir);
+            QDesktopServices::openUrl(QUrl::fromLocalFile(dir));
+        });
+        buttons->addWidget(workflows);
+    }
     buttons->addStretch();
     buttons->addWidget(saveBtn);
     v->addLayout(buttons);
@@ -574,8 +587,9 @@ void SettingsDialog::showProvider(const QString &id)
         Theme::setRole(title, QStringLiteral("title"));
         title->setAlignment(Qt::AlignCenter);
         v->addWidget(title);
-        auto *hint = mutedLabel(tr("Add an image generator (Stable Diffusion WebUI, ComfyUI, OpenAI, Gemini, Stability) and a language model "
-                                   "(llama.cpp, Ollama, LM Studio, OpenAI, Anthropic, Gemini, OpenRouter) to get started."), empty);
+        // The core needs only an image engine; language models are for some plugins.
+        auto *hint = mutedLabel(tr("Add an image engine to change pictures with words (Help → Set up AI… helps with that). A language "
+                                   "model is only needed by some plugins."), empty);
         hint->setAlignment(Qt::AlignCenter);
         v->addWidget(hint);
         v->addStretch();
@@ -753,7 +767,8 @@ OnboardingDialog::OnboardingDialog(Studio *studio, QWidget *parent)
     v->addStretch();
     auto *buttons = new QHBoxLayout;
     auto *again = new QPushButton(Icons::get(QStringLiteral("refresh")), tr("Search again"), this);
-    auto *cloud = new QPushButton(Icons::get(QStringLiteral("cloud")), tr("Add cloud provider..."), this);
+    auto *cloud = new QPushButton(Icons::get(QStringLiteral("cloud")), tr("Use an online service…"), this);
+    cloud->setToolTip(tr("fal.ai, OpenAI or Gemini with your key, checked with a test image (the setup wizard)"));
     auto *local = new QPushButton(Icons::get(QStringLiteral("sparkles")), tr("Set up local AI…"), this);
     local->setToolTip(tr("Download free models and run them on this computer"));
     auto *done = new QPushButton(tr("Close"), this);
@@ -767,11 +782,8 @@ OnboardingDialog::OnboardingDialog(Studio *studio, QWidget *parent)
     connect(again, &QPushButton::clicked, this, &OnboardingDialog::detect);
     connect(local, &QPushButton::clicked, this, [this] { openSetupWizard(m_studio, this, SetupWizard::Page::Local); });
     connect(done, &QPushButton::clicked, this, &QDialog::accept);
-    connect(cloud, &QPushButton::clicked, this, [this] {
-        SettingsDialog dlg(m_studio, this);
-        dlg.showTab(QStringLiteral("providers"));
-        dlg.exec();
-    });
+    // This is Settings → Providers → Detect local: an online service is set up in the wizard.
+    connect(cloud, &QPushButton::clicked, this, [this] { openSetupWizard(m_studio, this, SetupWizard::Page::Online); });
     detect();
 }
 
@@ -788,7 +800,7 @@ void OnboardingDialog::detect()
             return;
         if (found.isEmpty()) {
             self->m_status->setText(tr("No local servers found. Start SD WebUI with --api, ComfyUI, llama-server, Ollama or LM Studio and "
-                                       "search again — or add a cloud provider."));
+                                       "search again — or use an online service."));
             return;
         }
         self->m_status->setText(tr("Found %n server(s):", nullptr, int(found.size())));

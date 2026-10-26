@@ -5,9 +5,14 @@ AI-assisted image generation and editing studio for the desktop, built with C++2
 It covers:
 * text-to-image and multi-reference character generation;
 * editable OpenPose poses, with a Live2D preset category;
-* mask-based local inpainting, with a prompt bar that appears next to the selection on the canvas;
+* a prompt bar under the canvas: select an area and describe the change (or nothing selected for the
+  whole image, or a blank canvas for a new image), then pick one of the results to keep as a layer;
 * LLM-driven shot planning, and an assistant that drives the studio through tool calls;
 * a layered editor (selection, brush, fill, crop and free transform tools);
+* filters for the picture or a selection, built in or made in a node editor, with AI steps
+  (colorize, clean up or remove the background, upscale);
+* a setup wizard for the image engine: on this computer (it downloads only the files it does not
+  find), an online service, or a server that is already running;
 * an asset library with batch background removal and upscaling;
 * character part slicing for Live2D.
 
@@ -16,7 +21,7 @@ The interface is available in English and German, with dark, light and high-cont
 Local back-ends (Stable Diffusion WebUI / Forge, ComfyUI, llama.cpp, Ollama, LM Studio) and cloud
 APIs (OpenAI, Gemini, Anthropic, Stability AI, fal.ai, OpenRouter) both work.
 
-The [user guide](docs/USER_GUIDE.md) explains every page, tool and shortcut. See
+The [user guide](docs/USER_GUIDE.md) explains every window, tool and shortcut. See
 [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md) for the architecture, the technology stack and the roadmap.
 
 ## Building (Windows, MinGW)
@@ -64,8 +69,8 @@ out of `tr()` on purpose.
 
 ## Character slicing for Live2D
 
-The **Parts** page (Alt+5) turns a finished character illustration into named, ordered layers for
-Live2D Cubism, in four steps:
+**Tools → Parts** (the Live2D parts plugin, switched on in Tools → Plugins…; `Alt+5`) turns a
+finished character illustration into named, ordered layers for Live2D Cubism, in four steps:
 
 1. **Source**: pick an image, optionally remove its background, and choose the part layout.
 2. **Masks**: segment automatically, then fix the masks.

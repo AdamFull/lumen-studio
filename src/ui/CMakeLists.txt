@@ -6,13 +6,11 @@ add_library(lumen_ui STATIC
     ext/Extension.h ext/Extension.cpp
     Studio.h Studio.cpp
     MainWindow.h MainWindow.cpp
-    PageFactory.h PageFactory.cpp
     canvas/EditorState.h canvas/EditorState.cpp
     canvas/CanvasView.h canvas/CanvasView.cpp
     canvas/Tool.h
     canvas/Tools.h canvas/Tools.cpp
     canvas/TransformTool.h canvas/TransformTool.cpp
-    canvas/ContextBar.h canvas/ContextBar.cpp
     widgets/Controls.h widgets/Controls.cpp
     widgets/FlowLayout.h widgets/FlowLayout.cpp
     widgets/ReferenceStrip.h widgets/ReferenceStrip.cpp
@@ -22,8 +20,15 @@ add_library(lumen_ui STATIC
     widgets/JobCard.h widgets/JobCard.cpp
     widgets/Toasts.h widgets/Toasts.cpp
     widgets/ServerStatus.h widgets/ServerStatus.cpp
+    pages/AiOptions.h pages/AiOptions.cpp
     pages/AiPanel.h pages/AiPanel.cpp
+    pages/PromptPlan.h pages/PromptPlan.cpp
+    pages/PromptBar.h pages/PromptBar.cpp
+    pages/VariantStrip.h pages/VariantStrip.cpp
     pages/EditorPage.h pages/EditorPage.cpp
+    pages/StartScreen.h pages/StartScreen.cpp
+    dialogs/NewFromPromptDialog.h dialogs/NewFromPromptDialog.cpp
+    dialogs/NewCanvasDialog.h dialogs/NewCanvasDialog.cpp
     dialogs/SettingsDialog.h dialogs/SettingsDialog.cpp
     dialogs/ShortcutsPage.h dialogs/ShortcutsPage.cpp
     dialogs/LocalServersPage.h dialogs/LocalServersPage.cpp
@@ -37,7 +42,6 @@ add_library(lumen_ui STATIC
     widgets/ThumbnailCache.h widgets/ThumbnailCache.cpp
     pose/PoseCanvas.h pose/PoseCanvas.cpp
     pages/LibraryPage.h pages/LibraryPage.cpp
-    pages/GeneratePage.h pages/GeneratePage.cpp
     filters/GraphModel.h filters/GraphModel.cpp
     filters/ParamWidgets.h filters/ParamWidgets.cpp
     filters/FilterCatalog.h filters/FilterCatalog.cpp
