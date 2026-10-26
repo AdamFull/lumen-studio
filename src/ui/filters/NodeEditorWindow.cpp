@@ -6,6 +6,7 @@
 #include "core/Error.h"
 #include "filters/Registry.h"
 #include "ui/Icons.h"
+#include "ui/Shortcuts.h"
 #include "ui/Theme.h"
 #include "ui/filters/FilterCatalog.h"
 #include "ui/filters/GraphModel.h"
@@ -222,6 +223,9 @@ NodeEditorWindow::NodeEditorWindow(FilterCatalog *catalog, QWidget *parent)
     }
     rebuildNodeSection();
     setGraph(filters::Graph::createDefault());
+    // The main window's commands that work everywhere (Open image, the Queue, Settings…) work here
+    // too; Ctrl+S, Ctrl+Z and the other keys of this window stay its own.
+    Shortcuts::instance().shareAppWide(this);
 }
 
 NodeEditorWindow::~NodeEditorWindow()

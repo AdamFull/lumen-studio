@@ -1,6 +1,6 @@
 // Files as in an image editor (M17): File → Save writes a picture back to the file it came from,
 // Save as… and Export a copy…, the unsaved-changes marker and the questions on closing and quitting,
-// recent files.
+// recent files; the main window's keys in other windows.
 
 #include "MockHttpServer.h"
 #include "ai/ModelDefaults.h"
@@ -55,6 +55,26 @@ using namespace lumen;
 using namespace lumen::ui;
 
 namespace {
+
+// Plugins are off by default: on for one test, back to the default afterwards.
+struct PluginsOn
+{
+    explicit PluginsOn(const QStringList &ids = {})
+    {
+        ext::Extensions &registry = ext::Extensions::instance();
+        for (const ext::Extension *e : registry.all()) {
+            if (ids.isEmpty() || ids.contains(e->id()))
+                registry.setEnabled(e->id(), true);
+        }
+        registry.refresh();
+    }
+    ~PluginsOn()
+    {
+        for (const ext::Extension *e : ext::Extensions::instance().all())
+            Settings::instance().remove(QStringLiteral("plugins/%1/enabled").arg(e->id()));
+        ext::Extensions::instance().refresh();
+    }
+};
 
 // A photo with detail everywhere, opaque.
 QImage photo(const QSize &size = QSize(160, 120))
@@ -180,6 +200,7 @@ private slots:
     void saveAsFormats();
     void closeAndQuitAsk();
     void recentFiles();
+    void shortcutsInOtherWindows();
 };
 
 void TestFiles::initTestCase()
@@ -644,6 +665,75 @@ void TestFiles::recentFiles()
             a->trigger();
     }
     QVERIFY(Settings::instance().recentFiles().isEmpty());
+}
+
+// The main window's app-wide keys work while a plugin window or the filter editor is active; the
+// filter editor's own Ctrl+S and Ctrl+Z stay its own, also when a customised key collides.
+void TestFiles::shortcutsInOtherWindows()
+{
+    PluginsOn plugins({QStringLiteral("poses")});
+    Fixture f;
+    QVERIFY(f.setUp());
+    auto cleanup = qScopeGuard([] { Shortcuts::instance().reset(QStringLiteral("app.job-queue")); });
+    MainWindow &window = *f.window;
+    QAction *queue = window.findChild<QAction *>(QStringLiteral("jobQueue"));
+    QVERIFY(queue);
+    window.showPage(QStringLiteral("poses"));
+    QWidget *poses = window.pageWindow(QStringLiteral("poses"));
+    QVERIFY(poses);
+    QVERIFY(QTest::qWaitForWindowExposed(poses));
+    poses->activateWindow();
+    QTRY_COMPARE(QApplication::activeWindow(), poses);
+    QTest::keyClick(poses, Qt::Key_Q, Qt::ControlModifier | Qt::ShiftModifier);
+    QTRY_VERIFY(queue->isChecked());
+    QTest::keyClick(poses, Qt::Key_Q, Qt::ControlModifier | Qt::ShiftModifier);
+    QTRY_VERIFY(!queue->isChecked());
+    // New from prompt (Alt+2) from the plugin window.
+    QVERIFY(!window.newFromPromptDialog());
+    poses->activateWindow();
+    QTRY_COMPARE(QApplication::activeWindow(), poses);
+    QTest::keyClick(poses, Qt::Key_2, Qt::AltModifier);
+    QTRY_VERIFY(window.newFromPromptDialog());
+    window.newFromPromptDialog()->close();
+    // A customised key works there too.
+    Shortcuts::instance().setKeys(QStringLiteral("app.job-queue"), {QKeySequence(QStringLiteral("Ctrl+Alt+J"))});
+    poses->activateWindow();
+    QTRY_COMPARE(QApplication::activeWindow(), poses);
+    QTest::keyClick(poses, Qt::Key_J, Qt::ControlModifier | Qt::AltModifier);
+    QTRY_VERIFY(queue->isChecked());
+    queue->setChecked(false);
+
+    // The filter editor: the Queue's key works; its own Ctrl+Z undoes its step and Ctrl+S saves the
+    // filter, not the picture.
+    doc::Document *doc = f.studio.newDocument(QSize(64, 48), QStringLiteral("Picture"));
+    paintSquare(doc);
+    const QString filter = window.editor()->filtersPanel()->newFilter(QStringLiteral("Keys test"));
+    QVERIFY(!filter.isEmpty());
+    QTRY_VERIFY(!NodeEditorWindow::openWindows().isEmpty());
+    NodeEditorWindow *editor = NodeEditorWindow::openWindows().last();
+    QVERIFY(QTest::qWaitForWindowExposed(editor));
+    editor->activateWindow();
+    QTRY_COMPARE(QApplication::activeWindow(), editor);
+    QTest::keyClick(editor, Qt::Key_J, Qt::ControlModifier | Qt::AltModifier);
+    QTRY_VERIFY(queue->isChecked());
+    queue->setChecked(false);
+    const QString node = editor->addNode(QStringLiteral("invert"));
+    QVERIFY(!node.isEmpty());
+    QVERIFY(editor->isModified());
+    const int steps = editor->model()->undoStack()->index();
+    // A key the editor uses itself, given to the Queue: the editor keeps it.
+    Shortcuts::instance().setKeys(QStringLiteral("app.job-queue"), {QKeySequence(QStringLiteral("Ctrl+Z"))});
+    editor->activateWindow();
+    QTRY_COMPARE(QApplication::activeWindow(), editor);
+    QTest::keyClick(editor, Qt::Key_Z, Qt::ControlModifier);
+    QTRY_COMPARE(editor->model()->undoStack()->index(), steps - 1);
+    QVERIFY(!queue->isChecked());
+    QTest::keyClick(editor, Qt::Key_S, Qt::ControlModifier);
+    QTRY_VERIFY(!editor->isModified()); // the filter was saved
+    QVERIFY(f.pathQuestions.isEmpty());  // and the picture was not
+    QVERIFY(doc->isModified());
+    // In the main window the customised key is the Queue's (the editor's undo has its own there).
+    editor->close();
 }
 
 QTEST_MAIN(TestFiles)

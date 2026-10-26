@@ -86,6 +86,8 @@ public:
         v->addWidget(new LibraryPage(studio, this));
         new Toasts(this);
         placeWindow(this, geometryKey(QStringLiteral("library")), QSize(1200, 760));
+        // Ctrl+O, Ctrl+N, Settings… work here as in the editor.
+        Shortcuts::instance().shareAppWide(this);
     }
 
 protected:
@@ -117,6 +119,9 @@ public:
         v->addWidget(m_page);
         new Toasts(this);
         placeWindow(this, geometryKey(spec.id), QSize(1400, 880));
+        // The main window's commands that are not about the editor's picture work here too; the
+        // page's own keys (its undo) stay its own.
+        Shortcuts::instance().shareAppWide(this);
     }
     QWidget *page() const { return m_page; }
 
@@ -297,27 +302,32 @@ void MainWindow::buildStatusBar()
 void MainWindow::buildMenus()
 {
     const QString general = tr("General");
-    auto bind = [general](QAction *action, const QString &id) {
+    // `everywhere`: the command also works while another window of Lumen is active (a plugin page,
+    // the filter editor, Browse project images); those that change the editor's document do not.
+    auto bind = [general](QAction *action, const QString &id, bool everywhere = false) {
         if (action->objectName().isEmpty())
             action->setObjectName(QStringLiteral("app-%1").arg(id));
         Shortcuts::instance().bindAction(action, QStringLiteral("app.") + id, general, QStringLiteral("global"));
+        if (everywhere)
+            Shortcuts::instance().addAppWide(action);
     };
     // Actions that replace a page of the old navigation rail keep its shortcut id and key.
     auto bindPage = [general](QAction *action, const QString &icon, const QString &name, const QKeySequence &key) {
         Shortcuts::instance().bindAction(action, QStringLiteral("nav.%1").arg(icon), general, QStringLiteral("global"),
                                          key.isEmpty() ? QList<QKeySequence>{} : QList<QKeySequence>{key}, name);
+        Shortcuts::instance().addAppWide(action);
     };
 
     QMenu *file = menuBar()->addMenu(tr("&File"));
     bind(file->addAction(Icons::get(QStringLiteral("plus")), tr("New blank canvas…"), QKeySequence::New, this, [this] {
         showPage(pages::Editor);
         m_editor->newDocumentDialog();
-    }), QStringLiteral("new-document"));
+    }), QStringLiteral("new-document"), true);
     QAction *fromPrompt = file->addAction(Icons::get(QStringLiteral("sparkles")), tr("New from prompt…"), this, &MainWindow::newFromPrompt);
     fromPrompt->setObjectName(QStringLiteral("newFromPrompt"));
     bindPage(fromPrompt, QStringLiteral("sparkles"), tr("New from prompt"), QKeySequence(QStringLiteral("Alt+2")));
     bind(file->addAction(Icons::get(QStringLiteral("image")), tr("Open image…"), QKeySequence::Open, this, &MainWindow::openImages),
-         QStringLiteral("open-image"));
+         QStringLiteral("open-image"), true);
     // Pictures opened from disk or saved as, newest first; one that is gone is shown greyed.
     QMenu *recentFiles = file->addMenu(Icons::get(QStringLiteral("history")), tr("Open recent"));
     recentFiles->setObjectName(QStringLiteral("openRecent"));
@@ -326,7 +336,7 @@ void MainWindow::buildMenus()
     bind(file->addAction(Icons::get(QStringLiteral("copy")), tr("Paste from clipboard"), this, [this] {
         showPage(pages::Editor);
         m_editor->pasteAsNewDocument();
-    }), QStringLiteral("paste-new-document"));
+    }), QStringLiteral("paste-new-document"), true);
     QAction *browse = file->addAction(Icons::get(QStringLiteral("gallery")), tr("Browse project images…"), this, &MainWindow::browseProjectImages);
     browse->setObjectName(QStringLiteral("browseProjectImages"));
     bindPage(browse, QStringLiteral("gallery"), tr("Browse project images"), QKeySequence(QStringLiteral("Alt+6")));
@@ -372,9 +382,9 @@ void MainWindow::buildMenus()
     bind(toLibrary, QStringLiteral("save-to-library")); // Ctrl+Shift+S went to Save as…
     m_documentActions << toLibrary;
     file->addSeparator();
-    bind(file->addAction(Icons::get(QStringLiteral("folder")), tr("New project…"), this, &MainWindow::newProject), QStringLiteral("new-project"));
+    bind(file->addAction(Icons::get(QStringLiteral("folder")), tr("New project…"), this, &MainWindow::newProject), QStringLiteral("new-project"), true);
     bind(file->addAction(Icons::get(QStringLiteral("folder")), tr("Open project…"), QKeySequence(QStringLiteral("Ctrl+Shift+O")), this, &MainWindow::openProject),
-         QStringLiteral("open-project"));
+         QStringLiteral("open-project"), true);
     QMenu *recent = file->addMenu(tr("Recent projects"));
     connect(recent, &QMenu::aboutToShow, this, [this, recent] {
         recent->clear();
@@ -388,7 +398,7 @@ void MainWindow::buildMenus()
     });
     file->addSeparator();
     // QKeySequence::Quit has no key on Windows; Ctrl+Q as in other image editors.
-    bind(file->addAction(tr("Quit"), QKeySequence(QStringLiteral("Ctrl+Q")), this, &QWidget::close), QStringLiteral("quit"));
+    bind(file->addAction(tr("Quit"), QKeySequence(QStringLiteral("Ctrl+Q")), this, &QWidget::close), QStringLiteral("quit"), true);
 
     QMenu *edit = menuBar()->addMenu(tr("&Edit"));
     // The editor's own commands: the same actions as its keys, so a key changed in Settings →
@@ -415,7 +425,7 @@ void MainWindow::buildMenus()
         m_editor->importAsLayer();
     }), QStringLiteral("import-layer"));
     edit->addSeparator();
-    bind(edit->addAction(Icons::get(QStringLiteral("settings")), tr("Settings…"), QKeySequence(QStringLiteral("Ctrl+,")), this, [this] { openSettings(); }), QStringLiteral("settings"));
+    bind(edit->addAction(Icons::get(QStringLiteral("settings")), tr("Settings…"), QKeySequence(QStringLiteral("Ctrl+,")), this, [this] { openSettings(); }), QStringLiteral("settings"), true);
 
     // Selecting is where changing a picture with words starts.
     QMenu *select = menuBar()->addMenu(tr("&Select"));
@@ -442,7 +452,7 @@ void MainWindow::buildMenus()
     m_queueAction->setObjectName(QStringLiteral("jobQueue"));
     m_queueAction->setCheckable(true);
     m_queueAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+Q")));
-    bind(m_queueAction, QStringLiteral("job-queue"));
+    bind(m_queueAction, QStringLiteral("job-queue"), true);
     connect(m_queueAction, &QAction::toggled, this, &MainWindow::setQueueVisible);
     // Panels of plugins (the assistant), over the right side of the editor.
     for (int index = 0; index < m_panels.size(); ++index) {
@@ -454,6 +464,7 @@ void MainWindow::buildMenus()
         a->setStatusTip(spec.tooltip);
         if (!spec.shortcutId.isEmpty())
             Shortcuts::instance().bindAction(a, spec.shortcutId, general, QStringLiteral("global"), {spec.shortcut}, spec.label);
+        Shortcuts::instance().addAppWide(a);
         connect(a, &QAction::toggled, this, [this, index](bool on) { setPanelVisible(index, on); });
         m_panels[index].action = a;
     }
@@ -510,7 +521,7 @@ void MainWindow::buildMenus()
     newFilter->setObjectName(QStringLiteral("newFilter"));
     newFilter->setToolTip(tr("Build a filter of your own from steps in the filter editor; it is listed in the Filters panel"));
     newFilter->setStatusTip(newFilter->toolTip());
-    bind(newFilter, QStringLiteral("new-filter"));
+    bind(newFilter, QStringLiteral("new-filter"), true);
     // The filter chosen in the Filters panel, which shows it: with a document, like View → Filters
     // (on the start screen nobody sees which filter that is).
     QAction *filterEditor = tools->addAction(Icons::get(QStringLiteral("edit")), tr("Filter editor…"), this, [this] {

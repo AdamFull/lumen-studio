@@ -4,6 +4,7 @@
 
 #include <QAbstractButton>
 #include <QAction>
+#include <QWidget>
 
 #include <algorithm>
 
@@ -30,6 +31,9 @@ bool scopesConflict(const QString &a, const QString &b)
 {
     return a == b || a == QLatin1String("global") || b == QLatin1String("global");
 }
+
+// Marks the proxies of shareAppWide(), so they are not counted as a window's own actions.
+constexpr const char *kProxyProperty = "lumenAppWideProxy";
 
 } // namespace
 
@@ -142,6 +146,56 @@ QString Shortcuts::toText(const QList<QKeySequence> &keys)
     for (const QKeySequence &k : keys)
         parts << k.toString(QKeySequence::NativeText);
     return parts.join(QStringLiteral(", "));
+}
+
+void Shortcuts::addAppWide(QAction *action)
+{
+    // One command per name: a main window made again (the tests make several) replaces the one
+    // before, or another window would get two actions with one key, and neither would work.
+    const QString name = action->objectName();
+    m_appWide.removeIf([action, &name](const QPointer<QAction> &a) {
+        return a.isNull() || a == action || (!name.isEmpty() && a->objectName() == name);
+    });
+    m_appWide.append(action);
+}
+
+void Shortcuts::shareAppWide(QWidget *window)
+{
+    m_appWide.removeIf([](const QPointer<QAction> &a) { return a.isNull(); });
+    for (const QPointer<QAction> &command : std::as_const(m_appWide)) {
+        auto *proxy = new QAction(window);
+        proxy->setObjectName(QStringLiteral("appWide-") + command->objectName());
+        proxy->setProperty(kProxyProperty, true);
+        proxy->setShortcutContext(Qt::WindowShortcut);
+        window->addAction(proxy);
+        const QPointer<QAction> target = command;
+        connect(proxy, &QAction::triggered, command, [target] {
+            if (target && target->isEnabled())
+                target->trigger();
+        });
+        // The command's keys and state, without the keys of the window's own actions: two actions
+        // with one key in a window are ambiguous, and neither would work.
+        auto sync = [proxy, target, window] {
+            if (!target)
+                return;
+            QList<QKeySequence> own;
+            for (const QAction *a : window->findChildren<QAction *>()) {
+                if (!a->property(kProxyProperty).toBool())
+                    own << a->shortcuts();
+            }
+            for (const QAbstractButton *b : window->findChildren<QAbstractButton *>()) {
+                if (!b->shortcut().isEmpty())
+                    own << b->shortcut();
+            }
+            QList<QKeySequence> keys = target->shortcuts();
+            keys.removeIf([&own](const QKeySequence &k) { return own.contains(k); });
+            proxy->setShortcuts(keys);
+            proxy->setEnabled(target->isEnabled());
+        };
+        connect(command, &QAction::changed, proxy, sync);
+        connect(this, &Shortcuts::changed, proxy, sync);
+        sync();
+    }
 }
 
 void Shortcuts::apply(const QString &id)

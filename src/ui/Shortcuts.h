@@ -56,6 +56,15 @@ public:
     // Text of a key list for display ("Ctrl+Shift+Z, Ctrl+Y").
     static QString toText(const QList<QKeySequence> &keys);
 
+    // The main window's commands that work wherever Lumen is (New, Open, Settings, the Queue…):
+    // shareAppWide() makes them work while another of its windows is active too.
+    void addAppWide(QAction *action);
+    // Proxy actions in `window` trigger the app-wide commands with their keys (customised ones
+    // too), except keys that `window`'s own actions and buttons use: the filter editor's Ctrl+S
+    // saves the filter and its Ctrl+Z undoes its last step. For the windows of plugin pages, the
+    // filter editor and Browse project images.
+    void shareAppWide(QWidget *window);
+
 signals:
     void changed(const QString &id);
 
@@ -70,6 +79,7 @@ private:
     };
     QHash<QString, Info> m_infos;
     QHash<QString, QList<Binding>> m_bindings;
+    QList<QPointer<QAction>> m_appWide;
 };
 
 } // namespace lumen::ui
