@@ -12,6 +12,7 @@ add_library(lumen_runtime STATIC
     ModelHub.h ModelHub.cpp
     ModelPresets.h ModelPresets.cpp
     AiSetup.h AiSetup.cpp
+    Components.h Components.cpp
     CloudTraining.h CloudTraining.cpp
     PodAgent.h PodAgent.cpp
     RunPod.h RunPod.cpp
@@ -39,6 +40,12 @@ qt_add_resources(lumen_runtime model_presets
     PREFIX "/presets/models"
     BASE "${PROJECT_SOURCE_DIR}/resources/presets/models"
     FILES ${LUMEN_MODEL_PRESETS}
+)
+# Components downloaded on first use (plan M18 §18.1), read as :/presets/components.json.
+qt_add_resources(lumen_runtime components
+    PREFIX "/presets"
+    BASE "${PROJECT_SOURCE_DIR}/resources/presets"
+    FILES "${PROJECT_SOURCE_DIR}/resources/presets/components.json"
 )
 find_package(ZLIB QUIET)
 target_include_directories(lumen_runtime PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)

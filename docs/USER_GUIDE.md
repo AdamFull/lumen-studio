@@ -179,6 +179,13 @@ because selecting is where changing an area with words starts.
   it, **Subtract** takes away, **Intersect** keeps only the overlap. For one drag, Shift adds, Alt
   takes away and Shift+Alt keeps the overlap. **Feather** gives a new selection a soft edge, in
   pixels; a change from the prompt bar fades out over it. A click deselects.
+* **Smart selection** (`W`): click an object and Lumen selects it; or drag a box around it. Shift+click
+  adds a point on the same object (when part of it was missed), Alt+click a point that is not part of
+  it (when too much was taken). New / Add / Subtract / Intersect and Feather work as for the other
+  selection tools. It runs on this computer without an image engine, using ONNX Runtime and the SAM
+  2.1 tiny model: the first click offers to download them once (about 145 MB, into Lumen's data and
+  the models folder's `detection` folder). The first click on a picture takes a second or two; the
+  next ones are quick.
 * **Selection brush** (`Q`): paint over what should change, for shapes that are hard to draw.
   Alt or the right mouse button takes paint away. *Tint the selection* in the tool's options shows
   what is painted.

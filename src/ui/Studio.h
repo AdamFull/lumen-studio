@@ -12,6 +12,7 @@
 #include "doc/Project.h"
 #include "net/HttpClient.h"
 #include "pose/Skeleton.h"
+#include "runtime/Components.h"
 #include "runtime/ModelHub.h"
 #include "runtime/ModelLibrary.h"
 #include "runtime/ModelsFolder.h"
@@ -24,6 +25,8 @@
 #include <QTimer>
 
 namespace lumen::ui {
+
+class SmartSelect;
 
 // What Studio::showPage opens: the editor (the main window), New from prompt ("generate") and Browse
 // project images ("library"), ids kept from the pages they replace. Plugins add their own pages
@@ -60,6 +63,9 @@ public:
     runtime::ModelLibrary *models() { return &m_models; }
     // Hugging Face / Civitai search and downloads into the library.
     runtime::ModelHub *hub() { return &m_hub; }
+    // Programs and models downloaded on first use (ONNX Runtime, detection models).
+    runtime::Components *components() { return &m_components; }
+    SmartSelect *smartSelect() const { return m_smartSelect; }
     // Moves Lumen's models folder (Settings → Models → Move…), see runtime::moveModelsFolder. The
     // chosen folder is kept in the "models/folder" setting; characters' LoRA files follow it.
     Job *moveModelsFolder(const QString &to);
@@ -197,6 +203,8 @@ private:
     runtime::ServerSupervisor m_servers; // destroyed before the providers: stops the servers
     runtime::ModelLibrary m_models;
     runtime::ModelHub m_hub;
+    runtime::Components m_components;
+    SmartSelect *m_smartSelect = nullptr;
     runtime::RunPodClient m_runPod{&m_http};
     ai::GenerationService m_generation;
     ai::Director m_director;

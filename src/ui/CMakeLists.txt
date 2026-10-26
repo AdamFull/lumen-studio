@@ -8,11 +8,13 @@ add_library(lumen_ui STATIC
     MainWindow.h MainWindow.cpp
     DocumentFiles.h DocumentFiles.cpp
     LoraCatalog.h LoraCatalog.cpp
+    SmartSelect.h SmartSelect.cpp
     canvas/EditorState.h canvas/EditorState.cpp
     canvas/CanvasView.h canvas/CanvasView.cpp
     canvas/Tool.h
     canvas/Tools.h canvas/Tools.cpp
     canvas/TransformTool.h canvas/TransformTool.cpp
+    canvas/SmartSelectTool.h canvas/SmartSelectTool.cpp
     widgets/Controls.h widgets/Controls.cpp
     widgets/FlowLayout.h widgets/FlowLayout.cpp
     widgets/ReferenceStrip.h widgets/ReferenceStrip.cpp

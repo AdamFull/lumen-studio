@@ -1105,7 +1105,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="-320"/>
-        <location filename="../src/ui/Studio.cpp" line="+149"/>
+        <location filename="../src/ui/Studio.cpp" line="+157"/>
         <location line="+17"/>
         <source>Lumen is shutting down.</source>
         <translation>Lumen wird beendet.</translation>
@@ -2187,6 +2187,49 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
 </context>
 <context>
+    <name>lumen::ai::Onnx</name>
+    <message>
+        <location filename="../src/ai/Onnx.cpp" line="+22"/>
+        <source>ONNX Runtime failed.</source>
+        <translation>ONNX Runtime ist fehlgeschlagen.</translation>
+    </message>
+    <message>
+        <location line="+57"/>
+        <source>ONNX Runtime could not be loaded from %1: %2</source>
+        <translation>ONNX Runtime konnte nicht aus %1 geladen werden: %2</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>%1 is not ONNX Runtime %2 or newer.</source>
+        <translation>%1 ist nicht ONNX Runtime %2 oder neuer.</translation>
+    </message>
+    <message>
+        <location line="+24"/>
+        <source>ONNX Runtime is not loaded.</source>
+        <translation>ONNX Runtime ist nicht geladen.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>The model file %1 is not there.</source>
+        <translation>Die Modelldatei %1 ist nicht vorhanden.</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>The model %1 could not be loaded: %2</source>
+        <translation>Das Modell %1 konnte nicht geladen werden: %2</translation>
+    </message>
+    <message>
+        <location line="+59"/>
+        <source>The input %1 does not fit the model: %2</source>
+        <translation>Die Eingabe %1 passt nicht zum Modell: %2</translation>
+    </message>
+    <message>
+        <location line="+49"/>
+        <source>The output %1 has a type Lumen does not read.</source>
+        <translation>Die Ausgabe %1 hat einen Typ, den Lumen nicht liest.</translation>
+    </message>
+</context>
+<context>
     <name>lumen::ai::OpenAiChatProvider</name>
     <message>
         <location filename="../src/ai/providers/OpenAiChatProvider.cpp" line="+83"/>
@@ -3024,6 +3067,19 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <location line="+189"/>
         <source>Stable Diffusion WebUI cannot segment character parts.</source>
         <translation>Stable Diffusion WebUI kann keine Charakterteile segmentieren.</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::ai::Segmenter</name>
+    <message>
+        <location filename="../src/ai/Segmenter.cpp" line="+90"/>
+        <source>Click on the object or draw a box around it.</source>
+        <translation>Klicken Sie auf das Objekt oder ziehen Sie einen Rahmen darum.</translation>
+    </message>
+    <message>
+        <location line="+51"/>
+        <source>The segmentation model gave an answer Lumen does not understand.</source>
+        <translation>Das Segmentierungsmodell gab eine Antwort, die Lumen nicht versteht.</translation>
     </message>
 </context>
 <context>
@@ -4792,6 +4848,49 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
 </context>
 <context>
+    <name>lumen::runtime::Components</name>
+    <message>
+        <location filename="../src/runtime/Components.cpp" line="+75"/>
+        <source>%1 of %2 MB</source>
+        <translation>%1 von %2 MB</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>%1 could not be downloaded: %2</source>
+        <translation>%1 konnte nicht heruntergeladen werden: %2</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Unpacking…</source>
+        <translation>Wird entpackt…</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>%1 is not in the archive.</source>
+        <translation>%1 ist nicht im Archiv.</translation>
+    </message>
+    <message>
+        <location line="+20"/>
+        <source>%1 could not be put in place at %2.</source>
+        <translation>%1 konnte nicht nach %2 gelegt werden.</translation>
+    </message>
+    <message>
+        <location line="+77"/>
+        <source>A component without an id or files.</source>
+        <translation>Eine Komponente ohne Kennung oder Dateien.</translation>
+    </message>
+    <message>
+        <location line="+87"/>
+        <source>Download %1</source>
+        <translation>%1 herunterladen</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Shutting down.</source>
+        <translation>Wird beendet.</translation>
+    </message>
+</context>
+<context>
     <name>lumen::runtime::FileDownload</name>
     <message>
         <location filename="../src/runtime/Download.cpp" line="+74"/>
@@ -6418,13 +6517,13 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::runtime::Zip</name>
     <message>
-        <location filename="../src/runtime/Zip.cpp" line="+60"/>
-        <location line="+148"/>
+        <location filename="../src/runtime/Zip.cpp" line="+62"/>
+        <location line="+155"/>
         <source>Cannot open %1: %2</source>
         <translation>%1 kann nicht geöffnet werden: %2</translation>
     </message>
     <message>
-        <location line="-145"/>
+        <location line="-152"/>
         <source>Not a zip archive.</source>
         <translation>Kein ZIP-Archiv.</translation>
     </message>
@@ -6465,7 +6564,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Beschädigtes Archiv (abgeschnittener Eintrag).</translation>
     </message>
     <message>
-        <location line="+74"/>
+        <location line="+81"/>
         <location line="+39"/>
         <source>The archive contains an unsafe path: %1</source>
         <translation>Das Archiv enthält einen unsicheren Pfad: %1</translation>
@@ -8774,7 +8873,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::EditorPage</name>
     <message>
-        <location filename="../src/ui/pages/EditorPage.cpp" line="+110"/>
+        <location filename="../src/ui/pages/EditorPage.cpp" line="+111"/>
         <source>Undo (Ctrl+Z)</source>
         <translation>Rückgängig (Strg+Z)</translation>
     </message>
@@ -8784,7 +8883,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Wiederholen (Strg+Umschalt+Z)</translation>
     </message>
     <message>
-        <location line="+36"/>
+        <location line="+37"/>
         <source>Editor tools</source>
         <translation>Editor-Werkzeuge</translation>
     </message>
@@ -8835,12 +8934,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Ebenen</translation>
     </message>
     <message>
-        <location line="-306"/>
+        <location line="-307"/>
         <source>New blank canvas (Ctrl+N)</source>
         <translation>Neue leere Arbeitsfläche (Strg+N)</translation>
     </message>
     <message>
-        <location line="+127"/>
+        <location line="+128"/>
         <location line="+179"/>
         <source>History</source>
         <translation>Protokoll</translation>
@@ -18326,6 +18425,49 @@ oder eines aus den Projektbildern ziehen</translation>
         <location filename="../src/plugins/parts/PartTools.h" line="+56"/>
         <source>Skeleton</source>
         <translation>Skelett</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::ui::SmartSelect</name>
+    <message>
+        <location filename="../src/ui/SmartSelect.cpp" line="+71"/>
+        <source>Smart selection needs ONNX Runtime and SAM 2.1, which are not downloaded yet.</source>
+        <translation>Die intelligente Auswahl braucht ONNX Runtime und SAM 2.1, die noch nicht heruntergeladen sind.</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::ui::SmartSelectTool</name>
+    <message>
+        <location filename="../src/ui/canvas/SmartSelectTool.h" line="+28"/>
+        <location filename="../src/ui/canvas/SmartSelectTool.cpp" line="+107"/>
+        <location line="+68"/>
+        <source>Smart selection</source>
+        <translation>Intelligente Auswahl</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Click an object to select it, or drag a box around it. Shift+click adds a point on it, Alt+click one that is not part of it.</source>
+        <translation>Klicken Sie auf ein Objekt, um es auszuwählen, oder ziehen Sie einen Rahmen darum. Umschalt+Klick fügt einen Punkt darauf hinzu, Alt+Klick einen, der nicht dazugehört.</translation>
+    </message>
+    <message>
+        <location filename="../src/ui/canvas/SmartSelectTool.cpp" line="-67"/>
+        <source>Smart selection cuts out the object you click. It needs two downloads, once: ONNX Runtime, the program that runs the model, and the SAM 2.1 tiny model, about %1 MB in all. It runs on this computer, without an image engine.</source>
+        <translation>Die intelligente Auswahl schneidet das angeklickte Objekt aus. Sie braucht einmalig zwei Downloads: ONNX Runtime, das Programm, das das Modell ausführt, und das Modell SAM 2.1 tiny, zusammen etwa %1 MB. Sie läuft auf diesem Computer, ohne Bild-Engine.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Download</source>
+        <translation>Herunterladen</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Downloading what Smart selection needs; the click is used when it is done (the Queue shows how far it is).</source>
+        <translation>Was die intelligente Auswahl braucht, wird heruntergeladen; der Klick wird danach verwendet (die Warteschlange zeigt den Fortschritt).</translation>
+    </message>
+    <message>
+        <location line="+32"/>
+        <source>Smart selection did not work: %1</source>
+        <translation>Die intelligente Auswahl hat nicht funktioniert: %1</translation>
     </message>
 </context>
 <context>

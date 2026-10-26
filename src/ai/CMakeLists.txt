@@ -21,6 +21,8 @@ add_library(lumen_ai STATIC
     PromptStyle.h PromptStyle.cpp
     ModelDefaults.h ModelDefaults.cpp
     RunSettings.h RunSettings.cpp
+    Onnx.h Onnx.cpp
+    Segmenter.h Segmenter.cpp
     GenerationService.h GenerationService.cpp
     FilterNodes.h FilterNodes.cpp
     CastGeneration.h CastGeneration.cpp
@@ -31,6 +33,8 @@ add_library(lumen_ai STATIC
     PartService.h PartService.cpp
 )
 target_include_directories(lumen_ai PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
+# ONNX Runtime's C API headers (the runtime itself is loaded at run time, see Onnx.cpp).
+target_include_directories(lumen_ai PRIVATE ${PROJECT_SOURCE_DIR}/third_party/onnxruntime/include)
 # lumen_filters for the AI steps of node filters (FilterNodes); the filters library never depends
 # on this one.
 target_link_libraries(lumen_ai PUBLIC lumen_core lumen_net lumen_pose lumen_doc lumen_filters Qt6::Gui)

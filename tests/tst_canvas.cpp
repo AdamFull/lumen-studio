@@ -33,6 +33,10 @@
 #include "ui/widgets/JobCard.h"
 #include "ui/widgets/LoraPicker.h"
 #include "ui/dialogs/SelectByDescriptionDialog.h"
+#include "ui/SmartSelect.h"
+#include "ui/canvas/SmartSelectTool.h"
+#include "ai/Segmenter.h"
+#include "runtime/Components.h"
 #include "core/Finders.h"
 #include "ui/widgets/RunSettingsEditor.h"
 #include "ui/widgets/ProviderCombo.h"
@@ -211,6 +215,7 @@ private slots:
     void loraPickerFolder();
     void runSettingsPerModel();
     void selectByDescription();
+    void smartSelection();
     void promptBarWithoutEdits();
     void aiMenuAndPanel();
     void promptBarKeepsTyping();
@@ -5330,6 +5335,124 @@ void TestCanvas::selectByDescription()
     QCOMPARE(qGray(doc->selection().pixel(300, 210)), 0);
     QTRY_VERIFY(f.words()->toPlainText().isEmpty());
     QVERIFY(f.sd.generations.isEmpty());
+}
+
+namespace {
+
+// Stands in for SAM 2: a disk of radius 30 around each point on the object, less a disk of 15
+// around each point off it; a box is filled.
+struct FakeSegmenter : ai::Segmenter
+{
+    int calls = 0;
+    QImage segment(const QImage &picture, const ai::SegmentPrompt &prompt, QString *) override
+    {
+        ++calls;
+        QImage mask = img::createMask(picture.size());
+        QPainter p(&mask);
+        p.setRenderHint(QPainter::Antialiasing, false);
+        p.setPen(Qt::NoPen);
+        if (!prompt.box.isNull())
+            p.fillRect(prompt.box, Qt::white);
+        for (int i = 0; i < prompt.points.size(); ++i) {
+            p.setBrush(prompt.positive.value(i) ? Qt::white : Qt::black);
+            const double r = prompt.positive.value(i) ? 30 : 15;
+            p.drawEllipse(prompt.points.at(i), r, r);
+        }
+        return mask;
+    }
+};
+
+} // namespace
+
+// Smart selection (plan M18 §18.1): the first use asks before downloading; then a click selects the
+// object, Shift+click and Alt+click refine it, a drag selects what is in the box, Add keeps the
+// selection there was, and each is one undo step.
+void TestCanvas::smartSelection()
+{
+    PromptBarFixture f;
+    QVERIFY(f.setUp(true));
+    doc::Document *doc = f.studio.openImageAsDocument(detailedPhoto(QSize(400, 300)), QStringLiteral("Photo"));
+    QVERIFY(doc);
+    EditorPage *editor = f.editor();
+    CanvasView *canvas = editor->canvas();
+    editor->selectTool(QStringLiteral("smart-select"));
+    auto *tool = qobject_cast<SmartSelectTool *>(canvas->tool());
+    QVERIFY(tool);
+    QTRY_VERIFY(canvas->isFitted());
+    QWidget *surface = canvas->focusProxy();
+    auto click = [&](const QPointF &at, Qt::KeyboardModifiers mods = Qt::NoModifier) {
+        const QPoint p = canvas->mapFromDoc(at).toPoint();
+        QTest::mousePress(surface, Qt::LeftButton, mods, p);
+        QTest::mouseRelease(surface, Qt::LeftButton, mods, p);
+    };
+    auto drag = [&](const QRectF &r) {
+        const QPoint from = canvas->mapFromDoc(r.topLeft()).toPoint();
+        const QPoint to = canvas->mapFromDoc(r.bottomRight()).toPoint();
+        QTest::mousePress(surface, Qt::LeftButton, Qt::NoModifier, from);
+        QTest::mouseMove(surface, (from + to) / 2);
+        QTest::mouseMove(surface, to);
+        QTest::mouseRelease(surface, Qt::LeftButton, Qt::NoModifier, to);
+    };
+    auto at = [doc](int x, int y) { return qGray(doc->selection().pixel(x, y)); };
+
+    // Not downloaded: it asks, says how much, and Cancel downloads nothing.
+    runtime::ComponentSpec fakeRuntime;
+    fakeRuntime.id = QStringLiteral("onnxruntime");
+    fakeRuntime.name = QStringLiteral("ONNX Runtime");
+    fakeRuntime.files = {runtime::ComponentFile{QUrl(QStringLiteral("http://127.0.0.1:9/ort.zip")), {}, 80000000, QStringLiteral("onnxruntime.dll"), {}}};
+    runtime::ComponentSpec fakeSam = fakeRuntime;
+    fakeSam.id = QStringLiteral("sam2.1-tiny");
+    fakeSam.files.first().size = 62000000;
+    fakeSam.files.first().path = QStringLiteral("model.onnx");
+    f.studio.components()->setSpecs({fakeRuntime, fakeSam});
+    QVERIFY(!f.studio.smartSelect()->isReady());
+    click(QPointF(100, 100));
+    QMessageBox *ask = nullptr;
+    QTRY_VERIFY((ask = f.window->findChild<QMessageBox *>(QStringLiteral("smartSelectDownload"))));
+    QVERIFY(ask->text().contains(QStringLiteral("142 MB")));
+    ask->button(QMessageBox::Cancel)->click();
+    QVERIFY(!f.studio.smartSelect()->isInstalling());
+    QVERIFY(!doc->hasSelection());
+
+    // Ready: a click selects the object.
+    auto fake = std::make_shared<FakeSegmenter>();
+    f.studio.smartSelect()->setSegmenter(fake);
+    QSignalSpy selected(tool, &SmartSelectTool::selected);
+    const int undoBefore = doc->undoStack()->count();
+    click(QPointF(100, 100));
+    QTRY_COMPARE(selected.size(), 1);
+    QCOMPARE(at(100, 100), 255);
+    QCOMPARE(at(200, 100), 0);
+    QCOMPARE(doc->undoStack()->count(), undoBefore + 1);
+    // Shift+click: another point on the same object.
+    click(QPointF(150, 100), Qt::ShiftModifier);
+    QTRY_COMPARE(selected.size(), 2);
+    QCOMPARE(tool->prompt().points.size(), 2);
+    QCOMPARE(at(175, 100), 255);
+    QCOMPARE(at(100, 100), 255);
+    // Alt+click: a point that is not part of it.
+    click(QPointF(120, 100), Qt::AltModifier);
+    QTRY_COMPARE(selected.size(), 3);
+    QCOMPARE(tool->prompt().positive.last(), false);
+    QCOMPARE(at(120, 100), 0);
+    // A drag: what is in the box, as a new object.
+    drag(QRectF(250, 150, 100, 80));
+    QTRY_COMPARE(selected.size(), 4);
+    QCOMPARE(tool->prompt().points.size(), 0);
+    QCOMPARE(at(300, 190), 255);
+    QCOMPARE(at(100, 100), 0);
+    // Add (the options bar): the box stays and a click's object joins it.
+    auto *add = editor->findChild<QToolButton *>(QStringLiteral("selectionAdd"));
+    QVERIFY(add);
+    add->click();
+    click(QPointF(60, 60));
+    QTRY_COMPARE(selected.size(), 5);
+    QCOMPARE(at(60, 60), 255);
+    QCOMPARE(at(300, 190), 255);
+    editor->findChild<QToolButton *>(QStringLiteral("selectionNew"))->click();
+    doc->undoStack()->undo();
+    QCOMPARE(at(60, 60), 0);
+    QCOMPARE(at(300, 190), 255);
 }
 
 // An engine without instruction edits (sd.cpp with a model it has no preset for): without a

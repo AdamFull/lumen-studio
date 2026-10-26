@@ -1,5 +1,7 @@
 #include "runtime/Zip.h"
 
+#include <algorithm>
+
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
@@ -180,11 +182,18 @@ QString safeEntryPath(const QString &name)
     return parts.join(QLatin1Char('/'));
 }
 
-QString extractZip(const QString &zipPath, const QString &destDir, const std::function<bool(qint64, qint64)> &progress)
+QString extractZip(const QString &zipPath, const QString &destDir, const std::function<bool(qint64, qint64)> &progress,
+                   const std::function<bool(const QString &)> &wanted)
 {
     QList<ZipEntry> entries;
     if (QString err = listZip(zipPath, &entries); !err.isEmpty())
         return err;
+    // Only the entries asked for (their safe relative paths), and their folders.
+    if (wanted) {
+        entries.erase(std::remove_if(entries.begin(), entries.end(),
+                                     [&wanted](const ZipEntry &e) { return e.directory || !wanted(safeEntryPath(e.name)); }),
+                      entries.end());
+    }
 
     // Validate everything before writing a single byte.
     qint64 total = 0;

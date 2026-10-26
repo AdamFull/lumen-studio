@@ -1,5 +1,7 @@
 #include "ui/Studio.h"
 
+#include "ui/SmartSelect.h"
+
 #include "ai/FilterNodes.h"
 #include "ai/ProviderCatalog.h"
 #include "core/Async.h"
@@ -36,11 +38,17 @@ Studio::Studio(QObject *parent)
     , m_servers(&m_runtimes, &m_http)
     , m_models(&m_http)
     , m_hub(&m_http, &m_jobs, &m_models)
+    , m_components(&m_http, &m_jobs)
     , m_generation(&m_registry, &m_jobs)
     , m_director(&m_registry)
     , m_parts(&m_registry, &m_jobs, &m_generation)
 {
     ai::registerBuiltInProviders(m_registry);
+    // Programs in Lumen's data, models in the models folder (and where it moves).
+    m_components.setRoots(paths::appData(), m_models.defaultFolder());
+    connect(&m_models, &runtime::ModelLibrary::folderChanged, this,
+            [this] { m_components.setRoots(paths::appData(), m_models.defaultFolder()); });
+    m_smartSelect = new SmartSelect(&m_components, this);
     m_registry.load();
     // The AI steps of node filters run through this studio's engines; registered before any
     // filter is loaded (FilterCatalog), or filters with AI steps would not load.

@@ -6,6 +6,7 @@
 #include "core/Paths.h"
 #include "net/HttpClient.h"
 #include "runtime/Catalog.h"
+#include "runtime/Components.h"
 #include "runtime/Download.h"
 #include "runtime/Hardware.h"
 #include "runtime/LoraTraining.h"
@@ -234,6 +235,7 @@ private slots:
     void adoptPythonApps();
     void inspectRealModels();
     void loraFamilies();
+    void componentsInstall();
     void modelFormats();
     void modelLibrary();
     void modelsFolderDefaults();
@@ -2993,6 +2995,107 @@ void TestRuntime::loraFamilies()
     QVERIFY(loraMismatch(xl, QString(), QString()).isEmpty());
     QVERIFY(loraMismatch(ModelInfo{}, QStringLiteral("SDXL"), QString()).isEmpty());
     QCOMPARE(modelFamilyName(QStringLiteral("FLUX"), QStringLiteral("Dev")), QStringLiteral("FLUX.1"));
+}
+
+// Components downloaded on first use (plan M18 §18.1): the bundled list is pinned; a runtime's
+// archive is unpacked to the files asked for only (not its debug symbols); a model file is put in
+// place; the folder appears only complete; a wrong checksum leaves nothing.
+void TestRuntime::componentsInstall()
+{
+    // The bundled list: ONNX Runtime and the two detection models, each file with size and SHA-256.
+    QStringList ids;
+    for (const ComponentSpec &c : componentSpecs()) {
+        ids << c.id;
+        QVERIFY2(!c.files.isEmpty(), qPrintable(c.id));
+        for (const ComponentFile &f : c.files) {
+            QVERIFY2(f.size > 0 && f.sha256.size() == 64 && f.url.scheme() == QLatin1String("https"), qPrintable(c.id));
+        }
+    }
+    QCOMPARE(ids, (QStringList{QStringLiteral("onnxruntime"), QStringLiteral("sam2.1-tiny"), QStringLiteral("grounding-dino-tiny")}));
+    QVERIFY(componentSpecs().at(1).inModels && !componentSpecs().at(0).inModels);
+    QCOMPARE(componentSpecs().at(1).files.first().url.toString(),
+             QStringLiteral("https://huggingface.co/onnx-community/sam2.1-hiera-tiny-ONNX/resolve/814a066640debee5a91e70aa401fb8e17e030503/"
+                            "onnx/vision_encoder_int8.onnx"));
+
+    // A runtime's archive, as the release ships it, and a model file.
+    QTemporaryDir dir;
+    const QString pkg = dir.filePath(QStringLiteral("pkg"));
+    QVERIFY(writeFile(pkg + QStringLiteral("/rt-1.0/lib/onnxruntime.dll"), "the runtime"));
+    QVERIFY(writeFile(pkg + QStringLiteral("/rt-1.0/lib/onnxruntime.pdb"), QByteArray(4096, 'd')));
+    QVERIFY(writeFile(pkg + QStringLiteral("/rt-1.0/LICENSE"), "MIT"));
+    const QString zip = dir.filePath(QStringLiteral("rt.zip"));
+    QCOMPARE(writeZip(zip, pkg), QString());
+    QFile zf(zip);
+    QVERIFY(zf.open(QIODevice::ReadOnly));
+    const QByteArray zipBytes = zf.readAll();
+    const QByteArray model = QByteArray(3000, 'm');
+    auto sha = [](const QByteArray &b) { return QString::fromLatin1(QCryptographicHash::hash(b, QCryptographicHash::Sha256).toHex()); };
+    MockHttpServer server;
+    server.route("GET", QStringLiteral("/rt.zip"), [&](const MockRequest &) {
+        MockResponse r;
+        r.contentType = "application/zip";
+        r.body = zipBytes;
+        return r;
+    });
+    server.route("GET", QStringLiteral("/model.onnx"), [&](const MockRequest &) {
+        MockResponse r;
+        r.contentType = "application/octet-stream";
+        r.body = model;
+        return r;
+    });
+    const QByteArray json = QStringLiteral(R"({"components": [
+        {"id": "rt", "name": "Runtime", "folder": "rt-1.0", "location": "data", "files": [
+            {"url": "%1/rt.zip", "size": %2, "sha256": "%3",
+             "extract": {"rt-1.0/lib/onnxruntime.dll": "onnxruntime.dll", "rt-1.0/LICENSE": "LICENSE"}}]},
+        {"id": "seg", "name": "Segmenter", "folder": "seg", "location": "models", "files": [
+            {"url": "%1/model.onnx", "path": "onnx/model.onnx", "size": %4, "sha256": "%5"}]},
+        {"id": "bad", "name": "Broken", "folder": "bad", "location": "models", "files": [
+            {"url": "%1/model.onnx", "path": "model.onnx", "size": %4, "sha256": "%6"}]}]})")
+                                 .arg(server.baseUrl().toString())
+                                 .arg(zipBytes.size())
+                                 .arg(sha(zipBytes))
+                                 .arg(model.size())
+                                 .arg(sha(model), QString(64, QLatin1Char('0')))
+                                 .toUtf8();
+    QString error;
+    const QList<ComponentSpec> specs = parseComponents(json, &error);
+    QVERIFY2(specs.size() == 3, qPrintable(error));
+    net::HttpClient http;
+    JobQueue jobs;
+    Components components(&http, &jobs);
+    components.setSpecs(specs);
+    components.setRoots(dir.filePath(QStringLiteral("data")), dir.filePath(QStringLiteral("models")));
+    QVERIFY(!components.isInstalled(QStringLiteral("rt")));
+    QCOMPARE(components.missingSize({QStringLiteral("rt"), QStringLiteral("seg")}), qint64(zipBytes.size() + model.size()));
+    QSignalSpy installed(&components, &Components::installed);
+    Job *rt = components.install(QStringLiteral("rt"));
+    QVERIFY(rt);
+    QCOMPARE(components.install(QStringLiteral("rt")), rt); // the running one
+    QTRY_VERIFY_WITH_TIMEOUT(rt->isFinished(), 15000);
+    QVERIFY2(rt->state() == Job::State::Succeeded, qPrintable(rt->errorString()));
+    QCOMPARE(components.folder(QStringLiteral("rt")), dir.filePath(QStringLiteral("data/components/rt-1.0")));
+    QVERIFY(components.isInstalled(QStringLiteral("rt")));
+    QVERIFY(QFileInfo::exists(components.path(QStringLiteral("rt"), QStringLiteral("onnxruntime.dll"))));
+    QVERIFY(QFileInfo::exists(components.path(QStringLiteral("rt"), QStringLiteral("LICENSE"))));
+    QVERIFY(!QFileInfo::exists(components.path(QStringLiteral("rt"), QStringLiteral("rt-1.0/lib/onnxruntime.pdb"))));
+    QCOMPARE(QDir(components.folder(QStringLiteral("rt"))).entryList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot),
+             (QStringList{QStringLiteral("LICENSE"), QStringLiteral("onnxruntime.dll")}));
+    QVERIFY(!QFileInfo::exists(components.folder(QStringLiteral("rt")) + QStringLiteral(".download")));
+    QCOMPARE(installed.size(), 1);
+
+    Job *seg = components.install(QStringLiteral("seg"));
+    QTRY_VERIFY_WITH_TIMEOUT(seg->isFinished(), 15000);
+    QVERIFY2(seg->state() == Job::State::Succeeded, qPrintable(seg->errorString()));
+    QCOMPARE(components.path(QStringLiteral("seg"), QStringLiteral("onnx/model.onnx")), dir.filePath(QStringLiteral("models/detection/seg/onnx/model.onnx")));
+    QVERIFY(components.isInstalled(QStringLiteral("seg")));
+    QCOMPARE(components.missingSize({QStringLiteral("rt"), QStringLiteral("seg")}), qint64(0));
+
+    // A checksum that does not match: it fails and the folder is not there.
+    Job *bad = components.install(QStringLiteral("bad"));
+    QTRY_VERIFY_WITH_TIMEOUT(bad->isFinished(), 15000);
+    QCOMPARE(bad->state(), Job::State::Failed);
+    QVERIFY(!components.isInstalled(QStringLiteral("bad")));
+    QVERIFY(!QFileInfo::exists(components.folder(QStringLiteral("bad"))));
 }
 
 void TestRuntime::inspectRealModels()

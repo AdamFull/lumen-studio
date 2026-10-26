@@ -3950,9 +3950,37 @@ Decisions (October 2026, with the user):
     engine); `tst_layout` audits the dialog with lines and with a colour at 100 % and 150 %.
   * Not yet: objects ("the cup") need the model finder of the next step; a colour picked on the
     canvas (the *Colour range* node takes one, the dialog only names).
-- [ ] ONNX Runtime as a managed component (pinned release, CUDA / DirectML / CPU builds, C API);
-  the detector and segmenter presets; `Utility::FindArea` and its local provider; *Smart
-  selection* (click and box); the *Find area* node. Tests against small ONNX test models, no GPU.
+- [x] ONNX Runtime as a managed component and *Smart selection* (click and box) with SAM 2.1 tiny.
+  * The user allowed the downloads for development (26 October 2026): ONNX Runtime 1.31.0 CPU
+    (83 MB zip), SAM 2.1 tiny int8 (62 MB) and Grounding DINO tiny int8 (205 MB), all verified
+    against GitHub's release digest and Hugging Face's SHA-256 at pinned commits.
+  * `ai::OnnxRuntime` / `OnnxSession` (`src/ai/Onnx`): the C API (headers in
+    `third_party/onnxruntime`, MIT) with `onnxruntime.dll` loaded at run time through
+    `OrtGetApiBase`, so the MinGW build needs no import library; float and int64 tensors by name.
+  * `ai::Sam2Segmenter`: the vision encoder once per picture (cached by the image), the prompt
+    decoder for points and a box (the box as its two corners, labels 2 and 3, among the points),
+    the best of three candidates by its score, scaled to the picture. Measured on this computer's
+    CPU: models loaded in 0.5 s, the first prompt with the encoding 1.3 s, each next one 0.23 s.
+  * `runtime::Components` (`resources/presets/components.json`): pinned files (address, size,
+    SHA-256), downloaded as Queue jobs with the existing resumable `FileDownload`, an archive
+    unpacked to the entries asked for only (`extractZip` gained a filter, so the runtime's 430 MB of
+    debug symbols are never written), into a staging folder moved into place when complete.
+    Programs go to Lumen's data (`components/`), models to the models folder (`detection/`).
+  * `ui::SmartSelect` (opens the segmenter on a worker thread on first use, segments off the GUI
+    thread) and `SmartSelectTool` (`W`): click, Shift+click and Alt+click refine one object, a drag
+    is a box; the options bar's modes and Feather apply against the selection before the object;
+    the first use asks before downloading (about 145 MB) and runs the click when it is done.
+  * Tests: `tst_detect` (the steps around SAM 2 without the runtime; with `LUMEN_TEST_ORT` and
+    `LUMEN_TEST_SAM2` the real models on a drawn scene: the ball and not the box, a box prompt, one
+    encoding); `tst_runtime componentsInstall` (the bundled list pinned; an archive unpacked to the
+    two files asked for; a model in the models folder; a wrong checksum leaves nothing);
+    `tst_canvas smartSelection` (asks before downloading, Cancel downloads nothing; click, Shift,
+    Alt, box, Add, undo, with a stand-in segmenter).
+  * Not yet: CUDA or DirectML builds of ONNX Runtime (the CPU is quick enough for SAM 2.1 tiny);
+    an object's mask is not refined further than SAM's 256 × 256 output.
+- [ ] Grounding DINO tiny (text → boxes, its WordPiece tokenizer) and SAM 2 boxes → masks:
+  `Utility::FindArea` and its local provider, objects in *Select → By description* and "select:
+  the cup", the *Find area* node. Tests against the real models when given, steps without them.
 - [ ] `FindArea` for ComfyUI (workflow template), fal.ai and Gemini, against mock servers.
 - [ ] Prompt rules per family; *Use my words as they are*; what was sent in the results' details.
 - [ ] LoRA suggestions; the picker for ComfyUI.

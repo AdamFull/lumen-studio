@@ -1,6 +1,7 @@
 #include "ui/pages/EditorPage.h"
 
 #include "ui/dialogs/SelectByDescriptionDialog.h"
+#include "ui/canvas/SmartSelectTool.h"
 
 #include "core/Async.h"
 #include "core/Error.h"
@@ -133,6 +134,7 @@ EditorPage::EditorPage(Studio *studio, QWidget *parent)
                new SelectionTool(m_state, SelectionTool::Shape::Rect, this),
                new SelectionTool(m_state, SelectionTool::Shape::Ellipse, this),
                new SelectionTool(m_state, SelectionTool::Shape::Lasso, this),
+               new SmartSelectTool(m_state, m_studio, this),
                new MaskBrushTool(m_state, this),
                new BrushTool(m_state, false, this),
                new BrushTool(m_state, true, this),
@@ -151,7 +153,8 @@ EditorPage::EditorPage(Studio *studio, QWidget *parent)
         auto *button = new QToolButton(palette);
         button->setDefaultAction(action);
         button->setIconSize(QSize(20, 20));
-        button->setFixedSize(40, 36);
+        // 32 high: thirteen tools and the colours fit a 1280 × 720 window.
+        button->setFixedSize(40, 32);
         pv->addWidget(button);
         m_toolActions.insert(tool->id(), action);
         connect(action, &QAction::triggered, this, [this, id = tool->id()] { selectTool(id); });
