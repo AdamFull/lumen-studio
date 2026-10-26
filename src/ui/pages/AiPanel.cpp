@@ -434,12 +434,13 @@ void AiPanel::updateUi()
     m_run->setText(runText);
 }
 
-ai::ImageRequest AiPanel::baseRequest(const ai::ImageProvider *provider, const QString &prompt, ai::GenMode mode, bool area) const
+ai::ImageRequest AiPanel::baseRequest(const ai::ImageProvider *provider, const QString &prompt, ai::GenMode mode, bool area, bool literal,
+                                      const std::optional<QString> &negative) const
 {
     ai::ImageRequest r;
     const ai::PromptStyle style = ai::promptStyleFor(provider);
-    const ai::FittedPrompt fitted = ai::fitPrompt(style, mode, area, prompt, takesNegative(provider) ? m_options->negative() : QString(),
-                                                  m_options->literalWords());
+    const QString unwanted = takesNegative(provider) ? negative.value_or(m_options->negative()) : QString();
+    const ai::FittedPrompt fitted = ai::fitPrompt(style, mode, area, prompt, unwanted, literal || m_options->literalWords());
     r.prompt = fitted.prompt;
     r.negativePrompt = fitted.negative;
     r.batchCount = m_options->variants();
@@ -564,7 +565,7 @@ void AiPanel::submitPrompt(const PromptRun &run)
     const bool colorMatch = m_options->colorMatch();
     const int variants = m_options->variants();
     const ai::GenMode mode = run.mode;
-    ai::ImageRequest base = baseRequest(provider, run.prompt, mode, region);
+    ai::ImageRequest base = baseRequest(provider, run.prompt, mode, region, run.literal, run.negative);
     base.mode = mode;
     base.denoise = run.strength;
     // A region gets the character's LoRA (or reference) only; the prompt describes the region.

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ai/ChangePlan.h"
 #include "ui/pages/PromptPlan.h"
 
 #include <QFrame>
@@ -13,6 +14,8 @@ class QProgressBar;
 class QPushButton;
 class QSpinBox;
 class QToolButton;
+
+#include <functional>
 
 namespace lumen::ai {
 class ImageProvider;
@@ -68,8 +71,14 @@ public:
     // main button and Enter ask for one (setUpAiRequested).
     void generate();
     void remove();
-    // "select: the black lines": the area is found by how it looks and becomes the selection.
-    void selectByWords(const QString &description);
+    // "select: the black lines": the area is found by how it looks and becomes the selection. With
+    // `then`, that runs once it is selected instead of the bar saying so.
+    void selectByWords(const QString &description, std::function<void()> then = {});
+    // Plan this change… (plan M18 §18.5): a language model that sees the picture proposes the
+    // selection, the request and LoRAs; the plan is shown, and Run selects and generates with it.
+    // Only offered when such a model is set up.
+    void planChange();
+    void runPlan(const ai::ChangePlan &plan);
     void variation();
     void cancel();
 
@@ -102,7 +111,9 @@ private:
     bool changesPicture() const;
     // The engine cannot change the whole image from words but can make a variation of it.
     static bool offersVariation(const PromptPlan &p);
-    void submit(const PromptPlan &plan, ai::GenMode mode, const QString &words, double strength, bool withCharacter, const QString &name);
+    // `planned`: the words are a plan's, sent as they are with its negative prompt.
+    void submit(const PromptPlan &plan, ai::GenMode mode, const QString &words, double strength, bool withCharacter, const QString &name,
+                const ai::ChangePlan *planned = nullptr);
 
     Studio *m_studio;
     AiOptions *m_options;
@@ -142,6 +153,7 @@ private:
     ProviderCombo *m_engine = nullptr;
     QToolButton *m_advanced = nullptr;
     QPushButton *m_allOptions = nullptr;
+    QPushButton *m_planChange = nullptr;
 };
 
 } // namespace lumen::ui

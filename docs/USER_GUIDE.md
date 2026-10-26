@@ -310,6 +310,8 @@ The **⋯** button next to Generate holds what most people never need, and only 
   The values are kept for each model type and are the same in the AI tab; *Back to the model's
   choice* undoes them. Image models have no "temperature": the nearest is *Follow the words*.
   *Use my words as they are* is there too (see below);
+* **Plan this change…**, when a language model that sees pictures is set up (Settings → Roles,
+  *Vision analysis*): see below;
 * **All AI options…** opens the AI tab.
 
 **Your words, fitted to the model.** Lumen adds the quality words the model's family expects
@@ -322,6 +324,14 @@ hat" sends "a hat", and "remove the lamp" sends the words for an empty place wit
 things to leave out. Tag models get tags ("candle"). Some German phrasings work too ("ersetze die
 Tasse durch eine Kerze"). **Use my words as they are** (in ⋯ → Advanced and in the AI tab) turns all
 of this off: the model gets exactly what you typed.
+
+**Plan this change.** Type what should change, then choose **Plan this change…** in ⋯. The language
+model looks at the picture and your words and proposes a plan: what to select first (in the words of
+*Select → By description…*, such as "the black lines" or "the cup"; empty keeps your selection or
+changes the whole picture), the request written for the image model, what to leave out, and which of
+the engine's LoRAs to use, with a sentence on why. Nothing is selected or generated yet: change any
+part of the plan, then **Run** selects and generates with exactly what the plan shows. A local
+language model may take a while to load the first time.
 
 **LoRAs.** *Add a LoRA…* lists the LoRAs the engine can load. Those made for the engine's model come
 first; the others are greyed out under *Made for another model*, with what they were made for (a LoRA

@@ -39,6 +39,7 @@
 #include "ui/dialogs/ModelHubDialog.h"
 #include "ui/dialogs/NewFromPromptDialog.h"
 #include "ui/dialogs/NewCanvasDialog.h"
+#include "ui/dialogs/PlanChangeDialog.h"
 #include "ui/dialogs/SelectByDescriptionDialog.h"
 #include "doc/Document.h"
 #include "ui/dialogs/PoseEditDialog.h"
@@ -983,6 +984,21 @@ void TestLayout::dialogs()
         m_auditor.auditDialog(&d, QStringLiteral("Select by description dialog (lines)"));
         d.setWords(QStringLiteral("the red"));
         m_auditor.auditDialog(&d, QStringLiteral("Select by description dialog (a colour)"));
+    }
+    {
+        ai::PlanContext context;
+        context.words = QStringLiteral("make the red scarf blue and give it a soft wool texture");
+        context.negative = true;
+        context.loras = {QStringLiteral("pixel"), QStringLiteral("ink_style_v2")};
+        PlanChangeDialog d(nullptr, QString(), QImage(), context);
+        ai::ChangePlan plan;
+        plan.select = QStringLiteral("the red");
+        plan.prompt = QStringLiteral("a blue wool scarf, soft folds, knitted texture");
+        plan.negative = QStringLiteral("blurry, lowres");
+        plan.loras = {QStringLiteral("pixel")};
+        plan.note = QStringLiteral("Select the red scarf and paint it blue, keeping its folds.");
+        d.showPlan(plan);
+        m_auditor.auditDialog(&d, QStringLiteral("Plan this change dialog"));
     }
     {
         ImageSizeDialog image(ImageSizeDialog::Kind::Image, QSize(4032, 3024));

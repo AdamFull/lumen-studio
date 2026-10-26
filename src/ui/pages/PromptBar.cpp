@@ -1,5 +1,6 @@
 #include "ui/pages/PromptBar.h"
 
+#include "ai/ChangePlan.h"
 #include "ai/PromptStyle.h"
 #include "doc/Document.h"
 #include "ui/Icons.h"
@@ -8,6 +9,7 @@
 #include "ui/pages/AiOptions.h"
 #include "ui/widgets/LoraPicker.h"
 #include "ui/widgets/RunSettingsEditor.h"
+#include "ui/dialogs/PlanChangeDialog.h"
 #include "ui/dialogs/SelectByDescriptionDialog.h"
 #include "ui/SmartSelect.h"
 #include "core/Finders.h"
@@ -203,6 +205,15 @@ void PromptBar::buildOptions()
     seedRow->addWidget(m_seed, 1);
     seedRow->addWidget(m_randomSeed);
     m_form->addRow(tr("Seed"), m_seedRow);
+    m_planChange = new QPushButton(tr("Plan this change…"), m_popup);
+    m_planChange->setObjectName(QStringLiteral("promptPlan"));
+    m_planChange->setToolTip(tr("A language model that sees the picture proposes what to select, the request for the image model and "
+                                "LoRAs. You see the plan and can change it before it runs."));
+    m_form->addRow(m_planChange);
+    connect(m_planChange, &QPushButton::clicked, this, [this] {
+        m_popup->hide();
+        planChange();
+    });
     m_allOptions = new QPushButton(Icons::get(QStringLiteral("adjust")), tr("All AI options…"), m_popup);
     m_allOptions->setToolTip(tr("The AI tab: every option, and the actions that are not a description (upscale, expand, "
                                 "remove background…)"));
@@ -486,6 +497,7 @@ void PromptBar::updateOptions()
     m_form->setRowVisible(m_loras, provider && caps.loras);
     m_form->setRowVisible(m_references, caps.maxReferences > 0);
     m_form->setRowVisible(m_pose, caps.poseControl && m_doc && m_doc->controlPose());
+    m_form->setRowVisible(m_planChange, provider && changesPicture() && ai::changePlanner(m_studio->providers()));
 }
 
 void PromptBar::showOptions()
@@ -504,7 +516,7 @@ void PromptBar::showOptions()
 }
 
 void PromptBar::submit(const PromptPlan &plan, ai::GenMode mode, const QString &words, double strength, bool withCharacter,
-                       const QString &name)
+                       const QString &name, const ai::ChangePlan *planned)
 {
     AiPanel::PromptRun run;
     // The engine the plan was made for.
@@ -516,6 +528,10 @@ void PromptBar::submit(const PromptPlan &plan, ai::GenMode mode, const QString &
     run.strength = strength;
     run.withCharacter = withCharacter;
     run.name = name;
+    if (planned) {
+        run.literal = true;
+        run.negative = planned->negative;
+    }
     if (plan.region)
         run.action = mode == ai::GenMode::Edit ? AiPanel::Mode::Edit : AiPanel::Mode::Inpaint;
     else if (mode == ai::GenMode::Edit)
@@ -557,7 +573,7 @@ void PromptBar::generate()
     submit(p, p.mode, words, p.strength ? m_options->regionStrength() : 1.0, true, words.simplified().left(40));
 }
 
-void PromptBar::selectByWords(const QString &description)
+void PromptBar::selectByWords(const QString &description, std::function<void()> then)
 {
     const img::FinderRequest request = img::parseFinderRequest(description);
     if (request.kind == img::FinderRequest::Kind::None) {
@@ -574,7 +590,7 @@ void PromptBar::selectByWords(const QString &description)
         QPointer<doc::Document> doc(m_doc);
         QPointer<PromptBar> self(this);
         finder->findObjects(m_doc->flattened(), description)
-            .then(this, [self, doc, description](const SmartSelect::FoundArea &area) {
+            .then(this, [self, doc, description, then](const SmartSelect::FoundArea &area) {
                 if (!self || !doc)
                     return;
                 if (area.mask.isNull()) {
@@ -582,6 +598,8 @@ void PromptBar::selectByWords(const QString &description)
                     return;
                 }
                 doc->applySelection(area.mask, tr("Select: %1").arg(description.left(40)));
+                if (then)
+                    return then();
                 if (doc == self->m_doc)
                     self->m_prompt->clear();
                 self->m_studio->notify(area.foundBy.isEmpty()
@@ -596,7 +614,7 @@ void PromptBar::selectByWords(const QString &description)
     QPointer<doc::Document> doc(m_doc);
     QPointer<PromptBar> self(this);
     QtConcurrent::run([picture = m_doc->flattened(), request] { return img::runFinder(picture, request); })
-        .then(this, [self, doc, request, description](const QImage &mask) {
+        .then(this, [self, doc, request, description, then](const QImage &mask) {
             if (!self || !doc)
                 return;
             if (mask.isNull() || img::maskIsEmpty(mask)) {
@@ -607,12 +625,107 @@ void PromptBar::selectByWords(const QString &description)
                 return;
             }
             doc->applySelection(mask, tr("Select: %1").arg(description.left(40)));
+            if (then)
+                return then();
             // The words asked to select; what comes next is the change.
             if (doc == self->m_doc)
                 self->m_prompt->clear();
             self->m_studio->notify(tr("Selected: %1 Now say what should change there, or press Remove object.").arg(finderDescription(request)),
                                    QStringLiteral("success"));
         });
+}
+
+void PromptBar::planChange()
+{
+    if (!m_doc || m_strip->isRunning())
+        return;
+    const QString words = m_prompt->text().trimmed();
+    if (words.isEmpty()) {
+        m_studio->notify(tr("Say what should change first; then Plan this change looks at the picture and proposes how."),
+                         QStringLiteral("warning"));
+        focusPrompt();
+        return;
+    }
+    ai::ImageProvider *provider = engine();
+    QString model;
+    ai::LlmProvider *planner = ai::changePlanner(m_studio->providers(), &model);
+    if (!provider || !planner)
+        return;
+    const ai::ImageCapabilities caps = provider->capabilities();
+    ai::PlanContext context;
+    context.words = words;
+    context.style = ai::promptStyleFor(provider);
+    // What the request will be once the area is selected.
+    context.instructions = promptPlan(true, blank(), &caps).mode == ai::GenMode::Edit;
+    context.negative = caps.negativePrompt && context.style.supportsNegative;
+    context.hasSelection = m_doc->hasSelection();
+    if (caps.loras) {
+        for (const LoraChoice &c : m_loras->listing().loras) {
+            if (c.mismatch.isEmpty())
+                context.loras << c.name;
+        }
+    }
+    auto *dlg = new PlanChangeDialog(planner, model, m_doc->flattened(), context, window());
+    dlg->setAttribute(Qt::WA_DeleteOnClose);
+    QPointer<PromptBar> self(this);
+    connect(dlg, &QDialog::accepted, this, [self, dlg] {
+        if (self)
+            self->runPlan(dlg->plan());
+    });
+    dlg->open();
+}
+
+void PromptBar::runPlan(const ai::ChangePlan &plan)
+{
+    if (!m_doc || plan.prompt.isEmpty())
+        return;
+    // The plan's LoRAs, ticked in the picker so the run (and the user) sees them.
+    if (const ai::ImageProvider *provider = engine(); provider && !plan.loras.isEmpty()) {
+        QList<ChosenLora> chosen = m_options->loras(provider->instanceId());
+        for (const QString &name : plan.loras) {
+            bool found = false;
+            for (ChosenLora &l : chosen) {
+                if (l.name.compare(name, Qt::CaseInsensitive) == 0) {
+                    l.on = true;
+                    found = true;
+                }
+            }
+            for (const LoraChoice &c : m_loras->listing().loras) {
+                if (!found && c.name == name && c.mismatch.isEmpty()) {
+                    ChosenLora l;
+                    l.name = c.name;
+                    l.path = c.path;
+                    l.file = c.file;
+                    l.triggerWords = c.info.triggerWords;
+                    chosen << l;
+                    found = true;
+                }
+            }
+        }
+        m_options->setLoras(provider->instanceId(), chosen);
+    }
+    QPointer<PromptBar> self(this);
+    auto go = [self, plan] {
+        if (!self || !self->m_doc || self->m_strip->isRunning())
+            return;
+        PromptPlan p = self->plan();
+        if (offersVariation(p)) {
+            p.region = false;
+            self->submit(p, ai::GenMode::ImageToImage, plan.prompt, self->m_options->variationStrength(), true,
+                         plan.prompt.simplified().left(40), &plan);
+            return;
+        }
+        if (!p.canRun()) {
+            self->m_studio->notify(self->hint(), QStringLiteral("warning"));
+            return;
+        }
+        self->submit(p, p.mode, plan.prompt, p.strength ? self->m_options->regionStrength() : 1.0, true,
+                     self->m_prompt->text().trimmed().simplified().left(40), &plan);
+    };
+    if (plan.select.isEmpty())
+        go();
+    else
+        selectByWords(plan.select, go);
 }
 
 void PromptBar::remove()

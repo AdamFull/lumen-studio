@@ -32,6 +32,7 @@
 #include "ui/pages/VariantStrip.h"
 #include "ui/widgets/JobCard.h"
 #include "ui/widgets/LoraPicker.h"
+#include "ui/dialogs/PlanChangeDialog.h"
 #include "ui/dialogs/SelectByDescriptionDialog.h"
 #include "ui/SmartSelect.h"
 #include "ui/canvas/SmartSelectTool.h"
@@ -220,6 +221,7 @@ private slots:
     void selectByDescription();
     void smartSelection();
     void selectObjectsByName();
+    void planChange();
     void promptBarWithoutEdits();
     void aiMenuAndPanel();
     void promptBarKeepsTyping();
@@ -5497,6 +5499,94 @@ void TestCanvas::smartSelection()
     doc->undoStack()->undo();
     QCOMPARE(at(60, 60), 0);
     QCOMPARE(at(300, 190), 255);
+}
+
+// Plan this change (plan M18 §18.5): offered only with a language model that sees pictures; it gets
+// the picture and the words, and proposes what to select, the request (a description, for an
+// inpainting model), what to leave out and LoRAs it was offered. Nothing happens before Run; Run
+// selects and sends the plan as shown, with the user's change to it.
+void TestCanvas::planChange()
+{
+    PromptBarFixture f;
+    f.sd.loras = QJsonArray{QJsonObject{{QStringLiteral("name"), QStringLiteral("pixel")}, {QStringLiteral("path"), QStringLiteral("pixel.safetensors")}},
+                            QJsonObject{{QStringLiteral("name"), QStringLiteral("ink")}, {QStringLiteral("path"), QStringLiteral("ink.safetensors")}}};
+    QVERIFY(f.setUp(false));
+    Settings::instance().remove(QStringLiteral("editor/ai/loras"));
+    auto cleanup = qScopeGuard([] { Settings::instance().remove(QStringLiteral("editor/ai/loras")); });
+    QImage page(400, 300, QImage::Format_ARGB32_Premultiplied);
+    page.fill(QColor(150, 150, 145));
+    QPainter(&page).fillRect(QRect(100, 80, 120, 90), QColor(220, 40, 40));
+    doc::Document *doc = f.studio.openImageAsDocument(page, QStringLiteral("Scarf"));
+    QVERIFY(doc);
+    PromptBar *bar = f.bar();
+    QTRY_VERIFY(bar->plan().action == PromptAction::CannotEditImage);
+
+    // No language model: not offered.
+    bar->showOptions();
+    auto *planButton = bar->optionsPopup()->findChild<QPushButton *>(QStringLiteral("promptPlan"));
+    QVERIFY(planButton && !planButton->isVisibleTo(bar->optionsPopup()));
+    QTRY_COMPARE(bar->loraPicker()->listing().loras.size(), 2);
+    bar->optionsPopup()->hide();
+
+    MockHttpServer llm;
+    QJsonObject asked;
+    llm.route("POST", QStringLiteral("/v1/chat/completions"), [&](const MockRequest &req) {
+        asked = req.json();
+        const QJsonObject plan{{QStringLiteral("select"), QStringLiteral("the red")},
+                               {QStringLiteral("prompt"), QStringLiteral("a blue scarf")},
+                               {QStringLiteral("negative"), QStringLiteral("blurry")},
+                               {QStringLiteral("loras"), QJsonArray{QStringLiteral("pixel"), QStringLiteral("watercolor")}},
+                               {QStringLiteral("note"), QStringLiteral("Select the red scarf and paint it blue.")}};
+        return MockResponse::json(
+            {{QStringLiteral("choices"),
+              QJsonArray{QJsonObject{{QStringLiteral("message"),
+                                      QJsonObject{{QStringLiteral("content"), QString::fromUtf8(QJsonDocument(plan).toJson(QJsonDocument::Compact))}}},
+                                     {QStringLiteral("finish_reason"), QStringLiteral("stop")}}}}});
+    });
+    QVERIFY(f.studio.providers()->addProvider(QStringLiteral("llamacpp"), QStringLiteral("Vision"),
+                                              {{QStringLiteral("url"), llm.baseUrl().toString() + QStringLiteral("/v1")}}));
+    bar->showOptions();
+    QVERIFY(planButton->isVisibleTo(bar->optionsPopup()));
+    f.words()->setPlainText(QStringLiteral("make the red scarf blue"));
+    planButton->click();
+    QTRY_VERIFY(f.window->findChild<PlanChangeDialog *>());
+    auto *dlg = f.window->findChild<PlanChangeDialog *>();
+    QTRY_VERIFY_WITH_TIMEOUT(dlg->isReady(), 10000);
+    const QByteArray request = QJsonDocument(asked).toJson(QJsonDocument::Compact);
+    QVERIFY(request.contains("make the red scarf blue"));
+    QVERIFY(request.contains("image_url"));
+    QVERIFY(request.contains("repaints the selected area")); // this engine inpaints
+    QVERIFY(request.contains("pixel") && request.contains("ink"));
+    QCOMPARE(dlg->findChild<QLineEdit *>(QStringLiteral("planSelect"))->text(), QStringLiteral("the red"));
+    auto *prompt = dlg->findChild<AutoTextEdit *>(QStringLiteral("planPrompt"));
+    QCOMPARE(prompt->text(), QStringLiteral("a blue scarf"));
+    QCOMPARE(dlg->findChild<AutoTextEdit *>(QStringLiteral("planNegative"))->text(), QStringLiteral("blurry"));
+    QStringList ticked;
+    for (QCheckBox *box : dlg->findChildren<QCheckBox *>(QStringLiteral("planLora"))) {
+        if (box->isChecked())
+            ticked << box->text();
+    }
+    QCOMPARE(ticked, QStringList{QStringLiteral("pixel")}); // "watercolor" was not offered
+    QVERIFY(dlg->findChild<QLabel *>(QStringLiteral("planNote"))->text().contains(QStringLiteral("paint it blue")));
+    QVERIFY(f.sd.generations.isEmpty());
+    QVERIFY(!doc->hasSelection());
+
+    // Run, with the request changed.
+    prompt->setPlainText(QStringLiteral("a blue wool scarf"));
+    dlg->findChild<QPushButton *>(QStringLiteral("planRun"))->click();
+    QTRY_COMPARE_WITH_TIMEOUT(f.sd.generations.size(), 1, 10000);
+    QVERIFY(doc->hasSelection());
+    QCOMPARE(qGray(doc->selection().pixel(160, 120)), 255);
+    QCOMPARE(qGray(doc->selection().pixel(350, 250)), 0);
+    const QJsonObject sent = f.sd.last();
+    QCOMPARE(sent.value(QStringLiteral("prompt")).toString(), QStringLiteral("a blue wool scarf"));
+    QCOMPARE(sent.value(QStringLiteral("negative_prompt")).toString(), QStringLiteral("blurry"));
+    QVERIFY(sent.contains(QStringLiteral("mask_image")));
+    const QJsonArray loras = sent.value(QStringLiteral("lora")).toArray();
+    QCOMPARE(loras.size(), 1);
+    QCOMPARE(loras.first().toObject().value(QStringLiteral("path")).toString(), QStringLiteral("pixel.safetensors"));
+    QTRY_COMPARE_WITH_TIMEOUT(f.strip()->count(), 2, 10000);
+    f.strip()->discard();
 }
 
 // Objects by name (plan M18 §18.1): the dialog offers the detection models' download while they are

@@ -59,6 +59,9 @@ public:
         bool withCharacter = true;            // false when removing an object
         QString name;                         // of the result layer
         std::optional<Mode> action;           // recorded with the images
+        // A plan's words (plan M18 §18.5) go as they are, with its negative prompt.
+        bool literal = false;
+        std::optional<QString> negative;
     };
     // Where the jobs of a prompt run go (the variants strip of the prompt bar), with the number of
     // results they make; called once per run, with no jobs when the run could not be submitted.
@@ -114,7 +117,9 @@ private:
     // references and the control pose.
     // The request for the words, fitted to the engine's model (plan M18 §18.2): `area` for a change
     // of the selection, whose instruction an inpainting model gets as a description of the result.
-    ai::ImageRequest baseRequest(const ai::ImageProvider *provider, const QString &prompt, ai::GenMode mode, bool area) const;
+    // `literal` and `negative` override Use my words as they are and the negative prompt of the options.
+    ai::ImageRequest baseRequest(const ai::ImageProvider *provider, const QString &prompt, ai::GenMode mode, bool area,
+                                 bool literal = false, const std::optional<QString> &negative = std::nullopt) const;
     bool takesNegative(const ai::ImageProvider *provider) const;
 
     Studio *m_studio;

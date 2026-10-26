@@ -63,8 +63,8 @@ QString finderDescription(const img::FinderRequest &r)
         return QCoreApplication::translate("lumen::ui::SelectByDescriptionDialog", "Everything %1, in all its shades.").arg(colorLabel(r.color));
     case img::FinderRequest::Kind::None: break;
     }
-    return QCoreApplication::translate("lumen::ui::SelectByDescriptionDialog", "Lumen finds lines, scratches, dust and colours by itself (e.g. \"the black lines\", \"dust\", \"the red\"). "
-              "Objects such as \"the cup\" need a detection model, which comes in a later version.");
+    return QCoreApplication::translate("lumen::ui::SelectByDescriptionDialog", "Lumen finds lines, scratches, dust and colours by itself (e.g. \"the black lines\", \"dust\", \"the red\"), "
+              "and objects such as \"the cup\" with a detection model.");
 }
 
 QString selectionWords(const QString &words)

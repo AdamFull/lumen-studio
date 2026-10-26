@@ -6766,12 +6766,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     <message>
         <location line="+1"/>
         <location line="+328"/>
-        <location line="+320"/>
+        <location line="+321"/>
         <source>Detect pose</source>
         <translation>Pose erkennen</translation>
     </message>
     <message>
-        <location line="-588"/>
+        <location line="-589"/>
         <source>Left</source>
         <translation>Links</translation>
     </message>
@@ -6829,14 +6829,14 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     <message>
         <location line="-312"/>
         <location line="+328"/>
-        <location line="+303"/>
+        <location line="+304"/>
         <location line="+4"/>
         <source>Remove background</source>
         <translation>Hintergrund entfernen</translation>
     </message>
     <message>
-        <location line="-305"/>
-        <location line="+253"/>
+        <location line="-306"/>
+        <location line="+254"/>
         <source>Expand canvas</source>
         <translation>Arbeitsfläche erweitern</translation>
     </message>
@@ -6856,7 +6856,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>%1 Varianten wurden als Ebenen hinzugefügt – schalten Sie ihre Sichtbarkeit um, um sie zu vergleichen.</translation>
     </message>
     <message>
-        <location line="-438"/>
+        <location line="-439"/>
         <location line="+3"/>
         <source>Engine for changes</source>
         <translation>Engine für Änderungen</translation>
@@ -6990,7 +6990,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>%1 erstellt nur neue Bilder; es kann keine Variation dieses Bildes erstellen.</translation>
     </message>
     <message>
-        <location line="+129"/>
+        <location line="+130"/>
         <location line="+91"/>
         <source>Set up an image engine first: Help → Set up AI…</source>
         <translation>Richten Sie zuerst eine Bild-Engine ein: Hilfe → KI einrichten…</translation>
@@ -15621,6 +15621,87 @@ oder eines aus den Projektbildern ziehen</translation>
     </message>
 </context>
 <context>
+    <name>lumen::ui::PlanChangeDialog</name>
+    <message>
+        <location filename="../src/ui/dialogs/PlanChangeDialog.cpp" line="+23"/>
+        <source>Plan this change</source>
+        <translation>Diese Änderung planen</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>The change: %1</source>
+        <translation>Die Änderung: %1</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <location line="+3"/>
+        <source>Select first</source>
+        <translation>Zuerst auswählen</translation>
+    </message>
+    <message>
+        <location line="-2"/>
+        <source>The selection as it is</source>
+        <translation>Die Auswahl, wie sie ist</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>The whole picture</source>
+        <translation>Das ganze Bild</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>What is selected before the change, as in Select → By description… (&quot;the black lines&quot;, &quot;the cup&quot;).</source>
+        <translation>Was vor der Änderung ausgewählt wird, wie bei Auswahl → Nach Beschreibung… („die schwarzen Linien“, „die Tasse“).</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <location line="+2"/>
+        <source>Request for the model</source>
+        <translation>Anfrage an das Modell</translation>
+    </message>
+    <message>
+        <location line="-1"/>
+        <source>Sent to the image model exactly as it is here.</source>
+        <translation>Wird genau so an das Bildmodell gesendet.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <location line="+2"/>
+        <source>Leave out</source>
+        <translation>Weglassen</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>LoRAs</source>
+        <translation>LoRAs</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Run</source>
+        <translation>Ausführen</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Planning needs a language model that sees pictures. Choose one for &quot;Vision analysis&quot; in Settings → Roles.</source>
+        <translation>Das Planen braucht ein Sprachmodell, das Bilder sieht. Wählen Sie eines für „Bildanalyse“ unter Einstellungen → Rollen.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>%1 looks at the picture… (a local model may first take a while to load)</source>
+        <translation>%1 sieht sich das Bild an… (ein lokales Modell braucht beim ersten Mal etwas zum Laden)</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>No plan: %1</source>
+        <translation>Kein Plan: %1</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Check the plan and change what you like; nothing happens before Run.</source>
+        <translation>Prüfen Sie den Plan und ändern Sie, was Sie möchten; vor Ausführen geschieht nichts.</translation>
+    </message>
+</context>
+<context>
     <name>lumen::ui::PoseEditDialog</name>
     <message>
         <location filename="../src/ui/dialogs/PoseEditDialog.cpp" line="+29"/>
@@ -16080,7 +16161,7 @@ oder eines aus den Projektbildern ziehen</translation>
 <context>
     <name>lumen::ui::PromptBar</name>
     <message>
-        <location filename="../src/ui/pages/PromptBar.cpp" line="+64"/>
+        <location filename="../src/ui/pages/PromptBar.cpp" line="+66"/>
         <source>Progress</source>
         <translation>Fortschritt</translation>
     </message>
@@ -16106,12 +16187,12 @@ oder eines aus den Projektbildern ziehen</translation>
     </message>
     <message>
         <location line="+4"/>
-        <location line="+319"/>
+        <location line="+328"/>
         <source>Generate</source>
         <translation>Generieren</translation>
     </message>
     <message>
-        <location line="-314"/>
+        <location line="-323"/>
         <source>Remove object</source>
         <translation>Objekt entfernen</translation>
     </message>
@@ -16178,13 +16259,13 @@ oder eines aus den Projektbildern ziehen</translation>
     </message>
     <message>
         <location line="+4"/>
-        <location line="+275"/>
+        <location line="+284"/>
         <location line="+1"/>
         <source>Image engine</source>
         <translation>Bild-Engine</translation>
     </message>
     <message>
-        <location line="-272"/>
+        <location line="-281"/>
         <source>Advanced</source>
         <translation>Erweitert</translation>
     </message>
@@ -16211,6 +16292,16 @@ oder eines aus den Projektbildern ziehen</translation>
     </message>
     <message>
         <location line="+4"/>
+        <source>Plan this change…</source>
+        <translation>Diese Änderung planen…</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>A language model that sees the picture proposes what to select, the request for the image model and LoRAs. You see the plan and can change it before it runs.</source>
+        <translation>Ein Sprachmodell, das das Bild sieht, schlägt vor, was ausgewählt wird, die Anfrage an das Bildmodell und LoRAs. Sie sehen den Plan und können ihn ändern, bevor er ausgeführt wird.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
         <source>All AI options…</source>
         <translation>Alle KI-Optionen…</translation>
     </message>
@@ -16385,7 +16476,7 @@ oder eines aus den Projektbildern ziehen</translation>
         </translation>
     </message>
     <message numerus="yes">
-        <location line="+115"/>
+        <location line="+122"/>
         <source>Selected %n object(s). Now say what should change there, or press Remove object.</source>
         <translation>
             <numerusform>%n Objekt ausgewählt. Sagen Sie jetzt, was sich dort ändern soll, oder drücken Sie Objekt entfernen.</numerusform>
@@ -16398,28 +16489,33 @@ oder eines aus den Projektbildern ziehen</translation>
         <translation>Nichts wie „%1“ gefunden. Auswahl → Nach Beschreibung… hat Einstellungen, um blassere oder größere zu finden.</translation>
     </message>
     <message>
-        <location line="-19"/>
-        <location line="+25"/>
+        <location line="-21"/>
+        <location line="+27"/>
         <source>Select: %1</source>
         <translation>Auswahl: %1</translation>
     </message>
     <message>
-        <location line="-41"/>
+        <location line="-43"/>
         <source>Selecting objects by name needs the detection models (about %1 MB, once), or an image engine that finds objects: ComfyUI, fal.ai or Google Gemini. Select → By description… offers the download.</source>
         <translation>Objekte nach Namen auszuwählen braucht die Erkennungsmodelle (einmalig etwa %1 MB) oder eine Bild-Engine, die Objekte findet: ComfyUI, fal.ai oder Google Gemini. Auswahl → Nach Beschreibung… bietet den Download an.</translation>
     </message>
     <message>
-        <location line="+22"/>
+        <location line="+24"/>
         <source>Selected what %1 found. Now say what should change there, or press Remove object.</source>
         <translation>Ausgewählt, was %1 gefunden hat. Sagen Sie jetzt, was sich dort ändern soll, oder drücken Sie Objekt entfernen.</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+25"/>
         <source>Selected: %1 Now say what should change there, or press Remove object.</source>
         <translation>Ausgewählt: %1 Sagen Sie jetzt, was sich dort ändern soll, oder drücken Sie „Objekt entfernen“.</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+11"/>
+        <source>Say what should change first; then Plan this change looks at the picture and proposes how.</source>
+        <translation>Sagen Sie zuerst, was sich ändern soll; dann sieht sich „Diese Änderung planen“ das Bild an und schlägt vor, wie.</translation>
+    </message>
+    <message>
+        <location line="+96"/>
         <source>Removed</source>
         <translation>Entfernt</translation>
     </message>
@@ -16865,8 +16961,8 @@ oder eines aus den Projektbildern ziehen</translation>
     </message>
     <message>
         <location line="+3"/>
-        <source>Lumen finds lines, scratches, dust and colours by itself (e.g. &quot;the black lines&quot;, &quot;dust&quot;, &quot;the red&quot;). Objects such as &quot;the cup&quot; need a detection model, which comes in a later version.</source>
-        <translation>Lumen findet Linien, Kratzer, Staub und Farben selbst (z. B. „die schwarzen Linien“, „Staub“, „das Rote“). Gegenstände wie „die Tasse“ brauchen ein Erkennungsmodell, das in einer späteren Version kommt.</translation>
+        <source>Lumen finds lines, scratches, dust and colours by itself (e.g. &quot;the black lines&quot;, &quot;dust&quot;, &quot;the red&quot;), and objects such as &quot;the cup&quot; with a detection model.</source>
+        <translation>Lumen findet Linien, Kratzer, Staub und Farben selbst (z. B. „die schwarzen Linien“, „Staub“, „das Rot“) und Objekte wie „die Tasse“ mit einem Erkennungsmodell.</translation>
     </message>
     <message>
         <location line="+17"/>

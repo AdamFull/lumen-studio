@@ -4059,7 +4059,28 @@ Decisions (October 2026, with the user):
   * Tests: `tst_canvas loraPickerElsewhere` (the matching rules; "pixel art" suggests "pixel", not
     used until ticked, then chosen and no longer suggested); `tst_providers_cloud comfyLoras`.
   * Not yet: tags from the LoRA's training metadata (`ss_tag_frequency`) for suggestions.
-- [ ] Planning with a vision model: `AgentRun` in the core, *Plan this change*, the proposal view.
+- [x] Planning with a vision model: `AgentRun` in the core, *Plan this change*, the proposal view.
+  * `AgentRun` was already in `src/ai` (the assistant plugin only uses it). A plan needs one answer,
+    not tools, so the planner is a single structured request (`requestJson`, with its repairs):
+    `ai::changePlanRequest` sends the picture (1024 px), the words, whether something is selected,
+    how the engine's model takes requests (an instruction for edit models; a description of the
+    result, as tags or a phrase, for inpainting models), whether it takes a negative prompt and the
+    LoRAs that fit; `ai::parseChangePlan` drops LoRAs that were not offered and a negative prompt the
+    model does not take. `ai::changePlanner`: the *Vision analysis* role's model (else the
+    assistant's, else any), only when it sees images.
+  * `PlanChangeDialog`: the planner's progress, then the plan as fields (*Select first*, *Request for
+    the model*, *Leave out*, the LoRAs as tick boxes, the note); nothing happens before *Run*.
+    `PromptBar::planChange` (⋯ → *Plan this change…*, shown only with such a model and a picture to
+    change) opens it; `runPlan` ticks the LoRAs in the picker, selects with `selectByWords` (which
+    gained a continuation) and submits the request as it is (`PromptRun::literal` and its negative
+    prompt).
+  * Also: Select by description's text about objects no longer says they come later.
+  * Tests: `tst_canvas planChange` (not offered without a language model; the request carries the
+    picture, the words, the inpainting rule and the LoRAs; the plan's fields, an unknown LoRA
+    dropped; nothing before Run; Run selects the red and sends the edited request, its negative
+    prompt and the LoRA); `tst_layout` audits the dialog with a plan at 100 % and 150 %.
+  * Not yet: the language model rewriting prompts during ordinary runs (§18.2's optional part); a
+    time estimate for loading a local model before the first plan.
 - [ ] Short live check (RTX 4060 8 GB): "remove the black lines" on a scanned drawing with a classic
   finder; "the cup" found and replaced with FLUX.2 [klein] and with SDXL; a klein 4B LoRA from the
   picker.

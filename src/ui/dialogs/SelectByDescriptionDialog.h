@@ -33,8 +33,8 @@ QString selectionWords(const QString &words);
 // Select → By description… (plan M18 §18.1): the user says what to select ("the black lines",
 // "dust", "the red"); Lumen says what it understood, shows the finder's settings and the found area
 // on a preview, and Select makes it the selection (new, added, taken away or where both are) as one
-// undo step. Objects ("the cup") need a detection model, which a later step adds; until then the
-// dialog says what it can find.
+// undo step. Other words are objects ("the cup"), found with the detection models or an image
+// engine that can (setObjectFinder).
 class SelectByDescriptionDialog : public QDialog
 {
     Q_OBJECT
