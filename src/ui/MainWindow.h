@@ -21,9 +21,10 @@ class NewFromPromptDialog;
 class PageWindow;
 class Toasts;
 
-// The main window is the editor: tools on the left, the canvas with document tabs in the centre, the
-// AI panel, Layers and History on the right, and the start screen while no document is open. The
-// status bar shows the project, the image engine in use and the jobs (the Queue opens from there).
+// The main window is the editor: tools on the left, the canvas with document tabs and the prompt bar
+// in the centre, Layers and History (and the AI panel when asked for) on the right, and the start
+// screen while no document is open. The AI menu has the actions that are not "describe a change".
+// The status bar shows the project, the image engine in use and the jobs (the Queue opens there).
 // Plugin pages (Create, Poses, Parts) open in windows of their own from the Tools menu; plugin
 // panels (the assistant) are switched on from the View menu.
 class MainWindow : public QMainWindow
@@ -78,6 +79,7 @@ private:
     void setPanelVisible(int index, bool show);
     void placePanels();
     void updateJobSummary();
+    void updateDocumentActions();
     void updateEngine();
     void updateTitle();
     void newProject();
@@ -105,6 +107,7 @@ private:
     QVBoxLayout *m_queueList = nullptr;
     QAction *m_queueAction = nullptr;
     QToolButton *m_jobsButton = nullptr;
+    QList<QAction *> m_documentActions; // the AI menu's, which need a document
     QToolButton *m_engineButton = nullptr;
     ElidedLabel *m_projectLabel = nullptr;
     QPointer<NewFromPromptDialog> m_newFromPrompt;

@@ -153,9 +153,19 @@ void AutoTextEdit::adjustHeight()
     for (QTextBlock b = document()->begin(); b.isValid(); b = b.next())
         lines += std::max(1, b.layout() ? b.layout()->lineCount() : 1);
     lines = std::clamp(lines, m_minLines, m_maxLines);
-    const int h = lines * fm.lineSpacing() + 18;
+    // The frame and the style sheet's padding around the text, measured once the field is laid out
+    // (a border of 1 and a padding of 6 px before), the document's margin above and below the text,
+    // and a pixel each that the plain text layout keeps free: with less, one line gets a scroll bar.
+    const int chrome = viewport()->height() > 0 && height() > viewport()->height() ? height() - viewport()->height() : 14;
+    const int h = lines * fm.lineSpacing() + 2 * int(std::ceil(document()->documentMargin())) + 2 + chrome;
     if (h != height())
         setFixedHeight(h);
+}
+
+void AutoTextEdit::resizeEvent(QResizeEvent *e)
+{
+    QPlainTextEdit::resizeEvent(e);
+    adjustHeight();
 }
 
 void AutoTextEdit::keyPressEvent(QKeyEvent *e)

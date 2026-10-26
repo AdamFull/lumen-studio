@@ -41,6 +41,7 @@
 #include "plugins/characters/training/CharacterTraining.h"
 #include "plugins/characters/training/LoraEvaluation.h"
 #include "plugins/characters/director/DirectorSession.h"
+#include "ui/pages/AiOptions.h"
 #include "ui/pages/AiPanel.h"
 #include "ui/dialogs/CharacterLoraDialog.h"
 #include "plugins/parts/ExpressionCheck.h"
@@ -2389,7 +2390,8 @@ void TestLive::characterEverywhere()
         qInfo().noquote() << QStringLiteral("  editor base: identity %1, different: %2")
                                  .arg(original.identity, 0, 'f', 1)
                                  .arg(original.different.join(QStringLiteral(", ")));
-        ui::AiPanel panel(&studio);
+        ui::AiOptions options;
+        ui::AiPanel panel(&studio, &options);
         auto *chip = panel.findChild<ui::CharacterChip *>();
         QVERIFY(chip);
         for (const auto &[name, rect, prompt] : fixes) {
@@ -2404,7 +2406,8 @@ void TestLive::characterEverywhere()
                 }
                 doc->setSelectionRaw(mask);
                 const int layers = doc->layerCount();
-                panel.runFromCanvas(ui::AiPanel::Mode::Inpaint, prompt);
+                // Inpainting of the selection, as the prompt bar sends it for a model without edits.
+                panel.submitPrompt({.mode = ai::GenMode::Inpaint, .region = true, .prompt = prompt, .name = prompt});
                 QVERIFY(QTest::qWaitFor([&] { return doc->layerCount() > layers; }, 900000));
                 auto flat = async::run([snap = doc->snapshot(), size = doc->size()] { return doc::flatten(snap, size); });
                 QTRY_VERIFY_WITH_TIMEOUT(flat.isFinished(), 10000);

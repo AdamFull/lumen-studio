@@ -62,6 +62,11 @@ public:
 
     void setCursorOverride(const QCursor &cursor);
 
+    // A picture drawn over the document without changing it (a result to choose from), at the
+    // document's size; a null image removes it. Showing another document removes it too.
+    void setPreview(const QImage &image);
+    const QImage &preview() const { return m_preview; }
+
     // Renders the surface into a widget painter (called by the drawing surface).
     void render(QPainter &p, const QRect &widgetRect);
 
@@ -111,6 +116,8 @@ private:
     int m_antsOffset = 0;
     quint64 m_contourGeneration = 0;
     QPixmap m_checker;
+    QImage m_preview;
+    QImage m_previewScaled; // below 100 %: the preview at the current zoom
 };
 
 } // namespace lumen::ui

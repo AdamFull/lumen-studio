@@ -224,7 +224,8 @@ start, and the previous version stays installed, so you can switch back in the s
 ## 3. The window
 
 Lumen Studio opens as an image editor: tools on the left, the canvas with a tab per document in
-the middle, and the **AI**, **Layers** and **History** tabs on the right (§5, §6).
+the middle and the **prompt bar** under it (§6), and the **Layers** and **History** tabs on the
+right (§5). The **AI** tab with every AI option opens from the prompt bar's ⋯ menu or the AI menu.
 
 **Start screen.** While no document is open, the window shows how to start:
 
@@ -238,10 +239,11 @@ the middle, and the **AI**, **Layers** and **History** tabs on the right (§5, �
 **New from prompt** (**File → New from prompt…**, `Alt+2`) makes a new image from a description:
 write what you want, pick the shape (square, portrait or landscape ratios, or a custom width ×
 height) and how many variants to make (1 to 4), and click **Create** (`Ctrl+Enter`). Lumen makes a
-document of that size and draws into it with the image engine; each variant becomes a layer, the
-first one shown, so you can compare them in the Layers tab and keep one. *More options* has the
-seed and, for models that take one, a negative prompt ("leave out"). Steps, guidance and the
-sampler follow the model. The shape and the number of variants are kept for the next time.
+document of that size and draws into it with the image engine. The variants are shown over the new
+document one at a time, as the prompt bar's results are (§6): ←/→ compares them and Enter keeps
+one as a layer. *More options* has the seed and, for models that take one, a negative prompt
+("leave out"). Steps, guidance and the sampler follow the model. The shape and the number of
+variants are kept for the next time.
 
 **Browse project images** (**File → Browse project images…**, `Alt+6`) opens every image of the
 project in a window of its own (§7).
@@ -253,9 +255,10 @@ and the jobs (click for the Queue).
 
 **Menus.** *File*: new, open, paste, browse, save, export and projects. *Edit*: copy and paste,
 importing an image as a layer, **Settings…** (`Ctrl+,`). *View*: the Queue, the panels of plugins
-(the assistant), the generative toolbar on the canvas, the theme. *Tools*: the tools of plugins
-(Create, Poses, Parts), each in a window of its own, and **Plugins…**. *Help*: **Set up AI…**, the
-models, log and ComfyUI workflow folders, *About*.
+(the assistant), the theme. *AI*: what is not a description of a change: **Upscale** (2×, 3×,
+4×), **Remove background**, **Expand canvas…**, **Variation**, **Detect pose**, and **All AI
+options…** (§6). *Tools*: the tools of plugins (Create, Poses, Parts), each in a window of its own,
+and **Plugins…**. *Help*: **Set up AI…**, the models, log and ComfyUI workflow folders, *About*.
 
 ### Plugins
 
@@ -291,8 +294,9 @@ session, and the sheet is set. Saving under an existing name updates that charac
 ### The project's character
 
 A project has one **active character** from the character library. The character button (round
-picture and name, "· LoRA" when it has one) sits above the prompt in the editor's AI panel and on
-the Parts page. Its menu picks another character or none. New from prompt draws no character.
+picture and name, "· LoRA" when it has one) sits in the editor's AI tab (prompt bar → ⋯ → *All AI
+options…*) and on the Parts page. Its menu picks another character or none. New from prompt draws
+no character.
 
 * The Create page makes a character active when you save it to the library or load it from there.
 * With a character active, the prompt only needs the scene ("reading in a library, evening light").
@@ -302,12 +306,14 @@ the Parts page. Its menu picks another character or none. New from prompt draws 
   * and its **appearance** (hair, eyes, outfit) as tags or a sentence.
 * When the LoRA cannot be used (a cloud API, a model of another family), Lumen says once what it
   uses instead.
-* In the editor, the character goes in as far as the action needs it:
-  * **Fill selection** and **Expand** use its LoRA (or reference) but not its appearance words, so
-    a fixed hand does not get hair painted into it;
-  * a **Variation** of the whole image also uses its appearance;
-  * **Instruct edit** uses its reference or description (edit models take no LoRA);
-  * **Remove** (the selection bar) never uses it.
+* In the editor (the prompt bar and the AI tab), the character goes in as far as the change needs
+  it:
+  * a selected area painted anew (inpainting) and **Expand** use its LoRA (or reference) but not
+    its appearance words, so a fixed hand does not get hair painted into it;
+  * a **Variation** of the whole image and a new image on a blank canvas also use its appearance;
+  * an instruction edit (with an edit model) uses its reference or description (edit models take
+    no LoRA);
+  * **Remove** never uses it.
 * On the **Parts** page, opening an image drawn for a library character makes that character the
   project's one. Part completion (including LayerDiffuse on ComfyUI) and the expression variants
   then use its LoRA, so hidden parts and closed eyes or a smile keep the character's look. An empty
@@ -488,25 +494,58 @@ place uses moves to the new action (the page tells you which one lost it); *Rese
 | Paste as layer / copy merged | `Ctrl+V` / `Ctrl+Shift+C` |
 | Fit / 100 % / zoom in / zoom out | `Ctrl+0` / `Ctrl+1` / `Ctrl+=` / `Ctrl+-` |
 | Swap colours | `X` |
+| Generate from the prompt bar | `Enter` in its words, `Ctrl+Enter` anywhere in the editor |
+| Results: compare / keep / drop | `←` `→` / `Enter` / `Esc` |
 
 ## 6. AI editing
 
-Make a selection or paint a mask, then either:
+Under the canvas is the **prompt bar**: describe in your own words what you want, and press Enter
+(or click **Generate**). Its first line says what Generate does now:
 
-* type in the **prompt bar** that appears under the selection and press Enter (**Generate**), or
-  click **Remove** to fill the area from its surroundings. The bar hides while you draw; ✕ hides it
-  until the selection changes, and **View → Generative toolbar on the canvas** turns it off; or
-* use the **AI** tab on the right for all options: fill selection, variation, instruction edit,
-  expand (outpainting), upscale, remove background and pose detection, with references, strength,
-  padding, feather and colour matching.
+* **With a selection** (or a painted mask): "Changes the selected area". Only that area changes;
+  the result is blended in through the selection with a soft edge and matched to the colours
+  around it, so every pixel outside it stays exactly as it was.
+  * With a model that edits from an instruction, describe the change ("colorize it", "replace the
+    cup with a candle"); the area and its surroundings are edited as a whole and blended back.
+  * With another model the area is painted anew: describe what should be there ("a red scarf").
+  * **Remove** fills the area from its surroundings, as if the object had never been there.
+* **Without a selection**: "Changes the whole image" with an edit model ("colorize this photo",
+  "make it night"). An engine that cannot edit from words says so and offers **Select an area**
+  or **Make a variation** (the whole image redrawn from your words, keeping its layout; the
+  strength in ⋯ says how much may change).
+* **On a blank canvas** (a new blank canvas, or a document from New from prompt): "Creates an
+  image" of the canvas's size, from your description.
+* Without an image engine, it says so and offers **Set up AI…**.
 
-Results are added as new layers, so the original stays untouched. Only the masked area changes:
-Lumen crops the region around the mask, generates it at the model's working resolution and
-blends it back.
+While a run goes, the bar shows its progress and Generate becomes **Cancel**.
+
+**Choosing a result.** A run makes 1 to 4 results (2 at first; ⋯ → *Variants*). They appear in a
+strip above the bar, and the canvas shows the current one over the image without changing it.
+* `←`/`→` or a click on a thumbnail shows another one.
+* **Enter** or **Keep** adds it as a new layer on top, named after your words. A result of a
+  selection covers only that area, so the original stays underneath; one Undo takes it away.
+* **Esc** or **Discard** drops them all; the image stays as it was.
+* Each document keeps its own results while you switch tabs, and every result is also saved with
+  the project's images (§7).
+
+**⋯ (more options)** has what most people never need, only where it applies: the strength (how much
+a painted area or a variation may change), steps (the model's choice unless you set them), the
+seed (random, or fixed to repeat a result), the number of results, what to leave out (a negative
+prompt, for models that take one), reference images, the document's control pose (with a pose
+ControlNet), the image engine, and **All AI options…**.
+
+**The AI tab and the AI menu.** *All AI options…* opens the **AI** tab on the right (✕ on the tab
+closes it). It has the same options as ⋯ (they are shared), the project's character button, the
+reference images, and the settings of a selection's blending: *Context* (how much of the
+surroundings the model sees), *Blend edge* and colour matching. Its actions, also in the **AI**
+menu, are what is not a description of a change: **Variation**, **Expand canvas** (outpainting:
+choose the sides and how far), **Upscale** (2×, 3× or 4×, as a new document), **Remove
+background** (a cut-out layer) and **Detect pose** (the document's control pose). Variation and
+Expand use the words in the prompt bar, if any.
 
 **Instruction edits on your own computer.** With a model that edits from an instruction running
-in stable-diffusion.cpp (FLUX.2 [klein], FLUX.1 Kontext or Qwen-Image-Edit), **Instruct edit** in
-the AI tab works locally: "colorize it", "make it night", "replace the cup with a candle".
+in stable-diffusion.cpp (FLUX.2 [klein], FLUX.1 Kontext or Qwen-Image-Edit), the prompt bar edits
+locally: "colorize it", "make it night", "replace the cup with a candle".
 * With a selection, the area around it is edited as a whole and blended back through the
   selection, so the rest of the image stays exactly as it was.
 * Without a selection, the whole image is edited.
@@ -521,8 +560,8 @@ imported and edited image of the project, in a window of its own.
 
 * Filter by kind, favourites or text; the inspector shows the prompt and all parameters.
 * **Open in editor** (or a double-click) opens the image in the main window.
-* **Use as reference** adds it to the references of the editor's AI tab; **Reuse prompt** puts its
-  prompt into the AI tab (with no document open, into New from prompt); **Re-run** opens New from
+* **Use as reference** adds it to the references in the editor's AI tab; **Reuse prompt** puts its
+  words into the prompt bar (with no document open, into New from prompt); **Re-run** opens New from
   prompt with the image's prompt, negative prompt, size and seed.
 * Right-click selected images to open them in the editor, use them as references, slice them into
   parts (with the Live2D parts plugin), export them, or run **Remove background** / **Upscale 2×**

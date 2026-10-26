@@ -5,7 +5,8 @@ AI-assisted image generation and editing studio for the desktop, built with C++2
 It covers:
 * text-to-image and multi-reference character generation;
 * editable OpenPose poses, with a Live2D preset category;
-* mask-based local inpainting, with a prompt bar that appears next to the selection on the canvas;
+* a prompt bar under the canvas: select an area and describe the change (or nothing selected for the
+  whole image, or a blank canvas for a new image), then pick one of the results to keep as a layer;
 * LLM-driven shot planning, and an assistant that drives the studio through tool calls;
 * a layered editor (selection, brush, fill, crop and free transform tools);
 * an asset library with batch background removal and upscaling;

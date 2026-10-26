@@ -10,14 +10,15 @@
 #include "ui/Icons.h"
 #include "ui/Shortcuts.h"
 #include "ui/Theme.h"
-#include "ui/canvas/ContextBar.h"
-#include "ui/canvas/EditorState.h"
 #include "ui/dialogs/NewFromPromptDialog.h"
 #include "ui/dialogs/SettingsDialog.h"
 #include "ui/widgets/ServerStatus.h"
 #include "ui/pages/EditorPage.h"
+#include "ui/pages/AiPanel.h"
 #include "ui/pages/LibraryPage.h"
+#include "ui/pages/PromptBar.h"
 #include "ui/pages/StartScreen.h"
+#include "ui/pages/VariantStrip.h"
 #include "ui/widgets/Controls.h"
 #include "ui/widgets/JobCard.h"
 #include "ui/widgets/ProviderCombo.h"
@@ -162,6 +163,7 @@ MainWindow::MainWindow(Studio *studio, QWidget *parent)
     connect(start, &StartScreen::newCanvasRequested, m_editor, &EditorPage::newDocumentDialog);
     connect(start, &StartScreen::browseRequested, this, &MainWindow::browseProjectImages);
     connect(start, &StartScreen::setUpAiRequested, this, &MainWindow::setUpAi);
+    connect(m_editor->promptBar(), &PromptBar::setUpAiRequested, this, &MainWindow::setUpAi);
 
     buildStatusBar();
     buildMenus();
@@ -357,19 +359,46 @@ void MainWindow::buildMenus()
         m_panels[index].action = a;
     }
     view->addSeparator();
-    QAction *contextBar = view->addAction(Icons::get(QStringLiteral("sparkles")), tr("Generative toolbar on the canvas"));
-    bind(contextBar, QStringLiteral("context-bar"));
-    contextBar->setCheckable(true);
-    contextBar->setChecked(m_editor->editorState()->showContextBar());
-    connect(contextBar, &QAction::toggled, this, [this](bool on) {
-        m_editor->editorState()->setShowContextBar(on);
-        m_editor->contextBar()->setEnabledByUser(on);
-    });
     view->addAction(Icons::get(Theme::instance().isDark() ? QStringLiteral("sun") : QStringLiteral("moon")), tr("Toggle light/dark theme"), this, [this] {
         const QString next = Theme::instance().isDark() ? QStringLiteral("light") : QStringLiteral("dark");
         Settings::instance().setValue(QStringLiteral("ui/theme"), next);
         QMessageBox::information(this, tr("Theme"), tr("The %1 theme will be applied the next time Lumen Studio starts.").arg(next));
     });
+
+    // What is not "describe a change" (that is the prompt bar's): the AI panel's actions.
+    QMenu *aiMenu = menuBar()->addMenu(tr("&AI"));
+    auto aiAction = [this](QMenu *menu, const QString &name, const QString &icon, const QString &text, const QString &tip,
+                           std::function<void()> fn) {
+        QAction *a = menu->addAction(Icons::get(icon), text, this, std::move(fn));
+        a->setObjectName(name);
+        a->setToolTip(tip);
+        a->setStatusTip(tip);
+        m_documentActions << a;
+        return a;
+    };
+    QMenu *upscale = aiMenu->addMenu(Icons::get(QStringLiteral("upscale")), tr("Upscale"));
+    for (const double factor : {2.0, 3.0, 4.0}) {
+        aiAction(upscale, QStringLiteral("ai-upscale-%1").arg(int(factor)), QStringLiteral("upscale"), QStringLiteral("%1×").arg(int(factor)),
+                 tr("A larger copy of the image, %1 times as wide, as a new document").arg(int(factor)),
+                 [this, factor] { m_editor->aiPanel()->upscale(factor); });
+    }
+    aiAction(aiMenu, QStringLiteral("ai-remove-background"), QStringLiteral("scissors"), tr("Remove background"),
+             tr("Cut out the subject onto a transparent layer"), [this] { m_editor->aiPanel()->run(AiPanel::Mode::RemoveBackground); });
+    aiAction(aiMenu, QStringLiteral("ai-expand"), QStringLiteral("outpaint"), tr("Expand canvas..."),
+             tr("Make the canvas larger and let the image engine paint the new area"),
+             [this] { m_editor->showAiPanel(AiPanel::Mode::Expand); });
+    aiAction(aiMenu, QStringLiteral("ai-variation"), QStringLiteral("variation"), tr("Variation"),
+             tr("Re-imagine the image (or the selection), keeping its layout; the words in the prompt bar guide it"),
+             [this] { m_editor->aiPanel()->run(AiPanel::Mode::Variation); });
+    aiAction(aiMenu, QStringLiteral("ai-detect-pose"), QStringLiteral("person"), tr("Detect pose"),
+             tr("Find the people's pose in the image; it becomes the document's control pose"),
+             [this] { m_editor->aiPanel()->run(AiPanel::Mode::DetectPose); });
+    aiMenu->addSeparator();
+    QAction *allOptions = aiMenu->addAction(Icons::get(QStringLiteral("adjust")), tr("All AI options..."), this, [this] { m_editor->showAiPanel(); });
+    allOptions->setObjectName(QStringLiteral("ai-all-options"));
+    m_documentActions << allOptions;
+    connect(m_studio, &Studio::documentsChanged, this, &MainWindow::updateDocumentActions);
+    updateDocumentActions();
 
     // One action per plugin page; each opens in a window of its own.
     QMenu *tools = menuBar()->addMenu(tr("&Tools"));
@@ -411,6 +440,13 @@ void MainWindow::buildMenus()
                            tr("<h3>Lumen Studio %1</h3><p>AI-assisted image generation and editing.</p>"
                               "<p>Built with Qt %2.</p>").arg(QApplication::applicationVersion(), QString::fromLatin1(qVersion())));
     });
+}
+
+void MainWindow::updateDocumentActions()
+{
+    const bool open = !m_studio->documents().isEmpty();
+    for (QAction *a : std::as_const(m_documentActions))
+        a->setEnabled(open);
 }
 
 void MainWindow::showPage(const QString &id)
@@ -472,6 +508,11 @@ NewFromPromptDialog *MainWindow::newFromPrompt()
     if (!m_newFromPrompt) {
         m_newFromPrompt = new NewFromPromptDialog(m_studio, this);
         m_newFromPrompt->setAttribute(Qt::WA_DeleteOnClose);
+        // Its results are chosen like the prompt bar's, in the strip above the bar.
+        connect(m_newFromPrompt, &NewFromPromptDialog::generationStarted, this,
+                [this](doc::Document *doc, Job *job, const QString &name, int results) {
+                    m_editor->variantStrip()->track(doc, {job}, name, results);
+                });
         m_newFromPrompt->open();
     }
     m_newFromPrompt->raise();

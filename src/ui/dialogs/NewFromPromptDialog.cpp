@@ -21,6 +21,7 @@
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QMetaMethod>
 #include <QPointer>
 #include <QPushButton>
 #include <QRandomGenerator>
@@ -108,7 +109,7 @@ NewFromPromptDialog::NewFromPromptDialog(Studio *studio, QWidget *parent)
     m_variants = new QSpinBox(this);
     m_variants->setRange(1, 4);
     m_variants->setValue(std::clamp(Settings::instance().value(kVariantsKey, 2).toInt(), 1, 4));
-    m_variants->setToolTip(tr("How many images to make. Each becomes a layer; the first one is shown, so you can compare and keep one."));
+    m_variants->setToolTip(tr("How many images to make. They are shown over the new document one at a time, and you keep the one you like."));
     form->addRow(tr("Variants"), m_variants);
     m_engine = new ProviderCombo(studio->providers(), ai::ProviderKind::Image, this);
     m_engine->setObjectName(QStringLiteral("imageEngine"));
@@ -367,6 +368,10 @@ doc::Document *NewFromPromptDialog::create()
     if (fitted)
         doc->setControlPose(fitted);
     Job *job = m_studio->generation()->submit(spec);
+    if (isSignalConnected(QMetaMethod::fromSignal(&NewFromPromptDialog::generationStarted))) {
+        emit generationStarted(doc, job, name, r.batchCount);
+        return doc;
+    }
     QPointer<doc::Document> target(doc);
     Studio *studio = m_studio;
     connect(job, &Job::finished, studio, [studio, target, name](Job *j) {

@@ -2377,9 +2377,107 @@ Survey of the code, the app log and user testing (October 2026):
     decorators); the German translation of the new texts; the main window's menu shortcuts do not
     work while a plugin window is active, and open plugin windows are not reopened at the next
     start.
-- [ ] Prompt bar (§17.2): selection, whole-image and blank-canvas modes, *Remove*, variants strip,
+- [x] Prompt bar (§17.2): selection, whole-image and blank-canvas modes, *Remove*, variants strip,
   results as masked layers. Test with the mock server: a selection edit leaves every pixel
   outside the feathered mask unchanged.
+  * `PromptBar` (`ui/pages/PromptBar`), docked under the canvas while a document is open: a line
+    saying what Generate does now or why it cannot (an `ElidedLabel`, the full text as tooltip), the
+    words (`AutoTextEdit`, one to three lines; Enter runs, Shift+Enter starts a line, and
+    `Ctrl+Enter` (`editor.ai-run`, the AI panel's old key) runs it from anywhere in the editor),
+    *Generate*, *Remove* (with a selection) and *⋯*. It replaces the floating `ContextBar` (deleted,
+    with *View → Generative toolbar on the canvas*, `EditorState::showContextBar` and the setting
+    `editor/contextBar`, which is removed at start) and the AI panel's *Fill selection* and
+    *Instruct edit*.
+  * What Generate does is the pure `promptPlan(selection, blank canvas, capabilities)`
+    (`ui/pages/PromptPlan`). With a selection: an instruction edit of the area (`GenMode::Edit`
+    through the region pipeline) when the engine has `edit` and `regionEdit`, else inpainting
+    (`inpaint`, or a cloud `edit`, which the pipeline inpaints), else img2img of the area. Without
+    one: an instruction edit of the whole image when the engine has `edit`, else "This image engine
+    cannot change the whole image from a description." with *Select an area* (the rectangle
+    selection tool) and *Make a variation* (img2img of the whole image at the variation strength,
+    for engines with img2img). On a blank canvas (`isBlankCanvas`: every layer empty or one flat
+    colour): text to image at `workingSize` (the canvas's shape at the engine's pixels, or its
+    closest fixed size), scaled to the canvas. A selection wins over a blank canvas. The other
+    cases: no engine (*Set up AI…*), an engine that only makes new images, a blank canvas and an
+    engine that cannot draw from words. *Remove* (`removalRequest`): for edit models the
+    instruction "Remove the object in the middle of the picture and fill its place with what is
+    around it…", else inpainting (or img2img) with "empty background, seamless continuation of the
+    surroundings"; at strength 1 and without the project's character.
+  * `AiOptions` (`ui/pages/AiOptions`): one model of the options, shown by the bar's *⋯* menu and by
+    the AI panel: the engine (empty = the one in use), the area strength (0.75) and the variation
+    strength (0.45) kept apart, steps (0 = the model's, else `stepsChosen`), the seed (-1 = random),
+    variants (1–4, remembered in `editor/ai/variants`), the negative prompt, the control pose
+    switch, and the selection's context, blend edge and colour matching; also the bar's words
+    (`promptChanged`), which the panel's Variation and Expand use. The *⋯* menu (a popup above its
+    button) shows only what applies: the strength when the request uses it, steps and seed when the
+    engine takes them, *Leave out* for models with a negative prompt, *References* (the count; it
+    opens the AI panel, where they are) when the engine takes some, the control pose with pose
+    control and a pose, the engine and *All AI options…*.
+  * Requests: `AiPanel::submitPrompt(PromptRun)` builds them as the panel did (the prompt style,
+    the negative prompt, the references, the OpenPose control, and the character of the panel's
+    `CharacterChip` unless the run or the chip says no, as `CharacterUse::Edit`, `Region` or
+    `Full`), with a `RegionInput` for a selection and the working size for the whole image or a new
+    one. Engines without `batch` get one job per variant (a fixed seed counts up). The jobs go to
+    the panel's results handler, the strip; without one (the panel alone, `tst_live`) they become
+    layers as before. The images record `user_prompt` and the `action`.
+  * `VariantStrip` (`ui/pages/VariantStrip`) above the bar, per document: `track(doc, jobs, name,
+    results)` turns the jobs' images into results (scaled to the document; the thumbnails of a
+    selection's results show the engine's picture of the area). The canvas shows the current one over the
+    document (`CanvasView::setPreview`: drawn above the composite, from a copy at the current zoom
+    below 100 %, without the selection tint; cleared when another document is shown), so nothing
+    changes until one is kept. `←`/`→` (also while the canvas has the keyboard, through an event
+    filter on its surface) or a thumbnail pick one; *Keep* or Enter adds it as a layer on top
+    (`addLayer` at the top index: one undo step; the region pipeline's result is masked already);
+    *Discard* or Esc drops them and stops what still runs. The strip takes the keyboard when results
+    arrive, unless the user types outside the editor. A new run replaces the results on show, or
+    joins a run that still goes; results go when their document changes its size or closes. While
+    jobs run, the bar shows "Working on 2 results… <status>" and a progress bar, and Generate is
+    *Cancel* (`VariantStrip::stop`). New from prompt hands its job to the strip
+    (`NewFromPromptDialog::generationStarted`; a dialog nobody listens to still adds layers), in
+    place of the shell step's interim layers.
+  * The AI panel is the advanced panel: a hidden third tab of the right panel (which shows Layers and
+    History), opened by *All AI options…* (⋯ and the AI menu), ⋯ *References*, *Use as reference*
+    and *Expand canvas…*, closed by the ✕ on its tab. It keeps the engine, the character chip, the
+    actions that are not a description (Variation, Expand, Upscale, Remove BG, Detect pose) with
+    their settings, and every option of `AiOptions`, with *Steps*, *Seed* and *Area strength* new.
+    Its job cards stay for its own actions; `run(Mode)` and `upscale(factor)` are public.
+  * The **AI** menu (between View and Tools), enabled with a document open: *Upscale* 2× / 3× / 4×,
+    *Remove background*, *Expand canvas…* (the AI panel on Expand), *Variation* (to the strip),
+    *Detect pose*, *All AI options…*.
+  * *Reuse prompt* fills the bar's words and the negative prompt (New from prompt with no document
+    open); *Use as reference* adds to the AI panel's references and opens it.
+  * Found on the way: `AutoTextEdit` reserved 18 px around its lines, less than the style sheet's
+    border and padding (14 px), the document's margins (8 px) and the pixel the plain text layout
+    keeps free, so a one-line field showed a scroll bar (§17.9 item 9's negative prompt fields). It
+    measures its frame once laid out now.
+  * Tests (`tst_canvas`): `promptModes` (the mode table over seven kinds of engine, Remove's
+    requests, blank canvases, the working size); `promptBarSelectionEdit` (mock sd.cpp with the
+    FLUX.2 klein preset: the whole image without a selection; a selection edit through the bar with
+    Enter: the request (`ref_images`, no `init_image` or mask, `batch_count` 2, 4 steps), two results
+    previewed while the document stays as it is, ←/→ on the strip and on the canvas; Enter keeps the
+    second: one layer on top named after the words, one undo step, no pixel of it outside the
+    feathered selection and the picture unchanged wherever it is clear, gone with one undo; Esc on
+    the canvas drops them; a held job shows *Cancel* and its progress and is cancelled; *Remove*
+    sends the instruction; results stay with their document); `promptBarNewImage` (a 768 × 512
+    blank canvas: text to image at the working size, the kept layer at the canvas's size, then the
+    whole image); `promptBarWithoutEdits` (sd.cpp without a preset: the message, *Select an area*,
+    *Make a variation* at the strength from ⋯; inpainting of a selection at the area strength,
+    masked to it; *Remove* with a mask at strength 1); `aiMenuAndPanel` (the AI menu needs a
+    document; the panel hidden until asked for, *Expand canvas…*; ⋯ and the panel share variants and
+    steps; only the rows that apply; *References* opens the panel; the menu's Variation with the
+    bar's words, three results at 8 steps). Updated: `newFromPrompt` (the results in the strip, the
+    second kept; *Reuse prompt* in the bar, *Use as reference* opens the AI panel),
+    `editorCharacter` (through `submitPrompt` and `run`), `accessibleNames` (the ⋯ menu, results,
+    the AI panel), `shortcutsHaveNoConflicts` (`editor.ai-run` is `Ctrl+Return`, no `context-bar`).
+    Removed: `contextBarFollowsSelection` (the floating bar is gone). `tst_layout`: the editor
+    without an engine (*Set up AI…*), with an engine without edits (its offers), with a selection and
+    four results, the ⋯ menu and the AI panel, at the three sizes; `mainWindowFitsSmallScreen` checks
+    the bar, the results, the ⋯ menu and the AI panel at 1280×720. Findings stay at 4.
+  * Not yet: prompt-bar actions of plugins (§17.7); the status bar names the default engine, not
+    one chosen in ⋯; a result is previewed whole (no before/after view); unkept results of a run are
+    dropped when the next run starts (they stay in the project's images); Remove's instruction for
+    edit models names "the object in the middle", since the model does not see the selection; the
+    German translation of the new texts.
 - [ ] Setup wizard and Settings → AI (§17.5).
 - [x] Filter graph core and classic nodes; golden-image tests per node.
   * `src/filters` (`lumen_filters`, `lumen::filters`): on `lumen_core` (`ImageOps`, `Async`) and Qt
@@ -2581,6 +2679,11 @@ the Create, Poses and Parts windows, Browse project images and New from prompt. 
 from 7 to 4: item 6 went with the Generate page (and the AI panel is wider without the rail), the
 status bar has its side margin (item 9) and the Generate page's chips and negative prompt went with
 it; the four tall dialogs of item 8 remain.
+
+**Prompt bar** (October 2026): the audit adds the editor without an engine, with an engine that
+cannot edit the whole image, with a selection and four results, the prompt bar's ⋯ menu and the AI
+panel; no new findings. One-line text fields no longer show a scroll bar (item 9: `AutoTextEdit`
+measures its frame and padding).
 
 ---
 

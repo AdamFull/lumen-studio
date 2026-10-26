@@ -162,6 +162,8 @@ void CanvasView::setDocument(doc::Document *doc)
     m_doc = doc;
     m_contour = QPainterPath();
     m_antsTimer.stop();
+    m_preview = QImage();
+    m_previewScaled = QImage();
     m_fitPending = true;
     if (doc) {
         m_overlay.reset(doc->size());
@@ -203,6 +205,15 @@ void CanvasView::setTool(Tool *tool)
 void CanvasView::setCursorOverride(const QCursor &cursor)
 {
     m_surface->setCursor(cursor);
+}
+
+void CanvasView::setPreview(const QImage &image)
+{
+    if (image.isNull() && m_preview.isNull())
+        return;
+    m_preview = image;
+    m_previewScaled = QImage();
+    updateAll();
 }
 
 // ---- view transform -----------------------------------------------------------------------------
@@ -407,8 +418,25 @@ void CanvasView::render(QPainter &p, const QRect &widgetRect)
         }
     }
 
-    // Selection tint.
-    if (m_doc->hasSelection() && m_state->showSelectionOverlay()) {
+    // A result to choose from, over the document. Below 100 % a copy at the current zoom is drawn as
+    // it is, so that the repaints of the marching ants stay cheap.
+    if (!m_preview.isNull()) {
+        const double scale = m_zoom * devicePixelRatioF();
+        if (scale < 1.0) {
+            const QSize target = (QSizeF(m_doc->size()) * scale).toSize().expandedTo(QSize(1, 1));
+            if (m_previewScaled.size() != target)
+                m_previewScaled = m_preview.scaled(target, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+            p.drawImage(docWidget, m_previewScaled);
+        } else {
+            const double sx = double(m_preview.width()) / m_doc->size().width();
+            const double sy = double(m_preview.height()) / m_doc->size().height();
+            const QRectF source(visible.left() * sx, visible.top() * sy, visible.width() * sx, visible.height() * sy);
+            p.drawImage(mapFromDoc(visible), m_preview, source);
+        }
+    }
+
+    // Selection tint (not over a result, whose colours it would hide).
+    if (m_doc->hasSelection() && m_state->showSelectionOverlay() && m_preview.isNull()) {
         const QImage &sel = m_doc->selection();
         const QColor tint = pal.accent;
         m_overlay.update(visibleDoc, level, [&sel, tint](QImage &target, const QRect &rect) {

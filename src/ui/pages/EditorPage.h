@@ -1,6 +1,7 @@
 #pragma once
 
 #include "doc/Document.h"
+#include "ui/pages/AiPanel.h"
 
 #include <QHash>
 #include <QPointer>
@@ -16,18 +17,20 @@ class QHBoxLayout;
 
 namespace lumen::ui {
 
-class AiPanel;
+class AiOptions;
 class CanvasView;
 class ColorSwatch;
 class EditorState;
 class LayersPanel;
+class PromptBar;
 class StartScreen;
 class Studio;
 class Tool;
-class ContextBar;
+class VariantStrip;
 
-// Layered image editor with AI-assisted editing: the main window's content. While no document is
-// open it shows the start screen instead.
+// Layered image editor with AI-assisted editing: the main window's content. The canvas has the
+// prompt bar under it (and its results above the bar); the right panel shows Layers and History,
+// and the AI panel when it is asked for. While no document is open the start screen shows instead.
 class EditorPage : public QWidget
 {
     Q_OBJECT
@@ -35,9 +38,15 @@ public:
     explicit EditorPage(Studio *studio, QWidget *parent = nullptr);
 
     CanvasView *canvas() const { return m_canvas; }
-    ContextBar *contextBar() const { return m_contextBar; }
     EditorState *editorState() const { return m_state; }
     AiPanel *aiPanel() const { return m_ai; }
+    AiOptions *aiOptions() const { return m_aiOptions; }
+    PromptBar *promptBar() const { return m_bar; }
+    VariantStrip *variantStrip() const { return m_strip; }
+    // The AI panel in the right panel (hidden until asked for), on one of its actions if given.
+    void showAiPanel(std::optional<AiPanel::Mode> mode = std::nullopt);
+    void hideAiPanel();
+    bool isAiPanelShown() const;
     StartScreen *startScreen() const { return m_start; }
     bool showsStartScreen() const;
     void selectTool(const QString &id);
@@ -69,7 +78,9 @@ private:
     StartScreen *m_start;
     QWidget *m_body;
     CanvasView *m_canvas;
-    ContextBar *m_contextBar;
+    AiOptions *m_aiOptions;
+    VariantStrip *m_strip;
+    PromptBar *m_bar;
     QTabBar *m_tabs;
     QHBoxLayout *m_optionsHost;
     QWidget *m_options = nullptr;

@@ -13,6 +13,10 @@ class QPushButton;
 class QSpinBox;
 class QToolButton;
 
+namespace lumen {
+class Job;
+}
+
 namespace lumen::doc {
 class Document;
 struct AssetInfo;
@@ -25,7 +29,8 @@ class ProviderCombo;
 class Studio;
 
 // File → New from prompt: a new document of the chosen size, drawn from a description by the image
-// engine. The results come back as layers of the new document (all variants but the first hidden).
+// engine. The results are chosen in the editor's variants strip (generationStarted); without anyone
+// listening they become layers of the new document (all variants but the first hidden).
 class NewFromPromptDialog : public QDialog
 {
     Q_OBJECT
@@ -42,6 +47,10 @@ public:
     // Makes the document and starts the generation into it. Null when nothing can be made (no
     // image engine, no prompt). Create does this and closes the dialog.
     doc::Document *create();
+
+signals:
+    // The new document and the job drawing `results` images into it; `name` is the result layer's.
+    void generationStarted(lumen::doc::Document *doc, lumen::Job *job, const QString &name, int results);
 
 private:
     void updateUi();

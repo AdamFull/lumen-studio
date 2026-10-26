@@ -22,8 +22,11 @@
 #include "ui/dialogs/PoseEditDialog.h"
 #include "ui/dialogs/SettingsDialog.h"
 #include "ui/ext/Extension.h"
+#include "core/ImageOps.h"
 #include "ui/pages/EditorPage.h"
+#include "ui/pages/PromptBar.h"
 #include "ui/pages/StartScreen.h"
+#include "ui/pages/VariantStrip.h"
 
 #include <QAbstractButton>
 #include <QAbstractScrollArea>
@@ -331,6 +334,37 @@ struct AllPlugins
     }
 };
 
+// An image engine for the editor's states (a stable-diffusion.cpp server that is never asked: a
+// model without instruction edits, so the prompt bar offers a variation), removed again afterwards.
+struct ImageEngine
+{
+    explicit ImageEngine(Studio *studio)
+        : m_studio(studio)
+    {
+        m_id = studio->providers()
+                   ->addProvider(QStringLiteral("sdcpp"), QStringLiteral("Local image server"), {{QStringLiteral("url"), QStringLiteral("http://127.0.0.1:9")}})
+                   ->instanceId();
+    }
+    ~ImageEngine() { m_studio->providers()->removeProvider(m_id); }
+
+private:
+    Studio *m_studio;
+    QString m_id;
+};
+
+// Four results to choose from, as a prompt run leaves them above the prompt bar.
+void showResults(MainWindow &window, doc::Document *doc)
+{
+    QList<QImage> results;
+    for (int i = 0; i < 4; ++i) {
+        QImage im = sampleImage().scaled(doc->size());
+        if (i % 2)
+            im.invertPixels();
+        results << im;
+    }
+    window.editor()->variantStrip()->addVariants(doc, results, QStringLiteral("a long description of what should change in the picture"));
+}
+
 // Report and screenshot names of the plugin windows.
 QString pageName(const QString &id)
 {
@@ -442,10 +476,43 @@ void TestLayout::mainWindow()
         // The saved document, the four images, and the samples of the earlier sizes (saved on close).
         QTRY_VERIFY(window.editor()->startScreen()->recentTiles().size() >= 5);
         auditWindow(QStringLiteral("Start screen"));
-        // The editor with a document, and with the queue and the assistant over it.
-        studio.openImageAsDocument(sampleImage(), QStringLiteral("Sample"));
+        // The editor with a document (no image engine: the prompt bar offers to set one up), with an
+        // engine that cannot change the whole image from words (it offers a variation), with a
+        // selection and four results, the prompt bar's ⋯ menu, the AI panel, and the queue and the
+        // assistant over it.
+        doc::Document *doc = studio.openImageAsDocument(sampleImage(), QStringLiteral("Sample"));
         QVERIFY(!window.editor()->showsStartScreen());
         auditWindow(QStringLiteral("Editor"));
+        {
+            ImageEngine engine(&studio);
+            PromptBar *bar = window.editor()->promptBar();
+            QTRY_VERIFY(bar->plan().action == PromptAction::CannotEditImage);
+            auditWindow(QStringLiteral("Editor with an engine without edits"));
+            QImage mask = img::createMask(doc->size());
+            {
+                QPainter p(&mask);
+                p.setPen(Qt::NoPen);
+                p.setBrush(Qt::white);
+                p.drawEllipse(QRect(600, 300, 400, 400));
+            }
+            doc->applySelection(mask, QStringLiteral("Select"));
+            QTRY_VERIFY(bar->plan().region);
+            showResults(window, doc);
+            QVERIFY(window.editor()->variantStrip()->isVisible());
+            auditWindow(QStringLiteral("Editor with results"));
+            bar->showOptions();
+            QWidget *popup = bar->optionsPopup();
+            QVERIFY(QTest::qWaitForWindowExposed(popup));
+            Auditor::settle();
+            m_auditor.audit(popup, QStringLiteral("Prompt bar options %1").arg(res));
+            m_auditor.shoot(popup, QStringLiteral("Prompt bar options %1").arg(res));
+            popup->hide();
+            window.editor()->showAiPanel();
+            auditWindow(QStringLiteral("Editor with the AI panel"));
+            window.editor()->hideAiPanel();
+            window.editor()->variantStrip()->discard();
+            doc->clearSelection();
+        }
         window.setQueueVisible(true);
         auditWindow(QStringLiteral("Editor with the queue"));
         window.setQueueVisible(false);
@@ -481,8 +548,8 @@ void TestLayout::mainWindow()
 }
 
 // Not report-only: the main window fits a 1080p screen at 150 % (1280×720) with the start screen,
-// with a document, and with the queue and the assistant open; so do the plugin pages' windows and
-// Browse project images.
+// with a document (its prompt bar, results and AI panel), and with the queue and the assistant open;
+// so do the prompt bar's ⋯ menu, the plugin pages' windows and Browse project images.
 void TestLayout::mainWindowFitsSmallScreen()
 {
     AllPlugins plugins;
@@ -500,8 +567,23 @@ void TestLayout::mainWindowFitsSmallScreen()
     };
     QVERIFY(window.editor()->showsStartScreen());
     check(&window, QStringLiteral("the start screen"));
-    studio.openImageAsDocument(sampleImage(), QStringLiteral("Sample"));
+    doc::Document *doc = studio.openImageAsDocument(sampleImage(), QStringLiteral("Sample"));
     check(&window, QStringLiteral("the editor"));
+    {
+        // The prompt bar with its offers, four results above it, its ⋯ menu and the AI panel.
+        ImageEngine engine(&studio);
+        QTRY_VERIFY(window.editor()->promptBar()->plan().action == PromptAction::CannotEditImage);
+        check(&window, QStringLiteral("the prompt bar"));
+        showResults(window, doc);
+        check(&window, QStringLiteral("the results"));
+        window.editor()->promptBar()->showOptions();
+        check(window.editor()->promptBar()->optionsPopup(), QStringLiteral("the prompt bar's options"));
+        window.editor()->promptBar()->optionsPopup()->hide();
+        window.editor()->showAiPanel();
+        check(&window, QStringLiteral("the AI panel"));
+        window.editor()->hideAiPanel();
+        window.editor()->variantStrip()->discard();
+    }
     window.setQueueVisible(true);
     check(&window, QStringLiteral("the queue"));
     window.setQueueVisible(false);

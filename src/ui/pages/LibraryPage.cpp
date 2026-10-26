@@ -406,7 +406,7 @@ LibraryPage::LibraryPage(Studio *studio, QWidget *parent)
     auto *asRef = new QPushButton(Icons::get(QStringLiteral("link")), tr("Use as reference"), inspector);
     asRef->setToolTip(tr("Add to the reference images of the editor's AI panel"));
     auto *usePrompt = new QPushButton(Icons::get(QStringLiteral("text")), tr("Reuse prompt"), inspector);
-    usePrompt->setToolTip(tr("Put the image's prompt into the editor's AI panel"));
+    usePrompt->setToolTip(tr("Put the image's prompt into the editor's prompt bar"));
     auto *rerun = new QPushButton(Icons::get(QStringLiteral("refresh")), tr("Re-run"), inspector);
     rerun->setToolTip(tr("New from prompt with the image's prompt, size and seed"));
     auto *exportBtn = new QPushButton(Icons::get(QStringLiteral("download")), tr("Export…"), inspector);
