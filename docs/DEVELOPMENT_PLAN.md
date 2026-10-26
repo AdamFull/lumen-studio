@@ -3600,6 +3600,126 @@ dialog's status lines stood in boxes three lines high. At 150 % (`tst_layout_150
 screen at 144 dpi, which Qt shows as 1280 × 720 at a device pixel ratio of 1.5) the main window, its
 panels and every dialog pass the same checks.
 
+### M18 — Say what to change, Lumen finds it
+
+Goal: the step before an edit gets as easy as the edit itself. Today the user selects the area by
+hand, then describes the change in words the model understands. In M18 the user can say what to
+select ("the black lines", "the man on the left", "the sky"), Lumen turns it into a selection they
+can check and adjust, and the request that goes to the model is written for that model's family.
+
+Decisions (October 2026, with the user):
+* **Finding the area is the core of it.** It needs no language model and works without one.
+  Lines, dust and scratches are found with image processing; objects with a detector and a
+  segmenter. The result is always an ordinary selection shown on the canvas before anything is
+  generated, never a hidden mask.
+* **Prompts are fitted to the model by rules**, per model family, from the model presets. A
+  language model may refine them when one is set up, but the editor never needs one.
+* **LoRAs are offered, not chosen.** A LoRA picker lists the server's LoRAs that fit the model;
+  suggestions are ticked by the user. Automatic LoRA choice is not planned (LoRA metadata is too thin
+  to pick well, and a wrong pick changes the whole image's style).
+* **Planning with a vision model is optional** and comes last: only when a vision-capable language
+  model is set up, and the plan (selection method, prompt, LoRAs) is shown before it runs.
+* **Checking the result and retrying automatically is not planned**; the results strip already lets
+  the user compare and pick.
+* **Detection runs in Lumen, without Python**: ONNX Runtime (its C API, so MinGW can use the official
+  Windows build) as a managed component, with the detector and segmenter as pinned model files in the
+  models folder. ComfyUI and online services can offer the same utility.
+
+#### 18.1 Select by description
+
+* **Where**: *Select → By description…*, and in the prompt bar as "select: …" before a change. The result replaces, adds to or subtracts from the
+  selection (Shift / Alt, as the other selection tools), as one undo step, and shows how it was found
+  ("Found 3 areas: lines darker than the paper").
+* **Classic finders** (core, `core/` image operations, no model): thin dark or light strokes (lines,
+  scratches, hair-thin cracks: a black-hat / top-hat filter, threshold, line width, length),
+  specks and dust (small isolated spots by size), a colour range ("the red", "the white
+  background": a colour picked from the words or by a click, with tolerance), and *Select subject*
+  (new, from the engine's background removal). A small rule-based parser maps the common phrasings to
+  them; what it does not know goes to the model finders.
+* **Model finders** (new `Utility::FindArea`, text → mask, with a box or point hint optional):
+  * Local, built in: an open-vocabulary detector (Grounding DINO tiny or OWLv2, Apache-2.0, ONNX)
+    gives boxes for the words, a segmenter (SAM 2 small, Apache-2.0, ONNX) turns each box into a
+    mask. On the GPU through ONNX Runtime's CUDA or DirectML build, else the CPU (a few seconds).
+    The files are a preset like the model presets (pinned, with sizes and SHA-256), offered for
+    download the first time with their size.
+  * ComfyUI (a workflow template, as segmentParts has), fal.ai (SAM 2 / Florence-2 endpoints) and
+    Gemini (boxes and masks from its vision API), each as a provider capability.
+* **Click to select** comes with the segmenter: a *Smart selection* tool where a click (or a drawn
+  box) selects the object under it, Shift-click adds, Alt-click removes.
+* **Nodes**: *Find area* (text → mask) and *Find lines* for the filter editor, so "find the lines →
+  grow → fill area with AI" is a filter.
+
+#### 18.2 Prompts written for the model
+
+* **Rules per family**, as data next to the model presets (`resources/prompts`): the dialect (tags
+  for SDXL, Illustrious, Pony and Anima; sentences for FLUX, Qwen-Image), the default negative
+  prompt where the model takes one, quality words the family expects, and how an instruction becomes
+  a request:
+  * edit models (FLUX.2 [klein], FLUX.1 Kontext, Qwen-Image-Edit) keep the instruction;
+  * inpainting models get a description of what should be there instead of the instruction
+    ("remove the black lines" → "clean paper, plain background"; "replace the cup with a candle" →
+    "a candle"), from patterns for remove / replace / change colour / add;
+  * a character's or LoRA's trigger words go where the family expects them.
+* **What was sent is visible**: the results strip's tooltip and the result's details show the prompt
+  and negative prompt the model got, and *Use my words as they are* in ⋯ turns the rules off.
+* **With a language model set up** (optional), it rewrites what the rules cannot (a long description
+  into tags for Anima, an instruction an inpainting model cannot follow), within a short time limit,
+  and falls back to the rules.
+
+#### 18.3 LoRAs
+
+* **A LoRA picker** in the prompt bar's ⋯ and in New from prompt: the LoRAs the server lists, only
+  those that fit the model (family and size from their headers, e.g. a klein 4B LoRA for klein 4B),
+  with a weight slider, the trigger word filled in from the file's metadata or the model hub, and a
+  plain reason for each one left out. The request carries them (sd.cpp's `lora` list; `<lora:…>` for
+  WebUI), so the user does not type tags.
+* **Suggestions**: LoRAs whose name, tags or trigger words match the prompt are shown first with a
+  tick box, never applied without one.
+
+#### 18.4 Planning with a vision model (optional)
+
+* With a vision-capable language model set up (local llama.cpp with a projector, or an online one),
+  *Plan this change* in ⋯ looks at the picture and the words and proposes: how to find the area
+  (a classic finder with its settings, or the model finder with the words to look for), the request
+  for the model, and LoRAs from the picker's list. The proposal is shown; *Run* uses it, every part
+  can be changed first. It reuses the assistant's tool loop (`ai::AgentRun`), moved into the core
+  for this.
+* GPU memory: on 8 GB the language model and the image model take turns (the supervisor's
+  arbitration); the plan says how long that takes the first time.
+
+#### 18.5 Implementation steps
+
+- [ ] Classic finders (lines, specks, colour range) in `core/` with golden-image tests; *Select →
+  By description…* with the rule-based parser; *Find lines* node.
+- [ ] ONNX Runtime as a managed component (pinned release, CUDA / DirectML / CPU builds, C API);
+  the detector and segmenter presets; `Utility::FindArea` and its local provider; *Smart
+  selection* (click and box); the *Find area* node. Tests against small ONNX test models, no GPU.
+- [ ] `FindArea` for ComfyUI (workflow template), fal.ai and Gemini, against mock servers.
+- [ ] Prompt rules per family; *Use my words as they are*; what was sent in the results' details.
+- [ ] LoRA picker and suggestions (sd.cpp, WebUI, ComfyUI).
+- [ ] Planning with a vision model: `AgentRun` in the core, *Plan this change*, the proposal view.
+- [ ] Short live check (RTX 4060 8 GB): "remove the black lines" on a scanned drawing with a classic
+  finder; "the cup" found and replaced with FLUX.2 [klein] and with SDXL; a klein 4B LoRA from the
+  picker.
+
+Acceptance:
+1. "Select the black lines" on a line-scratched photo selects the lines and nothing large; Fill area
+   with AI then removes them, leaving the rest unchanged.
+2. "Select the cup" selects the cup with the local finder, with no language model set up; a click
+   with *Smart selection* does the same.
+3. The same "remove the cup" sends an instruction to FLUX.2 [klein] and a description of the empty
+   table to SDXL, and the user can see both.
+4. A LoRA that does not fit the model is never sent, and says why.
+5. Everything works with every plugin off and without a language model; planning with a vision model
+   adds to it but is never required.
+
+Risks and open questions:
+* Open-vocabulary detectors miss unusual words and small things; the classic finders and a click
+  cover the common cases, and the selection is always shown for correction.
+* ONNX Runtime adds about 30–200 MB per build (CPU smallest, CUDA largest); it is downloaded only when
+  the model finder is first used.
+* Florence-2 would find and caption in one model but needs a text decoder loop; it is left for later.
+
 ---
 
 ## 5. Quality strategy
