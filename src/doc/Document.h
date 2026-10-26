@@ -13,6 +13,33 @@
 
 namespace lumen::doc {
 
+// The image file a document was opened from or last saved as: File → Save writes the picture back
+// there, in its format. Kept with the document in the project.
+struct FileLink
+{
+    QString path;      // absolute, with "/" separators
+    QByteArray format; // "png", "jpeg", "webp", "tiff", "bmp", "psd" (ImageFile.h)
+    int quality = -1;  // JPEG and WebP: the quality to save with (the file's own when it could be told)
+    // What the file has that the document does not keep (16 bits per colour, parts of a Photoshop
+    // file), in plain words: saving over the file loses it.
+    QStringList losses;
+    bool dontAsk = false; // "Don't ask again for this picture" (the question before saving over it)
+    // The file's size and modification time when it was read or written, to tell whether another
+    // program has changed it since (-1: not known).
+    qint64 size = -1;
+    qint64 modified = -1;
+
+    bool isEmpty() const { return path.isEmpty(); }
+    QString fileName() const;
+    // Takes the size and modification time of the file as it is now.
+    void stamp();
+    // The file is there and has the size and time stamp() took.
+    bool isUnchangedOnDisk() const;
+    QJsonObject toJson() const;
+    static FileLink fromJson(const QJsonObject &json);
+    bool operator==(const FileLink &) const = default;
+};
+
 // A layered raster document with a selection mask (which doubles as the AI inpainting mask).
 // GUI-thread object. Pixel data is shared copy-on-write, so snapshots for worker threads are cheap.
 class Document : public QObject
@@ -95,8 +122,26 @@ public:
     void updateComposite(const QRect &docRect, int level);
 
     // ---- state ------------------------------------------------------------------------------
+    // Changed since the project last saved the document.
     bool isModified() const { return m_modified; }
     void setModified(bool modified);
+
+    // ---- the image file (File → Save) -------------------------------------------------------
+    const FileLink &file() const { return m_file; }
+    bool hasFile() const { return !m_file.isEmpty(); }
+    // The document is now the picture of `file` (just read from it, or saved as it): not modified
+    // for it. An empty link takes the document's file away.
+    void setFile(const FileLink &file);
+    // Changes the link's details (its quality, "don't ask") but not whether the document is
+    // modified for it.
+    void updateFile(const FileLink &file);
+    // The picture was just written to the file.
+    void markFileSaved();
+    // Changed since its file was read or written (undoing back to that state clears it); never
+    // without a file. History that is gone (a document read back from the project) counts through
+    // setFileModified().
+    bool isFileModified() const;
+    void setFileModified(bool modified);
     quint64 revision() const { return m_revision; }
     QJsonObject settings() const { return m_settings; }
     void setSettings(const QJsonObject &s) { m_settings = s; }
@@ -112,6 +157,8 @@ signals:
     void sizeChanged(const QSize &size);
     void modifiedChanged(bool modified);
     void controlPoseChanged();
+    // The file link changed, or whether the document is modified for it.
+    void fileChanged();
 
 private:
     void touch();
@@ -129,6 +176,8 @@ private:
     bool m_modified = false;
     quint64 m_revision = 0;
     QJsonObject m_settings;
+    FileLink m_file;
+    bool m_fileDirty = false; // modified for the file whatever the history says
 };
 
 } // namespace lumen::doc

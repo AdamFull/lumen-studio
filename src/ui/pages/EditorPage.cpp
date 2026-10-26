@@ -3,8 +3,7 @@
 #include "core/Async.h"
 #include "core/Error.h"
 #include "core/ImageOps.h"
-#include "core/Psd.h"
-#include "doc/PsdIO.h"
+#include "ui/DocumentFiles.h"
 #include "ui/Icons.h"
 #include "ui/Studio.h"
 #include "ui/Theme.h"
@@ -32,6 +31,7 @@
 #include <QApplication>
 #include <QClipboard>
 #include <QComboBox>
+#include <QDir>
 #include <QDragEnterEvent>
 #include <QFile>
 #include <QFileDialog>
@@ -58,6 +58,7 @@ EditorPage::EditorPage(Studio *studio, QWidget *parent)
     , m_studio(studio)
     , m_state(new EditorState(this))
     , m_aiOptions(new AiOptions(this))
+    , m_files(new DocumentFiles(studio, this))
 {
     // An engine chosen in the editor gives way to a new one in Settings → AI or the setup wizard.
     m_aiOptions->followSettings(studio->providers());
@@ -288,9 +289,10 @@ EditorPage::EditorPage(Studio *studio, QWidget *parent)
             return;
         m_studio->setActiveDocument(m_studio->documents().at(index));
     });
+    // Asks first when the document has changes that are not in its picture's file.
     connect(m_tabs, &QTabBar::tabCloseRequested, this, [this](int index) {
         if (index >= 0 && index < m_studio->documents().size())
-            m_studio->closeDocument(m_studio->documents().at(index));
+            m_files->close(m_studio->documents().at(index));
     });
     connect(studio, &Studio::documentsChanged, this, &EditorPage::rebuildTabs);
     connect(studio, &Studio::documentsChanged, this, &EditorPage::updateStack);
@@ -482,14 +484,39 @@ void EditorPage::rebuildTabs()
     while (m_tabs->count() > 0)
         m_tabs->removeTab(0);
     for (doc::Document *d : m_studio->documents()) {
-        const int i = m_tabs->addTab(d->name().isEmpty() ? tr("Untitled") : d->name());
-        m_tabs->setTabToolTip(i, QStringLiteral("%1 × %2").arg(d->size().width()).arg(d->size().height()));
+        m_tabs->addTab(QString());
         connect(d, &doc::Document::nameChanged, this, &EditorPage::rebuildTabs, Qt::UniqueConnection);
+        connect(d, &doc::Document::fileChanged, this, &EditorPage::updateTabTexts, Qt::UniqueConnection);
+        connect(d, &doc::Document::sizeChanged, this, &EditorPage::updateTabTexts, Qt::UniqueConnection);
     }
+    updateTabTexts();
     const int idx = int(m_studio->documents().indexOf(m_studio->activeDocument()));
     m_tabs->setCurrentIndex(idx);
     m_tabs->setVisible(m_tabs->count() > 0);
     m_rebuildingTabs = false;
+}
+
+QString EditorPage::tabText(const doc::Document *doc)
+{
+    const QString name = doc->name().isEmpty() ? tr("Untitled") : doc->name();
+    // Changes that are not in the picture's file yet, as other editors mark them.
+    return doc->isFileModified() ? name + QLatin1Char('*') : name;
+}
+
+void EditorPage::updateTabTexts()
+{
+    const QList<doc::Document *> &docs = m_studio->documents();
+    for (int i = 0; i < m_tabs->count() && i < docs.size(); ++i) {
+        const doc::Document *d = docs.at(i);
+        m_tabs->setTabText(i, tabText(d));
+        QString tip = QStringLiteral("%1 × %2").arg(d->size().width()).arg(d->size().height());
+        if (d->hasFile()) {
+            tip += QLatin1Char('\n') + QDir::toNativeSeparators(d->file().path);
+            if (d->isFileModified())
+                tip += QLatin1Char('\n') + tr("Changed since it was saved to the file: File → Save (Ctrl+S) writes it.");
+        }
+        m_tabs->setTabToolTip(i, tip);
+    }
 }
 
 void EditorPage::updateStatus()
@@ -527,37 +554,6 @@ void EditorPage::newDocumentDialog()
     NewCanvasDialog dlg(m_studio, this);
     if (dlg.exec() == QDialog::Accepted)
         m_studio->newDocument(dlg.canvasSize(), dlg.name(), dlg.background());
-}
-
-void EditorPage::exportImage()
-{
-    if (!m_doc)
-        return;
-    QString filter;
-    const QString path = QFileDialog::getSaveFileName(this, tr("Export image"), m_doc->name() + QStringLiteral(".png"),
-                                                      tr("PNG (*.png);;JPEG (*.jpg *.jpeg);;WebP (*.webp);;Layered Photoshop (*.psd)"), &filter);
-    if (path.isEmpty())
-        return;
-    const doc::DocumentSnapshot snap = m_doc->snapshot();
-    const QSize size = m_doc->size();
-    const QString suffix = QFileInfo(path).suffix().toLower();
-    async::run([snap, size, path, suffix] {
-        if (suffix == QLatin1String("psd")) {
-            QString error;
-            if (!psd::write(path, doc::exportPsd(snap, size), &error))
-                throw Error(error);
-            return;
-        }
-        const QImage img = doc::flatten(snap, size);
-        const QByteArray fmt = suffix == QLatin1String("jpg") || suffix == QLatin1String("jpeg") ? QByteArray("JPEG") : suffix.toUpper().toLatin1();
-        const QByteArray bytes = img::encode(img, fmt.isEmpty() ? "PNG" : fmt.constData(), fmt == "PNG" ? 6 : 95);
-        if (bytes.isEmpty())
-            throw Error(QObject::tr("This format is not supported (install the Qt Image Formats plugin for WebP)."));
-        QFile f(path);
-        if (!f.open(QIODevice::WriteOnly) || f.write(bytes) != bytes.size())
-            throw Error(f.errorString());
-    }).then(this, [this, path] { m_studio->notify(tr("Exported %1").arg(QFileInfo(path).fileName()), QStringLiteral("success")); })
-      .onFailed(this, [this](const std::exception &e) { m_studio->notify(describeException(e), QStringLiteral("error")); });
 }
 
 void EditorPage::saveToLibrary()

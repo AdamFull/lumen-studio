@@ -20,6 +20,7 @@ namespace lumen::ui {
 class AiOptions;
 class CanvasView;
 class ColorSwatch;
+class DocumentFiles;
 class EditorState;
 class FiltersPanel;
 class LayersPanel;
@@ -62,9 +63,14 @@ public:
     // strip and the prompt bar while a document is open, so they hide neither.
     int overlayBottom(const QWidget *in) const;
 
+    // File → Save, Save as…, Export a copy…, closing a document (its tab's ✕ asks first about
+    // changes not saved to its file).
+    DocumentFiles *files() const { return m_files; }
+    // The tab's text: the name, with "*" while it has changes not saved to its file.
+    static QString tabText(const doc::Document *doc);
+
     // Actions also exposed through the main window menus.
     void newDocumentDialog();
-    void exportImage();
     void saveToLibrary();
     void copyMerged();
     void pasteAsLayer();
@@ -84,6 +90,7 @@ protected:
 private:
     void setDocument(doc::Document *doc);
     void rebuildTabs();
+    void updateTabTexts();
     void updateStatus();
     void updateStack();
     // The right panel's tab names, or only their icons beside the AI tab when the names do not fit.
@@ -92,11 +99,12 @@ private:
 
     Studio *m_studio;
     EditorState *m_state;
+    AiOptions *m_aiOptions;
+    DocumentFiles *m_files;
     QStackedWidget *m_stack;
     StartScreen *m_start;
     QWidget *m_body;
     CanvasView *m_canvas;
-    AiOptions *m_aiOptions;
     VariantStrip *m_strip;
     PromptBar *m_bar;
     QTabBar *m_tabs;

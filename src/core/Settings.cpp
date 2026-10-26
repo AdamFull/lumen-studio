@@ -2,6 +2,7 @@
 
 #include "core/Paths.h"
 
+#include <QDir>
 #include <QThread>
 
 namespace lumen {
@@ -62,6 +63,25 @@ void Settings::addRecentProject(const QString &path)
     while (list.size() > 12)
         list.removeLast();
     setValue(QStringLiteral("app/recentProjects"), list);
+}
+
+void Settings::addRecentFile(const QString &path)
+{
+    if (path.isEmpty())
+        return;
+    QStringList list = recentFiles();
+    list.removeIf([&path](const QString &p) { return paths::sameFile(p, path); });
+    list.prepend(QDir::cleanPath(QDir::fromNativeSeparators(path)));
+    while (list.size() > 12)
+        list.removeLast();
+    setValue(QStringLiteral("app/recentFiles"), list);
+}
+
+void Settings::removeRecentFile(const QString &path)
+{
+    QStringList list = recentFiles();
+    if (list.removeIf([&path](const QString &p) { return path.isEmpty() || paths::sameFile(p, path); }) > 0)
+        setValue(QStringLiteral("app/recentFiles"), list);
 }
 
 } // namespace lumen

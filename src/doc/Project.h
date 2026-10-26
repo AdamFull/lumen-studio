@@ -46,6 +46,8 @@ struct DocumentInfo
     QDateTime modified;
     QSize size;
     QImage thumbnail;
+    FileLink file;             // the image file it saves to (File → Save), if any
+    bool fileModified = false; // with changes that are not in that file
 };
 
 // Generic JSON record stored in the project (poses, characters, chats, shot plans...).
@@ -70,6 +72,8 @@ struct LoadedDocument
     QUuid active;
     QJsonObject settings;
     std::optional<pose::Pose> pose;
+    FileLink file;
+    bool fileModified = false;
 };
 
 // An open project file (.lumen, SQLite). GUI-thread facade over ProjectStore; keeps lightweight

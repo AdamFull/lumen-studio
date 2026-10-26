@@ -43,6 +43,7 @@ target_compile_definitions(tst_canvas PRIVATE FAKE_SERVER_PATH="$<TARGET_FILE:fa
 add_dependencies(tst_canvas fake_server)
 lumen_add_test(tst_parts_ui SOURCES tst_parts_ui.cpp LIBS lumen_plugin_parts)
 lumen_add_test(tst_layout SOURCES tst_layout.cpp LIBS lumen_plugins)
+lumen_add_test(tst_files SOURCES tst_files.cpp MockHttpServer.h LIBS lumen_plugins)
 lumen_add_test(tst_live2d SOURCES tst_live2d.cpp LIBS lumen_live2d)
 lumen_add_test(tst_filters SOURCES tst_filters.cpp LIBS lumen_filters)
 lumen_add_test(tst_filters_ui SOURCES tst_filters_ui.cpp MockHttpServer.h LIBS lumen_ui)

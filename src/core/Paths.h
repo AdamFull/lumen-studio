@@ -29,4 +29,8 @@ QString bundledData();
 // Creates all writable directories. Returns false if any could not be created.
 bool ensure();
 
+// Whether two paths name the same file, whatever their separators or (on Windows) letter case.
+// Compares the text only; the file need not exist.
+bool sameFile(const QString &a, const QString &b);
+
 } // namespace lumen::paths

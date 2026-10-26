@@ -8,6 +8,7 @@ add_library(lumen_doc STATIC
     Project.h Project.cpp
     Parts.h Parts.cpp
     PsdIO.h PsdIO.cpp
+    ImageFile.h ImageFile.cpp
     CharacterLibrary.h CharacterLibrary.cpp
     LoraDataset.h LoraDataset.cpp
 )

@@ -4896,10 +4896,17 @@ void TestCanvas::editorMenus()
     QVERIFY(doc->hasSelection());
     // Documents open with the rectangle selection, the start of a change with words.
     QCOMPARE(window.editor()->canvas()->tool()->id(), QStringLiteral("select-rect"));
-    // File → Save to project says where it saves.
+    // File: the picture's file as in other editors, then the project (tst_files has the rest).
+    const QStringList file = texts(menu(QStringLiteral("&File")));
+    const qsizetype at = file.indexOf(QStringLiteral("Save"));
+    QVERIFY(at > 0);
+    QCOMPARE(file.mid(at, 6), (QStringList{QStringLiteral("Save"), QStringLiteral("Save as…"), QStringLiteral("Export a copy…"),
+                                           QStringLiteral("Close document"), QStringLiteral("Save to project"),
+                                           QStringLiteral("Save a copy to project images")}));
+    // Save to project says what it is for.
     bool save = false;
     for (QAction *a : menu(QStringLiteral("&File"))->actions())
-        save = save || (a->text() == QLatin1String("Save to project") && a->toolTip().contains(QStringLiteral("Export image")));
+        save = save || (a->text() == QLatin1String("Save to project") && a->toolTip().contains(QStringLiteral("File → Save")));
     QVERIFY(save);
 }
 

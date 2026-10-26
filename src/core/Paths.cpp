@@ -92,4 +92,16 @@ bool ensure()
     return ok;
 }
 
+bool sameFile(const QString &a, const QString &b)
+{
+#ifdef Q_OS_WIN
+    const Qt::CaseSensitivity cs = Qt::CaseInsensitive;
+#else
+    const Qt::CaseSensitivity cs = Qt::CaseSensitive;
+#endif
+    if (a.isEmpty() || b.isEmpty())
+        return false;
+    return QDir::cleanPath(QDir::fromNativeSeparators(a)).compare(QDir::cleanPath(QDir::fromNativeSeparators(b)), cs) == 0;
+}
+
 } // namespace lumen::paths

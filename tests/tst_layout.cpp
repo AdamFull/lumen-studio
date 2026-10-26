@@ -18,6 +18,7 @@
 #include "runtime/RuntimeStore.h"
 #include "runtime/ServerProfile.h"
 #include "ui/Accessibility.h"
+#include "ui/DocumentFiles.h"
 #include "ui/MainWindow.h"
 #include "ui/Studio.h"
 #include "ui/Theme.h"
@@ -56,6 +57,7 @@
 #include <QPushButton>
 #include <QRadioButton>
 #include <QRegularExpression>
+#include <QScopeGuard>
 #include <QScreen>
 #include <QScrollBar>
 #include <QSplitter>
@@ -429,6 +431,7 @@ private slots:
     void settingsDialog();
     void dialogs();
     void filterTools();
+    void fileQuestions();
 
 private:
     Auditor m_auditor;
@@ -929,6 +932,65 @@ void TestLayout::filterTools()
         m_auditor.audit(&host, surface);
         m_auditor.shoot(&host, surface);
     }
+}
+
+// The questions about a picture's file (M17): saving over it with everything it can say, and changes
+// not saved to their files when a picture closes or Lumen quits; the start screen with recent files.
+void TestLayout::fileQuestions()
+{
+    {
+        const SaveOverQuestion question{QStringLiteral("Holiday at the sea with the whole family, summer 2026.jpg"),
+                                        {QStringLiteral("The layers are merged in the file; your project keeps them."),
+                                         QStringLiteral("JPEG has no transparency: the transparent parts become white."),
+                                         QStringLiteral("JPEG loses a little quality each time it is saved; Lumen keeps the quality the "
+                                                        "file had (85 of 100)."),
+                                         QStringLiteral("The file has 16 bits per colour; Lumen saves 8, so the finest shades are lost.")}};
+        std::unique_ptr<QMessageBox> box(saveOverBox(question, nullptr));
+        m_auditor.auditDialog(box.get(), QStringLiteral("Save over question"));
+    }
+    {
+        std::unique_ptr<QMessageBox> box(unsavedChangesBox({QStringLiteral("cat.png")}, false, nullptr));
+        m_auditor.auditDialog(box.get(), QStringLiteral("Unsaved changes question (closing)"));
+    }
+    {
+        std::unique_ptr<QMessageBox> box(unsavedChangesBox({QStringLiteral("cat.png"), QStringLiteral("dog.png"),
+                                                            QStringLiteral("Holiday at the sea with the whole family.jpg")},
+                                                           true, nullptr));
+        m_auditor.auditDialog(box.get(), QStringLiteral("Unsaved changes question (quitting)"));
+    }
+    // The start screen with recent files (long names) next to the project's documents.
+    QTemporaryDir dir;
+    const QStringList before = Settings::instance().recentFiles();
+    auto restore = qScopeGuard([&before] { Settings::instance().setValue(QStringLiteral("app/recentFiles"), before); });
+    QStringList files;
+    for (int i = 0; i < 4; ++i) {
+        const QString path = dir.filePath(QStringLiteral("A picture from disk with a long name %1.png").arg(i + 1));
+        QImage im = sampleImage().scaled(600 + 100 * i, 400);
+        if (i % 2)
+            im.invertPixels();
+        QVERIFY(im.save(path));
+        files.prepend(path);
+    }
+    Settings::instance().setValue(QStringLiteral("app/recentFiles"), files);
+    Studio studio;
+    studio.openProject(dir.filePath(QStringLiteral("files.lumen")));
+    QTRY_VERIFY_WITH_TIMEOUT(studio.isProjectOpen(), 5000);
+    {
+        doc::Document *saved = studio.openImageAsDocument(sampleImage(), QStringLiteral("Saved document"));
+        auto done = studio.project()->saveDocument(saved);
+        QTRY_VERIFY_WITH_TIMEOUT(done.isFinished(), 5000);
+        studio.closeDocument(saved);
+    }
+    MainWindow window(&studio);
+    window.resize(kWindowSizes.first());
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    QTRY_VERIFY(window.editor()->showsStartScreen());
+    QTRY_COMPARE(window.editor()->startScreen()->recentFileTiles().size(), 4);
+    Auditor::settle();
+    const QString surface = QStringLiteral("Start screen with recent files 1280x720");
+    m_auditor.audit(&window, surface);
+    m_auditor.shoot(&window, surface);
 }
 
 int main(int argc, char **argv)

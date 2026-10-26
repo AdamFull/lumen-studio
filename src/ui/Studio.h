@@ -105,14 +105,21 @@ public:
     void setActiveDocument(doc::Document *doc);
     doc::Document *newDocument(const QSize &size, const QString &name, const QColor &background = Qt::white);
     doc::Document *openImageAsDocument(const QImage &image, const QString &name, const QJsonObject &meta = {});
-    // Opens an image file as a document; layered PSD files keep their layers.
+    // Opens an image file as a document that remembers the file (File → Save writes it back);
+    // layered PSD files keep their layers. A file that is open already is shown; one the project
+    // keeps as a document, unchanged since (in the document and on disk), opens that document with
+    // its layers. Either way the file goes to the top of File → Open recent.
     void openFile(const QString &path);
     void openPsdAsDocument(const QString &path);
     static QString openFileFilter();
+    // The open document that saves to `path`, if any.
+    doc::Document *documentForFile(const QString &path) const;
     // Opens a document stored in the project; `show` switches to the editor.
     void openStoredDocument(const QString &documentId, bool show = true);
     void openAssetInEditor(const QString &assetId);
-    void closeDocument(doc::Document *doc);
+    // Closes the document without asking (the editor asks first about changes not saved to its
+    // file); the project keeps it. The future finishes once the project has saved it.
+    QFuture<void> closeDocument(doc::Document *doc);
 
     // ---- session ------------------------------------------------------------------------------
     // The open documents are remembered in the project and reopened when it opens again (also after

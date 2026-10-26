@@ -6,6 +6,7 @@ add_library(lumen_ui STATIC
     ext/Extension.h ext/Extension.cpp
     Studio.h Studio.cpp
     MainWindow.h MainWindow.cpp
+    DocumentFiles.h DocumentFiles.cpp
     canvas/EditorState.h canvas/EditorState.cpp
     canvas/CanvasView.h canvas/CanvasView.cpp
     canvas/Tool.h

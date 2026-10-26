@@ -153,6 +153,14 @@
     </message>
 </context>
 <context>
+    <name>lumen::ui::DocumentFiles</name>
+    <message numerus="yes">
+        <location filename="../src/ui/DocumentFiles.cpp" line="+56" />
+        <source>Save the changes to %n picture(s) before quitting?</source>
+        <translation><numerusform>Save the changes to %n picture before quitting?</numerusform><numerusform>Save the changes to %n pictures before quitting?</numerusform></translation>
+    </message>
+</context>
+<context>
     <name>lumen::ui::LibraryPage</name>
     <message numerus="yes">
         <location filename="../src/ui/pages/LibraryPage.cpp" line="+525" />

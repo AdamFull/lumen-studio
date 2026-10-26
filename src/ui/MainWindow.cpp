@@ -6,6 +6,7 @@
 #include "core/Settings.h"
 #include "runtime/CloudTraining.h"
 #include "runtime/Hardware.h"
+#include "ui/DocumentFiles.h"
 #include "ui/Studio.h"
 #include "ui/Icons.h"
 #include "ui/Shortcuts.h"
@@ -297,6 +298,8 @@ void MainWindow::buildMenus()
 {
     const QString general = tr("General");
     auto bind = [general](QAction *action, const QString &id) {
+        if (action->objectName().isEmpty())
+            action->setObjectName(QStringLiteral("app-%1").arg(id));
         Shortcuts::instance().bindAction(action, QStringLiteral("app.") + id, general, QStringLiteral("global"));
     };
     // Actions that replace a page of the old navigation rail keep its shortcut id and key.
@@ -313,7 +316,13 @@ void MainWindow::buildMenus()
     QAction *fromPrompt = file->addAction(Icons::get(QStringLiteral("sparkles")), tr("New from prompt…"), this, &MainWindow::newFromPrompt);
     fromPrompt->setObjectName(QStringLiteral("newFromPrompt"));
     bindPage(fromPrompt, QStringLiteral("sparkles"), tr("New from prompt"), QKeySequence(QStringLiteral("Alt+2")));
-    bind(file->addAction(Icons::get(QStringLiteral("image")), tr("Open image…"), QKeySequence::Open, this, &MainWindow::openImages), QStringLiteral("open-image"));
+    bind(file->addAction(Icons::get(QStringLiteral("image")), tr("Open image…"), QKeySequence::Open, this, &MainWindow::openImages),
+         QStringLiteral("open-image"));
+    // Pictures opened from disk or saved as, newest first; one that is gone is shown greyed.
+    QMenu *recentFiles = file->addMenu(Icons::get(QStringLiteral("history")), tr("Open recent"));
+    recentFiles->setObjectName(QStringLiteral("openRecent"));
+    recentFiles->setToolTipsVisible(true);
+    connect(recentFiles, &QMenu::aboutToShow, this, [this, recentFiles] { fillRecentFiles(recentFiles); });
     bind(file->addAction(Icons::get(QStringLiteral("copy")), tr("Paste from clipboard"), this, [this] {
         showPage(pages::Editor);
         m_editor->pasteAsNewDocument();
@@ -322,23 +331,50 @@ void MainWindow::buildMenus()
     browse->setObjectName(QStringLiteral("browseProjectImages"));
     bindPage(browse, QStringLiteral("gallery"), tr("Browse project images"), QKeySequence(QStringLiteral("Alt+6")));
     file->addSeparator();
-    // Documents live in the project (with their layers); a picture file is written by Export.
-    QAction *saveAll = file->addAction(Icons::get(QStringLiteral("save")), tr("Save to project"), QKeySequence::Save, this, [this] {
+    // The picture's file, as in other editors: Save writes it back, Save as… chooses another file the
+    // document then saves to, Export a copy… writes one it does not.
+    auto documentAction = [this, file, bind](const QString &id, const QString &icon, const QString &text, const QKeySequence &key,
+                                             const QString &tip, std::function<void()> fn) {
+        QAction *a = file->addAction(icon.isEmpty() ? QIcon() : Icons::get(icon), text, key, this, std::move(fn));
+        a->setToolTip(tip);
+        a->setStatusTip(tip);
+        bind(a, id);
+        m_documentActions << a;
+        return a;
+    };
+    documentAction(QStringLiteral("save"), QStringLiteral("save"), tr("Save"), QKeySequence::Save,
+                   tr("Write the picture to the file it was opened from or last saved as (a new picture asks for a file)"),
+                   [this] { m_editor->files()->save(m_studio->activeDocument()); });
+    documentAction(QStringLiteral("save-as"), QString(), tr("Save as…"), QKeySequence(QStringLiteral("Ctrl+Shift+S")),
+                   tr("Write the picture to a new file (PNG, JPEG, layered PSD…); Save writes to that file from then on"),
+                   [this] { m_editor->files()->saveAs(m_studio->activeDocument()); });
+    documentAction(QStringLiteral("export-image"), QStringLiteral("download"), tr("Export a copy…"), QKeySequence(QStringLiteral("Ctrl+Shift+E")),
+                   tr("Write a copy of the picture to a file; Save keeps writing to the picture's own file"),
+                   [this] { m_editor->files()->exportCopy(m_studio->activeDocument()); });
+    documentAction(QStringLiteral("close-document"), QString(), tr("Close document"), QKeySequence::Close,
+                   tr("Close the picture (asks first when it has changes not saved to its file)"),
+                   [this] { m_editor->files()->close(m_studio->activeDocument()); });
+    file->addSeparator();
+    // The project keeps every document with its layers, saved by itself a few seconds after a change.
+    QAction *saveAll = file->addAction(Icons::get(QStringLiteral("save")), tr("Save to project"), this, [this] {
         m_studio->saveAll().then(this, [this] {
-            m_studio->notify(tr("Saved to the project with their layers. File → Export image… writes a picture file."), QStringLiteral("success"));
+            m_studio->notify(tr("Saved to the project with their layers. File → Save writes the picture's file."), QStringLiteral("success"));
         });
     });
-    saveAll->setToolTip(tr("Save the open documents, with their layers, in the project. Export image… writes a PNG, JPEG or PSD file."));
+    saveAll->setToolTip(tr("Save the open documents, with their layers, in the project now (it also does so by itself). File → Save "
+                           "writes the picture's file."));
     saveAll->setStatusTip(saveAll->toolTip());
     bind(saveAll, QStringLiteral("save-all"));
-    bind(file->addAction(Icons::get(QStringLiteral("download")), tr("Export image…"), QKeySequence(QStringLiteral("Ctrl+Shift+E")), this,
-                    [this] { m_editor->exportImage(); }), QStringLiteral("export-image"));
-    bind(file->addAction(Icons::get(QStringLiteral("gallery")), tr("Save a copy to project images"), QKeySequence(QStringLiteral("Ctrl+Shift+S")), this,
-                    [this] { m_editor->saveToLibrary(); }), QStringLiteral("save-to-library"));
-    bind(file->addAction(tr("Close document"), QKeySequence::Close, this, [this] { m_studio->closeDocument(m_studio->activeDocument()); }), QStringLiteral("close-document"));
+    QAction *toLibrary = file->addAction(Icons::get(QStringLiteral("gallery")), tr("Save a copy to project images"), this,
+                                         [this] { m_editor->saveToLibrary(); });
+    toLibrary->setToolTip(tr("Add the picture, merged, to the project's images (File → Browse project images)"));
+    toLibrary->setStatusTip(toLibrary->toolTip());
+    bind(toLibrary, QStringLiteral("save-to-library")); // Ctrl+Shift+S went to Save as…
+    m_documentActions << toLibrary;
     file->addSeparator();
     bind(file->addAction(Icons::get(QStringLiteral("folder")), tr("New project…"), this, &MainWindow::newProject), QStringLiteral("new-project"));
-    bind(file->addAction(Icons::get(QStringLiteral("folder")), tr("Open project…"), QKeySequence(QStringLiteral("Ctrl+Shift+O")), this, &MainWindow::openProject), QStringLiteral("open-project"));
+    bind(file->addAction(Icons::get(QStringLiteral("folder")), tr("Open project…"), QKeySequence(QStringLiteral("Ctrl+Shift+O")), this, &MainWindow::openProject),
+         QStringLiteral("open-project"));
     QMenu *recent = file->addMenu(tr("Recent projects"));
     connect(recent, &QMenu::aboutToShow, this, [this, recent] {
         recent->clear();
@@ -351,7 +387,8 @@ void MainWindow::buildMenus()
             recent->addAction(tr("(none)"))->setEnabled(false);
     });
     file->addSeparator();
-    bind(file->addAction(tr("Quit"), QKeySequence::Quit, this, &QWidget::close), QStringLiteral("quit"));
+    // QKeySequence::Quit has no key on Windows; Ctrl+Q as in other image editors.
+    bind(file->addAction(tr("Quit"), QKeySequence(QStringLiteral("Ctrl+Q")), this, &QWidget::close), QStringLiteral("quit"));
 
     QMenu *edit = menuBar()->addMenu(tr("&Edit"));
     // The editor's own commands: the same actions as its keys, so a key changed in Settings →
@@ -858,7 +895,11 @@ void MainWindow::openProject()
 
 void MainWindow::openImages()
 {
-    const QStringList files = QFileDialog::getOpenFileNames(this, tr("Open images"), QString(), Studio::openFileFilter());
+    // Where the last picture opened or saved is, as other editors start.
+    const QString recent = Settings::instance().recentFiles().value(0);
+    const QString folder = recent.isEmpty() ? QString() : QFileInfo(recent).absolutePath();
+    const QStringList files = QFileDialog::getOpenFileNames(this, tr("Open images"), QFileInfo(folder).isDir() ? folder : QString(),
+                                                            Studio::openFileFilter());
     for (const QString &f : files)
         m_studio->openFile(f);
 }
@@ -1000,23 +1041,64 @@ void MainWindow::closeEvent(QCloseEvent *e)
         e->accept();
         return;
     }
-    const int running = m_studio->jobs()->activeCount() + m_studio->jobs()->pendingCount();
-    if (running > 0) {
-        const auto answer = QMessageBox::question(this, tr("Quit"), tr("%n job(s) are still running. Quit anyway?", nullptr, running));
-        if (answer != QMessageBox::Yes) {
-            e->ignore();
+    e->ignore();
+    if (m_quitting)
+        return; // the questions or the saves of a quit are on their way
+    m_quitting = true;
+    // Pictures with changes not saved to their files first (Save / Don't save / Cancel), as in other
+    // editors; then the jobs. The window closes once everything is on disk. Saving a picture may
+    // ask too (the first time it saves over one), so this goes on when the answers are in.
+    m_editor->files()->confirmQuit().then(this, [this](bool quit) {
+        if (!quit) {
+            m_quitting = false;
             return;
         }
-        m_studio->jobs()->cancelAll();
+        const int running = m_studio->jobs()->activeCount() + m_studio->jobs()->pendingCount();
+        if (running > 0) {
+            const auto answer = QMessageBox::question(this, tr("Quit"), tr("%n job(s) are still running. Quit anyway?", nullptr, running));
+            if (answer != QMessageBox::Yes) {
+                m_quitting = false;
+                return;
+            }
+            m_studio->jobs()->cancelAll();
+        }
+        // Save open documents (and which are open, for the next start) before quitting. The close is
+        // queued: with nothing to save the futures are finished already and the continuation may run
+        // inside the close event, where a nested close() does nothing.
+        m_closing = true;
+        statusBar()->showMessage(tr("Saving..."));
+        auto closeLater = [this] { QTimer::singleShot(0, this, [this] { close(); }); };
+        m_studio->saveAll()
+            .then(this, [this] { return m_studio->saveSession(); })
+            .unwrap()
+            .then(this, closeLater)
+            .onFailed(this, [closeLater](const std::exception &) { closeLater(); });
+    });
+}
+
+void MainWindow::fillRecentFiles(QMenu *menu)
+{
+    menu->clear();
+    const QStringList files = Settings::instance().recentFiles();
+    QStringList names;
+    for (const QString &path : files)
+        names << QFileInfo(path).fileName();
+    for (const QString &path : files) {
+        const QFileInfo info(path);
+        // Two files of the same name say which folder they are in.
+        const QString name = names.count(info.fileName()) > 1 ? QStringLiteral("%1 (%2)").arg(info.fileName(), info.dir().dirName())
+                                                               : info.fileName();
+        QAction *a = menu->addAction(name, this, [this, path] { m_studio->openFile(path); });
+        const bool there = info.exists();
+        a->setEnabled(there);
+        a->setToolTip(there ? QDir::toNativeSeparators(path) : tr("%1 is not there any more").arg(QDir::toNativeSeparators(path)));
     }
-    // Save open documents before quitting; the window closes when everything is on disk. The close
-    // is queued: with nothing to save the future is already finished and its continuation runs
-    // here, inside this close event, where a nested close() does nothing.
-    e->ignore();
-    m_closing = true;
-    statusBar()->showMessage(tr("Saving..."));
-    auto closeLater = [this] { QTimer::singleShot(0, this, [this] { close(); }); };
-    m_studio->saveAll().then(this, closeLater).onFailed(this, [closeLater](const std::exception &) { closeLater(); });
+    if (files.isEmpty()) {
+        menu->addAction(tr("(none)"))->setEnabled(false);
+        return;
+    }
+    menu->addSeparator();
+    menu->addAction(tr("Clear the list"), this, [] { Settings::instance().removeRecentFile(QString()); });
 }
 
 } // namespace lumen::ui

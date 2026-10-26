@@ -164,8 +164,14 @@ QFuture<void> Project::open(const QString &path)
                     "FROM assets ORDER BY created")), q);
                 while (q.next())
                     loaded->assets.append(assetFromQuery(q));
-                ProjectStore::check(q.exec(QStringLiteral(
-                    "SELECT id, name, created, modified, width, height, thumb FROM documents ORDER BY modified DESC")), q);
+                // With the image file each one saves to, without reading the rest of its state (the
+                // selection is in there). Should SQLite lack its JSON functions, without the files.
+                const bool withFiles = q.exec(QStringLiteral(
+                    "SELECT id, name, created, modified, width, height, thumb, json_extract(state, '$.file') "
+                    "FROM documents ORDER BY modified DESC"));
+                if (!withFiles)
+                    ProjectStore::check(q.exec(QStringLiteral(
+                        "SELECT id, name, created, modified, width, height, thumb FROM documents ORDER BY modified DESC")), q);
                 while (q.next()) {
                     DocumentInfo d;
                     d.id = q.value(0).toString();
@@ -174,6 +180,11 @@ QFuture<void> Project::open(const QString &path)
                     d.modified = QDateTime::fromMSecsSinceEpoch(q.value(3).toLongLong());
                     d.size = QSize(q.value(4).toInt(), q.value(5).toInt());
                     d.thumbnail = img::decode(q.value(6).toByteArray());
+                    if (withFiles && !q.value(7).isNull()) {
+                        const QJsonObject file = fromJsonBytes(q.value(7).toString().toUtf8());
+                        d.file = FileLink::fromJson(file);
+                        d.fileModified = file.value(QStringLiteral("modified_since")).toBool();
+                    }
                     loaded->documents.append(d);
                 }
                 return loaded;
@@ -447,6 +458,14 @@ QFuture<void> Project::saveDocument(Document *doc)
     state.insert(QStringLiteral("settings"), doc->settings());
     if (doc->controlPose())
         state.insert(QStringLiteral("pose"), doc->controlPose()->toOpenPoseJson());
+    // The image file it saves to, and whether it has changes that are not in the file.
+    const FileLink file = doc->file();
+    const bool fileModified = doc->isFileModified();
+    if (doc->hasFile()) {
+        QJsonObject f = file.toJson();
+        f.insert(QStringLiteral("modified_since"), fileModified);
+        state.insert(QStringLiteral("file"), f);
+    }
     job->state = state;
     for (int i = 0; i < doc->layerCount(); ++i) {
         const LayerPtr l = doc->layerAt(i);
@@ -529,7 +548,7 @@ QFuture<void> Project::saveDocument(Document *doc)
             });
         })
         .unwrap()
-        .then(this, [this, job, guard, revisionAtSave] {
+        .then(this, [this, job, guard, revisionAtSave, file, fileModified] {
             if (guard) {
                 for (const LayerJob &lj : job->layers) {
                     if (const LayerPtr l = guard->findLayer(QUuid(lj.id)); l && lj.encode)
@@ -544,6 +563,8 @@ QFuture<void> Project::saveDocument(Document *doc)
             info.modified = QDateTime::fromMSecsSinceEpoch(job->now);
             info.size = job->size;
             info.thumbnail = img::decode(job->thumb);
+            info.file = file;
+            info.fileModified = fileModified;
             bool found = false;
             for (DocumentInfo &d : m_documents) {
                 if (d.id == info.id) {
@@ -645,6 +666,9 @@ QFuture<std::shared_ptr<LoadedDocument>> Project::loadDocument(const QString &id
                 doc->selection = img::fromBase64(sel.toLatin1()).convertToFormat(QImage::Format_Grayscale8);
             if (raw->state.contains(QStringLiteral("pose")))
                 doc->pose = pose::Pose::fromOpenPoseJson(raw->state.value(QStringLiteral("pose")).toObject());
+            const QJsonObject file = raw->state.value(QStringLiteral("file")).toObject();
+            doc->file = FileLink::fromJson(file);
+            doc->fileModified = file.value(QStringLiteral("modified_since")).toBool();
             return doc;
         });
 }

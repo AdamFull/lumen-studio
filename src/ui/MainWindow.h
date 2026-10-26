@@ -11,6 +11,7 @@ class QAction;
 class QDialog;
 class QFrame;
 class QLabel;
+class QMenu;
 class QToolButton;
 class QVBoxLayout;
 
@@ -90,6 +91,8 @@ private:
     void newProject();
     void openProject();
     void openImages();
+    // File → Open recent: the pictures opened from disk or saved as.
+    void fillRecentFiles(QMenu *menu);
     void rerun(const QString &assetId);
     void newImageWithPose(const pose::Pose &pose);
     void notify(const QString &message, const QString &level);
@@ -122,7 +125,8 @@ private:
     QPointer<NewFromPromptDialog> m_newFromPrompt;
     QPointer<QDialog> m_projectImages;
     QPointer<QWidget> m_lastOpened; // by showPage, for saveScreenshot
-    bool m_closing = false;
+    bool m_quitting = false; // asked to close: the questions and saves are on their way
+    bool m_closing = false;  // everything is saved: the next close event closes
 };
 
 } // namespace lumen::ui

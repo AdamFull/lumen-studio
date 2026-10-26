@@ -29,6 +29,10 @@ public:
     int autosaveIntervalSec() const { return value(QStringLiteral("doc/autosaveSec"), 60).toInt(); }
     QStringList recentProjects() const { return value(QStringLiteral("app/recentProjects")).toStringList(); }
     void addRecentProject(const QString &path);
+    // Image files opened from disk or saved as (File → Open recent, the start screen), newest first.
+    QStringList recentFiles() const { return value(QStringLiteral("app/recentFiles")).toStringList(); }
+    void addRecentFile(const QString &path);
+    void removeRecentFile(const QString &path); // "" removes them all
 
 signals:
     void changed(const QString &key, const QVariant &value);

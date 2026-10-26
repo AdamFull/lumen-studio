@@ -3,6 +3,7 @@
 #include "ai/FilterNodes.h"
 #include "ai/ProviderCatalog.h"
 #include "core/Async.h"
+#include "doc/ImageFile.h"
 #include "doc/PsdIO.h"
 #include "core/Error.h"
 #include "core/ImageOps.h"
@@ -561,6 +562,11 @@ doc::Document *Studio::adoptLoaded(const std::shared_ptr<doc::LoadedDocument> &l
     if (loaded->pose)
         doc->setControlPose(loaded->pose);
     doc->undoStack()->clear();
+    // The file it saves to, and whether it had changes that are not in the file.
+    if (!loaded->file.isEmpty()) {
+        doc->setFile(loaded->file);
+        doc->setFileModified(loaded->fileModified);
+    }
     doc->setModified(false);
     adoptDocument(doc);
     return doc;
@@ -612,29 +618,91 @@ QString Studio::openFileFilter()
     return tr("Images (*.png *.jpg *.jpeg *.webp *.bmp *.tif *.tiff *.psd);;Layered Photoshop (*.psd)");
 }
 
-void Studio::openFile(const QString &path)
+doc::Document *Studio::documentForFile(const QString &path) const
 {
+    for (doc::Document *d : m_documents) {
+        if (paths::sameFile(d->file().path, path))
+            return d;
+    }
+    return nullptr;
+}
+
+void Studio::openFile(const QString &file)
+{
+    const QString path = QDir::cleanPath(QFileInfo(file).absoluteFilePath());
+    // Open already: shown, not opened twice.
+    if (doc::Document *open = documentForFile(path)) {
+        Settings::instance().addRecentFile(path);
+        setActiveDocument(open);
+        showPage(pages::Editor);
+        return;
+    }
+    // The project keeps this picture as a document with its layers, as it was saved to the file or
+    // read from it, and no other program has changed the file since: that document, rather than a
+    // second one with the layers merged.
+    if (m_project && m_project->isOpen()) {
+        for (const doc::DocumentInfo &info : m_project->documents()) {
+            if (paths::sameFile(info.file.path, path) && !info.fileModified && info.file.isUnchangedOnDisk()) {
+                Settings::instance().addRecentFile(path);
+                openStoredDocument(info.id);
+                return;
+            }
+        }
+    }
+    // Gone since it was listed (File → Open recent, the start screen): said, and off the list.
+    if (!QFileInfo::exists(path)) {
+        notify(tr("%1 is not there any more.").arg(QDir::toNativeSeparators(path)), QStringLiteral("warning"));
+        Settings::instance().removeRecentFile(path);
+        return;
+    }
     if (QFileInfo(path).suffix().compare(QLatin1String("psd"), Qt::CaseInsensitive) == 0) {
         openPsdAsDocument(path);
         return;
     }
     QImageReader reader(path);
     reader.setAutoTransform(true);
+    QByteArray format = reader.format().toLower();
     const QImage image = reader.read();
-    if (image.isNull())
+    if (image.isNull()) {
         notify(tr("Cannot open %1: %2").arg(QFileInfo(path).fileName(), reader.errorString()), QStringLiteral("error"));
-    else
-        openImageAsDocument(image, QFileInfo(path).completeBaseName());
+        return;
+    }
+    if (format == "jpg")
+        format = "jpeg";
+    else if (format == "tif")
+        format = "tiff";
+    doc::FileLink link;
+    link.path = path;
+    link.format = format;
+    if (format == "jpeg")
+        link.quality = doc::estimateJpegQuality(path);
+    // The document keeps 8 bits per colour.
+    if (image.depth() > 32 || image.format() == QImage::Format_Grayscale16)
+        link.losses << tr("The file has 16 bits per colour; Lumen saves 8, so the finest shades are lost.");
+    link.stamp();
+    doc::Document *doc = openImageAsDocument(image, QFileInfo(path).completeBaseName());
+    doc->setFile(link);
+    Settings::instance().addRecentFile(path);
 }
 
-void Studio::openPsdAsDocument(const QString &path)
+void Studio::openPsdAsDocument(const QString &file)
 {
+    const QString path = QDir::cleanPath(QFileInfo(file).absoluteFilePath());
     const QString name = QFileInfo(path).completeBaseName();
     notify(tr("Opening %1...").arg(QFileInfo(path).fileName()));
     async::run([path] { return doc::importPsd(path); })
-        .then(this, [this, name](doc::PsdImport imported) {
+        .then(this, [this, name, path](doc::PsdImport imported) {
+            doc::FileLink link;
+            link.path = path;
+            link.format = "psd";
+            // What Lumen made do with (clipping, masks, blend modes) is lost when it writes the file.
+            if (!imported.warnings.isEmpty())
+                link.losses << tr("Lumen could not keep everything of this Photoshop file (%1).")
+                                   .arg(imported.warnings.join(QStringLiteral("; ")));
+            link.stamp();
+            Settings::instance().addRecentFile(path);
             if (imported.layers.isEmpty()) {
-                openImageAsDocument(imported.composite, name);
+                openImageAsDocument(imported.composite, name)->setFile(link);
                 return;
             }
             auto *d = new doc::Document(imported.size);
@@ -643,6 +711,7 @@ void Studio::openPsdAsDocument(const QString &path)
                 d->insertLayerRaw(i, imported.layers[i]);
             d->setActiveLayer(imported.layers.last()->id);
             d->undoStack()->clear();
+            d->setFile(link);
             d->setModified(false);
             adoptDocument(d);
             showPage(pages::Editor);
@@ -687,14 +756,15 @@ void Studio::openStoredDocument(const QString &documentId, bool show)
         .onFailed(this, [this](const std::exception &e) { notify(describeException(e), QStringLiteral("error")); });
 }
 
-void Studio::closeDocument(doc::Document *doc)
+QFuture<void> Studio::closeDocument(doc::Document *doc)
 {
     if (!doc || !m_documents.contains(doc))
-        return;
+        return QtFuture::makeReadyVoidFuture();
+    QFuture<void> saved = QtFuture::makeReadyVoidFuture();
     if (doc->isModified() && m_project && m_project->isOpen()) {
         // Persist before closing; deletion waits for the save to finish.
         QPointer<doc::Document> guard(doc);
-        m_project->saveDocument(doc).then(this, [guard] {
+        saved = m_project->saveDocument(doc).then(this, [guard] {
             if (guard)
                 guard->deleteLater();
         });
@@ -705,6 +775,7 @@ void Studio::closeDocument(doc::Document *doc)
     if (m_active == doc)
         setActiveDocument(m_documents.isEmpty() ? nullptr : m_documents.last());
     emit documentsChanged();
+    return saved;
 }
 
 bool Studio::hasPage(const QString &id) const

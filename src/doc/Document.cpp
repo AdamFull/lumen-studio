@@ -3,6 +3,9 @@
 #include "core/ImageOps.h"
 #include "doc/Commands.h"
 
+#include <QDateTime>
+#include <QFileInfo>
+#include <QJsonArray>
 #include <QPainter>
 
 namespace lumen::doc {
@@ -16,6 +19,9 @@ Document::Document(const QSize &size, QObject *parent)
     connect(&m_undo, &QUndoStack::cleanChanged, this, [this](bool clean) {
         if (!clean)
             setModified(true);
+        // The history's clean state is the file's: undoing back to it clears the marker.
+        if (hasFile())
+            emit fileChanged();
     });
     connect(&m_undo, &QUndoStack::indexChanged, this, [this] { setModified(true); });
 }
@@ -438,6 +444,90 @@ void Document::setModified(bool modified)
         return;
     m_modified = modified;
     emit modifiedChanged(modified);
+}
+
+QString FileLink::fileName() const
+{
+    return QFileInfo(path).fileName();
+}
+
+void FileLink::stamp()
+{
+    const QFileInfo info(path);
+    size = info.exists() ? info.size() : -1;
+    modified = info.exists() ? info.lastModified().toMSecsSinceEpoch() : -1;
+}
+
+bool FileLink::isUnchangedOnDisk() const
+{
+    const QFileInfo info(path);
+    return !path.isEmpty() && info.exists() && size >= 0 && info.size() == size && info.lastModified().toMSecsSinceEpoch() == modified;
+}
+
+QJsonObject FileLink::toJson() const
+{
+    QJsonObject o{{QStringLiteral("path"), path}, {QStringLiteral("format"), QString::fromLatin1(format)}};
+    if (quality > 0)
+        o.insert(QStringLiteral("quality"), quality);
+    if (!losses.isEmpty())
+        o.insert(QStringLiteral("losses"), QJsonArray::fromStringList(losses));
+    if (dontAsk)
+        o.insert(QStringLiteral("dontAsk"), true);
+    if (size >= 0) {
+        o.insert(QStringLiteral("size"), double(size));
+        o.insert(QStringLiteral("modified"), double(modified));
+    }
+    return o;
+}
+
+FileLink FileLink::fromJson(const QJsonObject &json)
+{
+    FileLink f;
+    f.path = json.value(QStringLiteral("path")).toString();
+    f.format = json.value(QStringLiteral("format")).toString().toLatin1();
+    f.quality = json.value(QStringLiteral("quality")).toInt(-1);
+    for (const QJsonValue &v : json.value(QStringLiteral("losses")).toArray())
+        f.losses << v.toString();
+    f.dontAsk = json.value(QStringLiteral("dontAsk")).toBool();
+    f.size = qint64(json.value(QStringLiteral("size")).toDouble(-1));
+    f.modified = qint64(json.value(QStringLiteral("modified")).toDouble(-1));
+    return f;
+}
+
+void Document::setFile(const FileLink &file)
+{
+    m_file = file;
+    m_fileDirty = false;
+    m_undo.setClean();
+    emit fileChanged();
+}
+
+void Document::updateFile(const FileLink &file)
+{
+    if (m_file == file)
+        return;
+    m_file = file;
+    emit fileChanged();
+}
+
+void Document::markFileSaved()
+{
+    m_fileDirty = false;
+    m_undo.setClean();
+    emit fileChanged();
+}
+
+bool Document::isFileModified() const
+{
+    return hasFile() && (m_fileDirty || !m_undo.isClean());
+}
+
+void Document::setFileModified(bool modified)
+{
+    if (m_fileDirty == modified)
+        return;
+    m_fileDirty = modified;
+    emit fileChanged();
 }
 
 void Document::touch()
