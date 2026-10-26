@@ -41,7 +41,12 @@
 #include "plugins/characters/training/CharacterTraining.h"
 #include "plugins/characters/training/LoraEvaluation.h"
 #include "plugins/characters/director/DirectorSession.h"
+#include "ui/MainWindow.h"
 #include "ui/pages/AiOptions.h"
+#include "ui/pages/EditorPage.h"
+#include "ui/pages/PromptBar.h"
+#include "ui/pages/PromptPlan.h"
+#include "ui/pages/VariantStrip.h"
 #include "ui/pages/AiPanel.h"
 #include "ui/dialogs/CharacterLoraDialog.h"
 #include "plugins/parts/ExpressionCheck.h"
@@ -122,6 +127,7 @@ private slots:
     void managedSdServer();
     void animaServer();
     void kleinEditServer();
+    void kleinPromptBar();
     void managedStudioScenario();
     void managedSdUpscale();
     void managedComfyUi();
@@ -946,6 +952,157 @@ void TestLive::kleinEditServer()
     QCOMPARE(changed, 0);
     servers.stop(profile.id);
     QTRY_COMPARE_WITH_TIMEOUT(servers.state(profile.id), runtime::ServerState::Stopped, 30000);
+}
+
+// The editor as the user meets it, with FLUX.2 klein through sd.cpp (plan M17 §17.8, the last
+// live check): a whole-image colorize from the prompt bar with nothing selected, then a new image
+// on a blank canvas. Same variables as kleinEditServer; one result per run to keep it short.
+void TestLive::kleinPromptBar()
+{
+    const QString root = qEnvironmentVariable("LUMEN_LIVE_SD_RUNTIMES");
+    const QString model = QDir::cleanPath(qEnvironmentVariable("LUMEN_LIVE_KLEIN_MODEL"));
+    if (root.isEmpty() || qEnvironmentVariable("LUMEN_LIVE_KLEIN_MODEL").isEmpty())
+        QSKIP("LUMEN_LIVE_SD_RUNTIMES and LUMEN_LIVE_KLEIN_MODEL are needed");
+    Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
+    Settings::instance().setValue(QStringLiteral("editor/ai/variants"), 1);
+    QTemporaryDir dir;
+    ui::Studio studio;
+    for (Provider *p : studio.providers()->providers())
+        studio.providers()->removeProvider(p->instanceId());
+    for (const runtime::ServerProfile &p : studio.servers()->profiles())
+        studio.servers()->removeProfile(p.id);
+    studio.runtimes()->setRoot(dir.filePath(QStringLiteral("runtimes")));
+    studio.runtimes()->load();
+    {
+        JobQueue jobs;
+        runtime::RuntimeStore real(&m_http, &jobs);
+        real.setRoot(root);
+        real.load();
+        const auto sd = real.latestManaged(QStringLiteral("sd.cpp"));
+        QVERIFY2(sd, "no managed sd.cpp install in LUMEN_LIVE_SD_RUNTIMES");
+        studio.runtimes()->addInstalled(*sd);
+    }
+    // The studio's library finds the model's VAE and text encoder by their headers.
+    // (The studio's own start-up scan may already have finished, so wait for the file itself.)
+    runtime::ModelLibrary *lib = studio.models();
+    lib->addRoot(QFileInfo(model).absolutePath());
+    for (const QString &d : qEnvironmentVariable("LUMEN_LIVE_MODEL_DIRS").split(QLatin1Char(';'), Qt::SkipEmptyParts))
+        lib->addRoot(d);
+    QTRY_VERIFY_WITH_TIMEOUT(lib->entry(model).has_value() && !lib->isScanning(), 180000);
+
+    // The server as Settings → Local servers makes it from the preset.
+    runtime::ServerSupervisor *servers = studio.servers();
+    runtime::ServerProfile profile = servers->createProfile(studio.runtimes()->latestManaged(QStringLiteral("sd.cpp"))->id,
+                                                            QStringLiteral("FLUX.2 klein"));
+    profile.options.insert(runtime::presetOptions(QStringLiteral("sd.cpp"), runtime::VramTier::Small));
+    const QVariantMap options = runtime::modelServerOptions(lib, model, runtime::VramTier::Small);
+    for (auto it = options.begin(); it != options.end(); ++it) {
+        if (it.value().typeId() == QMetaType::QString && it.value().toString().isEmpty())
+            profile.options.remove(it.key());
+        else
+            profile.options.insert(it.key(), it.value());
+    }
+    profile.startupTimeoutSec = 300;
+    QVERIFY(runtime::checkSdProfile(lib, profile).isEmpty());
+    servers->addProfile(profile);
+    Provider *klein = studio.providers()->addProvider(QStringLiteral("sdcpp"), QStringLiteral("FLUX.2 klein"),
+                                                      {{QStringLiteral("managed_server"), profile.id}});
+    QVERIFY(klein && klein->gate());
+    studio.providers()->setDefaultImageProvider(klein->instanceId());
+    QVERIFY(!klein->setting(QStringLiteral("model_preset")).toMap().isEmpty());
+
+    studio.openProject(dir.filePath(QStringLiteral("live.lumen")));
+    QTRY_VERIFY_WITH_TIMEOUT(studio.isProjectOpen(), 10000);
+    ui::MainWindow window(&studio);
+    window.resize(1400, 900);
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    ui::PromptBar *bar = window.editor()->promptBar();
+    ui::VariantStrip *strip = window.editor()->variantStrip();
+    auto *words = bar->findChild<QPlainTextEdit *>(QStringLiteral("promptText"));
+    QVERIFY(words);
+
+    // 1. A black-and-white photo of a simple scene, colorized with nothing selected.
+    QImage scene(1024, 768, QImage::Format_ARGB32_Premultiplied);
+    {
+        QPainter p(&scene);
+        QLinearGradient sky(0, 0, 0, 500);
+        sky.setColorAt(0, QColor(110, 160, 230));
+        sky.setColorAt(1, QColor(190, 215, 245));
+        p.fillRect(QRect(0, 0, 1024, 500), sky);
+        p.fillRect(QRect(0, 500, 1024, 268), QColor(80, 150, 70));
+        p.setRenderHint(QPainter::Antialiasing);
+        p.setPen(Qt::NoPen);
+        p.setBrush(QColor(250, 220, 60));
+        p.drawEllipse(QPoint(860, 120), 60, 60);
+        p.setBrush(QColor(200, 40, 40));
+        p.drawEllipse(QPoint(512, 500), 100, 100);
+    }
+    const QImage gray = scene.convertToFormat(QImage::Format_Grayscale8).convertToFormat(QImage::Format_ARGB32_Premultiplied);
+    save(gray, QStringLiteral("klein_bar_gray.png"));
+    doc::Document *photo = studio.openImageAsDocument(gray, QStringLiteral("Old photo"));
+    QVERIFY(photo);
+    QTRY_COMPARE(bar->plan().action, ui::PromptAction::EditImage);
+    auto saturation = [](const QImage &im) {
+        double sum = 0;
+        int n = 0;
+        for (int y = 0; y < im.height(); y += 4)
+            for (int x = 0; x < im.width(); x += 4, ++n)
+                sum += im.pixelColor(x, y).hsvSaturationF();
+        return sum / n;
+    };
+    QElapsedTimer t;
+    t.start();
+    words->setPlainText(QStringLiteral("colorize this black-and-white photo, keep everything else the same"));
+    QTest::keyClick(words, Qt::Key_Return);
+    QTRY_VERIFY_WITH_TIMEOUT(strip->count() >= 1 && !strip->isRunning(), 900000);
+    const QImage colorized = strip->currentImage();
+    qInfo() << "colorize after" << t.elapsed() << "ms (includes the server start); saturation" << saturation(gray) << "->"
+            << saturation(colorized);
+    save(colorized, QStringLiteral("klein_bar_colorized.png"));
+    QCOMPARE(colorized.size(), gray.size());
+    QVERIFY2(saturation(colorized) > saturation(gray) + 0.08, "the photo did not get colour");
+    // The picture is kept: its brightness stays close to the photo's.
+    double error = 0;
+    int n = 0;
+    for (int y = 0; y < gray.height(); y += 4)
+        for (int x = 0; x < gray.width(); x += 4, ++n)
+            error += std::abs(qGray(colorized.pixel(x, y)) - qGray(gray.pixel(x, y)));
+    qInfo() << "mean brightness difference" << error / n;
+    QVERIFY2(error / n < 25, qPrintable(QString::number(error / n)));
+    strip->keep();
+
+    // 2. A new image on a blank canvas.
+    doc::Document *blank = studio.newDocument(QSize(1024, 768), QStringLiteral("New image"));
+    QVERIFY(blank);
+    QTRY_COMPARE(bar->plan().action, ui::PromptAction::NewImage);
+    t.restart();
+    words->setPlainText(QStringLiteral("a red apple on a wooden table by a window, soft morning light, photo"));
+    QTest::keyClick(words, Qt::Key_Return);
+    QTRY_VERIFY_WITH_TIMEOUT(strip->count() >= 1 && !strip->isRunning(), 900000);
+    const QImage fresh = strip->currentImage();
+    qInfo() << "new image after" << t.elapsed() << "ms; saturation" << saturation(fresh);
+    save(fresh, QStringLiteral("klein_bar_new.png"));
+    QCOMPARE(fresh.size(), blank->size());
+    double mean = 0, sq = 0;
+    n = 0;
+    for (int y = 0; y < fresh.height(); y += 4)
+        for (int x = 0; x < fresh.width(); x += 4, ++n) {
+            const int g = qGray(fresh.pixel(x, y));
+            mean += g;
+            sq += double(g) * g;
+        }
+    mean /= n;
+    const double spread = std::sqrt(std::max(0.0, sq / n - mean * mean));
+    QVERIFY2(spread > 15, "the new image is nearly flat");
+    strip->keep();
+    for (const QString &line : servers->log(profile.id)) {
+        if (line.contains(QLatin1String("sampling completed")) || line.contains(QLatin1String("[E]")))
+            qInfo().noquote() << "sd:" << line.trimmed();
+    }
+    servers->stop(profile.id);
+    QTRY_COMPARE_WITH_TIMEOUT(servers->state(profile.id), runtime::ServerState::Stopped, 30000);
+    Settings::instance().remove(QStringLiteral("editor/ai/variants"));
 }
 
 // The reference scenario with both servers run by Lumen: LUMEN_LIVE_LLAMA_SERVER/_MODEL/_MMPROJ for the
