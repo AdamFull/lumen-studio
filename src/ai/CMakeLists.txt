@@ -23,6 +23,7 @@ add_library(lumen_ai STATIC
     RunSettings.h RunSettings.cpp
     Onnx.h Onnx.cpp
     Segmenter.h Segmenter.cpp
+    Detector.h Detector.cpp
     GenerationService.h GenerationService.cpp
     FilterNodes.h FilterNodes.cpp
     CastGeneration.h CastGeneration.cpp

@@ -37,6 +37,8 @@
 #include "ui/canvas/SmartSelectTool.h"
 #include "ai/Segmenter.h"
 #include "runtime/Components.h"
+#include "filters/Evaluator.h"
+#include "filters/Registry.h"
 #include "core/Finders.h"
 #include "ui/widgets/RunSettingsEditor.h"
 #include "ui/widgets/ProviderCombo.h"
@@ -82,6 +84,7 @@
 #include "ui/ext/Extension.h"
 
 #include <QClipboard>
+#include <QtConcurrent/QtConcurrentRun>
 #include <QRadioButton>
 #include <QCryptographicHash>
 #include <QDragEnterEvent>
@@ -216,6 +219,7 @@ private slots:
     void runSettingsPerModel();
     void selectByDescription();
     void smartSelection();
+    void selectObjectsByName();
     void promptBarWithoutEdits();
     void aiMenuAndPanel();
     void promptBarKeepsTyping();
@@ -5453,6 +5457,98 @@ void TestCanvas::smartSelection()
     doc->undoStack()->undo();
     QCOMPARE(at(60, 60), 0);
     QCOMPARE(at(300, 190), 255);
+}
+
+// Objects by name (plan M18 §18.1): the dialog offers the detection models' download while they are
+// missing; with them, "the ball" is found and selected, "a giraffe" is not; the prompt bar's
+// "select: the ball" and the filter step "Find area" do the same.
+void TestCanvas::selectObjectsByName()
+{
+    PromptBarFixture f;
+    QVERIFY(f.setUp(true));
+    QImage page(400, 300, QImage::Format_ARGB32_Premultiplied);
+    page.fill(QColor(150, 150, 145));
+    {
+        QPainter p(&page);
+        p.setPen(Qt::NoPen);
+        p.setBrush(QColor(220, 40, 40));
+        p.drawEllipse(QPoint(120, 150), 50, 50);
+    }
+    doc::Document *doc = f.studio.openImageAsDocument(page, QStringLiteral("Ball"));
+    QVERIFY(doc);
+    SmartSelect *finder = f.studio.smartSelect();
+
+    // Missing: the dialog says so, with the size, and offers the download.
+    runtime::ComponentSpec part;
+    part.files = {runtime::ComponentFile{QUrl(QStringLiteral("http://127.0.0.1:9/x")), {}, 50000000, QStringLiteral("x"), {}}};
+    QList<runtime::ComponentSpec> specs;
+    for (const QString &id : SmartSelect::objectComponentIds()) {
+        runtime::ComponentSpec c = part;
+        c.id = id;
+        c.name = id;
+        specs << c;
+    }
+    f.studio.components()->setSpecs(specs);
+    QVERIFY(!finder->objectsReady());
+    {
+        SelectByDescriptionDialog dlg(doc, f.window.get());
+        dlg.setObjectFinder(finder);
+        dlg.setWords(QStringLiteral("the ball"));
+        QVERIFY(dlg.findsObjects());
+        auto *download = dlg.findChild<QPushButton *>(QStringLiteral("selectDownload"));
+        QVERIFY(download && !download->isHidden());
+        QCOMPARE(download->text(), QStringLiteral("Download the detection models (about 150 MB, once)"));
+        QVERIFY(!dlg.apply());
+    }
+    filters::NodeTypePtr node = filters::NodeRegistry::global().find(QStringLiteral("find-area"));
+    QVERIFY(node && node->info().expensive);
+    QVERIFY(node->unavailableReason({}).contains(QStringLiteral("150 MB")));
+
+    // With the models (stand-ins): a box around what the words name, cut out as a disk.
+    auto segmenter = std::make_shared<FakeSegmenter>();
+    finder->setSegmenter(segmenter);
+    finder->setDetector([](const QImage &, const QString &words) {
+        QList<ai::Detection> found;
+        if (words.contains(QStringLiteral("ball")))
+            found << ai::Detection{QRectF(70, 100, 100, 100), 0.9f};
+        return found;
+    });
+    QVERIFY(finder->objectsReady());
+    QVERIFY(node->unavailableReason({}).isEmpty());
+    {
+        SelectByDescriptionDialog dlg(doc, f.window.get());
+        dlg.setObjectFinder(finder);
+        QSignalSpy found(&dlg, &SelectByDescriptionDialog::foundChanged);
+        dlg.setWords(QStringLiteral("the ball"));
+        QTRY_VERIFY(found.size() >= 1 && !dlg.found().isNull());
+        QVERIFY(dlg.findChild<QLabel *>(QStringLiteral("selectResult"))->text().startsWith(QStringLiteral("Found 1 object")));
+        QVERIFY(dlg.apply());
+        QCOMPARE(qGray(doc->selection().pixel(120, 150)), 255);
+        QCOMPARE(qGray(doc->selection().pixel(350, 50)), 0);
+        doc->clearSelection();
+        dlg.setWords(QStringLiteral("a giraffe"));
+        QTRY_VERIFY2(dlg.findChild<QLabel *>(QStringLiteral("selectResult"))->text().contains(QStringLiteral("Nothing that looks like")),
+                     qPrintable(dlg.findChild<QLabel *>(QStringLiteral("selectResult"))->text()));
+        QVERIFY(!dlg.apply());
+    }
+
+    // The prompt bar.
+    f.words()->setPlainText(QStringLiteral("select: the ball"));
+    QTest::keyClick(f.words(), Qt::Key_Return);
+    QTRY_VERIFY(doc->hasSelection());
+    QCOMPARE(qGray(doc->selection().pixel(120, 150)), 255);
+    QTRY_VERIFY(f.words()->toPlainText().isEmpty());
+    QVERIFY(f.sd.generations.isEmpty());
+
+    // The filter step, evaluated as a filter's worker thread does.
+    QFuture<filters::Values> out = QtConcurrent::run([node, page] {
+        return filters::evaluateNode(*node, {{QStringLiteral("image"), page}}, {{QStringLiteral("what"), QStringLiteral("the ball")}});
+    });
+    QTRY_VERIFY_WITH_TIMEOUT(out.isFinished(), 10000);
+    const QImage mask = out.result().value(QStringLiteral("mask")).value<QImage>();
+    QCOMPARE(mask.size(), page.size());
+    QCOMPARE(qGray(mask.pixel(120, 150)), 255);
+    QCOMPARE(qGray(mask.pixel(350, 50)), 0);
 }
 
 // An engine without instruction edits (sd.cpp with a model it has no preset for): without a

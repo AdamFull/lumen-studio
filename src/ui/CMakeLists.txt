@@ -51,6 +51,7 @@ add_library(lumen_ui STATIC
     widgets/ThumbnailCache.h widgets/ThumbnailCache.cpp
     pose/PoseCanvas.h pose/PoseCanvas.cpp
     pages/LibraryPage.h pages/LibraryPage.cpp
+    filters/FindAreaNode.h filters/FindAreaNode.cpp
     filters/GraphModel.h filters/GraphModel.cpp
     filters/ParamWidgets.h filters/ParamWidgets.cpp
     filters/FilterCatalog.h filters/FilterCatalog.cpp

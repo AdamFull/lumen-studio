@@ -21,6 +21,7 @@ class Document;
 namespace lumen::ui {
 
 class SliderField;
+class SmartSelect;
 
 // What a finder request will select, in plain words ("Lines darker than what is around them, up to
 // 6 px wide"); for Kind::None, what can be found instead.
@@ -41,6 +42,11 @@ public:
     SelectByDescriptionDialog(doc::Document *doc, QWidget *parent = nullptr);
 
     void setWords(const QString &words);
+    // Words that name no line, speck or colour are looked for as objects ("the cup") with the
+    // detection models (Grounding DINO and SAM 2.1), downloaded once from here when missing.
+    void setObjectFinder(SmartSelect *finder);
+    // The words are looked for as objects.
+    bool findsObjects() const { return m_objects; }
     const img::FinderRequest &request() const { return m_request; }
     // The found area (Grayscale8, the document's size); null before it is found or for Kind::None.
     QImage found() const { return m_found; }
@@ -79,6 +85,9 @@ private:
     QLabel *m_result;
     QButtonGroup *m_mode;
     QPushButton *m_select;
+    QPushButton *m_download;
+    QPointer<SmartSelect> m_finder;
+    bool m_objects = false;
 };
 
 } // namespace lumen::ui

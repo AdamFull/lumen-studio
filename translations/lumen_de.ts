@@ -1105,7 +1105,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="-320"/>
-        <location filename="../src/ui/Studio.cpp" line="+157"/>
+        <location filename="../src/ui/Studio.cpp" line="+160"/>
         <location line="+17"/>
         <source>Lumen is shutting down.</source>
         <translation>Lumen wird beendet.</translation>
@@ -1124,6 +1124,19 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <location filename="../src/ui/filters/NodeScene.cpp" line="+316"/>
         <source>%1 → %2</source>
         <translation>%1 → %2</translation>
+    </message>
+</context>
+<context>
+    <name>Text</name>
+    <message>
+        <location filename="../src/ui/filters/FindAreaNode.cpp" line="+43"/>
+        <source>Say what to find (&quot;the cup&quot;, &quot;people&quot;).</source>
+        <translation>Sagen Sie, was gefunden werden soll („die Tasse“, „Personen“).</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Finding objects is not available here.</source>
+        <translation>Objekte finden ist hier nicht verfügbar.</translation>
     </message>
 </context>
 <context>
@@ -1555,6 +1568,29 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <location line="+13"/>
         <source>Segmenting %1 (%2 of %3)</source>
         <translation>%1 wird segmentiert (%2 von %3)</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::ai::Detector</name>
+    <message>
+        <location filename="../src/ai/Detector.cpp" line="+47"/>
+        <source>The vocabulary %1 could not be read.</source>
+        <translation>Das Vokabular %1 konnte nicht gelesen werden.</translation>
+    </message>
+    <message>
+        <location line="+168"/>
+        <source>Say what to find.</source>
+        <translation>Sagen Sie, was gefunden werden soll.</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>The detection model gave an answer Lumen does not understand.</source>
+        <translation>Das Erkennungsmodell gab eine Antwort, die Lumen nicht versteht.</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Nothing that looks like &quot;%1&quot; was found.</source>
+        <translation>Nichts, das wie „%1“ aussieht, wurde gefunden.</translation>
     </message>
 </context>
 <context>
@@ -8888,7 +8924,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Editor-Werkzeuge</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+17"/>
         <source>Foreground colour</source>
         <translation>Vordergrundfarbe</translation>
     </message>
@@ -8929,29 +8965,29 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="-9"/>
-        <location line="+180"/>
+        <location line="+181"/>
         <source>Layers</source>
         <translation>Ebenen</translation>
     </message>
     <message>
-        <location line="-307"/>
+        <location line="-309"/>
         <source>New blank canvas (Ctrl+N)</source>
         <translation>Neue leere Arbeitsfläche (Strg+N)</translation>
     </message>
     <message>
-        <location line="+128"/>
-        <location line="+179"/>
+        <location line="+129"/>
+        <location line="+180"/>
         <source>History</source>
         <translation>Protokoll</translation>
     </message>
     <message>
-        <location line="-177"/>
-        <location line="+177"/>
+        <location line="-178"/>
+        <location line="+178"/>
         <source>Filters</source>
         <translation>Filter</translation>
     </message>
     <message>
-        <location line="-170"/>
+        <location line="-171"/>
         <source>Close the AI tab</source>
         <translation>Registerkarte „KI“ schließen</translation>
     </message>
@@ -8996,7 +9032,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Nach Beschreibung…</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+7"/>
         <source>Delete selected pixels</source>
         <translation>Ausgewählte Pixel löschen</translation>
     </message>
@@ -9774,6 +9810,49 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <location line="+29"/>
         <source>Keep or discard the AI results first: the canvas shows them, not the layer the filter would change.</source>
         <translation>Behalten oder verwerfen Sie zuerst die KI-Ergebnisse: Die Arbeitsfläche zeigt sie, nicht die Ebene, die der Filter ändern würde.</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::ui::FindAreaNode</name>
+    <message>
+        <location filename="../src/ui/filters/FindAreaNode.cpp" line="+19"/>
+        <source>Finding objects is not available here.</source>
+        <translation>Objekte finden ist hier nicht verfügbar.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Finding objects needs the detection models (about %1 MB, once): Select → By description… offers the download.</source>
+        <translation>Objekte finden braucht die Erkennungsmodelle (einmalig etwa %1 MB): Auswahl → Nach Beschreibung… bietet den Download an.</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Find area</source>
+        <translation>Bereich finden</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Selects the objects you name (&quot;the cup&quot;, &quot;people&quot;), found and cut out by detection models on this computer. Runs on Run, like the AI steps.</source>
+        <translation>Wählt die Objekte aus, die Sie nennen („die Tasse“, „Personen“), gefunden und ausgeschnitten von Erkennungsmodellen auf diesem Computer. Läuft bei Ausführen, wie die KI-Schritte.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Image</source>
+        <translation>Bild</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Mask</source>
+        <translation>Maske</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>What to find</source>
+        <translation>Was gefunden werden soll</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>The objects to select, in a few words.</source>
+        <translation>Die auszuwählenden Objekte, in wenigen Worten.</translation>
     </message>
 </context>
 <context>
@@ -15957,7 +16036,7 @@ oder eines aus den Projektbildern ziehen</translation>
 <context>
     <name>lumen::ui::PromptBar</name>
     <message>
-        <location filename="../src/ui/pages/PromptBar.cpp" line="+63"/>
+        <location filename="../src/ui/pages/PromptBar.cpp" line="+64"/>
         <source>Progress</source>
         <translation>Fortschritt</translation>
     </message>
@@ -16257,12 +16336,26 @@ oder eines aus den Projektbildern ziehen</translation>
         </translation>
     </message>
     <message>
-        <location line="+99"/>
+        <location line="+92"/>
+        <source>Selecting objects by name needs the detection models (about %1 MB, once). Select → By description… offers the download.</source>
+        <translation>Objekte nach Namen auszuwählen braucht die Erkennungsmodelle (einmalig etwa %1 MB). Auswahl → Nach Beschreibung… bietet den Download an.</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+19"/>
+        <source>Selected %n object(s). Now say what should change there, or press Remove object.</source>
+        <translation>
+            <numerusform>%n Objekt ausgewählt. Sagen Sie jetzt, was sich dort ändern soll, oder drücken Sie Objekt entfernen.</numerusform>
+            <numerusform>%n Objekte ausgewählt. Sagen Sie jetzt, was sich dort ändern soll, oder drücken Sie Objekt entfernen.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+13"/>
         <source>Nothing like &quot;%1&quot; was found. Select → By description… has settings to find fainter or larger ones.</source>
         <translation>Nichts wie „%1“ gefunden. Auswahl → Nach Beschreibung… hat Einstellungen, um blassere oder größere zu finden.</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="-16"/>
+        <location line="+22"/>
         <source>Select: %1</source>
         <translation>Auswahl: %1</translation>
     </message>
@@ -16627,7 +16720,7 @@ oder eines aus den Projektbildern ziehen</translation>
 <context>
     <name>lumen::ui::SelectByDescriptionDialog</name>
     <message>
-        <location filename="../src/ui/dialogs/SelectByDescriptionDialog.cpp" line="+29"/>
+        <location filename="../src/ui/dialogs/SelectByDescriptionDialog.cpp" line="+30"/>
         <source>red</source>
         <translation>Rote</translation>
     </message>
@@ -16783,7 +16876,17 @@ oder eines aus den Projektbildern ziehen</translation>
         <translation>Höher nimmt mehr Töne nahe der Farbe mit.</translation>
     </message>
     <message>
-        <location line="+18"/>
+        <location line="+6"/>
+        <source>Grounding DINO tiny finds objects by name and SAM 2.1 cuts them out; they run on this computer.</source>
+        <translation>Grounding DINO tiny findet Objekte nach Namen, SAM 2.1 schneidet sie aus; beide laufen auf diesem Computer.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Downloading… (the Queue shows how far it is)</source>
+        <translation>Wird heruntergeladen… (die Warteschlange zeigt den Fortschritt)</translation>
+    </message>
+    <message>
+        <location line="+17"/>
         <source>New selection</source>
         <translation>Neue Auswahl</translation>
     </message>
@@ -16808,12 +16911,22 @@ oder eines aus den Projektbildern ziehen</translation>
         <translation>Auswählen</translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location line="+49"/>
         <source>Say what to select, and Lumen finds it in the picture.</source>
         <translation>Sagen Sie, was ausgewählt werden soll, und Lumen findet es im Bild.</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+1"/>
+        <source>Objects: &quot;%1&quot;, found by a detection model on this computer.</source>
+        <translation>Objekte: „%1“, gefunden von einem Erkennungsmodell auf diesem Computer.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Download the detection models (about %1 MB, once)</source>
+        <translation>Erkennungsmodelle herunterladen (einmalig etwa %1 MB)</translation>
+    </message>
+    <message>
+        <location line="+7"/>
         <source>Dark lines</source>
         <translation>Dunkle Linien</translation>
     </message>
@@ -16838,7 +16951,20 @@ oder eines aus den Projektbildern ziehen</translation>
         <translation>Helle Flecken</translation>
     </message>
     <message>
-        <location line="+42"/>
+        <location line="+39"/>
+        <source>Looking… (the first time takes a few seconds)</source>
+        <translation>Wird gesucht… (beim ersten Mal dauert es einige Sekunden)</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+8"/>
+        <source>Found %n object(s) (tinted).</source>
+        <translation>
+            <numerusform>%n Objekt gefunden (eingefärbt).</numerusform>
+            <numerusform>%n Objekte gefunden (eingefärbt).</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+12"/>
         <source>Looking…</source>
         <translation>Wird gesucht…</translation>
     </message>
@@ -16848,7 +16974,7 @@ oder eines aus den Projektbildern ziehen</translation>
         <translation>Es gibt kein Bild, in dem ausgewählt werden kann.</translation>
     </message>
     <message>
-        <location line="+19"/>
+        <location line="+21"/>
         <source>Nothing like that was found. Try a lower contrast or a larger size.</source>
         <translation>Nichts dergleichen gefunden. Versuchen Sie einen niedrigeren Kontrast oder eine größere Größe.</translation>
     </message>
@@ -18430,9 +18556,19 @@ oder eines aus den Projektbildern ziehen</translation>
 <context>
     <name>lumen::ui::SmartSelect</name>
     <message>
-        <location filename="../src/ui/SmartSelect.cpp" line="+71"/>
+        <location filename="../src/ui/SmartSelect.cpp" line="+96"/>
         <source>Smart selection needs ONNX Runtime and SAM 2.1, which are not downloaded yet.</source>
         <translation>Die intelligente Auswahl braucht ONNX Runtime und SAM 2.1, die noch nicht heruntergeladen sind.</translation>
+    </message>
+    <message>
+        <location line="+49"/>
+        <source>Finding objects by name needs the Grounding DINO model, which is not downloaded yet.</source>
+        <translation>Objekte nach Namen zu finden braucht das Modell Grounding DINO, das noch nicht heruntergeladen ist.</translation>
+    </message>
+    <message>
+        <location line="+50"/>
+        <source>Nothing that looks like &quot;%1&quot; was found.</source>
+        <translation>Nichts, das wie „%1“ aussieht, wurde gefunden.</translation>
     </message>
 </context>
 <context>

@@ -1,6 +1,7 @@
 #include "ui/SmartSelect.h"
 
 #include "ai/Provider.h"
+#include "core/ImageOps.h"
 #include "core/Job.h"
 #include "runtime/Components.h"
 
@@ -62,13 +63,12 @@ bool SmartSelect::isInstalling() const
     return false;
 }
 
-QFuture<QImage> SmartSelect::segment(const QImage &picture, const ai::SegmentPrompt &prompt)
+QFuture<std::shared_ptr<ai::Segmenter>> SmartSelect::openSegmenter()
 {
+    if (m_segmenter)
+        return QtFuture::makeReadyValueFuture(m_segmenter);
     // Opened once, on a worker thread (loading the models takes about half a second).
-    if (!m_segmenter && !m_opening.isValid()) {
-        if (!isReady())
-            return QtFuture::makeExceptionalFuture<QImage>(std::make_exception_ptr(
-                ai::ProviderError(tr("Smart selection needs ONNX Runtime and SAM 2.1, which are not downloaded yet."))));
+    if (!m_opening.isValid()) {
         const QString dll = m_components->path(QStringLiteral("onnxruntime"), QStringLiteral("onnxruntime.dll"));
         const QString encoder = m_components->path(QStringLiteral("sam2.1-tiny"), QStringLiteral("onnx/vision_encoder_int8.onnx"));
         const QString decoder = m_components->path(QStringLiteral("sam2.1-tiny"), QStringLiteral("onnx/prompt_encoder_mask_decoder_int8.onnx"));
@@ -81,20 +81,138 @@ QFuture<QImage> SmartSelect::segment(const QImage &picture, const ai::SegmentPro
             return s;
         });
     }
-    QFuture<std::shared_ptr<ai::Segmenter>> segmenter = m_segmenter ? QtFuture::makeReadyValueFuture(m_segmenter) : m_opening;
     QPointer<SmartSelect> self(this);
-    return segmenter
-        .then(this, [self](const std::shared_ptr<ai::Segmenter> &s) {
-            if (self && !self->m_segmenter)
-                self->m_segmenter = s;
-            return s;
+    return m_opening.then(this, [self](const std::shared_ptr<ai::Segmenter> &s) {
+        if (self && !self->m_segmenter)
+            self->m_segmenter = s;
+        return s;
+    });
+}
+
+QFuture<QImage> SmartSelect::segment(const QImage &picture, const ai::SegmentPrompt &prompt)
+{
+    if (!m_segmenter && !isReady())
+        return QtFuture::makeExceptionalFuture<QImage>(std::make_exception_ptr(
+            ai::ProviderError(tr("Smart selection needs ONNX Runtime and SAM 2.1, which are not downloaded yet."))));
+    return openSegmenter().then(QtFuture::Launch::Async, [picture, prompt](const std::shared_ptr<ai::Segmenter> &s) {
+        QString error;
+        const QImage mask = s->segment(picture, prompt, &error);
+        if (mask.isNull())
+            throw ai::ProviderError(error);
+        return mask;
+    });
+}
+
+QStringList SmartSelect::objectComponentIds()
+{
+    return componentIds() << QStringLiteral("grounding-dino-tiny");
+}
+
+bool SmartSelect::objectsReady() const
+{
+    if (m_fakeDetect && m_segmenter)
+        return true;
+    for (const QString &id : objectComponentIds()) {
+        if (!m_components->isInstalled(id))
+            return false;
+    }
+    return true;
+}
+
+qint64 SmartSelect::objectsMissingSize() const
+{
+    return objectsReady() ? 0 : m_components->missingSize(objectComponentIds());
+}
+
+QList<Job *> SmartSelect::installObjects()
+{
+    QList<Job *> jobs;
+    for (const QString &id : objectComponentIds()) {
+        if (!m_components->isInstalled(id)) {
+            if (Job *job = m_components->install(id)) {
+                jobs << job;
+                m_jobs << job;
+            }
+        }
+    }
+    return jobs;
+}
+
+QFuture<SmartSelect::FoundArea> SmartSelect::findObjects(const QImage &picture, const QString &description)
+{
+    if (!objectsReady()) {
+        FoundArea none;
+        none.error = tr("Finding objects by name needs the Grounding DINO model, which is not downloaded yet.");
+        return QtFuture::makeReadyValueFuture(none);
+    }
+    // The detector, opened once on a worker thread like the segmenter (a test's stands in).
+    QFuture<Detect> detect;
+    if (m_fakeDetect) {
+        detect = QtFuture::makeReadyValueFuture(Detect(m_fakeDetect));
+    } else {
+        if (!m_detector && !m_openingDetector.isValid()) {
+            const QString dll = m_components->path(QStringLiteral("onnxruntime"), QStringLiteral("onnxruntime.dll"));
+            const QString model = m_components->path(QStringLiteral("grounding-dino-tiny"), QStringLiteral("onnx/model_int8.onnx"));
+            const QString vocab = m_components->path(QStringLiteral("grounding-dino-tiny"), QStringLiteral("vocab.txt"));
+            m_openingDetector = QtConcurrent::run([dll, model, vocab]() -> std::shared_ptr<ai::GroundingDino> {
+                QString error;
+                auto rt = ai::OnnxRuntime::load(dll, &error);
+                std::shared_ptr<ai::GroundingDino> d = rt ? ai::GroundingDino::open(rt, model, vocab, &error) : nullptr;
+                if (!d)
+                    throw ai::ProviderError(error);
+                return d;
+            });
+        }
+        QPointer<SmartSelect> self(this);
+        QFuture<std::shared_ptr<ai::GroundingDino>> opened = m_detector ? QtFuture::makeReadyValueFuture(m_detector) : m_openingDetector;
+        detect = opened.then(this, [self](const std::shared_ptr<ai::GroundingDino> &d) {
+            if (self && !self->m_detector)
+                self->m_detector = d;
+            return Detect([d](const QImage &picture, const QString &words) {
+                QString error;
+                const QList<ai::Detection> found = d->detect(picture, words, 0.3f, &error);
+                if (found.isEmpty() && !error.isEmpty())
+                    throw ai::ProviderError(error);
+                return found;
+            });
+        });
+    }
+    // The segmenter opens on the GUI thread's side; the finding and cutting out run on a worker.
+    QFuture<std::shared_ptr<ai::Segmenter>> segmenter = openSegmenter();
+    return detect
+        .then(this, [segmenter](const Detect &d) mutable { return segmenter.then([d](const std::shared_ptr<ai::Segmenter> &s) { return std::make_pair(d, s); }); })
+        .unwrap()
+        .then(QtFuture::Launch::Async, [picture, description](const std::pair<Detect, std::shared_ptr<ai::Segmenter>> &both) {
+            FoundArea area;
+            QList<ai::Detection> boxes;
+            try {
+                boxes = both.first(picture, description);
+            } catch (...) {
+                area.error = ai::errorMessage(std::current_exception());
+                return area;
+            }
+            if (boxes.isEmpty()) {
+                area.error = tr("Nothing that looks like \"%1\" was found.").arg(description);
+                return area;
+            }
+            QImage mask = img::createMask(picture.size());
+            for (const ai::Detection &det : boxes) {
+                ai::SegmentPrompt prompt;
+                prompt.box = det.box;
+                const QImage object = both.second->segment(picture, prompt, &area.error);
+                if (object.isNull())
+                    return area;
+                mask = img::combineMasks(mask, object, img::MaskOp::Union);
+            }
+            area.mask = mask;
+            area.objects = int(boxes.size());
+            return area;
         })
-        .then(QtFuture::Launch::Async, [picture, prompt](const std::shared_ptr<ai::Segmenter> &s) {
-            QString error;
-            const QImage mask = s->segment(picture, prompt, &error);
-            if (mask.isNull())
-                throw ai::ProviderError(error);
-            return mask;
+        .onFailed([](const std::exception_ptr &e) {
+            // Opening the models failed.
+            FoundArea area;
+            area.error = ai::errorMessage(e);
+            return area;
         });
 }
 

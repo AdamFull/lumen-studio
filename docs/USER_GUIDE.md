@@ -206,9 +206,17 @@ a preview, and whether it becomes a **New selection**, is **Added**, **Taken awa
 both are**. **Select** makes it the selection, as one step you can undo. In the prompt bar, words
 that start with **select** ("select: the black lines") do the same and clear the bar, so you can go
 on with "remove them" or **Remove object**. Some German words work too ("auswählen: Staub", "die
-schwarzen Linien"). Objects such as "the cup" need a detection model, which comes later; the dialog
-says so. The filter editor has the same finders as steps: *Find lines*, *Find specks* and *Colour
-range* (§8).
+schwarzen Linien"). The filter editor has the same finders as steps: *Find lines*, *Find specks* and
+*Colour range* (§8).
+
+**Objects by name.** Other words ("the cup", "people", "the dog on the left") are looked for as
+objects: the Grounding DINO tiny model finds them and SAM 2.1 cuts each one out, on this computer,
+without an image engine or a language model. The first time, the dialog offers to download the
+models once (about 350 MB with what Smart selection needs, less if that is already there); the
+prompt bar's "select: the cup" says where the download is. A search takes a few seconds on the
+processor; when nothing like it is in the picture, Lumen says so and selects nothing. In the filter
+editor, the step *Find area* does the same, for filters such as "find the cup → fill area with AI";
+like the AI steps, it runs only on **Run**.
 
 The selection is used by the prompt bar (§5), the filters (§8) and the transform and delete
 commands. Without one, the prompt bar and the filters work on the whole picture.

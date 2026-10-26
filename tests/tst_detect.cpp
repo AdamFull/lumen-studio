@@ -2,6 +2,7 @@
 // the models without the runtime, and, when LUMEN_TEST_ORT (onnxruntime.dll) and the model folders
 // are given, the real models on a drawn scene. Nothing is downloaded here.
 
+#include "ai/Detector.h"
 #include "ai/Onnx.h"
 #include "ai/Segmenter.h"
 #include "core/ImageOps.h"
@@ -50,6 +51,9 @@ class TestDetect : public QObject
 private slots:
     void sam2Steps();
     void sam2Real();
+    void wordPiece();
+    void dinoSteps();
+    void dinoReal();
 };
 
 // The picture in the encoder's form, points in its space, a mask back at the picture's size, the
@@ -116,6 +120,92 @@ void TestDetect::sam2Real()
     QVERIFY2(coverage(boxed, QRect(420, 240, 120, 120)) > 0.95, "the box");
     QVERIFY2(coverage(boxed, QRect(160, 260, 80, 80)) < 0.02, "not the ball");
     QCOMPARE(sam->encodings(), 1);
+}
+
+// BERT's uncased WordPiece, as Grounding DINO reads: lower case, accents off, punctuation apart, the
+// longest pieces with "##" inside a word, [CLS] … [SEP]. With LUMEN_TEST_GDINO, against the real
+// vocabulary's ids.
+void TestDetect::wordPiece()
+{
+    ai::WordPiece w;
+    w.setVocabulary({QStringLiteral("[PAD]"), QStringLiteral("[UNK]"), QStringLiteral("[CLS]"), QStringLiteral("[SEP]"), QStringLiteral("."),
+                     QStringLiteral("the"), QStringLiteral("cup"), QStringLiteral("tea"), QStringLiteral("##cup"), QStringLiteral("cafe")});
+    QCOMPARE(w.encode(QStringLiteral("The cup.")), (std::vector<int64_t>{2, 5, 6, 4, 3}));
+    QCOMPARE(w.encode(QStringLiteral("teacup")), (std::vector<int64_t>{2, 7, 8, 3}));     // tea ##cup
+    QCOMPARE(w.encode(QStringLiteral("Café")), (std::vector<int64_t>{2, 9, 3}));          // accents off
+    QCOMPARE(w.encode(QStringLiteral("xyz")), (std::vector<int64_t>{2, 1, 3}));           // unknown
+    QCOMPARE(ai::dinoText(QStringLiteral("  The Red  Cup. ")), QStringLiteral("the red cup ."));
+    const QString dir = qEnvironmentVariable("LUMEN_TEST_GDINO");
+    if (!dir.isEmpty()) {
+        ai::WordPiece bert;
+        QVERIFY(bert.load(dir + QStringLiteral("/vocab.txt")));
+        // As the Hugging Face tokenizer gives them.
+        QCOMPARE(bert.encode(QStringLiteral("a cup .")), (std::vector<int64_t>{101, 1037, 2452, 1012, 102}));
+        QCOMPARE(bert.encode(QStringLiteral("the black lines .")), (std::vector<int64_t>{101, 1996, 2304, 3210, 1012, 102}));
+    }
+}
+
+// The picture in the detector's form, and boxes back from its answer: a word's best score passes the
+// threshold, the box is scaled to the picture, an overlapping weaker box is dropped.
+void TestDetect::dinoSteps()
+{
+    QImage red(100, 50, QImage::Format_ARGB32);
+    red.fill(QColor(255, 0, 0));
+    const std::vector<float> px = ai::dinoPixels(red);
+    QCOMPARE(px.size(), size_t(3 * 800 * 800));
+    QVERIFY(std::abs(px[0] - (1.0f - 0.485f) / 0.229f) < 1e-4);
+    // Three candidates over a text of 4 tokens ([CLS] cup . [SEP]); the word is at 1.
+    const int text = 4;
+    std::vector<float> logits(3 * text, -6.0f);
+    logits[0 * text + 1] = 2.0f;  // sure: a box on the left
+    logits[1 * text + 1] = 0.5f;  // fairly sure, but overlapping the first
+    logits[2 * text + 2] = 5.0f;  // sure of the ".", not of the word: not kept
+    const std::vector<float> boxes{0.25f, 0.5f, 0.4f, 0.8f, 0.27f, 0.5f, 0.4f, 0.8f, 0.75f, 0.5f, 0.2f, 0.2f};
+    const QList<ai::Detection> found = ai::dinoDecode(logits, boxes, 3, text, {1}, QSize(200, 100), 0.3f);
+    QCOMPARE(found.size(), 1);
+    const QRectF box = found.first().box;
+    QVERIFY(std::abs(box.x() - 10) < 1e-3 && std::abs(box.y() - 10) < 1e-3 && std::abs(box.width() - 80) < 1e-3 && std::abs(box.height() - 80) < 1e-3);
+    QVERIFY(found.first().score > 0.85f);
+}
+
+// Grounding DINO tiny and SAM 2.1 tiny on the drawn scene: "ball" finds the ball and "box" the box;
+// the objects' area is the ball's, not the box's.
+void TestDetect::dinoReal()
+{
+    const QString dll = qEnvironmentVariable("LUMEN_TEST_ORT");
+    const QString dino = qEnvironmentVariable("LUMEN_TEST_GDINO");
+    const QString sam = qEnvironmentVariable("LUMEN_TEST_SAM2");
+    if (dll.isEmpty() || dino.isEmpty() || sam.isEmpty())
+        QSKIP("LUMEN_TEST_ORT, LUMEN_TEST_GDINO and LUMEN_TEST_SAM2 are needed");
+    QString error;
+    auto rt = ai::OnnxRuntime::load(dll, &error);
+    QVERIFY2(rt, qPrintable(error));
+    QElapsedTimer t;
+    t.start();
+    auto detector = ai::GroundingDino::open(rt, dino + QStringLiteral("/onnx/model_int8.onnx"), dino + QStringLiteral("/vocab.txt"), &error);
+    QVERIFY2(detector, qPrintable(error));
+    qInfo() << "detector loaded in" << t.restart() << "ms";
+    const QImage picture = scene();
+    const QList<ai::Detection> balls = detector->detect(picture, QStringLiteral("a red ball"), 0.3f, &error);
+    qInfo() << "detected in" << t.restart() << "ms:" << balls.size();
+    QVERIFY2(!balls.isEmpty(), qPrintable(error));
+    for (const ai::Detection &d : balls)
+        qInfo() << "  ball" << d.box << d.score;
+    QVERIFY(balls.first().box.contains(QPointF(200, 300)));
+    QVERIFY(!balls.first().box.contains(QPointF(480, 300)));
+    const QList<ai::Detection> boxes = detector->detect(picture, QStringLiteral("blue box"), 0.3f, &error);
+    QVERIFY2(!boxes.isEmpty(), qPrintable(error));
+    QVERIFY(boxes.first().box.contains(QPointF(480, 300)));
+    auto segmenter = ai::Sam2Segmenter::open(rt, sam + QStringLiteral("/onnx/vision_encoder_int8.onnx"),
+                                             sam + QStringLiteral("/onnx/prompt_encoder_mask_decoder_int8.onnx"), &error);
+    QVERIFY2(segmenter, qPrintable(error));
+    int count = 0;
+    t.restart();
+    const QImage area = ai::findObjects(*detector, *segmenter, picture, QStringLiteral("the ball"), &count, &error);
+    qInfo() << "found and cut out in" << t.elapsed() << "ms:" << count;
+    QVERIFY2(!area.isNull(), qPrintable(error));
+    QVERIFY(coverage(area, QRect(160, 260, 80, 80)) > 0.95);
+    QVERIFY(coverage(area, QRect(420, 240, 120, 120)) < 0.02);
 }
 
 QTEST_MAIN(TestDetect)

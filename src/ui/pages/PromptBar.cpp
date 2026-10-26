@@ -9,6 +9,7 @@
 #include "ui/widgets/LoraPicker.h"
 #include "ui/widgets/RunSettingsEditor.h"
 #include "ui/dialogs/SelectByDescriptionDialog.h"
+#include "ui/SmartSelect.h"
 #include "core/Finders.h"
 #include "core/ImageOps.h"
 #include "ui/pages/AiPanel.h"
@@ -552,7 +553,32 @@ void PromptBar::selectByWords(const QString &description)
 {
     const img::FinderRequest request = img::parseFinderRequest(description);
     if (request.kind == img::FinderRequest::Kind::None) {
-        m_studio->notify(finderDescription(request), QStringLiteral("warning"));
+        // An object by name: the detection models find it, once they are downloaded.
+        SmartSelect *finder = m_studio->smartSelect();
+        if (!finder->objectsReady()) {
+            m_studio->notify(tr("Selecting objects by name needs the detection models (about %1 MB, once). Select → By description… "
+                                "offers the download.")
+                                 .arg(QLocale().toString(finder->objectsMissingSize() / 1e6, 'f', 0)),
+                             QStringLiteral("warning"));
+            return;
+        }
+        QPointer<doc::Document> doc(m_doc);
+        QPointer<PromptBar> self(this);
+        finder->findObjects(m_doc->flattened(), description)
+            .then(this, [self, doc, description](const SmartSelect::FoundArea &area) {
+                if (!self || !doc)
+                    return;
+                if (area.mask.isNull()) {
+                    self->m_studio->notify(area.error, QStringLiteral("warning"));
+                    return;
+                }
+                doc->applySelection(area.mask, tr("Select: %1").arg(description.left(40)));
+                if (doc == self->m_doc)
+                    self->m_prompt->clear();
+                self->m_studio->notify(tr("Selected %n object(s). Now say what should change there, or press Remove object.", nullptr,
+                                          area.objects),
+                                       QStringLiteral("success"));
+            });
         return;
     }
     QPointer<doc::Document> doc(m_doc);

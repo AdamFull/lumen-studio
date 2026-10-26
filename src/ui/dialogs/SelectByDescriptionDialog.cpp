@@ -2,6 +2,7 @@
 
 #include "core/ImageOps.h"
 #include "doc/Document.h"
+#include "ui/SmartSelect.h"
 #include "ui/widgets/Controls.h"
 
 #include <QButtonGroup>
@@ -119,6 +120,19 @@ SelectByDescriptionDialog::SelectByDescriptionDialog(doc::Document *doc, QWidget
     cf->addWidget(m_tolerance);
     v->addWidget(m_colorBox);
 
+    m_download = new QPushButton(this);
+    m_download->setObjectName(QStringLiteral("selectDownload"));
+    m_download->setToolTip(tr("Grounding DINO tiny finds objects by name and SAM 2.1 cuts them out; they run on this computer."));
+    m_download->hide();
+    v->addWidget(m_download, 0, Qt::AlignLeft);
+    connect(m_download, &QPushButton::clicked, this, [this] {
+        if (!m_finder)
+            return;
+        m_finder->installObjects();
+        m_download->setEnabled(false);
+        m_download->setText(tr("Downloading… (the Queue shows how far it is)"));
+    });
+
     m_preview = new QLabel(this);
     m_preview->setObjectName(QStringLiteral("selectPreview"));
     m_preview->setAlignment(Qt::AlignCenter);
@@ -169,9 +183,21 @@ void SelectByDescriptionDialog::setWords(const QString &words)
     m_words->setText(words);
 }
 
+void SelectByDescriptionDialog::setObjectFinder(SmartSelect *finder)
+{
+    m_finder = finder;
+    // When the models arrive, what was typed is looked for.
+    connect(finder, &SmartSelect::ready, this, [this] {
+        if (m_objects)
+            parseWords();
+    });
+    parseWords();
+}
+
 void SelectByDescriptionDialog::parseWords()
 {
     m_request = img::parseFinderRequest(m_words->text());
+    m_objects = m_finder && m_request.kind == img::FinderRequest::Kind::None && !m_words->text().trimmed().isEmpty();
     showSettings();
     find();
 }
@@ -180,7 +206,12 @@ void SelectByDescriptionDialog::showSettings()
 {
     using K = img::FinderRequest::Kind;
     m_understood->setText(m_words->text().trimmed().isEmpty() ? tr("Say what to select, and Lumen finds it in the picture.")
-                                                               : finderDescription(m_request));
+                          : m_objects ? tr("Objects: \"%1\", found by a detection model on this computer.").arg(m_words->text().trimmed())
+                                      : finderDescription(m_request));
+    const bool missing = m_objects && !m_finder->objectsReady();
+    m_download->setVisible(missing);
+    if (missing && m_download->isEnabled())
+        m_download->setText(tr("Download the detection models (about %1 MB, once)").arg(QLocale().toString(m_finder->objectsMissingSize() / 1e6, 'f', 0)));
     const bool sized = m_request.kind == K::Strokes || m_request.kind == K::Specks;
     m_strokeBox->setVisible(sized);
     m_colorBox->setVisible(m_request.kind == K::Color);
@@ -230,6 +261,23 @@ void SelectByDescriptionDialog::find()
 {
     const int run = ++m_run;
     m_found = QImage();
+    if (m_objects && !m_picture.isNull()) {
+        showPreview();
+        if (!m_finder->objectsReady())
+            return;
+        m_result->setText(tr("Looking… (the first time takes a few seconds)"));
+        QPointer<SelectByDescriptionDialog> self(this);
+        m_finder->findObjects(m_picture, m_words->text().trimmed())
+            .then(this, [self, run](const SmartSelect::FoundArea &area) {
+                if (!self || run != self->m_run)
+                    return;
+                self->m_found = area.mask;
+                self->showPreview();
+                self->m_result->setText(area.mask.isNull() ? area.error : tr("Found %n object(s) (tinted).", nullptr, area.objects));
+                emit self->foundChanged();
+            });
+        return;
+    }
     if (m_request.kind == img::FinderRequest::Kind::None || m_picture.isNull()) {
         showPreview();
         emit foundChanged();
@@ -270,8 +318,10 @@ void SelectByDescriptionDialog::showPreview()
         p.drawImage(0, 0, tint);
     }
     m_preview->setPixmap(QPixmap::fromImage(shown));
-    if (m_request.kind == img::FinderRequest::Kind::None)
+    if (m_request.kind == img::FinderRequest::Kind::None && !m_objects)
         m_result->clear();
+    else if (m_objects)
+        ; // findObjects says what it found
     else if (!any)
         m_result->setText(tr("Nothing like that was found. Try a lower contrast or a larger size."));
     else {

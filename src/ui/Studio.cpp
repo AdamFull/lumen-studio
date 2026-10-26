@@ -1,6 +1,7 @@
 #include "ui/Studio.h"
 
 #include "ui/SmartSelect.h"
+#include "ui/filters/FindAreaNode.h"
 
 #include "ai/FilterNodes.h"
 #include "ai/ProviderCatalog.h"
@@ -53,6 +54,8 @@ Studio::Studio(QObject *parent)
     // The AI steps of node filters run through this studio's engines; registered before any
     // filter is loaded (FilterCatalog), or filters with AI steps would not load.
     ai::registerFilterNodes(&m_generation);
+    // "Find area": objects by name with the detection models (plan M18 §18.1).
+    registerFindAreaNode(m_smartSelect);
     applyConcurrency();
     connect(&m_registry, &ai::ProviderRegistry::providersChanged, this, &Studio::applyConcurrency);
     m_runtimes.load();

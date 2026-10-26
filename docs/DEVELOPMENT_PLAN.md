@@ -3978,9 +3978,32 @@ Decisions (October 2026, with the user):
     Alt, box, Add, undo, with a stand-in segmenter).
   * Not yet: CUDA or DirectML builds of ONNX Runtime (the CPU is quick enough for SAM 2.1 tiny);
     an object's mask is not refined further than SAM's 256 × 256 output.
-- [ ] Grounding DINO tiny (text → boxes, its WordPiece tokenizer) and SAM 2 boxes → masks:
-  `Utility::FindArea` and its local provider, objects in *Select → By description* and "select:
-  the cup", the *Find area* node. Tests against the real models when given, steps without them.
+- [x] Grounding DINO tiny (text → boxes, its WordPiece tokenizer) and SAM 2 boxes → masks:
+  objects in *Select → By description* and "select: the cup", the *Find area* node. Tests against
+  the real models when given, steps without them.
+  * `ai::GroundingDino` (`src/ai/Detector`): BERT's uncased WordPiece (`ai::WordPiece`, the model's
+    `vocab.txt`), the words as one phrase ending in ".", the picture squashed to 800 × 800 with
+    ImageNet normalisation, and the 900 queries' logits read against the phrase's tokens: a query
+    counts when its best token is over 0.3, boxes (centre, size) back to the picture, overlaps over
+    0.5 IoU dropped. Measured on this CPU: loaded in 3.9 s, one search 3.1 s.
+  * `ai::findObjects` and `ui::SmartSelect::findObjects`: each box found goes to SAM 2.1 as a box
+    prompt and the masks are united; the detector opens once on a worker thread, like the segmenter.
+    The answer is never a failed future: nothing found, or the models missing, comes back as
+    `FoundArea::error` in plain words (a failure thrown after `.unwrap()` did not reach a later
+    `.onFailed` on the GUI thread's context).
+  * *Select → By description…*: words that name no line, speck or colour are objects; the dialog
+    says so, offers the download of what is missing (Grounding DINO and, if not there yet, ONNX
+    Runtime and SAM 2.1, about 350 MB) and looks again when it is done. "select: the cup" in the
+    prompt bar does the same, or says that the download is in the dialog.
+  * The filter node *Find area* (`ui/filters/FindAreaNode`, text → mask, expensive like the AI
+    steps): it asks the studio's finder on the GUI thread and waits on a promise; while the models
+    are missing, it says so instead of running.
+  * Tests: `tst_detect wordPiece`, `dinoSteps` (the steps without the runtime) and `dinoReal` (with
+    `LUMEN_TEST_GDINO`: "a red ball" found at 0.92, "blue box", and the ball cut out by
+    `findObjects`); `tst_canvas selectObjectsByName` (download offered with its size; with stand-in
+    models the ball selected and "a giraffe" not; the prompt bar; the node on a worker thread).
+  * Not yet: a `FindArea` capability for the other engines (the next step); several phrases at
+    once ("the cup and the plate" is searched as one phrase).
 - [ ] `FindArea` for ComfyUI (workflow template), fal.ai and Gemini, against mock servers.
 - [ ] Prompt rules per family; *Use my words as they are*; what was sent in the results' details.
 - [ ] LoRA suggestions; the picker for ComfyUI.

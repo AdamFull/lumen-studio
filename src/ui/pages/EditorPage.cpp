@@ -340,6 +340,7 @@ EditorPage::EditorPage(Studio *studio, QWidget *parent)
         if (!m_doc)
             return;
         SelectByDescriptionDialog dlg(m_doc, this);
+        dlg.setObjectFinder(m_studio->smartSelect());
         dlg.exec();
     });
     shortcut(QStringLiteral("delete-pixels"), tr("Delete selected pixels"), {QStringLiteral("Del")}, [this] { deleteSelectionPixels(); });
