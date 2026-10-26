@@ -188,6 +188,7 @@ private:
     QHash<QString, QWidget *> m_fields; // the editor of each option
     QHash<QString, QWidget *> m_rows;   // a file field's row (path and buttons)
     QHash<QString, QLabel *> m_status;  // a file field's status line
+    QStringList m_shownFiles;           // the file fields showType() shows
     QHash<QString, QPointer<Job>> m_downloads; // components being downloaded, by option
     QPlainTextEdit *m_preview;
     QLabel *m_problem;

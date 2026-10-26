@@ -28,6 +28,11 @@ public:
     void setValue(double v);
     void setRange(double min, double max);
     void setCompact(bool compact);
+    // The label's own width, and a width to give it, so sliders stacked one under another start at
+    // the same place: alignLabels gives each the widest label's width.
+    int labelWidth() const;
+    void setLabelWidth(int width);
+    static void alignLabels(const QList<SliderField *> &fields);
 
 signals:
     void valueChanged(double value);

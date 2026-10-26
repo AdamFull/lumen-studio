@@ -155,8 +155,11 @@ QStringList sdFileOptions();
 // the profile sets a file option the type has no place for (a model in the other slot, an SDXL
 // ControlNet with Anima).
 const ModelType *profileModelType(const ModelLibrary *library, const ServerProfile &profile);
-// The label of an sd.cpp file field for a type: "Text encoder (Qwen3 4B)", "VAE (optional)" for
-// a checkpoint's own; the server form's label otherwise (`type` may be null).
+// The type a new server starts with, so its form asks only for that type's files: the type of an
+// image model in the library, else FLUX.2 [klein] 4B, the setup wizard's first suggestion.
+const ModelType *defaultModelType(const ModelLibrary *library);
+// The label of an sd.cpp file field for a type: "Text encoder (Qwen3 4B)", "VAE (FLUX.2)",
+// "VAE (optional)" for a checkpoint's own; the server form's label otherwise (`type` may be null).
 QString fileFieldLabel(const QString &option, const ModelType *type);
 // The pinned file with this SHA-256 in any preset, and the preset (for its licence and source).
 const PresetSlot *presetSlotForSha(const QString &sha256);
@@ -188,6 +191,11 @@ struct ProfileProblem
     QString brief;
 };
 QList<ProfileProblem> checkSdProfile(const ModelLibrary *library, const ServerProfile &profile);
+// The component and add-on files of a profile checked against a model type rather than its model:
+// for the server dialog when no model of that type decides (none chosen yet, or one of another
+// type). Each file must exist and be of the kind, family and variant the type's slot names, a VAE
+// in place of a checkpoint's own one of the type's family, an add-on one of its families.
+QList<ProfileProblem> checkTypeFiles(const ModelLibrary *library, const ServerProfile &profile, const ModelType &type);
 // Whether a ControlNet or IP-Adapter file fits a preset.
 bool addonFits(const ModelPreset &preset, const ModelInfo &addon);
 

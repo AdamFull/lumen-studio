@@ -50,6 +50,7 @@
 #include <QTreeWidget>
 #include <QUrl>
 #include <QVBoxLayout>
+#include <QWheelEvent>
 
 namespace lumen::ui {
 
@@ -916,6 +917,28 @@ protected:
     }
 };
 
+// A choice in a scrolling form that the mouse wheel changes only once it has been clicked: turning
+// the wheel over it to scroll the form must not change it (a model type changed in passing hides
+// the files of the model).
+class WheelSafeCombo : public QComboBox
+{
+public:
+    explicit WheelSafeCombo(QWidget *parent)
+        : QComboBox(parent)
+    {
+        setFocusPolicy(Qt::StrongFocus);
+    }
+
+protected:
+    void wheelEvent(QWheelEvent *e) override
+    {
+        if (hasFocus())
+            QComboBox::wheelEvent(e);
+        else
+            e->ignore(); // to the scroll area
+    }
+};
+
 // A field's status: a mark in the colour of its state, then the words.
 QString statusLine(const QString &mark, const QColor &color, const QString &text)
 {
@@ -1275,7 +1298,7 @@ void ServerProfileDialog::buildOptions()
         bv->addWidget(sectionLabel(tr("Model"), box));
         m_fileForm = newForm();
         bv->addLayout(m_fileForm);
-        m_type = new QComboBox(box);
+        m_type = new WheelSafeCombo(box);
         m_type->setObjectName(QStringLiteral("serverModelType"));
         m_type->setAccessibleName(tr("Model type"));
         m_type->setToolTip(tr("What kind of model the server runs: it decides which files are asked for. Choosing a model file sets it; "
@@ -1316,8 +1339,13 @@ void ServerProfileDialog::buildOptions()
         bv->addLayout(m_addonForm);
         connect(m_type, &QComboBox::activated, this, &ServerProfileDialog::typeChosen);
         // An existing profile opens with its model's type; Other when Lumen does not know the model
-        // or the profile has files its type has no place for.
+        // or the profile has files its type has no place for. A server without any file yet (a new
+        // one) starts on a type, so it asks only for that type's files rather than for every one.
         const runtime::ModelType *type = runtime::profileModelType(m_studio->models(), m_profile);
+        const QStringList fileOptions = runtime::sdFileOptions();
+        if (!type && std::none_of(fileOptions.cbegin(), fileOptions.cend(),
+                                  [this](const QString &key) { return !m_profile.options.value(key).toString().trimmed().isEmpty(); }))
+            type = runtime::defaultModelType(m_studio->models());
         const QSignalBlocker block(m_type);
         m_type->setCurrentIndex(std::max(0, m_type->findData(type ? type->id : QString())));
     } else {
@@ -1479,8 +1507,13 @@ QString ServerProfileDialog::typeModelOption() const
         return {};
     // A checkpoint of a type that also takes them stays a checkpoint (FLUX.2 [klein] as one file).
     for (const QString &key : {QStringLiteral("diffusion_model"), QStringLiteral("model")}) {
-        if (const QString file = fieldText(key); !file.isEmpty())
-            return type->modelOption(runtime::modelInfoOf(m_studio->models(), file));
+        if (const QString file = fieldText(key); !file.isEmpty()) {
+            const QString option = type->modelOption(runtime::modelInfoOf(m_studio->models(), file));
+            // A model the type has no slot for (a FLUX.1 diffusion model with SDXL chosen by hand)
+            // stays in sight in its own field, with what is wrong with it, rather than hidden and
+            // left out of the saved server.
+            return fieldText(option).isEmpty() ? key : option;
+        }
     }
     return type->modelOption();
 }
@@ -1508,6 +1541,7 @@ void ServerProfileDialog::showType()
         return;
     const runtime::ModelType *type = currentType();
     const QStringList shown = shownFileOptions();
+    m_shownFiles = shown;
     const QString modelOption = typeModelOption();
     for (const QString &key : runtime::sdFileOptions()) {
         QWidget *row = m_rows.value(key);
@@ -1781,6 +1815,10 @@ void ServerProfileDialog::updateFileStatus(const runtime::ServerProfile &p, QStr
     const std::optional<runtime::ModelInfo> info = model.isEmpty() ? std::nullopt : runtime::modelInfoOf(library, model);
     const runtime::ModelPreset *preset = info ? runtime::presetFor(*info, model) : nullptr;
     const bool otherType = preset && type && !type->contains(*preset);
+    // A model file of a kind the type does not take at all (a diffusion model with SDXL chosen), as
+    // the type was changed by hand.
+    const bool wrongKind = type && info && (info->kind == runtime::ModelKind::Checkpoint || info->kind == runtime::ModelKind::DiffusionModel)
+                        && !type->kinds.contains(info->kind);
     // What can be downloaded for the model (a file in the library).
     QHash<QString, runtime::ModelCompanion> downloadable;
     if (preset && !otherType && library->entry(model)) {
@@ -1791,7 +1829,25 @@ void ServerProfileDialog::updateFileStatus(const runtime::ServerProfile &p, QStr
     }
     // What is wrong stands next to its field; what has no field shown goes below the form.
     QHash<QString, runtime::ProfileProblem> byOption;
-    for (const runtime::ProfileProblem &pp : runtime::checkSdProfile(library, p)) {
+    QList<runtime::ProfileProblem> found;
+    if (type && (!preset || otherType)) {
+        // No model of the chosen type decides (none chosen yet, or one of another type): the fields
+        // are the type's, so their files are checked against it. Of the model, only what is wrong
+        // with it in its field (not the components a model of another type would need).
+        runtime::ServerProfile models = p;
+        for (const QString &key : runtime::sdFileOptions()) {
+            if (!isModelSlot(key))
+                models.options.remove(key);
+        }
+        for (const runtime::ProfileProblem &pp : runtime::checkSdProfile(library, models)) {
+            if (isModelSlot(pp.option))
+                found << pp;
+        }
+        found << runtime::checkTypeFiles(library, p, *type);
+    } else {
+        found = runtime::checkSdProfile(library, p);
+    }
+    for (const runtime::ProfileProblem &pp : std::as_const(found)) {
         *blocking = *blocking || !pp.missing;
         if (!shown.contains(pp.option))
             *problems << pp.message.toHtmlEscaped();
@@ -1811,10 +1867,22 @@ void ServerProfileDialog::updateFileStatus(const runtime::ServerProfile &p, QStr
             // A model of another type than the one chosen: its components have no fields here.
             text = statusLine(bad, pal.danger, tr("This is a %1 model: choose its type, %2.").arg(preset->name, runtime::modelTypeOf(*preset)->name));
             *blocking = true;
+        } else if (isModelSlot(key) && !file.isEmpty() && wrongKind) {
+            text = statusLine(bad, pal.danger,
+                              info->kind == runtime::ModelKind::Checkpoint
+                                  ? tr("This is a complete checkpoint, and this model type takes a diffusion model: choose another type, or Other.")
+                                  : tr("This is a diffusion model, and this model type takes a complete checkpoint: choose another type, or Other."));
+            *blocking = true;
         } else if (!problem.option.isEmpty() && !problem.missing) {
             text = statusLine(bad, pal.danger, problem.brief.isEmpty() ? problem.message : problem.brief);
         } else if (isModelSlot(key)) {
             if (file.isEmpty()) {
+                // What the server needs first, on the type's own field (not a line below the form
+                // that names fields the type does not show).
+                if (type)
+                    text = statusLine(QStringLiteral("•"), pal.textMuted,
+                                      key == QLatin1String("model") ? tr("Choose the checkpoint file: type its path, Browse…, or pick it from the model library.")
+                                                                    : tr("Choose the diffusion model file: type its path, Browse…, or pick it from the model library."));
             } else if (preset) {
                 text = statusLine(ok, pal.success, preset->note.isEmpty() ? preset->name : tr("%1: %2").arg(preset->name, preset->note));
             } else if (!info || info->kind == runtime::ModelKind::Unknown) {
@@ -1853,6 +1921,12 @@ void ServerProfileDialog::updateFileStatus(const runtime::ServerProfile &p, QStr
 
 void ServerProfileDialog::updatePreview()
 {
+    // A model file cleared or changed by hand can change which fields its type shows (a model left
+    // in a slot the type does not use makes way for the type's own).
+    if (m_type && m_builtFor == kind() && shownFileOptions() != m_shownFiles) {
+        showType();
+        fitToContent();
+    }
     const runtime::ServerProfile p = profile();
     const auto rt = m_studio->runtimes()->runtime(p.runtimeId);
     if (!rt) {
@@ -1863,7 +1937,10 @@ void ServerProfileDialog::updatePreview()
     }
     const runtime::LaunchCommand cmd = runtime::buildLaunch(p, *rt);
     m_preview->setPlainText(cmd.commandLine());
-    QString problem = cmd.error;
+    // Without a model, a known type asks for it on its model field (updateFileStatus).
+    const bool noModel = p.options.value(QStringLiteral("model")).toString().isEmpty()
+                      && p.options.value(QStringLiteral("diffusion_model")).toString().isEmpty();
+    QString problem = m_type && m_builtFor == rt->kind && currentType() && noModel ? QString() : cmd.error;
     for (const runtime::ServerProfile &other : m_studio->servers()->profiles()) {
         if (other.id != p.id && other.port == p.port && problem.isEmpty())
             problem = tr("Port %1 is already used by the server '%2'.").arg(p.port).arg(other.name);

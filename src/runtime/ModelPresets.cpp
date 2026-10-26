@@ -426,11 +426,40 @@ const ModelType *profileModelType(const ModelLibrary *library, const ServerProfi
     return type;
 }
 
+const ModelType *defaultModelType(const ModelLibrary *library)
+{
+    if (library) {
+        for (const ModelEntry &e : library->entries()) {
+            if (e.info.kind != ModelKind::Checkpoint && e.info.kind != ModelKind::DiffusionModel)
+                continue;
+            if (const ModelPreset *preset = presetFor(e.info, e.path)) {
+                if (const ModelType *type = modelTypeOf(*preset))
+                    return type;
+            }
+        }
+    }
+    // What recommendLocalModel suggests for a card with 8 GB or more.
+    if (const ModelPreset *klein = presetById(QStringLiteral("flux2-klein-4b")))
+        return modelTypeOf(*klein);
+    return modelTypes().isEmpty() ? nullptr : &modelTypes().first();
+}
+
 QString fileFieldLabel(const QString &option, const ModelType *type)
 {
     const PresetSlot *slot = type ? type->slot(option) : nullptr;
     if (option == QLatin1String("vae") && type && !slot && !type->optionalVae.isEmpty())
         return Text::tr("VAE (optional)");
+    if (option == QLatin1String("vae") && slot) {
+        // Which VAE, as the text encoders say which encoder: FLUX.1, FLUX.2 and Qwen-Image each
+        // need their own. The slot's label names it ("FLUX.2 VAE").
+        QString which = slot->label;
+        if (which.endsWith(QLatin1String(" VAE")))
+            which.chop(4);
+        if (which.isEmpty())
+            which = slot->family;
+        if (!which.isEmpty())
+            return Text::tr("VAE (%1)").arg(which);
+    }
     if (option == QLatin1String("llm") && slot && !slot->variant.isEmpty())
         return Text::tr("Text encoder (%1)").arg(slot->variant);
     return optionLabel(option);
@@ -629,6 +658,59 @@ QList<ProfileProblem> checkSdProfile(const ModelLibrary *library, const ServerPr
                               fitting.isEmpty() ? Text::tr("This is for %1 models and does not work with %2.").arg(info->family, preset->name)
                                                 : Text::tr("This is for %1 models; %2 needs one for %3.")
                                                       .arg(info->family, preset->name, fitting.join(QStringLiteral(", ")))};
+    }
+    return out;
+}
+
+QList<ProfileProblem> checkTypeFiles(const ModelLibrary *library, const ServerProfile &profile, const ModelType &type)
+{
+    QList<ProfileProblem> out;
+    auto str = [&profile](const QString &key) { return profile.options.value(key).toString().trimmed(); };
+    QStringList keys;
+    for (const QString &key : sdFileOptions()) {
+        if (key != QLatin1String("model") && key != QLatin1String("diffusion_model") && key != QLatin1String("lora_dir")
+            && key != QLatin1String("upscalers_dir") && !str(key).isEmpty())
+            keys << key;
+    }
+    for (const QString &key : std::as_const(keys)) {
+        if (!QFileInfo::exists(QDir::fromNativeSeparators(str(key))))
+            out << ProfileProblem{key, Text::tr("%1 (%2) does not exist.").arg(fileName(str(key)), fileFieldLabel(key, &type)), false,
+                                  Text::tr("This file does not exist.")};
+    }
+    if (!out.isEmpty())
+        return out;
+    for (const QString &key : std::as_const(keys)) {
+        const QString file = str(key);
+        const auto info = modelInfoOf(library, file);
+        if (!info || info->kind == ModelKind::Unknown)
+            continue;
+        const QString field = fileFieldLabel(key, &type);
+        if (const PresetSlot *slot = type.slot(key)) {
+            if (info->kind != slot->kind || info->family != slot->family || (!slot->variant.isEmpty() && info->variant != slot->variant))
+                out << ProfileProblem{key,
+                                      Text::tr("%1 (%2: %3) does not fit: this model type needs a %4 under \"%5\".")
+                                          .arg(fileName(file), modelKindLabel(info->kind), describe(*info), slot->label, field),
+                                      false, Text::tr("This is a %1; this model type needs a %2.").arg(whatFileIs(*info), slot->label)};
+        } else if (key == QLatin1String("vae") && !type.optionalVae.isEmpty()) {
+            if (info->kind != ModelKind::Vae || (!info->family.isEmpty() && info->family != type.optionalVae))
+                out << ProfileProblem{key,
+                                      Text::tr("%1 (%2) does not fit: this model type takes only a VAE for %3 under \"%4\".")
+                                          .arg(fileName(file), whatFileIs(*info), type.optionalVae, field),
+                                      false, Text::tr("This is a %1; this model type takes only a VAE for %2.").arg(whatFileIs(*info), type.optionalVae)};
+        } else if ((info->kind == ModelKind::ControlNet || info->kind == ModelKind::IpAdapter) && !info->family.isEmpty()) {
+            const QStringList fitting = info->kind == ModelKind::ControlNet ? type.controlNetFamilies : type.ipAdapterFamilies;
+            if (fitting.contains(info->family))
+                continue;
+            out << ProfileProblem{key,
+                                  fitting.isEmpty() ? Text::tr("%1 is for %2 models and does not work with this model type. Remove it from \"%3\".")
+                                                          .arg(fileName(file), info->family, field)
+                                                    : Text::tr("%1 is for %2 models; this model type needs one for %3.")
+                                                          .arg(fileName(file), info->family, fitting.join(QStringLiteral(", "))),
+                                  false,
+                                  fitting.isEmpty() ? Text::tr("This is for %1 models and does not work with this model type.").arg(info->family)
+                                                    : Text::tr("This is for %1 models; this model type needs one for %2.")
+                                                          .arg(info->family, fitting.join(QStringLiteral(", ")))};
+        }
     }
     return out;
 }

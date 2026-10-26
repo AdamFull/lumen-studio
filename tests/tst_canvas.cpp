@@ -3812,8 +3812,8 @@ struct ServerDialogDriver
 
 } // namespace
 
-// The server dialog of plan §17.5 with FLUX.2 [klein] 4B, chosen in the Checkpoint field as in the
-// session of plan §17.1: it picks its type, moves to its slot and gets its VAE and text encoder, each
+// The server dialog of plan §17.5 with FLUX.2 [klein] 4B, from the checkpoints folder as in the
+// session of plan §17.1: a new server starts on its type; the file gets its VAE and text encoder, each
 // with a status line; the launch settings and the command line are under a folded Advanced; the
 // saved server's provider gets the preset; a text encoder that does not fit keeps OK off; a missing
 // one shows with its size and a download.
@@ -3855,21 +3855,27 @@ void TestCanvas::presetServerDialog()
     QLabel *problems = d.problems();
     QVERIFY(ok && problems);
 
-    // A new server without a model: the type is Other, with every field; the memory and the port. The
-    // launch settings and the command line are under Advanced, folded.
+    // A new server without a model starts on the type of the library's model, FLUX.2 [klein] 4B, with
+    // only that type's fields (not every field of Other); its model field asks for the file, there
+    // rather than in a line below the form. The memory and the port; the launch settings and the
+    // command line are under Advanced, folded.
     auto *memory = dlg.findChild<QComboBox *>(QStringLiteral("serverMemory"));
     auto *advanced = dlg.findChild<QToolButton *>(QStringLiteral("serverAdvanced"));
     auto *advancedOptions = dlg.findChild<QWidget *>(QStringLiteral("serverAdvancedOptions"));
     QVERIFY(memory && advanced && advancedOptions && d.typeCombo());
-    QCOMPARE(dlg.modelType(), QString());
-    QCOMPARE(d.typeCombo()->currentText(), QStringLiteral("Other (every field)"));
-    QCOMPARE(d.shown(), runtime::sdFileOptions());
+    QCOMPARE(dlg.modelType(), QStringLiteral("flux2-klein-4b"));
+    QCOMPARE(d.shown(), (QStringList{QStringLiteral("diffusion_model"), QStringLiteral("vae"), QStringLiteral("llm"), QStringLiteral("lora_dir"),
+                                     QStringLiteral("upscalers_dir")}));
+    QVERIFY2(d.status(QStringLiteral("diffusion_model")).startsWith(QStringLiteral("• Choose the diffusion model file")),
+             qPrintable(d.status(QStringLiteral("diffusion_model"))));
+    QVERIFY(!problems->isVisible());
     QVERIFY(memory->isVisible() && advanced->isVisible());
     QVERIFY(!advanced->isChecked() && !advancedOptions->isVisible());
     QVERIFY(!dlg.findChild<QPlainTextEdit *>()->isVisible()); // the command line
 
-    // The klein file in the Checkpoint field: its type, its slot, its VAE and its text encoder, found.
-    d.type(QStringLiteral("model"), klein);
+    // The klein file (in the checkpoints folder, as in the session of plan §17.1) typed in: its type,
+    // its slot, its VAE and its text encoder, found.
+    d.type(QStringLiteral("diffusion_model"), klein);
     QCOMPARE(dlg.modelType(), QStringLiteral("flux2-klein-4b"));
     QCOMPARE(d.typeCombo()->currentText(), QStringLiteral("FLUX.2 [klein] 4B"));
     runtime::ServerProfile chosen = dlg.profile();
@@ -3880,6 +3886,7 @@ void TestCanvas::presetServerDialog()
     QCOMPARE(d.shown(), (QStringList{QStringLiteral("diffusion_model"), QStringLiteral("vae"), QStringLiteral("llm"), QStringLiteral("lora_dir"),
                                      QStringLiteral("upscalers_dir")}));
     QCOMPARE(d.field(QStringLiteral("llm"))->accessibleName(), QStringLiteral("Text encoder (Qwen3 4B)"));
+    QCOMPARE(d.field(QStringLiteral("vae"))->accessibleName(), QStringLiteral("VAE (FLUX.2)"));
     QVERIFY2(d.status(QStringLiteral("diffusion_model")).startsWith(QStringLiteral("✓ FLUX.2 [klein] 4B: Generates and edits")),
              qPrintable(d.status(QStringLiteral("diffusion_model"))));
     QCOMPARE(d.status(QStringLiteral("vae")), QStringLiteral("✓ Found"));
@@ -4193,6 +4200,97 @@ void TestCanvas::serverDialogModelTypes()
         QVERIFY(d.field(QStringLiteral("model"))->text().isEmpty());
         QCOMPARE(d.field(QStringLiteral("vae"))->text(), native(flux2Vae));
         QCOMPARE(d.field(QStringLiteral("llm"))->text(), native(qwen4b));
+        QVERIFY(d.ok()->isEnabled());
+    }
+    {
+        // An existing FLUX.1 server whose type is changed by hand to one with no place for its model
+        // (SDXL, FLUX.1 as one file, SD 1.5): the model stays in sight in its own field, saying what
+        // is wrong, and OK is off, so the server is never saved without its model and its encoders.
+        // Nothing about the FLUX.1 encoders the type does not show is said below the form.
+        runtime::ServerProfile p = empty;
+        p.options = {{QStringLiteral("diffusion_model"), native(flux1)},
+                     {QStringLiteral("vae"), native(flux1Vae)},
+                     {QStringLiteral("clip_l"), native(clipL)},
+                     {QStringLiteral("t5xxl"), native(myT5)}};
+        ServerProfileDialog dlg(&studio, p, false);
+        dlg.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&dlg));
+        const ServerDialogDriver d{&dlg};
+        QCOMPARE(dlg.modelType(), QStringLiteral("flux1"));
+        QCOMPARE(d.field(QStringLiteral("vae"))->accessibleName(), QStringLiteral("VAE (FLUX.1)"));
+        QVERIFY(d.ok()->isEnabled());
+        for (const QString &other : {QStringLiteral("sdxl"), QStringLiteral("flux1-checkpoint"), QStringLiteral("sd15")}) {
+            d.chooseType(other);
+            QVERIFY2(d.shown().contains(QStringLiteral("diffusion_model")) && !d.shown().contains(QStringLiteral("model")), qPrintable(other));
+            QCOMPARE(d.status(QStringLiteral("diffusion_model")),
+                     QStringLiteral("✗ This is a FLUX.1 [dev] model: choose its type, FLUX.1 (dev, schnell, Kontext; separate files)."));
+            QVERIFY2(!d.ok()->isEnabled(), qPrintable(other));
+            QVERIFY2(!d.problems()->isVisible(), qPrintable(d.problems()->text()));
+            QCOMPARE(dlg.profile().options.value(QStringLiteral("diffusion_model")).toString(), native(flux1));
+        }
+        // The FLUX.1 VAE is judged by the type shown: SDXL takes only an SD / SDXL one.
+        d.chooseType(QStringLiteral("sdxl"));
+        QCOMPARE(d.status(QStringLiteral("vae")), QStringLiteral("✗ This is a FLUX / SD 3 VAE; this model type takes only a VAE for SD / SDXL."));
+        // Turning the mouse wheel over the type, to scroll the form, does not change it.
+        QComboBox *combo = d.typeCombo();
+        const int before = combo->currentIndex();
+        QWheelEvent wheel(QPointF(5, 5), combo->mapToGlobal(QPointF(5, 5)), QPoint(), QPoint(0, -120), Qt::NoButton, Qt::NoModifier,
+                          Qt::NoScrollPhase, false);
+        QCoreApplication::sendEvent(combo, &wheel);
+        QCOMPARE(combo->currentIndex(), before);
+        // Back to FLUX.1: as it was, and it can be saved with its encoders.
+        d.chooseType(QStringLiteral("flux1"));
+        QVERIFY(d.ok()->isEnabled());
+        runtime::ServerProfile back = dlg.profile();
+        QCOMPARE(back.options.value(QStringLiteral("diffusion_model")).toString(), native(flux1));
+        QCOMPARE(back.options.value(QStringLiteral("clip_l")).toString(), native(clipL));
+        QCOMPARE(back.options.value(QStringLiteral("t5xxl")).toString(), native(myT5));
+        // The model cleared under SDXL: the Checkpoint field takes its place and asks for the file
+        // there, not in a line below the form that names a field SDXL does not have.
+        d.chooseType(QStringLiteral("sdxl"));
+        d.field(QStringLiteral("diffusion_model"))->clear();
+        QCOMPARE(d.shown(), sdxlFields);
+        QVERIFY2(d.status(QStringLiteral("model")).startsWith(QStringLiteral("• Choose the checkpoint file")), qPrintable(d.status(QStringLiteral("model"))));
+        QVERIFY2(!d.problems()->isVisible(), qPrintable(d.problems()->text()));
+        // With no model, the VAE left over from FLUX.1 still does not fit SDXL, and keeps OK off.
+        QCOMPARE(d.status(QStringLiteral("vae")), QStringLiteral("✗ This is a FLUX / SD 3 VAE; this model type takes only a VAE for SD / SDXL."));
+        QVERIFY(!d.ok()->isEnabled());
+        d.field(QStringLiteral("vae"))->clear();
+        QVERIFY(d.ok()->isEnabled());
+    }
+    {
+        // An SDXL server changed by hand to FLUX.1: its checkpoint stays in sight, and OK is off.
+        runtime::ServerProfile p = empty;
+        p.options = {{QStringLiteral("model"), native(sdxl)}};
+        ServerProfileDialog dlg(&studio, p, false);
+        dlg.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&dlg));
+        const ServerDialogDriver d{&dlg};
+        QCOMPARE(dlg.modelType(), QStringLiteral("sdxl"));
+        d.chooseType(QStringLiteral("flux1"));
+        QVERIFY(d.shown().contains(QStringLiteral("model")) && !d.shown().contains(QStringLiteral("diffusion_model")));
+        QVERIFY2(d.status(QStringLiteral("model")).endsWith(QStringLiteral("choose its type, SDXL (also Illustrious, NoobAI, Pony).")),
+                 qPrintable(d.status(QStringLiteral("model"))));
+        QVERIFY(!d.ok()->isEnabled());
+        QCOMPARE(dlg.profile().options.value(QStringLiteral("model")).toString(), native(sdxl));
+    }
+    {
+        // A new server of a type chosen by hand, before any model: a component of another type is
+        // named next to its field, and OK is off (FLUX.2's VAE with SDXL, a T5 encoder for klein).
+        ServerProfileDialog dlg(&studio, empty, true);
+        dlg.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&dlg));
+        const ServerDialogDriver d{&dlg};
+        d.chooseType(QStringLiteral("sdxl"));
+        d.type(QStringLiteral("vae"), flux2Vae);
+        QCOMPARE(d.status(QStringLiteral("vae")), QStringLiteral("✗ This is a FLUX.2 VAE; this model type takes only a VAE for SD / SDXL."));
+        QVERIFY(!d.ok()->isEnabled());
+        d.chooseType(QStringLiteral("flux2-klein-4b"));
+        QCOMPARE(d.status(QStringLiteral("vae")), QStringLiteral("✓ Found"));
+        d.type(QStringLiteral("llm"), t5);
+        QCOMPARE(d.status(QStringLiteral("llm")), QStringLiteral("✗ This is a T5 text encoder; this model type needs a Qwen3 4B text encoder."));
+        QVERIFY(!d.ok()->isEnabled());
+        d.type(QStringLiteral("llm"), myQwen);
         QVERIFY(d.ok()->isEnabled());
     }
     {

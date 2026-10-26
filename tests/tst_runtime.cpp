@@ -3770,11 +3770,17 @@ void TestRuntime::modelTypes()
     QCOMPARE(fileFieldLabel(QStringLiteral("llm"), modelTypeById(QStringLiteral("anima"))), QStringLiteral("Text encoder (Qwen3 0.6B)"));
     QCOMPARE(fileFieldLabel(QStringLiteral("clip_l"), modelTypeById(QStringLiteral("flux1"))), QStringLiteral("Text encoder (CLIP-L)"));
     QCOMPARE(fileFieldLabel(QStringLiteral("t5xxl"), modelTypeById(QStringLiteral("flux1"))), QStringLiteral("Text encoder (T5-XXL)"));
-    QCOMPARE(fileFieldLabel(QStringLiteral("vae"), modelTypeById(QStringLiteral("flux1"))), QStringLiteral("VAE"));
+    // A VAE the type needs names which: FLUX.1, FLUX.2 and Qwen-Image each have their own.
+    QCOMPARE(fileFieldLabel(QStringLiteral("vae"), modelTypeById(QStringLiteral("flux1"))), QStringLiteral("VAE (FLUX.1)"));
+    QCOMPARE(fileFieldLabel(QStringLiteral("vae"), modelTypeById(QStringLiteral("flux2-klein-4b"))), QStringLiteral("VAE (FLUX.2)"));
+    QCOMPARE(fileFieldLabel(QStringLiteral("vae"), modelTypeById(QStringLiteral("qwen-image"))), QStringLiteral("VAE (Qwen-Image)"));
+    QCOMPARE(fileFieldLabel(QStringLiteral("vae"), nullptr), QStringLiteral("VAE"));
     QCOMPARE(fileFieldLabel(QStringLiteral("vae"), modelTypeById(QStringLiteral("sdxl"))), QStringLiteral("VAE (optional)"));
     QCOMPARE(fileFieldLabel(QStringLiteral("llm"), nullptr), QStringLiteral("Text encoder (language model)"));
     QCOMPARE(fileFieldLabel(QStringLiteral("diffusion_model"), modelTypeById(QStringLiteral("flux1"))), QStringLiteral("Diffusion model"));
     QCOMPARE(fileFieldLabel(QStringLiteral("model"), modelTypeById(QStringLiteral("sdxl"))), QStringLiteral("Checkpoint"));
+    // A new server without a library model starts on the setup wizard's first suggestion.
+    QCOMPARE(defaultModelType(nullptr), modelTypeById(QStringLiteral("flux2-klein-4b")));
 
     // A preset of a type its file does not name is refused; one without a type is its own.
     const QByteArray noType = R"({"version": 1, "presets": [{"id": "x", "name": "X model", "match": {"family": "X", "kinds": ["checkpoint"]}}]})";

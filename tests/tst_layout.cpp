@@ -76,6 +76,8 @@
 #include <QScreen>
 #include <QScrollArea>
 #include <QScrollBar>
+#include <QSet>
+#include <QSlider>
 #include <QSplitter>
 #include <QStandardPaths>
 #include <QTabBar>
@@ -686,6 +688,13 @@ void TestLayout::mainWindow()
             QVERIFY(aiScroll);
             aiScroll->verticalScrollBar()->setValue(aiScroll->verticalScrollBar()->maximum());
             auditWindow(QStringLiteral("Editor with the AI panel's options"));
+            // Its sliders (Area may change, Context, Blend edge) start at one place, under one another.
+            QSet<int> sliderStarts;
+            for (SliderField *field : window.editor()->aiPanel()->findChildren<SliderField *>()) {
+                if (auto *slider = field->findChild<QSlider *>(); slider && field->isVisible())
+                    sliderStarts << slider->mapTo(window.editor()->aiPanel(), QPoint()).x();
+            }
+            QVERIFY2(sliderStarts.size() == 1, qPrintable(QStringLiteral("the AI panel's sliders start at %1 places at %2").arg(sliderStarts.size()).arg(res)));
             aiScroll->verticalScrollBar()->setValue(0);
             window.editor()->hideAiPanel();
             window.editor()->variantStrip()->discard();

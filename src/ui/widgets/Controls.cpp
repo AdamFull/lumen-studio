@@ -18,6 +18,7 @@
 #include <QTextBlock>
 #include <QTextLayout>
 
+#include <algorithm>
 #include <climits>
 #include <cmath>
 
@@ -90,6 +91,25 @@ void SliderField::setCompact(bool compact)
 {
     m_label->setMinimumWidth(compact ? 0 : 64);
     m_slider->setMinimumWidth(compact ? 80 : 120);
+}
+
+int SliderField::labelWidth() const
+{
+    return m_label->isHidden() ? 0 : m_label->sizeHint().width();
+}
+
+void SliderField::setLabelWidth(int width)
+{
+    m_label->setMinimumWidth(width);
+}
+
+void SliderField::alignLabels(const QList<SliderField *> &fields)
+{
+    int width = 0;
+    for (const SliderField *f : fields)
+        width = std::max(width, f->labelWidth());
+    for (SliderField *f : fields)
+        f->setLabelWidth(width);
 }
 
 // ---- ColorSwatch --------------------------------------------------------------------------------------

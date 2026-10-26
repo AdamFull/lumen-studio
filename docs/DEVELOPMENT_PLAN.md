@@ -3221,7 +3221,8 @@ Survey of the code, the app log and user testing (October 2026):
     engine name where there is room and keeps the whole name in its tooltip; an empty `AutoTextEdit`
     is as tall as its whole placeholder (New from prompt's and the AI tab's *Leave out* showed one line
     of a two-line hint); New from prompt's aspect chips have one width; the AI tab's action buttons one
-    height (*Remove background* takes two lines); the assistant's suggestions wrap to the panel's width
+    height (*Remove background* takes two lines) and its sliders one start (`SliderField::alignLabels`:
+    *Area may change*, *Context* and *Blend edge* each sized their own label); the assistant's suggestions wrap to the panel's width
     and its results' thumbnails wrap onto rows (`FlowLayout`), and its chat scrolls up and down only
     (a long suggestion ran past the panel's edge).
   * 150 % (acceptance 6): `tst_layout_150` is the same audit built with `LUMEN_LAYOUT_SCALE=1.5`. Its
@@ -3260,19 +3261,34 @@ Survey of the code, the app log and user testing (October 2026):
       components or the optional VAE, a ControlNet, an IP-Adapter and its CLIP vision encoder where the
       presets list fitting families, the LoRA folder where they take LoRAs, the upscaler folder.
       `profileModelType`: the type of a profile's model, none when the model is unknown, in the other
-      slot or a file has no place in its type. `fileFieldLabel`: "Text encoder (Qwen3 4B)", "Text
-      encoder (T5-XXL)", "VAE (optional)"; sd.cpp's fields are now "Text encoder (CLIP-L)" … "Text
+      slot or a file has no place in its type. `defaultModelType`: what a server without any file
+      starts on, the type of an image model in the library, else FLUX.2 [klein] 4B (the wizard's first
+      suggestion). `fileFieldLabel`: "Text encoder (Qwen3 4B)", "Text encoder (T5-XXL)", "VAE (FLUX.2)"
+      (a VAE the type needs says which; FLUX.1, FLUX.2 and Qwen-Image each need their own), "VAE
+      (optional)"; sd.cpp's fields are now "Text encoder (CLIP-L)" … "Text
       encoder (language model)", in the dialog's order, and its launch settings are `advanced`.
     * `checkSdProfile` says each problem also in a few words for next to its field
       (`ProfileProblem::brief`: "This is a T5 text encoder; FLUX.2 [klein] 4B needs a Qwen3 4B text
       encoder.") and names the fields as the dialog labels them; a VAE in place of a checkpoint's own
-      must be of its optional family (a FLUX.1 VAE left over for SDXL is refused).
+      must be of its optional family (a FLUX.1 VAE left over for SDXL is refused). `checkTypeFiles`
+      checks the components and add-ons against a type instead of a model, for the dialog while no
+      model of the chosen type decides ("This is a FLUX.2 VAE; this model type takes only a VAE for
+      SD / SDXL.").
     * The dialog: *Model type* (the types and *Other (every field)*), then the model's field, its
       components and *Download missing files*, the add-ons, the graphics card and the port; under each
       file a status line (`StatusLabel`, as tall as its text: a form gave wrapped labels the height of
       a narrower column) saying found, will be downloaded (with the size), missing (with the file and
       size) or does not fit (the brief, which then is not repeated below the form), or for the model
-      its preset and note. A model of another type than the one chosen says so and blocks OK. Choosing,
+      its preset and note. A new server (no file yet) starts on `defaultModelType`, not on *Other*
+      with every field; an empty model field asks for its file on its own line ("Choose the
+      checkpoint file: …"), so the line below the form no longer names a field the type does not
+      show. A model of another type than the one chosen says so and blocks OK; when the chosen type
+      has no slot for it at all (a FLUX.1 diffusion model with SDXL, FLUX.1 as one file or SD 1.5),
+      it stays in sight in its own field with that line instead of being hidden and dropped from the
+      saved server, and gives way to the type's own field when it is cleared. While no model of the
+      chosen type decides, its files are judged by the type (`checkTypeFiles`), so a component left
+      over from another type is not "Found". *Model type* changes with the mouse wheel only once
+      clicked (one wheel turn over it, scrolling the form, changed the type). Choosing,
       typing or dropping a model file (`PathEdit` takes a dropped file) sets the type from its header
       and puts it in the type's slot; a file Lumen does not know keeps the type chosen. Choosing the
       type by hand shows its fields and moves the model into its slot when it is of that kind, and a
@@ -3291,9 +3307,10 @@ Survey of the code, the app log and user testing (October 2026):
   * Tests: `tst_runtime modelTypes` (the types by name, every preset in one, the presets of a type
     alike, each type's fields, the labels, files with unknown, named and no types), `presetProfiles`
     (`profileModelType` of the profiles of the log, of a fixed klein, of klein with a T5; the briefs;
-    an SDXL with a FLUX.2 VAE); `tst_canvas presetServerDialog` (rewritten: a new server is *Other*
-    with every field and *Advanced* folded; klein typed into *Checkpoint* chooses its type and slot
-    and gets its found VAE and text encoder; the provider gets the preset; a T5 for klein's encoder
+    an SDXL with a FLUX.2 VAE); `tst_canvas presetServerDialog` (rewritten: a new server starts on
+    the library model's type, FLUX.2 [klein] 4B, with only its fields, the model field asking for
+    the file and nothing below the form, and *Advanced* folded; the klein file typed in chooses its
+    type and slot and gets its found VAE and text encoder, labelled *VAE (FLUX.2)*; the provider gets the preset; a T5 for klein's encoder
     is named next to the field, once, and OK is off; a missing encoder with its size, the download and
     *Will be downloaded* until it is cancelled), `serverDialogModelTypes` (new: each type's exact
     fields and labels; klein from the library chooses its type; the encoder menu lists the Qwen3 4B
@@ -3304,7 +3321,13 @@ Survey of the code, the app log and user testing (October 2026):
     *Diffusion model* moves to *Checkpoint*, its leftover FLUX.1 VAE is refused, the FLUX.1 encoders
     are not saved; the SDXL ControlNet fits first; *Other* saves every field; existing profiles open
     with their type or *Other*; the profile of §17.1 opens as *Other* with the message by the field
-    and the klein type moves the file; a dropped file chooses the type); `tst_setup settingsAi` (the
+    and the klein type moves the file; a FLUX.1 server switched by hand to SDXL, FLUX.1 as one file
+    or SD 1.5 keeps its model in sight with its line, OK off and nothing said below the form, its
+    FLUX.1 VAE refused by SDXL, a wheel turn over the type changes nothing, back to FLUX.1 it saves
+    its encoders, and with the model cleared under SDXL the *Checkpoint* field asks for the file; an
+    SDXL server switched to FLUX.1 keeps its checkpoint in sight with OK off; a new server with a
+    type chosen by hand refuses a FLUX.2 VAE for SDXL and a T5 for klein; a dropped file chooses the
+    type); `tst_layout` (the AI tab's sliders start at one place); `tst_setup settingsAi` (the
     page in its scroll area); `tst_canvas localServersWiring` (the provider list by name); `tst_layout`
     and `tst_layout_150` strict and without findings at 1280 × 720, 1536 × 864, 1920 × 1080 and
     150 %. Checked to fail: saving hidden fields (`serverDialogModelTypes`), the pose dialog at
@@ -3570,7 +3593,8 @@ reports). What each item became:
    its whole hint (*Leave out* in New from prompt and the AI tab); the status bar's margin: fixed with
    the new shell; New from prompt's aspect chips have one width.
 
-Found in the screenshots on the way: the AI tab's action buttons had uneven heights; the assistant's
+Found in the screenshots on the way: the AI tab's action buttons had uneven heights and its sliders
+started at different places; the assistant's
 long suggestions ran past the panel's edge and its result thumbnails did not wrap; the server
 dialog's status lines stood in boxes three lines high. At 150 % (`tst_layout_150`, a 1920 × 1080
 screen at 144 dpi, which Qt shows as 1280 × 720 at a device pixel ratio of 1.5) the main window, its

@@ -240,6 +240,8 @@ AiPanel::AiPanel(Studio *studio, AiOptions *options, QWidget *parent)
     m_feather = new SliderField(tr("Blend edge"), 0, 128, options->feather(), 0, QStringLiteral(" px"), content);
     m_feather->setToolTip(tr("How wide the edge is over which a result blends into the image around the selection."));
     v->addWidget(m_feather);
+    // The sliders start at one place, under one another (each label had its own width).
+    SliderField::alignLabels({m_strength, m_areaStrength, m_padding, m_feather});
     m_colorMatch = new QCheckBox(tr("Match colours to the surroundings"), content);
     v->addWidget(m_colorMatch);
     v->addStretch();

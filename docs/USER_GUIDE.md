@@ -152,21 +152,26 @@ The steps below do the same by hand.
    * **Model type** says what kind of model the server runs: Stable Diffusion 1.5; SDXL (also
      Illustrious, NoobAI and Pony); FLUX.1 dev, schnell or Kontext as separate files; FLUX.1 as a
      single file; FLUX.2 [klein] 4B or 9B; Qwen-Image or Qwen-Image-Edit; Anima; or *Other (every
-     field)* for a model Lumen does not know. Choosing or dropping a model file sets the type from
-     the file itself. You can change it by hand.
+     field)* for a model Lumen does not know. A new server starts on the type of an image model in
+     your library (FLUX.2 [klein] 4B when there is none). Choosing or dropping a model file sets the
+     type from the file itself. You can change it by hand: click the list first (turning the mouse
+     wheel over it scrolls the form instead). If the model you chose does not fit the type, its
+     field stays in sight and says which type it needs, and the server cannot be saved until the
+     type or the model is changed.
    * The type decides which fields you see: the model file (*Checkpoint* for SD 1.5, SDXL and a
      single-file FLUX.1, *Diffusion model* for the others), then exactly the files that model needs,
-     each labelled with what it expects. FLUX.1 asks for a VAE, *Text encoder (CLIP-L)* and *Text
-     encoder (T5-XXL)*; FLUX.2 [klein] 4B for a VAE and *Text encoder (Qwen3 4B)*; SDXL only for an
-     optional VAE. Then the add-ons the type can use: ControlNet and IP-Adapter (with its CLIP vision
-     encoder) for SD 1.5 and SDXL, the LoRA folder and the upscaler folder. Fields of other types
-     are hidden and not saved.
+     each labelled with what it expects. FLUX.1 asks for *VAE (FLUX.1)*, *Text encoder (CLIP-L)* and
+     *Text encoder (T5-XXL)*; FLUX.2 [klein] 4B for *VAE (FLUX.2)* and *Text encoder (Qwen3 4B)*;
+     SDXL only for an optional VAE. Then the add-ons the type can use: ControlNet and IP-Adapter
+     (with its CLIP vision encoder) for SD 1.5 and SDXL, the LoRA folder and the upscaler folder.
+     Fields of other types are hidden and not saved.
    * **Setting a file by hand**: type or paste its path, drop the file on the field, use
      **Browse…**, or **Choose from the model library**, which lists the files that fit first and
      the others below a line that says they may not fit. A file you choose stays as you chose it.
      The line under each field says whether the file is found, will be downloaded, is missing (with
      its size) or does not fit, and why, for example "This is a T5 text encoder; FLUX.2 [klein] 4B
-     needs a Qwen3 4B text encoder". A server with a file that does not fit cannot be saved.
+     needs a Qwen3 4B text encoder". This works before you choose the model too: the files are
+     checked against the type. A server with a file that does not fit cannot be saved.
    * **Graphics card** applies the memory settings for your card (up to 8 GB, 12 GB, 16 GB or more);
      **Port** is where Lumen talks to the server.
    * **Advanced** holds the launch settings (weight precision, keeping weights in RAM, the VRAM
