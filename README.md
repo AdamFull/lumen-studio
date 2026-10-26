@@ -80,10 +80,13 @@ set it writes `layout/layout-report.md` (`layout-150/` at 150 %) and a PNG of ev
 `dist/LumenStudio-<version>-win64/`, and writes the portable ZIP and, when `makensis` is installed,
 an NSIS installer. `scripts/make-icon.py` regenerates the application icon.
 
-`cmake --build build/<dir> --target update_translations` refreshes `translations/*.ts` from the
-sources. Edit them with Qt Linguist, then run `python scripts/check-translations.py`, which reports
-unfinished entries and broken placeholders, tags or accelerators. Prompts sent to AI models are kept
-out of `tr()` on purpose.
+`python scripts/update-translations.py [build/<dir>]` refreshes `translations/*.ts` from the
+sources (the `update_translations` target, then it puts the locations and layout of
+`lumen_en.ts`, which Qt's tooling writes from a copy in the build tree, back as they were). Edit
+them with Qt Linguist, then run `python scripts/check-translations.py`, which reports unfinished
+entries and broken placeholders, tags or accelerators. Prompts sent to AI models are kept out of
+`tr()` on purpose. `LUMEN_LAYOUT_TRANSLATION=build/<dir>/src/app/lumen_de.qm` runs the layout audit
+(`tst_layout`, `tst_layout_150`) in German, whose longer texts find layouts the English ones fit.
 
 ## Project layout
 

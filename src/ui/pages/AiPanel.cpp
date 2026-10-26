@@ -94,7 +94,9 @@ AiPanel::AiPanel(Studio *studio, AiOptions *options, QWidget *parent)
         auto *b = new QToolButton(content);
         b->setIcon(Icons::get(icon));
         double pointSize = 8.5;
-        const QString text = fitLabel(label, 72, &pointSize);
+        // At 1280 × 720 a button is about 95 px wide and its padding takes 30: a longer name takes two
+        // lines or a smaller font (the German "Hochskalieren" was cut at 72).
+        const QString text = fitLabel(label, 64, &pointSize);
         b->setText(text);
         b->setAccessibleName(label);
         b->setToolTip(tip);

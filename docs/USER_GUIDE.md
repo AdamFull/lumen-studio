@@ -577,6 +577,9 @@ Google Gemini, Stability AI) and the language models some plugins use.
   Windows), both after a restart; *Worker threads*, *Autosave interval*, *Use the GPU for the
   canvas*, and **Safe for work**. Every button and field has a name for screen readers, and the
   themes meet the WCAG 2.1 contrast ratios for text.
+* **German**: every window is translated, the setup wizard, the prompt bar and the filters included.
+  What you describe goes to the model as you wrote it; the instructions inside the built-in AI
+  filters (*Colorize with AI*, *Clean up background*) stay in English, which the models follow best.
 * **Safe for work** (also the shield in the status bar) adds "nsfw, nude, nudity, explicit, cleavage,
   underwear, lingerie" to what is left out of every image, for models that take this. Some anime
   models draw nudity unasked. It is off by default; online services filter on their own.

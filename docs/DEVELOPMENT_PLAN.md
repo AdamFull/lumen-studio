@@ -3495,6 +3495,46 @@ Survey of the code, the app log and user testing (October 2026):
   * Not yet: the German translation of the guide; screenshots inside the guide; mismatches between
     the code and the guide found while checking (user-visible texts that still say "tab" for
     Settings pages, the Create page's "No image provider is configured.") are left to the next step.
+- [x] German translation of the editor, the setup wizard and the filters (the "Not yet: the German
+  translation of the new texts" of the steps above).
+  * Why lupdate seemed to break the files from a worktree: it does from any build directory.
+    `qt_add_translations(PLURALS_TS_FILE …)` updates a copy of `lumen_en.ts` in
+    `<build>/src/app/.lupdate` and writes it back with `lconvert -pluralonly`, so with
+    `-locations relative` its locations are relative to that copy (`../../../../../src/…`) and
+    lconvert's layout replaces the file's; `lumen_de.ts` is updated in place and keeps `../src/…`.
+    `scripts/update-translations.py [build-dir]` runs the target and puts `lumen_en.ts` back (its
+    locations, `" />`, the plural forms on one line); a second run changes nothing, and the diff of
+    both files holds only real changes.
+  * 1077 new German entries: the start screen, the prompt bar, the results strip, the AI tab, the
+    menus, *Set up AI* and Settings → AI and Plugins, the models folder, model presets and the server
+    dialog by model type, the Filters panel, the filter editor, the classic and the AI nodes, the
+    file questions and notes. 174 entries of texts that are gone were dropped (`-no-obsolete`, as
+    before); six English plural forms added. Terms: image engine *Bild-Engine*, prompt bar
+    *Prompt-Leiste*, project images *Projektbilder*, *KI einrichten…*, node, link and port *Knoten*,
+    *Verbindung*, *Anschluss* (*Eingang*, *Ausgang*), the blend modes as in German image editors.
+    `scripts/check-translations.py` passes without `--allow-unfinished` (3344 and 69 messages).
+  * Found: lupdate filed six texts of `ai/FilterNodes.cpp` (the AI nodes' *Image* port, *Image
+    engine* and its help, the errors for an empty *Instruction* or *Description*) under a context
+    `Text`, because it cannot resolve `filters::` in a function's signature; the app looks them up
+    under `lumen::ai::FilterNodes`, so they stayed English. The signatures use using-declarations.
+  * German layout audit: `LUMEN_LAYOUT_TRANSLATION=<build>/src/app/lumen_de.qm` loads a translation
+    in `tst_layout` before anything is built (its three checks of the prompt bar's button text use
+    `PromptBar::tr`). First run: 10 findings at 100 %, 4 at 150 %. Fixed with shorter German where
+    the English fits (the Filters panel's *Neu…* and *Kopie ändern…*, which wrapped to a second
+    row of the flow layout that the splitter does not count, so the list covered it; its notes; the
+    AI tab's *Ergebnisse je Lauf*, *Änderung im Bereich*, *Wie stark ändern*, whose label column
+    pushed the options out of the panel; a status line of the server dialog; the Create window's
+    *Anzahl:* and *Illustrationen*), and the AI tab's action buttons fit their names into 64 px
+    instead of 72 (the padding leaves 65; *Hochskalieren* and *Pose erkennen* were cut). The strict
+    audit passes in German at 100 % and 150 %, and in English.
+  * Looked at in German: the start screen; the editor with the prompt bar (no engine, an engine
+    without edits, a selection with four results); the AI tab and its options; the Filters tab; the
+    filter editor with an AI node; the setup wizard (choose, on this computer, online service);
+    Settings → AI; New from prompt.
+  * Not yet: the German user guide and plugin guide; names that come from data files stay English
+    (model types such as "FLUX.1 (dev, schnell, Kontext; separate files)", the default server
+    name); the audit has no Qt translation, so dialog buttons such as *Cancel* show in English there
+    (the app loads `qt_de.qm`).
 - [ ] Short live check (RTX 4060 8 GB, FLUX.2 klein 4B through sd.cpp): one selection edit, one
   whole-image colorize, one new image. Everything before this step uses mock servers.
   * Done early for the selection edit (October 2026, `tst_live kleinEditServer`): the user's

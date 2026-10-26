@@ -87,6 +87,7 @@
 #include <QTextBlock>
 #include <QTextDocumentFragment>
 #include <QToolButton>
+#include <QTranslator>
 #include <QVBoxLayout>
 #include <QtTest>
 
@@ -530,6 +531,13 @@ void TestLayout::initTestCase()
 {
     QStandardPaths::setTestModeEnabled(true);
     Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
+    // LUMEN_LAYOUT_TRANSLATION=<build>/src/app/lumen_de.qm audits a translation, whose longer texts
+    // can break a layout the English one fits. Installed before anything is built, as main.cpp does.
+    if (const QString qm = qEnvironmentVariable("LUMEN_LAYOUT_TRANSLATION"); !qm.isEmpty()) {
+        auto *translator = new QTranslator(qApp);
+        QVERIFY2(translator->load(qm), qPrintable(QStringLiteral("Cannot load the translation %1").arg(qm)));
+        QCoreApplication::installTranslator(translator);
+    }
     plugins::registerBuiltInPlugins();
     // The fonts and theme of the real app (main.cpp), so text widths match.
     QFont font = QApplication::font();
@@ -642,13 +650,13 @@ void TestLayout::mainWindow()
         QVERIFY(!window.editor()->showsStartScreen());
         PromptBar *bar = window.editor()->promptBar();
         auto *generate = bar->findChild<QPushButton *>(QStringLiteral("promptGenerate"));
-        QTRY_COMPARE(generate->text(), QStringLiteral("Set up AI…"));
+        QTRY_COMPARE(generate->text(), PromptBar::tr("Set up AI…"));
         auditWindow(QStringLiteral("Editor"));
         {
             ImageEngine engine(&studio);
             QTRY_VERIFY(bar->plan().action == PromptAction::CannotEditImage);
             // What the screenshot is named after, on screen (not only the plan).
-            QTRY_COMPARE(generate->text(), QStringLiteral("Make a variation"));
+            QTRY_COMPARE(generate->text(), PromptBar::tr("Make a variation"));
             QTRY_VERIFY(bar->findChild<QPushButton *>(QStringLiteral("promptSelectArea"))->isVisible());
             auditWindow(QStringLiteral("Editor with an engine without edits"));
             QImage mask = img::createMask(doc->size());
@@ -709,7 +717,7 @@ void TestLayout::mainWindow()
             window.editor()->variantStrip()->discard();
             sidePanel(window)->setCurrentIndex(0);
         }
-        QTRY_COMPARE(generate->text(), QStringLiteral("Set up AI…"));
+        QTRY_COMPARE(generate->text(), PromptBar::tr("Set up AI…"));
         QTRY_VERIFY(!bar->findChild<QPushButton *>(QStringLiteral("promptRemove"))->isVisible());
         // The queue and the assistant lie over the editor, above the prompt bar (whose buttons they
         // would hide).

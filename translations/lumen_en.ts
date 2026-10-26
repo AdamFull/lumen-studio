@@ -4,14 +4,14 @@
 <context>
     <name>QObject</name>
     <message numerus="yes">
-        <location filename="../src/ai/ProviderRegistry.cpp" line="+402" />
+        <location filename="../src/ai/ProviderRegistry.cpp" line="+464" />
         <location line="+2" />
         <location line="+2" />
         <source>%n model(s)</source>
         <translation><numerusform>%n model</numerusform><numerusform>%n models</numerusform></translation>
     </message>
     <message numerus="yes">
-        <location filename="../src/doc/PsdIO.cpp" line="+78" />
+        <location filename="../src/doc/PsdIO.cpp" line="+97" />
         <source>%n clipping mask layer(s) were imported as normal layers</source>
         <translation><numerusform>%n clipping mask layer was imported as a normal layer</numerusform><numerusform>%n clipping mask layers were imported as normal layers</numerusform></translation>
     </message>
@@ -20,11 +20,36 @@
         <source>%n layer mask(s) were ignored</source>
         <translation><numerusform>%n layer mask was ignored</numerusform><numerusform>%n layer masks were ignored</numerusform></translation>
     </message>
+    <message numerus="yes">
+        <location line="+4" />
+        <source>%n text layer(s) became pictures of their text</source>
+        <translation><numerusform>%n text layer became a picture of its text</numerusform><numerusform>%n text layers became pictures of their text</numerusform></translation>
+    </message>
+    <message numerus="yes">
+        <location line="+2" />
+        <source>the effects of %n layer(s) (shadows, strokes, glows) are not kept</source>
+        <translation><numerusform>the effects of %n layer (shadows, strokes, glows) are not kept</numerusform><numerusform>the effects of %n layers (shadows, strokes, glows) are not kept</numerusform></translation>
+    </message>
+    <message numerus="yes">
+        <location line="+2" />
+        <source>%n adjustment or fill layer(s) are empty layers here</source>
+        <translation><numerusform>%n adjustment or fill layer is an empty layer here</numerusform><numerusform>%n adjustment or fill layers are empty layers here</numerusform></translation>
+    </message>
+    <message numerus="yes">
+        <location line="+2" />
+        <source>%n smart object(s) became plain layers</source>
+        <translation><numerusform>%n smart object became a plain layer</numerusform><numerusform>%n smart objects became plain layers</numerusform></translation>
+    </message>
+    <message numerus="yes">
+        <location line="+2" />
+        <source>the opacity or hiding of %n group(s) went onto their layers</source>
+        <translation><numerusform>the opacity or hiding of %n group went onto its layers</numerusform><numerusform>the opacity or hiding of %n groups went onto their layers</numerusform></translation>
+    </message>
 </context>
 <context>
     <name>lumen::ai::AgentRun</name>
     <message numerus="yes">
-        <location filename="../src/ai/Agent.cpp" line="+143" />
+        <location filename="../src/ai/Agent.cpp" line="+144" />
         <source>I stopped after %n tool step(s). Tell me how to continue.</source>
         <translation><numerusform>I stopped after %n tool step. Tell me how to continue.</numerusform><numerusform>I stopped after %n tool steps. Tell me how to continue.</numerusform></translation>
     </message>
@@ -80,7 +105,7 @@
 <context>
     <name>lumen::ai::PartService</name>
     <message numerus="yes">
-        <location filename="../src/ai/PartService.cpp" line="+254" />
+        <location filename="../src/ai/PartService.cpp" line="+261" />
         <source>%n part(s) found</source>
         <translation><numerusform>%n part found</numerusform><numerusform>%n parts found</numerusform></translation>
     </message>
@@ -88,50 +113,71 @@
 <context>
     <name>lumen::doc::PartSet</name>
     <message numerus="yes">
-        <location filename="../src/doc/Parts.cpp" line="+658" />
+        <location filename="../src/doc/Parts.cpp" line="+660" />
         <source>Delete %n parts</source>
         <translation><numerusform>Delete %n part</numerusform><numerusform>Delete %n parts</numerusform></translation>
     </message>
 </context>
 <context>
+    <name>lumen::runtime::ModelsFolder</name>
+    <message numerus="yes">
+        <location filename="../src/runtime/ModelsFolder.cpp" line="+467" />
+        <source>%n model(s) moved to %1</source>
+        <translation><numerusform>%n model moved to %1</numerusform><numerusform>%n models moved to %1</numerusform></translation>
+    </message>
+    <message numerus="yes">
+        <location line="+10" />
+        <source>%n file(s) added meanwhile stayed in %1.</source>
+        <translation><numerusform>%n file added meanwhile stayed in %1.</numerusform><numerusform>%n files added meanwhile stayed in %1.</numerusform></translation>
+    </message>
+</context>
+<context>
     <name>lumen::ui::AssistantPanel</name>
     <message numerus="yes">
-        <location filename="../src/ui/assistant/AssistantPanel.cpp" line="+227" />
+        <location filename="../src/plugins/characters/assistant/AssistantPanel.cpp" line="+283" />
         <source>%n image(s)</source>
         <translation><numerusform>%n image</numerusform><numerusform>%n images</numerusform></translation>
     </message>
 </context>
 <context>
+    <name>lumen::ui::CloudTrainingPage</name>
+    <message numerus="yes">
+        <location filename="../src/plugins/characters/training/CloudTrainingPage.cpp" line="+164" />
+        <source>Connected: %n GPU type(s) with %1 GB or more.</source>
+        <translation><numerusform>Connected: %n GPU type with %1 GB or more.</numerusform><numerusform>Connected: %n GPU types with %1 GB or more.</numerusform></translation>
+    </message>
+</context>
+<context>
     <name>lumen::ui::CreatePage</name>
     <message numerus="yes">
-        <location filename="../src/ui/pages/CreatePage.cpp" line="+482" />
+        <location filename="../src/plugins/characters/CreatePage.cpp" line="+515" />
         <source>%n reference(s). The character sheet is created automatically when you send a message, or press Analyze.</source>
         <translation><numerusform>%n reference. The character sheet is created automatically when you send a message, or press Analyze.</numerusform><numerusform>%n references. The character sheet is created automatically when you send a message, or press Analyze.</numerusform></translation>
     </message>
     <message numerus="yes">
-        <location line="+122" />
+        <location line="+188" />
         <source>Studying %n reference image(s)…</source>
         <translation><numerusform>Studying %n reference image…</numerusform><numerusform>Studying %n reference images…</numerusform></translation>
     </message>
     <message numerus="yes">
-        <location line="+248" />
+        <location line="+311" />
         <source>Critic: best %1/10 after %n attempt(s)</source>
         <translation><numerusform>Critic: best %1/10 after %n attempt</numerusform><numerusform>Critic: best %1/10 after %n attempts</numerusform></translation>
     </message>
     <message numerus="yes">
-        <location line="+255" />
-        <source>Saved "%1" with %n reference(s) to the character library.</source>
-        <translation><numerusform>Saved "%1" with %n reference to the character library.</numerusform><numerusform>Saved "%1" with %n references to the character library.</numerusform></translation>
+        <location line="+259" />
+        <source>Saved &quot;%1&quot; with %n reference(s) to the character library.</source>
+        <translation><numerusform>Saved &quot;%1&quot; with %n reference to the character library.</numerusform><numerusform>Saved &quot;%1&quot; with %n references to the character library.</numerusform></translation>
     </message>
     <message numerus="yes">
-        <location line="+23" />
+        <location line="+25" />
         <source>%n reference(s) · %1</source>
         <translation><numerusform>%n reference · %1</numerusform><numerusform>%n references · %1</numerusform></translation>
     </message>
     <message numerus="yes">
-        <location line="+67" />
-        <source>Loaded "%1" with %n reference(s).</source>
-        <translation><numerusform>Loaded "%1" with %n reference.</numerusform><numerusform>Loaded "%1" with %n references.</numerusform></translation>
+        <location line="+69" />
+        <source>Loaded &quot;%1&quot; with %n reference(s).</source>
+        <translation><numerusform>Loaded &quot;%1&quot; with %n reference.</numerusform><numerusform>Loaded &quot;%1&quot; with %n references.</numerusform></translation>
     </message>
     <message numerus="yes">
         <location line="+22" />
@@ -142,7 +188,7 @@
 <context>
     <name>lumen::ui::CubismPanel</name>
     <message numerus="yes">
-        <location filename="../src/ui/parts/CubismPanel.cpp" line="+179" />
+        <location filename="../src/plugins/parts/CubismPanel.cpp" line="+179" />
         <source>&lt;b&gt;%1&lt;/b&gt; · %n parameter(s) · Core %2</source>
         <translation><numerusform>&lt;b&gt;%1&lt;/b&gt; · %n parameter · Core %2</numerusform><numerusform>&lt;b&gt;%1&lt;/b&gt; · %n parameters · Core %2</numerusform></translation>
     </message>
@@ -163,7 +209,7 @@
 <context>
     <name>lumen::ui::LibraryPage</name>
     <message numerus="yes">
-        <location filename="../src/ui/pages/LibraryPage.cpp" line="+525" />
+        <location filename="../src/ui/pages/LibraryPage.cpp" line="+548" />
         <source> (%n images)</source>
         <translation><numerusform> (%n image)</numerusform><numerusform> (%n images)</numerusform></translation>
     </message>
@@ -173,7 +219,7 @@
         <translation><numerusform>Queued %n job. The results appear in the project images.</numerusform><numerusform>Queued %n jobs. The results appear in the project images.</numerusform></translation>
     </message>
     <message numerus="yes">
-        <location line="+83" />
+        <location line="+127" />
         <source>Export %n images to folder</source>
         <translation><numerusform>Export %n image to folder</numerusform><numerusform>Export %n images to folder</numerusform></translation>
     </message>
@@ -189,24 +235,75 @@
     </message>
 </context>
 <context>
+    <name>lumen::ui::LocalSetupDialog</name>
+    <message numerus="yes">
+        <location filename="../src/ui/dialogs/LocalSetupDialog.cpp" line="+684" />
+        <source>%n step(s)</source>
+        <translation><numerusform>%n step</numerusform><numerusform>%n steps</numerusform></translation>
+    </message>
+</context>
+<context>
+    <name>lumen::ui::LoraDatasetDialog</name>
+    <message numerus="yes">
+        <location filename="../src/plugins/characters/training/LoraDatasetDialog.cpp" line="+1093" />
+        <source>%n image(s) without a caption.</source>
+        <translation><numerusform>%n image without a caption.</numerusform><numerusform>%n images without a caption.</numerusform></translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4" />
+        <source>Writing captions, %n left…</source>
+        <translation><numerusform>Writing captions, %n left…</numerusform><numerusform>Writing captions, %n left…</numerusform></translation>
+    </message>
+    <message numerus="yes">
+        <location line="-862" />
+        <source>Added %n image(s) from the session.</source>
+        <translation><numerusform>Added %n image from the session.</numerusform><numerusform>Added %n images from the session.</numerusform></translation>
+    </message>
+    <message numerus="yes">
+        <location line="+15" />
+        <source>%n near-duplicate(s) rejected.</source>
+        <translation><numerusform>%n near-duplicate rejected.</numerusform><numerusform>%n near-duplicates rejected.</numerusform></translation>
+    </message>
+    <message numerus="yes">
+        <location line="+119" />
+        <source>%n more needed</source>
+        <translation><numerusform>%n more needed</numerusform><numerusform>%n more needed</numerusform></translation>
+    </message>
+    <message numerus="yes">
+        <location line="+5" />
+        <source>scoring, %n left</source>
+        <translation><numerusform>scoring, %n left</numerusform><numerusform>scoring, %n left</numerusform></translation>
+    </message>
+    <message numerus="yes">
+        <location line="+920" />
+        <source>Remove %n image(s) from the training set?</source>
+        <translation><numerusform>Remove %n image from the training set?</numerusform><numerusform>Remove %n images from the training set?</numerusform></translation>
+    </message>
+    <message numerus="yes">
+        <location line="+152" />
+        <source>Exported %n training image(s) to %1.</source>
+        <translation><numerusform>Exported %n training image to %1.</numerusform><numerusform>Exported %n training images to %1.</numerusform></translation>
+    </message>
+    <message numerus="yes">
+        <location line="-684" />
+        <source>%n earlier training(s), %1</source>
+        <translation><numerusform>%n earlier training, %1</numerusform><numerusform>%n earlier trainings, %1</numerusform></translation>
+    </message>
+</context>
+<context>
     <name>lumen::ui::MainWindow</name>
     <message numerus="yes">
-        <location filename="../src/ui/MainWindow.cpp" line="+1" />
+        <location filename="../src/ui/MainWindow.cpp" line="+1000" />
         <source>%n cloud GPU(s) of earlier trainings are still rented on RunPod.</source>
         <translation><numerusform>%n cloud GPU of an earlier training is still rented on RunPod.</numerusform><numerusform>%n cloud GPUs of earlier trainings are still rented on RunPod.</numerusform></translation>
     </message>
     <message numerus="yes">
-        <location filename="../src/ui/MainWindow.cpp" line="+451" />
-        <source>Importing %n image(s)...</source>
-        <translation><numerusform>Importing %n image...</numerusform><numerusform>Importing %n images...</numerusform></translation>
-    </message>
-    <message numerus="yes">
-        <location line="+36" />
+        <location line="+66" />
         <source>%n job(s) are still running. Quit anyway?</source>
         <translation><numerusform>%n job is still running. Quit anyway?</numerusform><numerusform>%n jobs are still running. Quit anyway?</numerusform></translation>
     </message>
     <message numerus="yes">
-        <location filename="../src/ui/MainWindow.cpp" line="+1" />
+        <location line="-102" />
         <source>Lumen now keeps models in a folder that is easy to find: %1
 
 The models of the earlier version are in %2 (%n file(s), %3). Move them to the new folder?</source>
@@ -218,9 +315,43 @@ The models of the earlier version are in %2 (%n files, %3). Move them to the new
     </message>
 </context>
 <context>
+    <name>lumen::ui::ModelHubDialog</name>
+    <message numerus="yes">
+        <location filename="../src/ui/dialogs/ModelHubDialog.cpp" line="+379" />
+        <source>%n model(s)</source>
+        <translation><numerusform>%n model</numerusform><numerusform>%n models</numerusform></translation>
+    </message>
+</context>
+<context>
+    <name>lumen::ui::ModelsPage</name>
+    <message numerus="yes">
+        <location filename="../src/ui/dialogs/ModelsPage.cpp" line="+411" />
+        <source>%n model(s) shown, %1</source>
+        <translation><numerusform>%n model shown, %1</numerusform><numerusform>%n models shown, %1</numerusform></translation>
+    </message>
+    <message numerus="yes">
+        <location line="+0" />
+        <source> · %n folder(s)</source>
+        <translation><numerusform> · %n folder</numerusform><numerusform> · %n folders</numerusform></translation>
+    </message>
+    <message numerus="yes">
+        <location line="-68" />
+        <source>Move %n model(s) (%1) from %2 to %3?</source>
+        <translation><numerusform>Move %n model (%1) from %2 to %3?</numerusform><numerusform>Move %n models (%1) from %2 to %3?</numerusform></translation>
+    </message>
+</context>
+<context>
+    <name>lumen::ui::NodeItem</name>
+    <message numerus="yes">
+        <location filename="../src/ui/filters/NodeScene.cpp" line="+82" />
+        <source>%1: %n point(s)</source>
+        <translation><numerusform>%1: %n point</numerusform><numerusform>%1: %n points</numerusform></translation>
+    </message>
+</context>
+<context>
     <name>lumen::ui::OnboardingDialog</name>
     <message numerus="yes">
-        <location filename="../src/ui/dialogs/SettingsDialog.cpp" line="+660" />
+        <location filename="../src/ui/dialogs/SettingsDialog.cpp" line="+897" />
         <source>Found %n server(s):</source>
         <translation><numerusform>Found %n server:</numerusform><numerusform>Found %n servers:</numerusform></translation>
     </message>
@@ -228,7 +359,7 @@ The models of the earlier version are in %2 (%n files, %3). Move them to the new
 <context>
     <name>lumen::ui::PartCutTool</name>
     <message numerus="yes">
-        <location filename="../src/ui/parts/PartTools.cpp" line="+618" />
+        <location filename="../src/plugins/parts/PartTools.cpp" line="+618" />
         <source>Cut into %n parts.</source>
         <translation><numerusform>Cut into %n part.</numerusform><numerusform>Cut into %n parts.</numerusform></translation>
     </message>
@@ -236,7 +367,7 @@ The models of the earlier version are in %2 (%n files, %3). Move them to the new
 <context>
     <name>lumen::ui::PartListPanel</name>
     <message numerus="yes">
-        <location filename="../src/ui/parts/PartListPanel.cpp" line="+417" />
+        <location filename="../src/plugins/parts/PartListPanel.cpp" line="+424" />
         <source>Generate %n selected parts</source>
         <translation><numerusform>Generate %n selected part</numerusform><numerusform>Generate %n selected parts</numerusform></translation>
     </message>
@@ -244,12 +375,12 @@ The models of the earlier version are in %2 (%n files, %3). Move them to the new
 <context>
     <name>lumen::ui::PartsPage</name>
     <message numerus="yes">
-        <location filename="../src/ui/parts/PartsPage.cpp" line="+462" />
+        <location filename="../src/plugins/parts/PartsPage.cpp" line="+467" />
         <source>Found %n part(s).</source>
         <translation><numerusform>Found %n part.</numerusform><numerusform>Found %n parts.</numerusform></translation>
     </message>
     <message numerus="yes">
-        <location line="+729" />
+        <location line="+746" />
         <source>Imported %n part layer(s).</source>
         <translation><numerusform>Imported %n part layer.</numerusform><numerusform>Imported %n part layers.</numerusform></translation>
     </message>
@@ -259,7 +390,7 @@ The models of the earlier version are in %2 (%n files, %3). Move them to the new
         <translation><numerusform>%n hidden layer skipped.</numerusform><numerusform>%n hidden layers skipped.</numerusform></translation>
     </message>
     <message numerus="yes">
-        <location line="+330" />
+        <location line="+331" />
         <source>Split into %n parts.</source>
         <translation><numerusform>Split into %n part.</numerusform><numerusform>Split into %n parts.</numerusform></translation>
     </message>
@@ -267,15 +398,23 @@ The models of the earlier version are in %2 (%n files, %3). Move them to the new
 <context>
     <name>lumen::ui::PosePage</name>
     <message numerus="yes">
-        <location filename="../src/ui/pages/PosePage.cpp" line="+738" />
+        <location filename="../src/plugins/poses/PosePage.cpp" line="+729" />
         <source>Detected %n person(s).</source>
         <translation><numerusform>Detected %n person.</numerusform><numerusform>Detected %n people.</numerusform></translation>
     </message>
 </context>
 <context>
+    <name>lumen::ui::PromptBar</name>
+    <message numerus="yes">
+        <location filename="../src/ui/pages/PromptBar.cpp" line="+454" />
+        <source>%n picture(s) in the AI tab…</source>
+        <translation><numerusform>%n picture in the AI tab…</numerusform><numerusform>%n pictures in the AI tab…</numerusform></translation>
+    </message>
+</context>
+<context>
     <name>lumen::ui::ProviderForm</name>
     <message numerus="yes">
-        <location filename="../src/ui/dialogs/SettingsDialog.cpp" line="-401" />
+        <location filename="../src/ui/dialogs/SettingsDialog.cpp" line="-516" />
         <source>%n option(s) found.</source>
         <translation><numerusform>%n option found.</numerusform><numerusform>%n options found.</numerusform></translation>
     </message>
@@ -283,143 +422,32 @@ The models of the earlier version are in %2 (%n files, %3). Move them to the new
 <context>
     <name>lumen::ui::ServerStatusButton</name>
     <message numerus="yes">
-        <location filename="../src/ui/widgets/ServerStatus.cpp" line="+45" />
+        <location filename="../src/ui/widgets/ServerStatus.cpp" line="+59" />
         <source>%n server(s) running</source>
         <translation><numerusform>%n server running</numerusform><numerusform>%n servers running</numerusform></translation>
     </message>
 </context>
 <context>
-    <name>lumen::ui::ModelsPage</name>
-    <message numerus="yes">
-        <location filename="../src/ui/dialogs/ModelsPage.cpp" line="+1" />
-        <source>%n model(s) shown, %1</source>
-        <translation><numerusform>%n model shown, %1</numerusform><numerusform>%n models shown, %1</numerusform></translation>
-    </message>
-    <message numerus="yes">
-        <location filename="../src/ui/dialogs/ModelsPage.cpp" line="+1" />
-        <source> · %n folder(s)</source>
-        <translation><numerusform> · %n folder</numerusform><numerusform> · %n folders</numerusform></translation>
-    </message>
-    <message numerus="yes">
-        <location filename="../src/ui/dialogs/ModelsPage.cpp" line="+1" />
-        <source>Move %n model(s) (%1) from %2 to %3?</source>
-        <translation><numerusform>Move %n model (%1) from %2 to %3?</numerusform><numerusform>Move %n models (%1) from %2 to %3?</numerusform></translation>
-    </message>
-</context>
-<context>
-    <name>lumen::ui::ModelHubDialog</name>
-    <message numerus="yes">
-        <location filename="../src/ui/dialogs/ModelHubDialog.cpp" line="+1" />
-        <source>%n model(s)</source>
-        <translation><numerusform>%n model</numerusform><numerusform>%n models</numerusform></translation>
-    </message>
-</context>
-<context>
-    <name>lumen::ui::LocalSetupDialog</name>
-    <message numerus="yes">
-        <location filename="../src/ui/dialogs/LocalSetupDialog.cpp" line="+1" />
-        <source>%n step(s)</source>
-        <translation><numerusform>%n step</numerusform><numerusform>%n steps</numerusform></translation>
-    </message>
-</context>
-<context>
-    <name>lumen::ui::LoraDatasetDialog</name>
-    <message numerus="yes">
-        <location filename="../src/ui/dialogs/LoraDatasetDialog.cpp" line="+1" />
-        <source>%n image(s) without a caption.</source>
-        <translation><numerusform>%n image without a caption.</numerusform><numerusform>%n images without a caption.</numerusform></translation>
-    </message>
-    <message numerus="yes">
-        <location filename="../src/ui/dialogs/LoraDatasetDialog.cpp" line="+1" />
-        <source>Writing captions, %n left…</source>
-        <translation><numerusform>Writing captions, %n left…</numerusform><numerusform>Writing captions, %n left…</numerusform></translation>
-    </message>
-    <message numerus="yes">
-        <location filename="../src/ui/dialogs/LoraDatasetDialog.cpp" line="+1" />
-        <source>Added %n image(s) from the session.</source>
-        <translation><numerusform>Added %n image from the session.</numerusform><numerusform>Added %n images from the session.</numerusform></translation>
-    </message>
-    <message numerus="yes">
-        <location filename="../src/ui/dialogs/LoraDatasetDialog.cpp" line="+1" />
-        <source>%n near-duplicate(s) rejected.</source>
-        <translation><numerusform>%n near-duplicate rejected.</numerusform><numerusform>%n near-duplicates rejected.</numerusform></translation>
-    </message>
-    <message numerus="yes">
-        <location filename="../src/ui/dialogs/LoraDatasetDialog.cpp" line="+1" />
-        <source>%n more needed</source>
-        <translation><numerusform>%n more needed</numerusform><numerusform>%n more needed</numerusform></translation>
-    </message>
-    <message numerus="yes">
-        <location filename="../src/ui/dialogs/LoraDatasetDialog.cpp" line="+1" />
-        <source>scoring, %n left</source>
-        <translation><numerusform>scoring, %n left</numerusform><numerusform>scoring, %n left</numerusform></translation>
-    </message>
-    <message numerus="yes">
-        <location filename="../src/ui/dialogs/LoraDatasetDialog.cpp" line="+1" />
-        <source>Remove %n image(s) from the training set?</source>
-        <translation><numerusform>Remove %n image from the training set?</numerusform><numerusform>Remove %n images from the training set?</numerusform></translation>
-    </message>
-    <message numerus="yes">
-        <location filename="../src/ui/dialogs/LoraDatasetDialog.cpp" line="+1" />
-        <source>Exported %n training image(s) to %1.</source>
-        <translation><numerusform>Exported %n training image to %1.</numerusform><numerusform>Exported %n training images to %1.</numerusform></translation>
-    </message>
-    <message numerus="yes">
-        <location filename="../src/ui/dialogs/LoraDatasetDialog.cpp" line="+1" />
-        <source>%n earlier training(s), %1</source>
-        <translation><numerusform>%n earlier training, %1</numerusform><numerusform>%n earlier trainings, %1</numerusform></translation>
-    </message>
-</context>
-<context>
-    <name>lumen::ui::CloudTrainingPage</name>
-    <message numerus="yes">
-        <location filename="../src/ui/dialogs/CloudTrainingPage.cpp" line="+1" />
-        <source>Connected: %n GPU type(s) with %1 GB or more.</source>
-        <translation><numerusform>Connected: %n GPU type with %1 GB or more.</numerusform><numerusform>Connected: %n GPU types with %1 GB or more.</numerusform></translation>
-    </message>
-</context>
-<context>
-    <name>lumen::runtime::ModelsFolder</name>
-    <message numerus="yes">
-        <location filename="../src/runtime/ModelsFolder.cpp" line="+1" />
-        <source>%n model(s) moved to %1</source>
-        <translation><numerusform>%n model moved to %1</numerusform><numerusform>%n models moved to %1</numerusform></translation>
-    </message>
-    <message numerus="yes">
-        <location filename="../src/runtime/ModelsFolder.cpp" line="+1" />
-        <source>%n file(s) added meanwhile stayed in %1.</source>
-        <translation><numerusform>%n file added meanwhile stayed in %1.</numerusform><numerusform>%n files added meanwhile stayed in %1.</numerusform></translation>
-    </message>
-</context>
-<context>
     <name>lumen::ui::SetupWizard</name>
     <message numerus="yes">
-        <location filename="../src/ui/dialogs/SetupWizard.cpp" line="+1" />
+        <location filename="../src/ui/dialogs/SetupWizard.cpp" line="+87" />
         <source>about %n minute(s) at 100 Mbit/s</source>
         <translation><numerusform>about %n minute at 100 Mbit/s</numerusform><numerusform>about %n minutes at 100 Mbit/s</numerusform></translation>
     </message>
     <message numerus="yes">
-        <location filename="../src/ui/dialogs/SetupWizard.cpp" line="+1" />
+        <location line="+406" />
         <source>%n model file(s) found in %1.</source>
         <translation><numerusform>%n model file found in %1.</numerusform><numerusform>%n model files found in %1.</numerusform></translation>
     </message>
     <message numerus="yes">
-        <location filename="../src/ui/dialogs/SetupWizard.cpp" line="+1" />
+        <location line="+283" />
         <source>%n step(s)</source>
         <translation><numerusform>%n step</numerusform><numerusform>%n steps</numerusform></translation>
     </message>
     <message numerus="yes">
-        <location filename="../src/ui/dialogs/SetupWizard.cpp" line="+1" />
+        <location line="+286" />
         <source>Found %n server(s).</source>
         <translation><numerusform>Found %n server.</numerusform><numerusform>Found %n servers.</numerusform></translation>
-    </message>
-</context>
-<context>
-    <name>lumen::ui::PromptBar</name>
-    <message numerus="yes">
-        <location filename="../src/ui/pages/PromptBar.cpp" line="+1" />
-        <source>%n picture(s) in the AI tab…</source>
-        <translation><numerusform>%n picture in the AI tab…</numerusform><numerusform>%n pictures in the AI tab…</numerusform></translation>
     </message>
 </context>
 </TS>

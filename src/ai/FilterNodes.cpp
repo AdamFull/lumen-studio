@@ -26,7 +26,13 @@ struct Text
     Q_DECLARE_TR_FUNCTIONS(lumen::ai::FilterNodes)
 };
 
+// Unqualified in the signatures below: lupdate cannot resolve "filters::" there and would file the
+// texts of such a function under "Text", a context the app never looks up (they stayed English).
+using filters::EvalContext;
 using filters::NodeArgs;
+using filters::NodeResult;
+using filters::ParamSpec;
+using filters::PortSpec;
 using filters::PortType;
 using filters::Values;
 
@@ -379,7 +385,7 @@ public:
     {
     }
 
-    filters::NodeResult evaluate(const NodeArgs &args, filters::EvalContext &ctx) const override
+    NodeResult evaluate(const NodeArgs &args, EvalContext &ctx) const override
     {
         StepInput in;
         in.step = m_step;
@@ -437,13 +443,13 @@ private:
     Step m_step;
 };
 
-filters::PortSpec imagePort(const QString &label = Text::tr("Image"))
+PortSpec imagePort(const QString &label = Text::tr("Image"))
 {
     return {ImagePort, label, PortType::Image, false};
 }
 
-filters::ParamSpec textParam(const QString &id, const QString &label, const QString &defaultValue, const QString &editor,
-                             const QString &help)
+ParamSpec textParam(const QString &id, const QString &label, const QString &defaultValue, const QString &editor,
+                     const QString &help)
 {
     filters::ParamSpec p;
     p.id = id;
@@ -455,7 +461,7 @@ filters::ParamSpec textParam(const QString &id, const QString &label, const QStr
     return p;
 }
 
-filters::ParamSpec engineParam()
+ParamSpec engineParam()
 {
     return textParam(filter_nodes::EngineParam, Text::tr("Image engine"), QString(), filter_nodes::EngineEditor,
                      Text::tr("Which of your image engines runs this step. “The one in use” is the one Settings → AI uses for "
@@ -463,8 +469,8 @@ filters::ParamSpec engineParam()
                               "when that one cannot)."));
 }
 
-filters::ParamSpec numberParam(const QString &id, const QString &label, double defaultValue, double minimum, double maximum,
-                               int decimals, const QString &unit, const QString &help)
+ParamSpec numberParam(const QString &id, const QString &label, double defaultValue, double minimum, double maximum,
+                       int decimals, const QString &unit, const QString &help)
 {
     filters::ParamSpec p;
     p.id = id;

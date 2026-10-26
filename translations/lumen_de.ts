@@ -6,7 +6,7 @@
     <message>
         <location filename="../src/ai/Director.cpp" line="+62"/>
         <source>General illustrations</source>
-        <translation>Allgemeine Illustrationen</translation>
+        <translation>Illustrationen</translation>
     </message>
     <message>
         <location line="+0"/>
@@ -84,7 +84,7 @@
         <translation>20–32 abwechslungsreiche Bilder eines Charakters, um seine LoRA zu trainieren.</translation>
     </message>
     <message>
-        <location filename="../src/ai/GenerationService.cpp" line="+316"/>
+        <location filename="../src/ai/GenerationService.cpp" line="+398"/>
         <source>The selection is empty - paint a mask or make a selection first.</source>
         <translation>Die Auswahl ist leer – malen Sie zuerst eine Maske oder erstellen Sie eine Auswahl.</translation>
     </message>
@@ -176,7 +176,7 @@
     </message>
     <message>
         <location line="+1"/>
-        <source>Director (shot &amp; pose planning)</source>
+        <source>Director (shot and pose planning)</source>
         <translation>Regie (Aufnahme- und Posenplanung)</translation>
     </message>
     <message>
@@ -185,7 +185,7 @@
         <translation>Prompt-Autor</translation>
     </message>
     <message numerus="yes">
-        <location line="+368"/>
+        <location line="+430"/>
         <location line="+2"/>
         <location line="+2"/>
         <source>%n model(s)</source>
@@ -260,7 +260,12 @@
         <translation>Warten auf den Server...</translation>
     </message>
     <message>
-        <location filename="../src/app/main.cpp" line="+168"/>
+        <location filename="../src/app/main.cpp" line="+135"/>
+        <source>The Live2D parts plugin is off, so --slice and --cubism do nothing. Switch it on in Tools → Plugins… and restart Lumen.</source>
+        <translation>Das Plugin „Live2D-Teile“ ist ausgeschaltet, daher bewirken --slice und --cubism nichts. Schalten Sie es unter Werkzeuge → Plugins… ein und starten Sie Lumen neu.</translation>
+    </message>
+    <message>
+        <location line="+49"/>
         <source>Lumen Studio did not close properly last time. Open documents were restored from the last autosave; a crash report may be in the log folder (Help → Open log folder).</source>
         <translation>Lumen Studio wurde beim letzten Mal nicht ordnungsgemäß beendet. Geöffnete Dokumente wurden aus der letzten automatischen Sicherung wiederhergestellt; ein Absturzbericht befindet sich möglicherweise im Protokollordner (Hilfe → Protokollordner öffnen).</translation>
     </message>
@@ -559,9 +564,9 @@
         <translation>Charakterteil</translation>
     </message>
     <message>
-        <location filename="../src/ui/parts/PartsPage.cpp" line="+1162"/>
-        <location filename="../src/doc/Project.cpp" line="+169"/>
-        <location filename="../src/doc/PsdIO.cpp" line="+91"/>
+        <location filename="../src/plugins/parts/PartsPage.cpp" line="+1166"/>
+        <location filename="../src/doc/Project.cpp" line="+180"/>
+        <location filename="../src/doc/PsdIO.cpp" line="+126"/>
         <location filename="../src/live2d/Motion.cpp" line="+20"/>
         <location filename="../src/live2d/Physics.cpp" line="+145"/>
         <location filename="../src/live2d/Animation.cpp" line="+23"/>
@@ -580,12 +585,12 @@
         <translation>Nicht unterstütztes Exportformat: %1</translation>
     </message>
     <message>
-        <location filename="../src/doc/PsdIO.cpp" line="-29"/>
+        <location filename="../src/doc/PsdIO.cpp" line="-55"/>
         <source>Layer</source>
         <translation>Ebene</translation>
     </message>
     <message numerus="yes">
-        <location line="+16"/>
+        <location line="+26"/>
         <source>%n clipping mask layer(s) were imported as normal layers</source>
         <translation>
             <numerusform>%n Schnittmaskenebene wurde als normale Ebene importiert</numerusform>
@@ -604,6 +609,51 @@
         <location line="+2"/>
         <source>unsupported blend modes shown as Normal: %1</source>
         <translation>nicht unterstützte Mischmodi als Normal angezeigt: %1</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+2"/>
+        <source>%n text layer(s) became pictures of their text</source>
+        <translation>
+            <numerusform>%n Textebene wurde zu einem Bild ihres Textes</numerusform>
+            <numerusform>%n Textebenen wurden zu Bildern ihres Textes</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+2"/>
+        <source>the effects of %n layer(s) (shadows, strokes, glows) are not kept</source>
+        <translation>
+            <numerusform>die Effekte von %n Ebene (Schatten, Konturen, Schein) bleiben nicht erhalten</numerusform>
+            <numerusform>die Effekte von %n Ebenen (Schatten, Konturen, Schein) bleiben nicht erhalten</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+2"/>
+        <source>%n adjustment or fill layer(s) are empty layers here</source>
+        <translation>
+            <numerusform>%n Einstellungs- oder Füllebene ist hier eine leere Ebene</numerusform>
+            <numerusform>%n Einstellungs- oder Füllebenen sind hier leere Ebenen</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+2"/>
+        <source>%n smart object(s) became plain layers</source>
+        <translation>
+            <numerusform>%n Smartobjekt wurde zu einer einfachen Ebene</numerusform>
+            <numerusform>%n Smartobjekte wurden zu einfachen Ebenen</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+2"/>
+        <source>the opacity or hiding of %n group(s) went onto their layers</source>
+        <translation>
+            <numerusform>die Deckkraft oder das Ausblenden von %n Gruppe wurde auf ihre Ebenen übertragen</numerusform>
+            <numerusform>die Deckkraft oder das Ausblenden von %n Gruppen wurde auf ihre Ebenen übertragen</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>its colour profile is not kept, so colours may shift</source>
+        <translation>das Farbprofil bleibt nicht erhalten, daher können sich Farben verschieben</translation>
     </message>
     <message>
         <location filename="../src/live2d/Motion.cpp" line="+7"/>
@@ -693,7 +743,7 @@
         <translation>Physikeinstellung %1 benötigt mindestens zwei Eckpunkte.</translation>
     </message>
     <message>
-        <location filename="../src/ui/pages/CreatePage.cpp" line="+720"/>
+        <location filename="../src/plugins/characters/CreatePage.cpp" line="+724"/>
         <source>**Character sheet:** %1 — %2</source>
         <translation>**Charakterblatt:** %1 — %2</translation>
     </message>
@@ -725,17 +775,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Aufnahme: %1</translation>
     </message>
     <message>
-        <location filename="../src/ui/pages/EditorPage.cpp" line="+443"/>
-        <source>This format is not supported (install the Qt Image Formats plugin for WebP).</source>
-        <translation>Dieses Format wird nicht unterstützt (installieren Sie das Qt-Image-Formats-Plugin für WebP).</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/pages/LibraryPage.cpp" line="+76"/>
+        <location filename="../src/ui/pages/LibraryPage.cpp" line="+77"/>
         <source>Loading…</source>
         <translation>Wird geladen…</translation>
     </message>
     <message>
-        <location filename="../src/ui/pages/PosePage.cpp" line="+87"/>
+        <location filename="../src/plugins/poses/PosePage.cpp" line="+88"/>
         <source>Raise</source>
         <translation>Heben</translation>
     </message>
@@ -871,7 +916,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Skalierung</translation>
     </message>
     <message>
-        <location filename="../src/ui/parts/PartsPage.cpp" line="-1073"/>
+        <location filename="../src/plugins/parts/PartsPage.cpp" line="-1077"/>
         <source>1  Source</source>
         <translation>1  Quelle</translation>
     </message>
@@ -951,7 +996,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Noch nicht generiert</translation>
     </message>
     <message>
-        <location line="+998"/>
+        <location line="+1002"/>
         <source>%1 has no visible pixel layers.</source>
         <translation>%1 hat keine sichtbaren Pixelebenen.</translation>
     </message>
@@ -971,7 +1016,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Das Skelett ordnet das gesamte Teil einem Knochen zu – passen Sie die Gelenke an.</translation>
     </message>
     <message>
-        <location filename="../src/ui/parts/PartTools.cpp" line="+46"/>
+        <location filename="../src/plugins/parts/PartTools.cpp" line="+46"/>
         <source>Only inside the character</source>
         <translation>Nur innerhalb des Charakters</translation>
     </message>
@@ -981,7 +1026,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Beim Malen werden niemals Hintergrundpixel außerhalb der Charaktersilhouette erfasst.</translation>
     </message>
     <message>
-        <location filename="../src/ui/assistant/AssistantTools.cpp" line="+92"/>
+        <location filename="../src/plugins/characters/assistant/AssistantTools.cpp" line="+92"/>
         <source>cancelled</source>
         <translation>abgebrochen</translation>
     </message>
@@ -1014,12 +1059,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+49"/>
-        <location line="+58"/>
+        <location line="+59"/>
         <source>No image provider is configured.</source>
         <translation>Es ist kein Bildanbieter konfiguriert.</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+13"/>
         <source>Edit: %1</source>
         <translation>Bearbeitung: %1</translation>
     </message>
@@ -1059,8 +1104,8 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Die Regie ist nicht verfügbar.</translation>
     </message>
     <message>
-        <location line="-322"/>
-        <location filename="../src/ui/Studio.cpp" line="+98"/>
+        <location line="-320"/>
+        <location filename="../src/ui/Studio.cpp" line="+149"/>
         <location line="+17"/>
         <source>Lumen is shutting down.</source>
         <translation>Lumen wird beendet.</translation>
@@ -1075,6 +1120,11 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <source>The provider did not start the request.</source>
         <translation>Der Anbieter hat die Anfrage nicht gestartet.</translation>
     </message>
+    <message>
+        <location filename="../src/ui/filters/NodeScene.cpp" line="+316"/>
+        <source>%1 → %2</source>
+        <translation>%1 → %2</translation>
+    </message>
 </context>
 <context>
     <name>lumen</name>
@@ -1088,12 +1138,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::Job</name>
     <message>
-        <location filename="../src/core/Job.cpp" line="+133"/>
+        <location filename="../src/core/Job.cpp" line="+135"/>
         <source>Cancelled</source>
         <translation>Abgebrochen</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+20"/>
         <source>Cancelling...</source>
         <translation>Wird abgebrochen...</translation>
     </message>
@@ -1216,8 +1266,8 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="-148"/>
-        <source>No image provider is configured. Add one in Settings → Providers.</source>
-        <translation>Kein Bildanbieter konfiguriert. Fügen Sie unter Einstellungen → Anbieter einen hinzu.</translation>
+        <source>There is no image engine. Set one up with Help → Set up AI…</source>
+        <translation>Es gibt keine Bild-Engine. Richten Sie eine unter Hilfe → KI einrichten… ein.</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -1684,6 +1734,232 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
 </context>
 <context>
+    <name>lumen::ai::FilterNodes</name>
+    <message>
+        <location filename="../src/ai/FilterNodes.cpp" line="+54"/>
+        <source>There is no image engine to run this AI step. Set one up with Help → Set up AI…</source>
+        <translation>Keine Bild-Engine für diesen KI-Schritt. Richten Sie eine ein: Hilfe → KI einrichten…</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <location line="+297"/>
+        <location line="+60"/>
+        <source>AI steps cannot run here: Lumen&apos;s image engines are not available.</source>
+        <translation>KI-Schritte können hier nicht laufen: Die Bild-Engines von Lumen sind nicht verfügbar.</translation>
+    </message>
+    <message>
+        <location line="-351"/>
+        <source>The image engine chosen for this step is no longer set up. Choose another one for it in the filter editor, or “The one in use”.</source>
+        <translation>Die für diesen Schritt gewählte Bild-Engine ist nicht mehr eingerichtet. Wählen Sie im Filtereditor eine andere dafür aus oder „Die verwendete“.</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>“%1” has no upscaler. Choose another engine for this step, or “The one in use”.</source>
+        <translation>„%1“ hat keinen Hochskalierer. Wählen Sie für diesen Schritt eine andere Engine oder „Die verwendete“.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>“%1” cannot remove backgrounds. Choose another engine for this step, or “The one in use”.</source>
+        <translation>„%1“ kann keine Hintergründe entfernen. Wählen Sie für diesen Schritt eine andere Engine oder „Die verwendete“.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>None of your image engines has an upscaler. A stable-diffusion.cpp server needs an upscale model in its settings; ComfyUI, Stable Diffusion WebUI, fal.ai and Stability AI have one.</source>
+        <translation>Keine Ihrer Bild-Engines hat einen Hochskalierer. Ein stable-diffusion.cpp-Server braucht in seinen Einstellungen ein Hochskalierungsmodell; ComfyUI, Stable Diffusion WebUI, fal.ai und Stability AI haben einen.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>None of your image engines can remove a background. Stable Diffusion WebUI (with its background removal extension), fal.ai and Stability AI can.</source>
+        <translation>Keine Ihrer Bild-Engines kann einen Hintergrund entfernen. Stable Diffusion WebUI (mit seiner Erweiterung zum Entfernen von Hintergründen), fal.ai und Stability AI können das.</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>“%1” cannot change a picture from a description. In Settings → AI, choose an engine for changes with an edit model: FLUX.2 klein, Kontext or Qwen-Image-Edit, or OpenAI, Gemini or fal.ai.</source>
+        <translation>„%1“ kann ein Bild nicht nach einer Beschreibung ändern. Wählen Sie unter Einstellungen → KI eine Engine für Änderungen mit einem Bearbeitungsmodell: FLUX.2 klein, Kontext oder Qwen-Image-Edit, oder OpenAI, Gemini oder fal.ai.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>“%1” cannot change a picture from a description. Choose an engine with an edit model for this step, or “The one in use”; or use “Fill area with AI”.</source>
+        <translation>„%1“ kann ein Bild nicht nach einer Beschreibung ändern. Wählen Sie für diesen Schritt eine Engine mit einem Bearbeitungsmodell oder „Die verwendete“; oder verwenden Sie „Bereich mit KI füllen“.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>“%1” cannot change part of a picture. Choose another engine for changes in Settings → AI.</source>
+        <translation>„%1“ kann keinen Teil eines Bildes ändern. Wählen Sie unter Einstellungen → KI eine andere Engine für Änderungen.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>“%1” cannot change part of a picture. Choose another engine for this step.</source>
+        <translation>„%1“ kann keinen Teil eines Bildes ändern. Wählen Sie für diesen Schritt eine andere Engine.</translation>
+    </message>
+    <message>
+        <location line="+136"/>
+        <source>The step&apos;s job was removed from the Queue.</source>
+        <translation>Der Auftrag des Schritts wurde aus der Warteschlange entfernt.</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>The image engine gave no picture.</source>
+        <translation>Die Bild-Engine hat kein Bild geliefert.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>%1: %2</source>
+        <translation>%1: %2</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>%1 %2×</source>
+        <translation>%1 %2×</translation>
+    </message>
+    <message>
+        <location line="+100"/>
+        <source>Describe the change first: its “Instruction” is empty.</source>
+        <translation>Beschreiben Sie zuerst die Änderung: Die „Anweisung“ ist leer.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Describe what should appear first: its “Description” is empty.</source>
+        <translation>Beschreiben Sie zuerst, was erscheinen soll: Die „Beschreibung“ ist leer.</translation>
+    </message>
+    <message>
+        <location line="+45"/>
+        <source>Image</source>
+        <translation>Bild</translation>
+    </message>
+    <message>
+        <location line="+20"/>
+        <source>Image engine</source>
+        <translation>Bild-Engine</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Which of your image engines runs this step. “The one in use” is the one Settings → AI uses for changes of a picture (an upscale or a background removal goes to another engine that can do it when that one cannot).</source>
+        <translation>Welche Ihrer Bild-Engines diesen Schritt ausführt. „Die verwendete“ ist die, die Einstellungen → KI für Änderungen an einem Bild verwendet (Hochskalieren oder Hintergrund entfernen geht an eine andere Engine, die das kann, wenn diese es nicht kann).</translation>
+    </message>
+    <message>
+        <location line="+45"/>
+        <source>Edit with AI</source>
+        <translation>Mit KI bearbeiten</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Changes the picture as you describe it (“colorize it”, “make it night”). With an area connected, only that area changes and the rest stays as it was.</source>
+        <translation>Ändert das Bild so, wie Sie es beschreiben („färbe es ein“, „mach es nachts“). Ist ein Bereich verbunden, ändert sich nur dieser Bereich und der Rest bleibt, wie er war.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <location line="+19"/>
+        <source>Area</source>
+        <translation>Bereich</translation>
+    </message>
+    <message>
+        <location line="-15"/>
+        <source>Colours of an area</source>
+        <translation>Farben eines Bereichs</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Match the picture around it</source>
+        <translation>An das umgebende Bild anpassen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>As the AI made them</source>
+        <translation>Wie die KI sie erzeugt hat</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>With an area connected: “Match” removes the colour drift a model adds around an edit. Choose “As the AI made them” for changes of colour on purpose, such as colorizing.</source>
+        <translation>Mit verbundenem Bereich: „Anpassen“ entfernt die Farbabweichung, die ein Modell rund um eine Bearbeitung hinzufügt. Wählen Sie „Wie die KI sie erzeugt hat“ für gewollte Farbänderungen, etwa beim Einfärben.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Instruction</source>
+        <translation>Anweisung</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>What to change, in your own words.</source>
+        <translation>Was geändert werden soll, in Ihren eigenen Worten.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Fill area with AI</source>
+        <translation>Bereich mit KI füllen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Paints the area anew from a description (“a vase of flowers”), blended into what is around it.</source>
+        <translation>Malt den Bereich nach einer Beschreibung neu („eine Vase mit Blumen“), eingeblendet in seine Umgebung.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Description</source>
+        <translation>Beschreibung</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>What should appear in the area.</source>
+        <translation>Was im Bereich erscheinen soll.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>How much to change</source>
+        <translation>Wie stark ändern</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Low values keep more of what is there; 1 paints the area anew.</source>
+        <translation>Niedrige Werte behalten mehr vom Vorhandenen; 1 malt den Bereich neu.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Upscale with AI</source>
+        <translation>Mit KI hochskalieren</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Makes the picture larger with an AI upscaler, which adds detail instead of blurring it.</source>
+        <translation>Vergrößert das Bild mit einem KI-Hochskalierer, der Details hinzufügt, statt es unscharf zu machen.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Factor</source>
+        <translation>Faktor</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>How many times larger the picture becomes.</source>
+        <translation>Wie oft größer das Bild wird.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Remove background</source>
+        <translation>Hintergrund entfernen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Cuts out the main subject: the background becomes transparent. “Subject” is its outline as a mask.</source>
+        <translation>Stellt das Hauptmotiv frei: Der Hintergrund wird transparent. „Motiv“ ist sein Umriss als Maske.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Subject</source>
+        <translation>Motiv</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>The one in use</source>
+        <translation>Die verwendete</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>an engine that is no longer set up</source>
+        <translation>eine Engine, die nicht mehr eingerichtet ist</translation>
+    </message>
+</context>
+<context>
     <name>lumen::ai::GeminiChatProvider</name>
     <message>
         <location filename="../src/ai/providers/GeminiProvider.cpp" line="-517"/>
@@ -1819,7 +2095,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ai::GenerationService</name>
     <message>
-        <location filename="../src/ai/GenerationService.cpp" line="-176"/>
+        <location filename="../src/ai/GenerationService.cpp" line="-215"/>
         <source>Image generation</source>
         <translation>Bildgenerierung</translation>
     </message>
@@ -1829,12 +2105,17 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Der Generierungsdienst ist nicht mehr verfügbar</translation>
     </message>
     <message>
-        <location line="+29"/>
-        <source>No image provider is configured. Add one in Settings → Providers.</source>
-        <translation>Kein Bildanbieter konfiguriert. Fügen Sie unter Einstellungen → Anbieter einen hinzu.</translation>
+        <location line="-181"/>
+        <source>The image engine was removed while it was working.</source>
+        <translation>Die Bild-Engine wurde entfernt, während sie arbeitete.</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+228"/>
+        <source>There is no image engine. Set one up with Help → Set up AI…</source>
+        <translation>Es gibt keine Bild-Engine. Richten Sie eine unter Hilfe → KI einrichten… ein.</translation>
+    </message>
+    <message>
+        <location line="+16"/>
         <source>Preparing...</source>
         <translation>Wird vorbereitet...</translation>
     </message>
@@ -1844,7 +2125,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Der Anbieter ist nicht mehr verfügbar</translation>
     </message>
     <message>
-        <location line="+38"/>
+        <location line="+41"/>
+        <source>Restoring detail...</source>
+        <translation>Details werden wiederhergestellt...</translation>
+    </message>
+    <message>
+        <location line="+16"/>
         <source>Blending result...</source>
         <translation>Ergebnis wird eingeblendet...</translation>
     </message>
@@ -1874,7 +2160,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Der Anbieter wurde entfernt.</translation>
     </message>
     <message>
-        <location line="+46"/>
+        <location line="+47"/>
         <source>Loading...</source>
         <translation>Wird geladen...</translation>
     </message>
@@ -2371,7 +2657,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ai::SdCppProvider</name>
     <message>
-        <location filename="../src/ai/providers/SdCppProvider.cpp" line="+49"/>
+        <location filename="../src/ai/providers/SdCppProvider.cpp" line="+50"/>
         <source>Local stable-diffusion.cpp server. Lumen can download and start it for you (Settings → Local servers). Runs SD 1.5, SDXL (Illustrious, Pony…), FLUX and more without Python; pose control and character references need a ControlNet and an IP-Adapter loaded with the server.</source>
         <translation>Lokaler stable-diffusion.cpp-Server. Lumen kann ihn für Sie herunterladen und starten (Einstellungen → Lokale Server). Führt SD 1.5, SDXL (Illustrious, Pony…), FLUX und mehr ohne Python aus; Posensteuerung und Figurenreferenzen brauchen ein ControlNet und einen IP-Adapter, die mit dem Server geladen werden.</translation>
     </message>
@@ -2501,12 +2787,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Verbunden – Modell: %1</translation>
     </message>
     <message>
-        <location line="+133"/>
-        <source>stable-diffusion.cpp does not do instruction edits with this model; use inpainting or img2img.</source>
-        <translation>stable-diffusion.cpp kann mit diesem Modell keine Anweisungsbearbeitung; verwenden Sie Inpainting oder img2img.</translation>
+        <location line="+171"/>
+        <source>The model on this server does not edit images from an instruction (FLUX.2 [klein], FLUX.1 Kontext and Qwen-Image-Edit do); use inpainting or a variation instead.</source>
+        <translation>Das Modell auf diesem Server bearbeitet keine Bilder nach einer Anweisung (FLUX.2 [klein], FLUX.1 Kontext und Qwen-Image-Edit können das); verwenden Sie stattdessen Inpainting oder eine Variation.</translation>
     </message>
     <message>
-        <location line="+21"/>
+        <location line="+22"/>
         <source>Sending…</source>
         <translation>Wird gesendet…</translation>
     </message>
@@ -2816,7 +3102,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::doc::Document</name>
     <message>
-        <location filename="../src/doc/Document.cpp" line="+92"/>
+        <location filename="../src/doc/Document.cpp" line="+98"/>
         <source>Add layer</source>
         <translation>Ebene hinzufügen</translation>
     </message>
@@ -2879,6 +3165,24 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <location line="+18"/>
         <source>Scale image</source>
         <translation>Bild skalieren</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::doc::ImageFile</name>
+    <message>
+        <location filename="../src/doc/ImageFile.cpp" line="+107"/>
+        <source>Layered Photoshop</source>
+        <translation>Photoshop mit Ebenen</translation>
+    </message>
+    <message>
+        <location line="+161"/>
+        <source>Lumen cannot write %1 files here.</source>
+        <translation>Lumen kann hier keine %1-Dateien schreiben.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>%1 could not be written: %2</source>
+        <translation>%1 konnte nicht geschrieben werden: %2</translation>
     </message>
 </context>
 <context>
@@ -2945,12 +3249,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Löschen der Assets fehlgeschlagen</translation>
     </message>
     <message>
-        <location line="+194"/>
+        <location line="+204"/>
         <source>Saving document failed</source>
         <translation>Speichern des Dokuments fehlgeschlagen</translation>
     </message>
     <message>
-        <location line="+100"/>
+        <location line="+103"/>
         <source>Deleting document failed</source>
         <translation>Löschen des Dokuments fehlgeschlagen</translation>
     </message>
@@ -2958,6 +3262,1029 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <location line="+76"/>
         <source>Deleting record failed</source>
         <translation>Löschen des Eintrags fehlgeschlagen</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::filters::ClassicNodes</name>
+    <message>
+        <location filename="../src/filters/ClassicNodes.cpp" line="+24"/>
+        <source>Image</source>
+        <translation>Bild</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Mask</source>
+        <translation>Maske</translation>
+    </message>
+    <message>
+        <location line="+25"/>
+        <source>px</source>
+        <translation>px</translation>
+    </message>
+    <message>
+        <location line="+20"/>
+        <source>Channels</source>
+        <translation>Kanäle</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>All colours</source>
+        <translation>Alle Farben</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Red</source>
+        <translation>Rot</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Green</source>
+        <translation>Grün</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Blue</source>
+        <translation>Blau</translation>
+    </message>
+    <message>
+        <location line="+53"/>
+        <source>Input</source>
+        <translation>Eingabe</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The picture the filter is applied to, the active layer or the whole picture, and the selection.</source>
+        <translation>Das Bild, auf das der Filter angewendet wird – die aktive Ebene oder das ganze Bild – und die Auswahl.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Selection</source>
+        <translation>Auswahl</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Reads</source>
+        <translation>Liest</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Active layer</source>
+        <translation>Aktive Ebene</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Whole picture</source>
+        <translation>Ganzes Bild</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Active layer: the layer chosen in the Layers panel. Whole picture: every visible layer merged, as you see it; the result then goes over all the layers.</source>
+        <translation>Aktive Ebene: die im Ebenen-Bedienfeld gewählte Ebene. Ganzes Bild: alle sichtbaren Ebenen zusammengeführt, so wie Sie es sehen; das Ergebnis kommt dann über alle Ebenen.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>There is no image to apply the filter to.</source>
+        <translation>Es gibt kein Bild, auf das der Filter angewendet werden kann.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Output</source>
+        <translation>Ausgabe</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The result of the filter. Connect a mask to apply the result only there.</source>
+        <translation>Das Ergebnis des Filters. Verbinden Sie eine Maske, um das Ergebnis nur dort anzuwenden.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Where to apply</source>
+        <translation>Wo anwenden</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Levels</source>
+        <translation>Tonwerte</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Sets the darkest and brightest values and the brightness of the midtones.</source>
+        <translation>Legt die dunkelsten und hellsten Werte und die Helligkeit der Mitteltöne fest.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Input black</source>
+        <translation>Eingabe Schwarz</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Values up to this one become black.</source>
+        <translation>Werte bis zu diesem werden schwarz.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Input white</source>
+        <translation>Eingabe Weiß</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Values from this one up become white.</source>
+        <translation>Werte ab diesem werden weiß.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+50"/>
+        <source>Midtones</source>
+        <translation>Mitteltöne</translation>
+    </message>
+    <message>
+        <location line="-49"/>
+        <source>Above 1 brightens the midtones, below 1 darkens them.</source>
+        <translation>Über 1 hellt die Mitteltöne auf, unter 1 dunkelt sie ab.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Output black</source>
+        <translation>Ausgabe Schwarz</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Output white</source>
+        <translation>Ausgabe Weiß</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Curve</source>
+        <translation>Kurve</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Points as input and output values from 0 to 255, for example “0 0, 128 160, 255 255”.</source>
+        <translation>Punkte als Eingabe- und Ausgabewerte von 0 bis 255, zum Beispiel „0 0, 128 160, 255 255“.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Curves</source>
+        <translation>Gradationskurven</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Maps every brightness value through a smooth curve.</source>
+        <translation>Bildet jeden Helligkeitswert über eine glatte Kurve ab.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Brightness and contrast</source>
+        <translation>Helligkeit und Kontrast</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Makes the image brighter or darker, and its contrast stronger or weaker.</source>
+        <translation>Macht das Bild heller oder dunkler und seinen Kontrast stärker oder schwächer.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Brightness</source>
+        <translation>Helligkeit</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Contrast</source>
+        <translation>Kontrast</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Hue and saturation</source>
+        <translation>Farbton und Sättigung</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Turns the colours around the colour wheel and makes them stronger or paler.</source>
+        <translation>Dreht die Farben im Farbkreis und macht sie kräftiger oder blasser.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Hue</source>
+        <translation>Farbton</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <location line="+273"/>
+        <source>°</source>
+        <translation>°</translation>
+    </message>
+    <message>
+        <location line="-272"/>
+        <source>Saturation</source>
+        <translation>Sättigung</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Lightness</source>
+        <translation>Helligkeit</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Colour balance</source>
+        <translation>Farbbalance</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Tints the shadows, midtones or highlights.</source>
+        <translation>Tönt die Tiefen, Mitteltöne oder Lichter.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Tones</source>
+        <translation>Töne</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Shadows</source>
+        <translation>Tiefen</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Highlights</source>
+        <translation>Lichter</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Cyan – Red</source>
+        <translation>Cyan – Rot</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Magenta – Green</source>
+        <translation>Magenta – Grün</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Yellow – Blue</source>
+        <translation>Gelb – Blau</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Keep brightness</source>
+        <translation>Helligkeit erhalten</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Yes</source>
+        <translation>Ja</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>No</source>
+        <translation>Nein</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Invert</source>
+        <translation>Umkehren</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Turns the image into its negative.</source>
+        <translation>Verwandelt das Bild in sein Negativ.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Black and white</source>
+        <translation>Schwarzweiß</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Removes the colours and keeps the brightness.</source>
+        <translation>Entfernt die Farben und behält die Helligkeit.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Brightness from</source>
+        <translation>Helligkeit aus</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>How bright the eye sees each colour</source>
+        <translation>Wie hell das Auge jede Farbe sieht</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Average of red, green and blue</source>
+        <translation>Mittelwert von Rot, Grün und Blau</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Middle of the strongest and weakest colour</source>
+        <translation>Mitte zwischen stärkster und schwächster Farbe</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <location line="+39"/>
+        <source>Threshold</source>
+        <translation>Schwellenwert</translation>
+    </message>
+    <message>
+        <location line="-38"/>
+        <source>Turns bright pixels white and the others black.</source>
+        <translation>Macht helle Pixel weiß und die übrigen schwarz.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Level</source>
+        <translation>Stufe</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Pixels at least this bright become white.</source>
+        <translation>Pixel, die mindestens so hell sind, werden weiß.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Posterize</source>
+        <translation>Tontrennung</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Reduces every colour channel to a few flat steps.</source>
+        <translation>Reduziert jeden Farbkanal auf wenige flache Stufen.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Steps per channel</source>
+        <translation>Stufen pro Kanal</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Blur</source>
+        <translation>Weichzeichnen</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Softens the image evenly.</source>
+        <translation>Zeichnet das Bild gleichmäßig weich.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+16"/>
+        <location line="+29"/>
+        <source>Radius</source>
+        <translation>Radius</translation>
+    </message>
+    <message>
+        <location line="-39"/>
+        <source>Sharpen</source>
+        <translation>Schärfen</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Makes fine detail crisper.</source>
+        <translation>Macht feine Details schärfer.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+8"/>
+        <location line="+12"/>
+        <source>Amount</source>
+        <translation>Stärke</translation>
+    </message>
+    <message>
+        <location line="-20"/>
+        <location line="+8"/>
+        <location line="+12"/>
+        <location line="+44"/>
+        <location line="+60"/>
+        <source>%</source>
+        <translation>%</translation>
+    </message>
+    <message>
+        <location line="-118"/>
+        <source>Unsharp mask</source>
+        <translation>Unscharf maskieren</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Sharpens edges by increasing the contrast along them.</source>
+        <translation>Schärft Kanten, indem der Kontrast entlang der Kanten erhöht wird.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Edges with less contrast than this stay as they are.</source>
+        <translation>Kanten mit weniger Kontrast als diesem bleiben, wie sie sind.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Noise</source>
+        <translation>Rauschen</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Adds film grain.</source>
+        <translation>Fügt Filmkorn hinzu.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Grain</source>
+        <translation>Korn</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Coloured</source>
+        <translation>Farbig</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Grey</source>
+        <translation>Grau</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Spread</source>
+        <translation>Verteilung</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Soft (most grains small)</source>
+        <translation>Weich (meist kleine Körner)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Even</source>
+        <translation>Gleichmäßig</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Pattern</source>
+        <translation>Muster</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Another number gives another pattern of the same strength.</source>
+        <translation>Eine andere Zahl ergibt ein anderes Muster gleicher Stärke.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Remove specks</source>
+        <translation>Flecken entfernen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Replaces each pixel by the middle value of its neighbours (a median filter).</source>
+        <translation>Ersetzt jedes Pixel durch den mittleren Wert seiner Nachbarn (ein Medianfilter).</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Normal</source>
+        <translation>Normal</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Multiply</source>
+        <translation>Multiplizieren</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Screen</source>
+        <translation>Negativ multiplizieren</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Overlay</source>
+        <translation>Ineinanderkopieren</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Darken</source>
+        <translation>Abdunkeln</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Lighten</source>
+        <translation>Aufhellen</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Color Dodge</source>
+        <translation>Farbig abwedeln</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Color Burn</source>
+        <translation>Farbig nachbelichten</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Hard Light</source>
+        <translation>Hartes Licht</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Soft Light</source>
+        <translation>Weiches Licht</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Difference</source>
+        <translation>Differenz</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Exclusion</source>
+        <translation>Ausschluss</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Add</source>
+        <translation>Addieren</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Blend</source>
+        <translation>Überblenden</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Puts one image over another with a layer blend mode.</source>
+        <translation>Legt ein Bild mit einer Ebenen-Füllmethode über ein anderes.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Background</source>
+        <translation>Hintergrund</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Foreground</source>
+        <translation>Vordergrund</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Where</source>
+        <translation>Wo</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Blend mode</source>
+        <translation>Füllmethode</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Opacity</source>
+        <translation>Deckkraft</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Mix by mask</source>
+        <translation>Per Maske mischen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Takes one image where the mask is black and the other where it is white.</source>
+        <translation>Nimmt das eine Bild, wo die Maske schwarz ist, und das andere, wo sie weiß ist.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Outside the mask</source>
+        <translation>Außerhalb der Maske</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Inside the mask</source>
+        <translation>Innerhalb der Maske</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Mask from image</source>
+        <translation>Maske aus Bild</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Makes a mask from the brightness or the opacity of an image.</source>
+        <translation>Erstellt eine Maske aus der Helligkeit oder der Deckkraft eines Bildes.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>From</source>
+        <translation>Aus</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Brightness (white is selected)</source>
+        <translation>Helligkeit (Weiß ist ausgewählt)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Opacity (opaque is selected)</source>
+        <translation>Deckkraft (Deckendes ist ausgewählt)</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Grow, shrink and feather</source>
+        <translation>Erweitern, verkleinern und weiche Kante</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Makes a mask larger or smaller and softens its edge.</source>
+        <translation>Macht eine Maske größer oder kleiner und macht ihre Kante weich.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Grow or shrink</source>
+        <translation>Erweitern oder verkleinern</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Positive values grow the mask, negative values shrink it.</source>
+        <translation>Positive Werte erweitern die Maske, negative verkleinern sie.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Feather</source>
+        <translation>Weiche Kante</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Invert mask</source>
+        <translation>Maske umkehren</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Selects what was not selected.</source>
+        <translation>Wählt aus, was nicht ausgewählt war.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Smooth</source>
+        <translation>Glatt</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Hard pixel edges</source>
+        <translation>Harte Pixelkanten</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Resize</source>
+        <translation>Größe ändern</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Makes the image larger or smaller.</source>
+        <translation>Macht das Bild größer oder kleiner.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Size by</source>
+        <translation>Größe nach</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+1"/>
+        <source>Percent</source>
+        <translation>Prozent</translation>
+    </message>
+    <message>
+        <location line="-1"/>
+        <source>Pixels</source>
+        <translation>Pixel</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <location line="+27"/>
+        <source>Width</source>
+        <translation>Breite</translation>
+    </message>
+    <message>
+        <location line="-26"/>
+        <location line="+27"/>
+        <source>Height</source>
+        <translation>Höhe</translation>
+    </message>
+    <message>
+        <location line="-26"/>
+        <source>0 keeps the proportions.</source>
+        <translation>0 behält die Proportionen bei.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+68"/>
+        <source>Quality</source>
+        <translation>Qualität</translation>
+    </message>
+    <message>
+        <location line="-47"/>
+        <source>Crop</source>
+        <translation>Freistellen</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Keeps a rectangle of the image.</source>
+        <translation>Behält ein Rechteck des Bildes.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Left</source>
+        <translation>Links</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Top</source>
+        <translation>Oben</translation>
+    </message>
+    <message>
+        <location line="+23"/>
+        <source>The crop area is outside the image.</source>
+        <translation>Der Freistellungsbereich liegt außerhalb des Bildes.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Flip</source>
+        <translation>Spiegeln</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Mirrors the image.</source>
+        <translation>Spiegelt das Bild.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Direction</source>
+        <translation>Richtung</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Left to right</source>
+        <translation>Links nach rechts</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Upside down</source>
+        <translation>Kopfüber</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Both</source>
+        <translation>Beides</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Rotate</source>
+        <translation>Drehen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Turns the image clockwise; the canvas grows to hold the corners.</source>
+        <translation>Dreht das Bild im Uhrzeigersinn; die Arbeitsfläche wächst, damit die Ecken hineinpassen.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Angle</source>
+        <translation>Winkel</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::filters::Evaluator</name>
+    <message>
+        <location filename="../src/filters/Evaluator.cpp" line="+90"/>
+        <location line="+468"/>
+        <source>It gave no result.</source>
+        <translation>Er hat kein Ergebnis geliefert.</translation>
+    </message>
+    <message>
+        <location line="-444"/>
+        <source>“%1”: %2</source>
+        <translation>„%1“: %2</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>“%1” has nothing connected to its “%2” input.</source>
+        <translation>Am Eingang „%2“ von „%1“ ist nichts angeschlossen.</translation>
+    </message>
+    <message>
+        <location line="+586"/>
+        <source>That node cannot be shown: it is not in the filter or is part of a loop.</source>
+        <translation>Dieser Knoten kann nicht angezeigt werden: Er ist nicht im Filter oder Teil einer Schleife.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>There is no image to apply the filter to.</source>
+        <translation>Es gibt kein Bild, auf das der Filter angewendet werden kann.</translation>
+    </message>
+    <message>
+        <location line="+92"/>
+        <source>“%1” was cancelled.</source>
+        <translation>„%1“ wurde abgebrochen.</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::filters::Graph</name>
+    <message>
+        <location filename="../src/filters/NodeType.cpp" line="+45"/>
+        <source>an image</source>
+        <translation>ein Bild</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>a mask</source>
+        <translation>eine Maske</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>a number</source>
+        <translation>eine Zahl</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>a colour</source>
+        <translation>eine Farbe</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>text</source>
+        <translation>Text</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>a choice</source>
+        <translation>eine Auswahl</translation>
+    </message>
+    <message>
+        <location filename="../src/filters/Graph.cpp" line="+66"/>
+        <source>“%1” gives %2, but the “%3” input of “%4” takes %5.</source>
+        <translation>„%1“ liefert %2, aber der Eingang „%3“ von „%4“ nimmt %5.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Put a “Mask from image” node between them.</source>
+        <translation>Setzen Sie einen Knoten „Maske aus Bild“ dazwischen.</translation>
+    </message>
+    <message>
+        <location line="+142"/>
+        <source>That connection point does not exist.</source>
+        <translation>Diesen Anschluss gibt es nicht.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>This link would make a loop: the result of “%1” would come back into its own input.</source>
+        <translation>Diese Verbindung würde eine Schleife bilden: Das Ergebnis von „%1“ käme in seinen eigenen Eingang zurück.</translation>
+    </message>
+    <message>
+        <location line="+116"/>
+        <source>The filter has no output. Add an “Output” node and connect the result to it.</source>
+        <translation>Der Filter hat keine Ausgabe. Fügen Sie einen Knoten „Ausgabe“ hinzu und verbinden Sie das Ergebnis damit.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The filter has more than one output node; keep one.</source>
+        <translation>Der Filter hat mehr als einen Ausgabeknoten; behalten Sie einen.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>A link points to a node or a connection point that is not in the filter.</source>
+        <translation>Eine Verbindung zeigt auf einen Knoten oder Anschluss, der nicht im Filter ist.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>“%1” has more than one link into its “%2” input.</source>
+        <translation>„%1“ hat mehr als eine Verbindung in seinen Eingang „%2“.</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>“%1” is part of a loop: its result comes back into its own input. Remove one of the links of the loop.</source>
+        <translation>„%1“ ist Teil einer Schleife: Sein Ergebnis kommt in seinen eigenen Eingang zurück. Entfernen Sie eine der Verbindungen der Schleife.</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>“%1” is not connected to the output, so it has no effect.</source>
+        <translation>„%1“ ist nicht mit der Ausgabe verbunden und hat daher keine Wirkung.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>“%1” has nothing connected to its “%2” input.</source>
+        <translation>Am Eingang „%2“ von „%1“ ist nichts angeschlossen.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>The slider “%1” belongs to a setting that is not in the filter.</source>
+        <translation>Der Schieberegler „%1“ gehört zu einer Einstellung, die nicht im Filter ist.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>The slider “%1” has no range: its lowest value is not below its highest.</source>
+        <translation>Der Schieberegler „%1“ hat keinen Bereich: Sein kleinster Wert liegt nicht unter seinem größten.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The slider “%1” reaches values that its setting does not take; keep it within %2 to %3.</source>
+        <translation>Der Schieberegler „%1“ erreicht Werte, die seine Einstellung nicht annimmt; halten Sie ihn zwischen %2 und %3.</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>“%1”: %2</source>
+        <translation>„%1“: %2</translation>
+    </message>
+    <message>
+        <location line="+68"/>
+        <location line="+84"/>
+        <source>This is not a Lumen filter file.</source>
+        <translation>Dies ist keine Lumen-Filterdatei.</translation>
+    </message>
+    <message>
+        <location line="-82"/>
+        <source>This filter was made with a newer version of Lumen Studio (file version %1; this version reads up to %2). Update Lumen Studio to use it.</source>
+        <translation>Dieser Filter wurde mit einer neueren Version von Lumen Studio erstellt (Dateiversion %1; diese Version liest bis %2). Aktualisieren Sie Lumen Studio, um ihn zu verwenden.</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>The filter file is damaged: two nodes have the same name, or one has none.</source>
+        <translation>Die Filterdatei ist beschädigt: Zwei Knoten haben denselben Namen, oder einer hat keinen.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>This filter uses a node that this version of Lumen Studio does not have (“%1”). It may come from a plugin that is turned off.</source>
+        <translation>Dieser Filter verwendet einen Knoten, den diese Version von Lumen Studio nicht hat („%1“). Er stammt vielleicht aus einem ausgeschalteten Plugin.</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>The filter file is damaged: a link points to a node that is not in it.</source>
+        <translation>Die Filterdatei ist beschädigt: Eine Verbindung zeigt auf einen Knoten, der nicht darin ist.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The filter does not fit this version of Lumen Studio: “%1” has no “%2” output.</source>
+        <translation>Der Filter passt nicht zu dieser Version von Lumen Studio: „%1“ hat keinen Ausgang „%2“.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>The filter does not fit this version of Lumen Studio: “%1” has no “%2” input.</source>
+        <translation>Der Filter passt nicht zu dieser Version von Lumen Studio: „%1“ hat keinen Eingang „%2“.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>The filter file is damaged: an input of “%1” has two links.</source>
+        <translation>Die Filterdatei ist beschädigt: Ein Eingang von „%1“ hat zwei Verbindungen.</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <location line="+6"/>
+        <source>Could not save the filter: %1</source>
+        <translation>Der Filter konnte nicht gespeichert werden: %1</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Could not open the filter: %1</source>
+        <translation>Der Filter konnte nicht geöffnet werden: %1</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::filters::Library</name>
+    <message>
+        <location filename="../src/filters/Library.cpp" line="+66"/>
+        <source>Filter</source>
+        <translation>Filter</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Could not create the folder for filters: %1</source>
+        <translation>Der Ordner für Filter konnte nicht erstellt werden: %1</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::filters::NodeRegistry</name>
+    <message>
+        <location filename="../src/filters/Registry.cpp" line="+93"/>
+        <source>Input and output</source>
+        <translation>Eingabe und Ausgabe</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Colour</source>
+        <translation>Farbe</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Blur, sharpen and noise</source>
+        <translation>Weichzeichnen, Schärfen und Rauschen</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Combine</source>
+        <translation>Kombinieren</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Masks</source>
+        <translation>Masken</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Size and orientation</source>
+        <translation>Größe und Ausrichtung</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>AI</source>
+        <translation>KI</translation>
     </message>
 </context>
 <context>
@@ -3007,6 +4334,53 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <location line="+15"/>
         <source>Could not create request</source>
         <translation>Anfrage konnte nicht erstellt werden</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::plugins::CharactersPlugin</name>
+    <message>
+        <location filename="../src/plugins/characters/CharactersPlugin.cpp" line="+13"/>
+        <source>Characters</source>
+        <translation>Charaktere</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Tools → Create: an AI director that builds a character sheet from reference images and plans sets of shots with poses. Also the assistant (View → Assistant), and training a character LoRA (locally or on a rented cloud GPU).</source>
+        <translation>Werkzeuge → Erstellen: eine KI-Regie, die aus Referenzbildern ein Charakterblatt erstellt und Aufnahmeserien mit Posen plant. Außerdem der Assistent (Ansicht → Assistent) und das Training einer Charakter-LoRA (lokal oder auf einer gemieteten Cloud-GPU).</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::plugins::PartsPlugin</name>
+    <message>
+        <location filename="../src/plugins/parts/PartsPlugin.cpp" line="+11"/>
+        <source>Live2D parts</source>
+        <translation>Live2D-Teile</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Tools → Parts: slices a character illustration into parts for Live2D Cubism, completes the hidden areas of every part, previews the result as a puppet and exports a layered PSD.</source>
+        <translation>Werkzeuge → Teile: zerlegt eine Charakterillustration in Teile für Live2D Cubism, ergänzt die verdeckten Bereiche jedes Teils, zeigt das Ergebnis als Puppe und exportiert eine PSD mit Ebenen.</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::plugins::PosesPlugin</name>
+    <message>
+        <location filename="../src/plugins/poses/PosesPlugin.cpp" line="+11"/>
+        <source>Poses</source>
+        <translation>Posen</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Tools → Poses: a pose editor and library. Pose people with a 3D rig or joint by joint, detect a pose in an image, and start a new image in that pose.</source>
+        <translation>Werkzeuge → Posen: ein Posen-Editor und eine Posenbibliothek. Posieren Sie Menschen mit einem 3D-Rig oder Gelenk für Gelenk, erkennen Sie eine Pose in einem Bild und beginnen Sie ein neues Bild in dieser Pose.</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::runtime::AiSetup</name>
+    <message>
+        <location filename="../src/runtime/AiSetup.cpp" line="+219"/>
+        <source>No %1 file was found on this computer, and Lumen has none to download for it.</source>
+        <translation>Auf diesem Computer wurde keine %1-Datei gefunden, und Lumen hat keine zum Herunterladen dafür.</translation>
     </message>
 </context>
 <context>
@@ -3337,7 +4711,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Der GPU ist der Speicher ausgegangen. Schließen Sie andere Programme, die die GPU nutzen, oder wählen Sie kleinere Einstellungen.</translation>
     </message>
     <message>
-        <location line="+53"/>
+        <location line="+57"/>
         <source>The LoRA trainer is not installed. Install it under Settings → Local servers → Download…</source>
         <translation>Der LoRA-Trainer ist nicht installiert. Installieren Sie ihn unter Einstellungen → Lokale Server → Herunterladen…</translation>
     </message>
@@ -3367,7 +4741,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Die Bilder werden vorbereitet…</translation>
     </message>
     <message>
-        <location line="-220"/>
+        <location line="-224"/>
         <source>Epoch %1 of %2 · step %3 of %4</source>
         <translation>Epoche %1 von %2 · Schritt %3 von %4</translation>
     </message>
@@ -3387,7 +4761,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation> · noch %1</translation>
     </message>
     <message>
-        <location line="+235"/>
+        <location line="+147"/>
+        <source>The LoRA cannot be trained now: %1</source>
+        <translation>Die LoRA kann jetzt nicht trainiert werden: %1</translation>
+    </message>
+    <message>
+        <location line="+92"/>
         <source>Cannot start the trainer: %1</source>
         <translation>Der Trainer kann nicht gestartet werden: %1</translation>
     </message>
@@ -3417,7 +4796,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::runtime::ModelFormats</name>
     <message>
-        <location filename="../src/runtime/ModelFormats.cpp" line="+32"/>
+        <location filename="../src/runtime/ModelFormats.cpp" line="+33"/>
         <source>Other</source>
         <translation>Sonstiges</translation>
     </message>
@@ -3482,7 +4861,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Vision-Projektor</translation>
     </message>
     <message>
-        <location line="+250"/>
+        <location line="+286"/>
         <source>Not a safetensors file.</source>
         <translation>Keine safetensors-Datei.</translation>
     </message>
@@ -3499,7 +4878,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     <message>
         <location line="+6"/>
         <location line="+16"/>
-        <location line="+17"/>
+        <location line="+19"/>
         <source>Damaged GGUF header.</source>
         <translation>Beschädigter GGUF-Header.</translation>
     </message>
@@ -3507,7 +4886,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::runtime::ModelHub</name>
     <message>
-        <location filename="../src/runtime/ModelHub.cpp" line="+68"/>
+        <location filename="../src/runtime/ModelHub.cpp" line="+69"/>
         <source>not found</source>
         <translation>nicht gefunden</translation>
     </message>
@@ -3559,13 +4938,13 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     <message>
         <location line="+9"/>
         <location line="+27"/>
-        <location line="+584"/>
+        <location line="+552"/>
         <location line="+45"/>
         <source>Shutting down.</source>
         <translation>Wird beendet.</translation>
     </message>
     <message>
-        <location line="-642"/>
+        <location line="-610"/>
         <source>Civitai requires an API key for this download. Add one under Settings → Models → Download.</source>
         <translation>Civitai verlangt für diesen Download einen API-Schlüssel. Fügen Sie einen unter Einstellungen → Modelle → Herunterladen hinzu.</translation>
     </message>
@@ -3590,7 +4969,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>%1 wird geprüft…</translation>
     </message>
     <message>
-        <location line="+567"/>
+        <location line="+535"/>
         <source>Invalid repository name: %1</source>
         <translation>Ungültiger Repository-Name: %1</translation>
     </message>
@@ -3604,16 +4983,21 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <source>Download %1</source>
         <translation>%1 herunterladen</translation>
     </message>
+    <message>
+        <location line="+5"/>
+        <source>The models folder is being moved. Download again when that is done.</source>
+        <translation>Der Modellordner wird gerade verschoben. Laden Sie erneut herunter, wenn das erledigt ist.</translation>
+    </message>
 </context>
 <context>
     <name>lumen::runtime::ModelLibrary</name>
     <message>
-        <location filename="../src/runtime/ModelLibrary.cpp" line="+214"/>
+        <location filename="../src/runtime/ModelLibrary.cpp" line="+190"/>
         <source>Lumen models</source>
         <translation>Lumen-Modelle</translation>
     </message>
     <message>
-        <location line="+235"/>
+        <location line="+353"/>
         <source>Cannot read %1.</source>
         <translation>%1 kann nicht gelesen werden.</translation>
     </message>
@@ -3626,6 +5010,318 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <location line="+29"/>
         <source>Cannot move %1 to the recycle bin: %2</source>
         <translation>%1 kann nicht in den Papierkorb verschoben werden: %2</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::runtime::ModelPresets</name>
+    <message>
+        <location filename="../src/runtime/ModelPresets.cpp" line="+78"/>
+        <source>text encoder</source>
+        <translation>Text-Encoder</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>%1 text encoder</source>
+        <translation>%1-Text-Encoder</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>VAE</source>
+        <translation>VAE</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>%1 VAE</source>
+        <translation>%1-VAE</translation>
+    </message>
+    <message>
+        <location line="+371"/>
+        <source>VAE (optional)</source>
+        <translation>VAE (optional)</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>VAE (%1)</source>
+        <translation>VAE (%1)</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Text encoder (%1)</source>
+        <translation>Text-Encoder (%1)</translation>
+    </message>
+    <message>
+        <location line="+99"/>
+        <location line="+114"/>
+        <source>%1 (%2) does not exist.</source>
+        <translation>%1 (%2) existiert nicht.</translation>
+    </message>
+    <message>
+        <location line="-114"/>
+        <location line="+115"/>
+        <source>This file does not exist.</source>
+        <translation>Diese Datei existiert nicht.</translation>
+    </message>
+    <message>
+        <location line="-97"/>
+        <source>%1 is a diffusion model (%2), not a complete checkpoint: choose it under &quot;%3&quot;, with its VAE and text encoder.</source>
+        <translation>%1 ist ein Diffusionsmodell (%2), kein vollständiger Checkpoint: Wählen Sie es unter „%3“, mit seinem VAE und Text-Encoder.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>This is a diffusion model (%1), not a complete checkpoint: it belongs under &quot;%2&quot;.</source>
+        <translation>Dies ist ein Diffusionsmodell (%1), kein vollständiger Checkpoint: Es gehört unter „%2“.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>%1 is a complete checkpoint (%2): choose it under &quot;%3&quot;.</source>
+        <translation>%1 ist ein vollständiger Checkpoint (%2): Wählen Sie ihn unter „%3“.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>This is a complete checkpoint (%1): it belongs under &quot;%2&quot;.</source>
+        <translation>Dies ist ein vollständiger Checkpoint (%1): Er gehört unter „%2“.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>%1 (%2) is not an image model.</source>
+        <translation>%1 (%2) ist kein Bildmodell.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This is a %1, not an image model.</source>
+        <translation>Dies ist ein %1, kein Bildmodell.</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>%1 needs a %2 under &quot;%3&quot; (%4, %5).</source>
+        <translation>%1 braucht einen %2 unter „%3“ (%4, %5).</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Missing: %1 (%2).</source>
+        <translation>Fehlt: %1 (%2).</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>%1 (%2: %3) does not fit: %4 needs a %5 under &quot;%6&quot;.</source>
+        <translation>%1 (%2: %3) passt nicht: %4 braucht einen %5 unter „%6“.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>This is a %1; %2 needs a %3.</source>
+        <translation>Dies ist ein %1; %2 braucht einen %3.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>%1 (%2) does not fit: %3 takes only a VAE for %4 under &quot;%5&quot;.</source>
+        <translation>%1 (%2) passt nicht: %3 nimmt unter „%5“ nur einen VAE für %4.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>This is a %1; %2 takes only a VAE for %3.</source>
+        <translation>Dies ist ein %1; %2 nimmt nur einen VAE für %3.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>%1 is for %2 models and does not work with %3. Remove it from &quot;%4&quot;.</source>
+        <translation>%1 ist für %2-Modelle und funktioniert nicht mit %3. Entfernen Sie es aus „%4“.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>%1 is for %2 models; %3 needs one for %4.</source>
+        <translation>%1 ist für %2-Modelle; %3 braucht einen für %4.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>This is for %1 models and does not work with %2.</source>
+        <translation>Dies ist für %1-Modelle und funktioniert nicht mit %2.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This is for %1 models; %2 needs one for %3.</source>
+        <translation>Dies ist für %1-Modelle; %2 braucht einen für %3.</translation>
+    </message>
+    <message>
+        <location line="+32"/>
+        <source>%1 (%2: %3) does not fit: this model type needs a %4 under &quot;%5&quot;.</source>
+        <translation>%1 (%2: %3) passt nicht: Dieser Modelltyp braucht einen %4 unter „%5“.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>This is a %1; this model type needs a %2.</source>
+        <translation>Dies ist ein %1; dieser Modelltyp braucht einen %2.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>%1 (%2) does not fit: this model type takes only a VAE for %3 under &quot;%4&quot;.</source>
+        <translation>%1 (%2) passt nicht: Dieser Modelltyp nimmt unter „%4“ nur einen VAE für %3.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>This is a %1; this model type takes only a VAE for %2.</source>
+        <translation>Dies ist ein %1; dieser Modelltyp nimmt nur einen VAE für %2.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>%1 is for %2 models and does not work with this model type. Remove it from &quot;%3&quot;.</source>
+        <translation>%1 ist für %2-Modelle und funktioniert nicht mit diesem Modelltyp. Entfernen Sie es aus „%3“.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>%1 is for %2 models; this model type needs one for %3.</source>
+        <translation>%1 ist für %2-Modelle; dieser Modelltyp braucht einen für %3.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>This is for %1 models and does not work with this model type.</source>
+        <translation>Dies ist für %1-Modelle und funktioniert nicht mit diesem Modelltyp.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This is for %1 models; this model type needs one for %2.</source>
+        <translation>Dies ist für %1-Modelle; dieser Modelltyp braucht einen für %2.</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::runtime::ModelsFolder</name>
+    <message>
+        <location filename="../src/runtime/ModelsFolder.cpp" line="+80"/>
+        <source>A file of that name exists.</source>
+        <translation>Eine Datei mit diesem Namen existiert bereits.</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <location line="+9"/>
+        <source>Cannot read %1: %2</source>
+        <translation>%1 kann nicht gelesen werden: %2</translation>
+    </message>
+    <message>
+        <location line="-6"/>
+        <location line="+10"/>
+        <location line="+8"/>
+        <source>Cannot write %1: %2</source>
+        <translation>%1 kann nicht geschrieben werden: %2</translation>
+    </message>
+    <message>
+        <location line="-4"/>
+        <location line="+511"/>
+        <location line="+42"/>
+        <source>The move was cancelled.</source>
+        <translation>Das Verschieben wurde abgebrochen.</translation>
+    </message>
+    <message>
+        <location line="-436"/>
+        <source>%1 is a link to another place. Links can only move to a folder on the same drive: choose one there, or remove the link first.</source>
+        <translation>%1 ist eine Verknüpfung zu einem anderen Ort. Verknüpfungen können nur in einen Ordner auf demselben Laufwerk verschoben werden: Wählen Sie dort einen, oder entfernen Sie zuerst die Verknüpfung.</translation>
+    </message>
+    <message>
+        <location line="+134"/>
+        <location line="+384"/>
+        <source>Shutting down.</source>
+        <translation>Wird beendet.</translation>
+    </message>
+    <message>
+        <location line="-379"/>
+        <source>Models are being downloaded into the folder. Move it when the downloads are done.</source>
+        <translation>In den Ordner werden gerade Modelle heruntergeladen. Verschieben Sie ihn, wenn die Downloads fertig sind.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>A LoRA is being trained; it is saved into the folder when it is done. Move the folder after that.</source>
+        <translation>Eine LoRA wird gerade trainiert; sie wird in den Ordner gespeichert, wenn sie fertig ist. Verschieben Sie den Ordner danach.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>The models folder cannot be moved now: %1</source>
+        <translation>Der Modellordner kann jetzt nicht verschoben werden: %1</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The models folder is being moved; servers start again when it is done.</source>
+        <translation>Der Modellordner wird gerade verschoben; die Server starten wieder, wenn das erledigt ist.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Stopping servers…</source>
+        <translation>Server werden angehalten…</translation>
+    </message>
+    <message>
+        <location line="+36"/>
+        <source>Moving models…</source>
+        <translation>Modelle werden verschoben…</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Moving models: %1 of %2</source>
+        <translation>Modelle werden verschoben: %1 von %2</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+41"/>
+        <source>%n model(s) moved to %1</source>
+        <translation>
+            <numerusform>%n Modell nach %1 verschoben</numerusform>
+            <numerusform>%n Modelle nach %1 verschoben</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+10"/>
+        <source>%n file(s) added meanwhile stayed in %1.</source>
+        <translation>
+            <numerusform>%n in der Zwischenzeit hinzugefügte Datei blieb in %1.</numerusform>
+            <numerusform>%n in der Zwischenzeit hinzugefügte Dateien blieben in %1.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+56"/>
+        <source>Choose a folder for the models.</source>
+        <translation>Wählen Sie einen Ordner für die Modelle.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>The models are in %1 already.</source>
+        <translation>Die Modelle sind bereits in %1.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>%1 is inside the current models folder. Choose a folder outside it.</source>
+        <translation>%1 liegt im aktuellen Modellordner. Wählen Sie einen Ordner außerhalb davon.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>%1 is a file, not a folder.</source>
+        <translation>%1 ist eine Datei, kein Ordner.</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>%1 has files with the same names already: %2. Move or rename them first.</source>
+        <translation>In %1 gibt es bereits Dateien mit denselben Namen: %2. Verschieben oder benennen Sie diese zuerst um.</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>Not enough free space on %1: %2 needed, %3 free.</source>
+        <translation>Nicht genug freier Speicher auf %1: %2 benötigt, %3 frei.</translation>
+    </message>
+    <message>
+        <location line="+23"/>
+        <location line="+32"/>
+        <source>Cannot create %1.</source>
+        <translation>%1 kann nicht erstellt werden.</translation>
+    </message>
+    <message>
+        <location line="-4"/>
+        <source>%1 exists already.</source>
+        <translation>%1 existiert bereits.</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <location line="+9"/>
+        <source>Cannot move %1: %2</source>
+        <translation>%1 kann nicht verschoben werden: %2</translation>
+    </message>
+    <message>
+        <location line="+92"/>
+        <source>Move models folder</source>
+        <translation>Modellordner verschieben</translation>
     </message>
 </context>
 <context>
@@ -3819,7 +5515,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::runtime::ServerProfile</name>
     <message>
-        <location filename="../src/runtime/ServerProfile.cpp" line="+35"/>
+        <location filename="../src/runtime/ServerProfile.cpp" line="+37"/>
         <source>GGUF models (*.gguf)</source>
         <translation>GGUF-Modelle (*.gguf)</translation>
     </message>
@@ -3895,12 +5591,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+3"/>
-        <location line="+79"/>
+        <location line="+99"/>
         <source>Flash attention</source>
         <translation>Flash Attention</translation>
     </message>
     <message>
-        <location line="-76"/>
+        <location line="-96"/>
         <source>Unload when idle (s)</source>
         <translation>Im Leerlauf entladen (s)</translation>
     </message>
@@ -3951,18 +5647,18 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+5"/>
-        <location line="+72"/>
+        <location line="+77"/>
         <source>CPU threads</source>
         <translation>CPU-Threads</translation>
     </message>
     <message>
-        <location line="-72"/>
-        <location line="+72"/>
+        <location line="-77"/>
+        <location line="+77"/>
         <source>0 = automatic</source>
         <translation>0 = automatisch</translation>
     </message>
     <message>
-        <location line="-68"/>
+        <location line="-73"/>
         <source>Reasoning budget</source>
         <translation>Reasoning-Budget</translation>
     </message>
@@ -3972,7 +5668,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>-1 = unbegrenztes Nachdenken, 0 = Nachdenken aus (schneller bei kleinen Modellen).</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+13"/>
         <source>Models (*.safetensors *.gguf *.ckpt *.sft)</source>
         <translation>Modelle (*.safetensors *.gguf *.ckpt *.sft)</translation>
     </message>
@@ -3987,17 +5683,57 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Checkpoint als einzelne Datei (SD 1.5, SDXL, Illustrious, Pony…). Für FLUX-artige Modelle stattdessen „Diffusionsmodell“ mit separaten Text-Encodern verwenden.</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+8"/>
         <source>VAE</source>
         <translation>VAE</translation>
     </message>
     <message>
-        <location line="+0"/>
-        <source>Optional separate VAE (e.g. sdxl_vae.safetensors).</source>
-        <translation>Optionaler separater VAE (z. B. sdxl_vae.safetensors).</translation>
+        <location line="+1"/>
+        <source>Decodes the images. A diffusion model needs one; a checkpoint has its own, which this replaces (e.g. sdxl_vae.safetensors).</source>
+        <translation>Decodiert die Bilder. Ein Diffusionsmodell braucht einen; ein Checkpoint hat einen eigenen, den dieser ersetzt (z. B. sdxl_vae.safetensors).</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+5"/>
+        <source>Text encoder (CLIP-L)</source>
+        <translation>Text-Encoder (CLIP-L)</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>CLIP-L text encoder, e.g. clip_l.safetensors (FLUX.1, SD 3).</source>
+        <translation>CLIP-L-Text-Encoder, z. B. clip_l.safetensors (FLUX.1, SD 3).</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Text encoder (CLIP-G)</source>
+        <translation>Text-Encoder (CLIP-G)</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>CLIP-G text encoder, e.g. clip_g.safetensors (SD 3).</source>
+        <translation>CLIP-G-Text-Encoder, z. B. clip_g.safetensors (SD 3).</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Text encoder (T5-XXL)</source>
+        <translation>Text-Encoder (T5-XXL)</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>T5-XXL text encoder, e.g. t5xxl_fp16.safetensors (FLUX.1, SD 3).</source>
+        <translation>T5-XXL-Text-Encoder, z. B. t5xxl_fp16.safetensors (FLUX.1, SD 3).</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Text encoder (language model)</source>
+        <translation>Text-Encoder (Sprachmodell)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>A language model that reads the prompt: Qwen3 for FLUX.2 [klein] and Anima, Qwen2.5-VL for Qwen-Image.</source>
+        <translation>Ein Sprachmodell, das den Prompt liest: Qwen3 für FLUX.2 [klein] und Anima, Qwen2.5-VL für Qwen-Image.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
         <source>ControlNet</source>
         <translation>ControlNet</translation>
     </message>
@@ -4047,7 +5783,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Ordner mit ESRGAN-Modellen (z. B. RealESRGAN_x4plus_anime_6B.pth) für Hochskalierung und Hires-Fix; models/upscale_models von ComfyUI funktioniert.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+3"/>
         <source>Weight precision</source>
         <translation>Gewichtsgenauigkeit</translation>
     </message>
@@ -4082,7 +5818,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Weniger VRAM, meist schneller.</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-49"/>
         <source>Diffusion model</source>
         <translation>Diffusionsmodell</translation>
     </message>
@@ -4092,32 +5828,17 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Eigenständiges Diffusionsmodell (FLUX, Qwen-Image, Z-Image…), anstelle eines Checkpoints.</translation>
     </message>
     <message>
-        <location line="+4"/>
-        <source>CLIP-L text encoder</source>
-        <translation>CLIP-L-Text-Encoder</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>CLIP-G text encoder</source>
-        <translation>CLIP-G-Text-Encoder</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>T5-XXL text encoder</source>
-        <translation>T5-XXL-Text-Encoder</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>LLM text encoder</source>
-        <translation>LLM-Text-Encoder</translation>
-    </message>
-    <message>
-        <location line="+6"/>
+        <location line="+49"/>
         <source>Text encoders on the CPU</source>
         <translation>Text-Encoder auf der CPU</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+1"/>
+        <source>Runs the text encoders on the processor, which leaves the graphics card&apos;s memory to the model.</source>
+        <translation>Führt die Text-Encoder auf dem Prozessor aus, sodass der Speicher der Grafikkarte dem Modell bleibt.</translation>
+    </message>
+    <message>
+        <location line="+13"/>
         <source>VRAM mode</source>
         <translation>VRAM-Modus</translation>
     </message>
@@ -4215,7 +5936,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Das Programm von %1 ist nicht mehr installiert.</translation>
     </message>
     <message>
-        <location line="+161"/>
+        <location line="+165"/>
         <source>%1 is missing. Reinstall the runtime.</source>
         <translation>%1 fehlt. Installieren Sie das Programm neu.</translation>
     </message>
@@ -4558,27 +6279,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::AiPanel</name>
     <message>
-        <location filename="../src/ui/pages/AiPanel.cpp" line="+51"/>
-        <source>Provider</source>
-        <translation>Anbieter</translation>
-    </message>
-    <message>
-        <location line="+8"/>
+        <location filename="../src/ui/pages/AiPanel.cpp" line="+80"/>
         <source>Action</source>
         <translation>Aktion</translation>
     </message>
     <message>
-        <location line="+5"/>
-        <source>Fill selection</source>
-        <translation>Auswahl füllen</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Regenerate the selected / masked area from the prompt (inpainting).</source>
-        <translation>Den ausgewählten / maskierten Bereich anhand des Prompts neu generieren (Inpainting).</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+6"/>
         <source>Variation</source>
         <translation>Variation</translation>
     </message>
@@ -4589,85 +6295,29 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Instruct edit</source>
-        <translation>Per Anweisung bearbeiten</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Describe the change in words (e.g. &apos;make it night&apos;, &apos;add a red scarf&apos;).</source>
-        <translation>Beschreiben Sie die Änderung in Worten (z. B. &apos;mach es nachts&apos;, &apos;füge einen roten Schal hinzu&apos;).</translation>
-    </message>
-    <message>
-        <location line="+1"/>
         <source>Expand</source>
         <translation>Erweitern</translation>
     </message>
     <message>
-        <location line="+0"/>
-        <source>Extend the canvas and let the model paint the new area (outpainting).</source>
-        <translation>Die Arbeitsfläche erweitern und den neuen Bereich vom Modell malen lassen (Outpainting).</translation>
-    </message>
-    <message>
         <location line="+1"/>
-        <location line="+243"/>
+        <location line="+319"/>
         <source>Upscale</source>
         <translation>Hochskalieren</translation>
     </message>
     <message>
-        <location line="-243"/>
-        <source>Increase resolution with an AI upscaler (opens a new document).</source>
-        <translation>Auflösung mit einem KI-Upscaler erhöhen (öffnet ein neues Dokument).</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Remove BG</source>
-        <translation>HG entfernen</translation>
-    </message>
-    <message>
-        <location line="+0"/>
+        <location line="-318"/>
         <source>Cut out the subject onto a transparent layer.</source>
         <translation>Das Motiv auf eine transparente Ebene freistellen.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+243"/>
-        <location line="+249"/>
+        <location line="+319"/>
+        <location line="+308"/>
         <source>Detect pose</source>
         <translation>Pose erkennen</translation>
     </message>
     <message>
-        <location line="-492"/>
-        <source>Extract an editable OpenPose skeleton from the image.</source>
-        <translation>Ein bearbeitbares OpenPose-Skelett aus dem Bild extrahieren.</translation>
-    </message>
-    <message>
-        <location line="+34"/>
-        <source>Prompt</source>
-        <translation>Prompt</translation>
-    </message>
-    <message>
-        <location line="+6"/>
-        <location line="+168"/>
-        <source>Describe what should appear…</source>
-        <translation>Beschreiben Sie, was erscheinen soll…</translation>
-    </message>
-    <message>
-        <location line="-165"/>
-        <source>Negative prompt (optional)</source>
-        <translation>Negativer Prompt (optional)</translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Strength</source>
-        <translation>Stärke</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>How much the model may change the area (denoising strength).</source>
-        <translation>Wie stark das Modell den Bereich verändern darf (Denoising-Stärke).</translation>
-    </message>
-    <message>
-        <location line="+6"/>
+        <location line="-574"/>
         <source>Left</source>
         <translation>Links</translation>
     </message>
@@ -4687,32 +6337,18 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Unten</translation>
     </message>
     <message>
-        <location line="+18"/>
+        <location line="+19"/>
+        <location line="+2"/>
         <source>Factor</source>
         <translation>Faktor</translation>
     </message>
     <message>
-        <location line="+11"/>
-        <source>References</source>
-        <translation>Referenzen</translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Use the document&apos;s control pose</source>
-        <translation>Steuerpose des Dokuments verwenden</translation>
-    </message>
-    <message>
-        <location line="+5"/>
+        <location line="+17"/>
         <source>Options</source>
         <translation>Optionen</translation>
     </message>
     <message>
-        <location line="+2"/>
-        <source>Variants</source>
-        <translation>Varianten</translation>
-    </message>
-    <message>
-        <location line="+7"/>
+        <location line="+55"/>
         <source>Context</source>
         <translation>Kontext</translation>
     </message>
@@ -4727,71 +6363,31 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Kante überblenden</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+5"/>
         <source>Match colours to the surroundings</source>
         <translation>Farben an die Umgebung angleichen</translation>
     </message>
     <message>
-        <location line="+4"/>
-        <location line="+132"/>
-        <source>Generate</source>
-        <translation>Generieren</translation>
-    </message>
-    <message>
-        <location line="-129"/>
-        <source>Editor</source>
-        <translation>Editor</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Run the AI action</source>
-        <translation>KI-Aktion ausführen</translation>
-    </message>
-    <message>
-        <location line="+91"/>
-        <source>Describe the change, e.g. &apos;turn the jacket red&apos;</source>
-        <translation>Beschreiben Sie die Änderung, z. B. &apos;färbe die Jacke rot&apos;</translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>Paint a mask (Q) or make a selection first.</source>
-        <translation>Malen Sie zuerst eine Maske (Q) oder erstellen Sie eine Auswahl.</translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>%1 has no instruction editing; the change will be done by inpainting.</source>
-        <translation>%1 unterstützt keine Bearbeitung per Anweisung; die Änderung erfolgt per Inpainting.</translation>
-    </message>
-    <message>
-        <location line="+6"/>
+        <location line="+146"/>
         <source>Will use %1 for this action.</source>
         <translation>Für diese Aktion wird %1 verwendet.</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>No configured provider supports this action.</source>
-        <translation>Kein konfigurierter Anbieter unterstützt diese Aktion.</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>%1 has no native inpainting; Lumen blends an img2img result into the selection.</source>
-        <translation>%1 bietet kein natives Inpainting; Lumen blendet ein img2img-Ergebnis in die Auswahl ein.</translation>
-    </message>
-    <message>
-        <location line="+12"/>
-        <location line="+232"/>
+        <location line="-304"/>
+        <location line="+319"/>
+        <location line="+291"/>
         <location line="+4"/>
         <source>Remove background</source>
         <translation>Hintergrund entfernen</translation>
     </message>
     <message>
-        <location line="-234"/>
-        <location line="+183"/>
+        <location line="-293"/>
+        <location line="+242"/>
         <source>Expand canvas</source>
         <translation>Arbeitsfläche erweitern</translation>
     </message>
     <message>
-        <location line="-138"/>
+        <location line="-191"/>
         <source>AI result: %1</source>
         <translation>KI-Ergebnis: %1</translation>
     </message>
@@ -4806,32 +6402,168 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>%1 Varianten wurden als Ebenen hinzugefügt – schalten Sie ihre Sichtbarkeit um, um sie zu vergleichen.</translation>
     </message>
     <message>
-        <location line="+36"/>
-        <source>Add an image provider in Settings → Providers first.</source>
-        <translation>Fügen Sie zuerst unter Einstellungen → Anbieter einen Bildanbieter hinzu.</translation>
+        <location line="-424"/>
+        <location line="+3"/>
+        <source>Engine for changes</source>
+        <translation>Engine für Änderungen</translation>
     </message>
     <message>
-        <location line="+14"/>
-        <source>Paint a mask or make a selection first.</source>
-        <translation>Malen Sie zuerst eine Maske oder erstellen Sie eine Auswahl.</translation>
+        <location line="+11"/>
+        <source>Character</source>
+        <translation>Charakter</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Make the canvas larger and let the image engine paint the new area.</source>
+        <translation>Die Arbeitsfläche vergrößern und die Bild-Engine den neuen Bereich malen lassen.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>A larger, sharper copy of the image, as a new document.</source>
+        <translation>Eine größere, schärfere Kopie des Bildes als neues Dokument.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Find the pose of the people in the image.</source>
+        <translation>Die Pose der Personen im Bild finden.</translation>
+    </message>
+    <message>
+        <location line="+45"/>
+        <source>How much may change</source>
+        <translation>Wie stark ändern</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>How much a variation may change the image: a little keeps more of it.</source>
+        <translation>Wie stark eine Variation das Bild ändern darf: wenig behält mehr davon.</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>Expand by</source>
+        <translation>Erweitern um</translation>
+    </message>
+    <message>
+        <location line="+20"/>
+        <location line="+237"/>
+        <source>Make a variation</source>
+        <translation>Eine Variation erstellen</translation>
+    </message>
+    <message>
+        <location line="-226"/>
+        <source>These also apply to the prompt bar under the canvas.</source>
+        <translation>Diese gelten auch für die Prompt-Leiste unter der Arbeitsfläche.</translation>
     </message>
     <message>
         <location line="+4"/>
-        <source>Describe the change you want.</source>
-        <translation>Beschreiben Sie die gewünschte Änderung.</translation>
+        <source>Reference images</source>
+        <translation>Referenzbilder</translation>
     </message>
     <message>
-        <location line="+36"/>
-        <source>Edit: %1</source>
-        <translation>Bearbeitung: %1</translation>
+        <location line="+5"/>
+        <source>Follow the document&apos;s control pose</source>
+        <translation>Der Steuerpose des Dokuments folgen</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="+6"/>
+        <location line="+2"/>
+        <source>Results per run</source>
+        <translation>Ergebnisse je Lauf</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>How many results each run makes to choose from.</source>
+        <translation>Wie viele Ergebnisse jeder Durchlauf zur Auswahl erzeugt.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <location line="+2"/>
+        <source>Steps</source>
+        <translation>Schritte</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Model&apos;s choice</source>
+        <translation>Wahl des Modells</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>More steps can add detail and take longer. The model&apos;s choice is right for most models.</source>
+        <translation>Mehr Schritte können Details hinzufügen und dauern länger. Die Wahl des Modells passt für die meisten Modelle.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <location line="+3"/>
+        <source>Seed</source>
+        <translation>Seed</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The same seed, words and settings give the same result again.</source>
+        <translation>Derselbe Seed, dieselben Worte und Einstellungen ergeben wieder dasselbe Ergebnis.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Random</source>
+        <translation>Zufällig</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Leave out</source>
+        <translation>Weglassen</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Negative prompt</source>
+        <translation>Negativer Prompt</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Things that should not be in the result</source>
+        <translation>Was nicht im Ergebnis sein soll</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Area may change</source>
+        <translation>Änderung im Bereich</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>How much a selected area may change when the prompt bar paints it anew: a little keeps more of what is there.</source>
+        <translation>Wie stark sich ein ausgewählter Bereich ändern darf, wenn die Prompt-Leiste ihn neu malt: wenig behält mehr vom Vorhandenen.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>How wide the edge is over which a result blends into the image around the selection.</source>
+        <translation>Wie breit der Rand ist, über den ein Ergebnis in das Bild rund um die Auswahl übergeht.</translation>
+    </message>
+    <message>
+        <location line="+137"/>
+        <source>It uses the words in the prompt bar under the canvas, if any.</source>
+        <translation>Es verwendet die Worte in der Prompt-Leiste unter der Arbeitsfläche, falls vorhanden.</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>No image engine you have set up can do this (Help → Set up AI…).</source>
+        <translation>Keine Bild-Engine, die Sie eingerichtet haben, kann das (Hilfe → KI einrichten…).</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>%1 only makes new images; it cannot make a variation of this one.</source>
+        <translation>%1 erstellt nur neue Bilder; es kann keine Variation dieses Bildes erstellen.</translation>
+    </message>
+    <message>
+        <location line="+124"/>
+        <location line="+91"/>
+        <source>Set up an image engine first: Help → Set up AI…</source>
+        <translation>Richten Sie zuerst eine Bild-Engine ein: Hilfe → KI einrichten…</translation>
+    </message>
+    <message>
+        <location line="+20"/>
         <source>AI variation</source>
         <translation>KI-Variation</translation>
     </message>
     <message>
-        <location line="+24"/>
+        <location line="+18"/>
         <source>Choose at least one direction.</source>
         <translation>Wählen Sie mindestens eine Richtung.</translation>
     </message>
@@ -4861,9 +6593,14 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Freisteller</translation>
     </message>
     <message>
-        <location line="+13"/>
-        <source>Pose detected - it is now the document&apos;s control pose. Open the Poses page to edit it.</source>
-        <translation>Pose erkannt – sie ist jetzt die Steuerpose des Dokuments. Öffnen Sie die Seite „Posen“, um sie zu bearbeiten.</translation>
+        <location line="+14"/>
+        <source>Pose detected - it is now the document&apos;s control pose, and open in the Poses window to edit.</source>
+        <translation>Pose erkannt – sie ist jetzt die Steuerpose des Dokuments und zum Bearbeiten im Fenster „Posen“ geöffnet.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Pose detected - it is now the document&apos;s control pose.</source>
+        <translation>Pose erkannt – sie ist jetzt die Steuerpose des Dokuments.</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -4877,9 +6614,175 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
 </context>
 <context>
+    <name>lumen::ui::AiSettingsPage</name>
+    <message>
+        <location filename="../src/ui/dialogs/AiSettingsPage.cpp" line="+36"/>
+        <source>What makes and changes your images. Change… picks another engine you have set up, or sets up a new one.</source>
+        <translation>Was Ihre Bilder erstellt und ändert. Ändern… wählt eine andere Engine, die Sie eingerichtet haben, oder richtet eine neue ein.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Image engine</source>
+        <translation>Bild-Engine</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Makes new images and changes them from your descriptions.</source>
+        <translation>Erstellt neue Bilder und ändert sie nach Ihren Beschreibungen.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Engine for changes</source>
+        <translation>Engine für Änderungen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>What the editor uses to change a selection or the whole image: colorize, remove, replace. Usually the image engine; choose another one when it follows such instructions better.</source>
+        <translation>Was der Editor verwendet, um eine Auswahl oder das ganze Bild zu ändern: einfärben, entfernen, ersetzen. Meist die Bild-Engine; wählen Sie eine andere, wenn sie solche Anweisungen besser befolgt.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Language model</source>
+        <translation>Sprachmodell</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Set up AI…</source>
+        <translation>KI einrichten…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Every setting of each engine is on the Providers, Local servers and Models tabs.</source>
+        <translation>Alle Einstellungen jeder Engine finden Sie auf den Registerkarten Anbieter, Lokale Server und Modelle.</translation>
+    </message>
+    <message>
+        <location line="+65"/>
+        <location line="+111"/>
+        <source>Change…</source>
+        <translation>Ändern…</translation>
+    </message>
+    <message>
+        <location line="-88"/>
+        <source>the one loaded on the server</source>
+        <translation>das auf dem Server geladene</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Turned off (Providers tab)</source>
+        <translation>Ausgeschaltet (Registerkarte Anbieter)</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Running on this computer</source>
+        <translation>Läuft auf diesem Computer</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Starting…</source>
+        <translation>Startet…</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Stopping…</source>
+        <translation>Wird beendet…</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Did not start: %1</source>
+        <translation>Nicht gestartet: %1</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>On this computer; starts when it is needed</source>
+        <translation>Auf diesem Computer; startet, wenn sie gebraucht wird</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Connected</source>
+        <translation>Verbunden</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Not reachable: %1</source>
+        <translation>Nicht erreichbar: %1</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Checking…</source>
+        <translation>Wird geprüft…</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Not set up</source>
+        <translation>Nicht eingerichtet</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>%1 (%2)</source>
+        <translation>%1 (%2)</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <location line="+35"/>
+        <source>Model: %1</source>
+        <translation>Modell: %1</translation>
+    </message>
+    <message>
+        <location line="-24"/>
+        <location line="+9"/>
+        <source>No image engine yet</source>
+        <translation>Noch keine Bild-Engine</translation>
+    </message>
+    <message>
+        <location line="-8"/>
+        <source>Set up…</source>
+        <translation>Einrichten…</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>The image engine (%1)</source>
+        <translation>Die Bild-Engine (%1)</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Used by %1 (plugins). The editor itself works without one.</source>
+        <translation>Wird von %1 (Plugins) verwendet. Der Editor selbst funktioniert ohne.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>No language model</source>
+        <translation>Kein Sprachmodell</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Not set up; the plugins&apos; assistant and planning do not work without one.</source>
+        <translation>Nicht eingerichtet; der Assistent und die Planung der Plugins funktionieren ohne eines nicht.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>The image engine</source>
+        <translation>Die Bild-Engine</translation>
+    </message>
+    <message>
+        <location line="+27"/>
+        <source>Set up a new engine…</source>
+        <translation>Eine neue Engine einrichten…</translation>
+    </message>
+    <message>
+        <location line="+20"/>
+        <source>Models for each task…</source>
+        <translation>Modelle für jede Aufgabe…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Run one on this computer…</source>
+        <translation>Eine auf diesem Computer ausführen…</translation>
+    </message>
+</context>
+<context>
     <name>lumen::ui::AssistantPanel</name>
     <message>
-        <location filename="../src/ui/assistant/AssistantPanel.cpp" line="+42"/>
+        <location filename="../src/plugins/characters/assistant/AssistantPanel.cpp" line="+97"/>
         <source>Looking at the project</source>
         <translation>Projekt wird angesehen</translation>
     </message>
@@ -4955,9 +6858,9 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Schließen</translation>
     </message>
     <message>
-        <location line="+15"/>
-        <source>Ask in your own words. The assistant plans, generates, edits and poses for you; every image lands in the library.</source>
-        <translation>Fragen Sie in Ihren eigenen Worten. Der Assistent plant, generiert, bearbeitet und posiert für Sie; jedes Bild landet in der Bibliothek.</translation>
+        <location line="+17"/>
+        <source>Ask in your own words. The assistant plans, generates, edits and poses for you; every image lands in the project images.</source>
+        <translation>Fragen Sie in Ihren eigenen Worten. Der Assistent plant, generiert, bearbeitet und posiert für Sie; jedes Bild landet in den Projektbildern.</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -4980,7 +6883,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Lass das neueste Bild wie eine regnerische Nacht aussehen</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+12"/>
         <source>What should I do? (Enter sends, Shift+Enter adds a line)</source>
         <translation>Was soll ich tun? (Eingabe sendet, Umschalt+Eingabe fügt eine Zeile hinzu)</translation>
     </message>
@@ -4991,12 +6894,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+148"/>
+        <location line="+147"/>
         <source>Send</source>
         <translation>Senden</translation>
     </message>
     <message>
-        <location line="-117"/>
+        <location line="-116"/>
         <source>no language model</source>
         <translation>kein Sprachmodell</translation>
     </message>
@@ -5019,7 +6922,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Ergebnisbild %1</translation>
     </message>
     <message>
-        <location line="+19"/>
+        <location line="+18"/>
         <source>Stop</source>
         <translation>Stopp</translation>
     </message>
@@ -5113,9 +7016,162 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
 </context>
 <context>
+    <name>lumen::ui::BuiltInFilters</name>
+    <message>
+        <location filename="../src/ui/filters/FilterCatalog.cpp" line="+43"/>
+        <source>Black and white</source>
+        <translation>Schwarzweiß</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Removes the colours and keeps the brightness.</source>
+        <translation>Entfernt die Farben und behält die Helligkeit.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Brightness from</source>
+        <translation>Helligkeit aus</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Warm tones</source>
+        <translation>Warme Töne</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Makes the colours warmer, like late afternoon light.</source>
+        <translation>Macht die Farben wärmer, wie Licht am späten Nachmittag.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Cool tones</source>
+        <translation>Kühle Töne</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Makes the colours cooler, like early morning light.</source>
+        <translation>Macht die Farben kühler, wie Licht am frühen Morgen.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Strength</source>
+        <translation>Stärke</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Sharpen</source>
+        <translation>Schärfen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Makes edges and fine detail crisper.</source>
+        <translation>Macht Kanten und feine Details schärfer.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Amount</source>
+        <translation>Stärke</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Edge width</source>
+        <translation>Kantenbreite</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Soft focus</source>
+        <translation>Weichzeichner</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>A soft, dreamy glow over the picture.</source>
+        <translation>Ein weiches, verträumtes Leuchten über dem Bild.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Softness</source>
+        <translation>Weichheit</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Film grain</source>
+        <translation>Filmkorn</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Adds the grain of photographic film.</source>
+        <translation>Fügt das Korn eines fotografischen Films hinzu.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Grain</source>
+        <translation>Korn</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Old photo</source>
+        <translation>Altes Foto</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Brownish black and white with a little grain, like an old print.</source>
+        <translation>Bräunliches Schwarzweiß mit etwas Korn, wie ein alter Abzug.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Brown tint</source>
+        <translation>Brauntönung</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Colorize with AI</source>
+        <translation>Mit KI einfärben</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Gives a black-and-white photo natural colours and keeps everything else as it is. With a selection, only the selected area is coloured.</source>
+        <translation>Gibt einem Schwarzweißfoto natürliche Farben und lässt alles andere, wie es ist. Mit einer Auswahl wird nur der ausgewählte Bereich eingefärbt.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Instruction</source>
+        <translation>Anweisung</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Clean up background</source>
+        <translation>Hintergrund aufräumen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Tidies the background (clutter, stray objects, spots) and keeps the main subject as it is. Select the background to change only that.</source>
+        <translation>Räumt den Hintergrund auf (Unordnung, störende Gegenstände, Flecken) und lässt das Hauptmotiv, wie es ist. Wählen Sie den Hintergrund aus, um nur ihn zu ändern.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Remove background</source>
+        <translation>Hintergrund entfernen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Cuts out the main subject: the background becomes transparent.</source>
+        <translation>Stellt das Hauptmotiv frei: Der Hintergrund wird transparent.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Upscale ×2</source>
+        <translation>Hochskalieren ×2</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Makes the whole picture twice as large with an AI upscaler, which adds detail. With a selection, only the selected area gets the added detail; the rest is only resized.</source>
+        <translation>Macht das ganze Bild mit einem KI-Hochskalierer doppelt so groß, der Details hinzufügt. Mit einer Auswahl erhält nur der ausgewählte Bereich die zusätzlichen Details; der Rest wird nur vergrößert.</translation>
+    </message>
+</context>
+<context>
     <name>lumen::ui::CanvasView</name>
     <message>
-        <location filename="../src/ui/canvas/CanvasView.cpp" line="+373"/>
+        <location filename="../src/ui/canvas/CanvasView.cpp" line="+397"/>
         <source>Open an image or create a new document
 (File → New, or drop an image here)</source>
         <translation>Öffnen Sie ein Bild oder erstellen Sie ein neues Dokument
@@ -5333,17 +7389,23 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::CharacterTraining</name>
     <message>
-        <location filename="../src/ui/CharacterTraining.cpp" line="+58"/>
+        <location filename="../src/plugins/characters/training/CharacterTraining.cpp" line="+59"/>
         <source>This character&apos;s LoRA is already being trained.</source>
         <translation>Die LoRA dieses Charakters wird bereits trainiert.</translation>
     </message>
     <message>
-        <location line="+108"/>
+        <location line="+124"/>
         <source>The character is not in the character library.</source>
         <translation>Der Charakter ist nicht in der Charakterbibliothek.</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+10"/>
+        <location line="+85"/>
+        <source>The models folder is being moved. Start the training when that is done.</source>
+        <translation>Der Modellordner wird gerade verschoben. Starten Sie das Training, wenn das erledigt ist.</translation>
+    </message>
+    <message>
+        <location line="-83"/>
         <source>Keep some images in the training set first.</source>
         <translation>Behalten Sie zuerst einige Bilder im Trainingsset.</translation>
     </message>
@@ -5388,7 +7450,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Keine Bilder zum Trainieren.</translation>
     </message>
     <message>
-        <location line="+45"/>
+        <location line="+48"/>
         <source>Training stopped. It can continue from the last finished epoch.</source>
         <translation>Training gestoppt. Es kann ab der letzten abgeschlossenen Epoche fortgesetzt werden.</translation>
     </message>
@@ -5406,7 +7468,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::CloudTrainingPage</name>
     <message>
-        <location filename="../src/ui/dialogs/CloudTrainingPage.cpp" line="+36"/>
+        <location filename="../src/plugins/characters/training/CloudTrainingPage.cpp" line="+36"/>
         <source>Train character LoRAs on a rented RunPod GPU: about half an hour instead of hours on a laptop. Lumen starts the GPU, uploads the training set, trains with the same settings as on this computer, downloads the LoRA and shuts the GPU down. RunPod bills your account by the minute. Create an API key at &lt;a href=&apos;https://www.runpod.io/console/user/settings&apos;&gt;runpod.io → Settings → API Keys&lt;/a&gt;.</source>
         <translation>Trainieren Sie Charakter-LoRAs auf einer gemieteten RunPod-GPU: etwa eine halbe Stunde statt Stunden auf einem Laptop. Lumen startet die GPU, lädt das Trainingsset hoch, trainiert mit denselben Einstellungen wie auf diesem Computer, lädt die LoRA herunter und fährt die GPU wieder herunter. RunPod rechnet minutengenau über Ihr Konto ab. Einen API-Schlüssel erstellen Sie unter &lt;a href=&apos;https://www.runpod.io/console/user/settings&apos;&gt;runpod.io → Settings → API Keys&lt;/a&gt;.</translation>
     </message>
@@ -5522,64 +7584,15 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::ColorSwatch</name>
     <message>
-        <location filename="../src/ui/widgets/Controls.cpp" line="+97"/>
+        <location filename="../src/ui/widgets/Controls.cpp" line="+124"/>
         <source>Choose colour</source>
         <translation>Farbe wählen</translation>
     </message>
 </context>
 <context>
-    <name>lumen::ui::ContextBar</name>
-    <message>
-        <location filename="../src/ui/canvas/ContextBar.cpp" line="+37"/>
-        <source>Generative fill for the selection</source>
-        <translation>Generatives Füllen der Auswahl</translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>Describe what should appear here…</source>
-        <translation>Beschreiben Sie, was hier erscheinen soll…</translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <location line="+62"/>
-        <source>Generate</source>
-        <translation>Generieren</translation>
-    </message>
-    <message>
-        <location line="-60"/>
-        <source>Inpaint the selection with this prompt (Enter)</source>
-        <translation>Auswahl mit diesem Prompt per Inpainting füllen (Eingabe)</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Remove</source>
-        <translation>Entfernen</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Remove the selected content and fill it from the surroundings</source>
-        <translation>Ausgewählten Inhalt entfernen und aus der Umgebung auffüllen</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>More options in the AI panel</source>
-        <translation>Weitere Optionen im KI-Bedienfeld</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Hide until the selection changes</source>
-        <translation>Ausblenden, bis sich die Auswahl ändert</translation>
-    </message>
-    <message>
-        <location line="+53"/>
-        <source>Generate (%1 running)</source>
-        <translation>Generieren (%1 laufen)</translation>
-    </message>
-</context>
-<context>
     <name>lumen::ui::CreatePage</name>
     <message>
-        <location filename="../src/ui/pages/CreatePage.cpp" line="-803"/>
+        <location filename="../src/plugins/characters/CreatePage.cpp" line="-806"/>
         <source>Director</source>
         <translation>Regie</translation>
     </message>
@@ -5590,12 +7603,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+289"/>
+        <location line="+292"/>
         <source>New session</source>
         <translation>Neue Sitzung</translation>
     </message>
     <message>
-        <location line="-265"/>
+        <location line="-268"/>
         <source>Describe what you need, e.g. &quot;3 images of my character for a Live2D avatar: neutral front A-pose, eyes closed and mouth open variants&quot;. Attach reference images above. Enter sends, Shift+Enter = new line.</source>
         <translation>Beschreiben Sie, was Sie benötigen, z. B. „3 Bilder meines Charakters für einen Live2D-Avatar: neutrale A-Pose von vorn, Varianten mit geschlossenen Augen und offenem Mund“. Hängen Sie oben Referenzbilder an. Eingabe sendet, Umschalt+Eingabe = neue Zeile.</translation>
     </message>
@@ -5612,7 +7625,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     <message>
         <location line="+1"/>
         <source>Shots: </source>
-        <translation>Aufnahmen: </translation>
+        <translation>Anzahl: </translation>
     </message>
     <message>
         <location line="+1"/>
@@ -5621,29 +7634,29 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+507"/>
+        <location line="+510"/>
         <source>Send</source>
         <translation>Senden</translation>
     </message>
     <message>
-        <location line="-489"/>
-        <location line="+1113"/>
+        <location line="-492"/>
+        <location line="+1116"/>
         <source>Character</source>
         <translation>Charakter</translation>
     </message>
     <message>
-        <location line="-1109"/>
+        <location line="-1112"/>
         <source>Edit sheet</source>
         <translation>Steckbrief bearbeiten</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+385"/>
+        <location line="+388"/>
         <source>Analyze references</source>
         <translation>Referenzen analysieren</translation>
     </message>
     <message>
-        <location line="-382"/>
+        <location line="-385"/>
         <source>Library</source>
         <translation>Bibliothek</translation>
     </message>
@@ -5664,12 +7677,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+4"/>
-        <location line="+376"/>
+        <location line="+379"/>
         <source>LoRA</source>
         <translation>LoRA</translation>
     </message>
     <message>
-        <location line="-373"/>
+        <location line="-376"/>
         <source>A LoRA keeps the character looking the same in every image</source>
         <translation>Eine LoRA hält das Aussehen des Charakters in jedem Bild gleich</translation>
     </message>
@@ -5685,19 +7698,24 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+21"/>
-        <location line="+425"/>
+        <location line="+428"/>
         <source>Shot plan</source>
         <translation>Aufnahmeplan</translation>
     </message>
     <message>
-        <location line="-422"/>
+        <location line="-420"/>
         <source>Generator</source>
         <translation>Generator</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+12"/>
         <source> per shot</source>
         <translation> pro Aufnahme</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Images made for each shot</source>
+        <translation>Bilder pro Aufnahme</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -5730,12 +7748,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Wie oft eine Einstellung erneut generiert wird, wenn kein Ergebnis die Mindestbewertung erreicht</translation>
     </message>
     <message>
-        <location line="+17"/>
+        <location line="+15"/>
         <source>Generate all</source>
         <translation>Alle generieren</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+16"/>
         <source>&lt;h2&gt;Create a set of images with your character&lt;/h2&gt;&lt;p style=&apos;color:%1&apos;&gt;1. Attach reference images of the character (drag &amp; drop into the chat box).&lt;br&gt;2. Describe what you need and pick the purpose (e.g. Live2D model, turnaround, stickers).&lt;br&gt;3. The director analyses the references and plans every shot with an editable pose.&lt;br&gt;4. Adjust poses and prompts, then generate — each result opens in the editor for inpainting.&lt;/p&gt;</source>
         <translation>&lt;h2&gt;Eine Bilderserie mit Ihrem Charakter erstellen&lt;/h2&gt;&lt;p style=&apos;color:%1&apos;&gt;1. Hängen Sie Referenzbilder des Charakters an (per Drag &amp; Drop in das Chatfeld).&lt;br&gt;2. Beschreiben Sie, was Sie benötigen, und wählen Sie den Zweck (z. B. Live2D-Modell, Turnaround, Sticker).&lt;br&gt;3. Die Regie analysiert die Referenzen und plant jede Aufnahme mit einer bearbeitbaren Pose.&lt;br&gt;4. Passen Sie Posen und Prompts an und generieren Sie dann – jedes Ergebnis öffnet sich im Editor für Inpainting.&lt;/p&gt;</translation>
     </message>
@@ -6078,7 +8096,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::CropTool</name>
     <message>
-        <location filename="../src/ui/canvas/Tools.cpp" line="+474"/>
+        <location filename="../src/ui/canvas/Tools.cpp" line="+473"/>
         <source>Resize canvas</source>
         <translation>Arbeitsfläche anpassen</translation>
     </message>
@@ -6126,7 +8144,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::CubismPanel</name>
     <message>
-        <location filename="../src/ui/parts/CubismPanel.cpp" line="+45"/>
+        <location filename="../src/plugins/parts/CubismPanel.cpp" line="+45"/>
         <source>Locate Cubism Core...</source>
         <translation>Cubism Core suchen...</translation>
     </message>
@@ -6310,7 +8328,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::CubismView</name>
     <message>
-        <location filename="../src/ui/parts/CubismView.cpp" line="+200"/>
+        <location filename="../src/plugins/parts/CubismView.cpp" line="+200"/>
         <source>Motion %1 %2 does not exist.</source>
         <translation>Bewegung %1 %2 existiert nicht.</translation>
     </message>
@@ -6331,22 +8349,166 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
 </context>
 <context>
+    <name>lumen::ui::CurveEditor</name>
+    <message>
+        <location filename="../src/ui/filters/ParamWidgets.cpp" line="+60"/>
+        <source>Drag a point to change the curve. Click to add a point; double-click or right-click a point to remove it.</source>
+        <translation>Ziehen Sie einen Punkt, um die Kurve zu ändern. Klicken Sie, um einen Punkt hinzuzufügen; doppel- oder rechtsklicken Sie auf einen Punkt, um ihn zu entfernen.</translation>
+    </message>
+</context>
+<context>
     <name>lumen::ui::DirectorSession</name>
     <message>
-        <location filename="../src/ui/director/DirectorSession.cpp" line="+270"/>
+        <location filename="../src/plugins/characters/director/DirectorSession.cpp" line="+270"/>
         <source>Untitled session</source>
         <translation>Unbenannte Sitzung</translation>
     </message>
 </context>
 <context>
-    <name>lumen::ui::EditorPage</name>
+    <name>lumen::ui::DocumentFiles</name>
     <message>
-        <location filename="../src/ui/pages/EditorPage.cpp" line="-369"/>
-        <source>New document (Ctrl+N)</source>
-        <translation>Neues Dokument (Strg+N)</translation>
+        <location filename="../src/ui/DocumentFiles.cpp" line="+34"/>
+        <source>Save over the picture</source>
+        <translation>Bild überschreiben</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Save over %1?</source>
+        <translation>%1 überschreiben?</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Save over</source>
+        <translation>Überschreiben</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Save as…</source>
+        <translation>Speichern unter…</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Don&apos;t ask again for this picture</source>
+        <translation>Für dieses Bild nicht mehr fragen</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Save the changes to %1 before quitting?</source>
+        <translation>Die Änderungen an %1 vor dem Beenden speichern?</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Save the changes to %1?</source>
+        <translation>Die Änderungen an %1 speichern?</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+1"/>
+        <source>Save the changes to %n picture(s) before quitting?</source>
+        <translation>
+            <numerusform>Die Änderungen an %n Bild vor dem Beenden speichern?</numerusform>
+            <numerusform>Die Änderungen an %n Bildern vor dem Beenden speichern?</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Quit</source>
+        <translation>Beenden</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Close the picture</source>
+        <translation>Bild schließen</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>If you don&apos;t save, the file stays as it was. Your project keeps the changes.</source>
+        <translation>Wenn Sie nicht speichern, bleibt die Datei, wie sie war. Ihr Projekt behält die Änderungen.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>If you don&apos;t save, the files stay as they were. Your project keeps the changes.</source>
+        <translation>Wenn Sie nicht speichern, bleiben die Dateien, wie sie waren. Ihr Projekt behält die Änderungen.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Don&apos;t save</source>
+        <translation>Nicht speichern</translation>
+    </message>
+    <message>
+        <location line="+47"/>
+        <source>The layers are merged in the file; your project keeps them.</source>
+        <translation>Die Ebenen werden in der Datei zusammengeführt; Ihr Projekt behält sie.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>%1 has no transparency: the transparent parts become white.</source>
+        <translation>%1 hat keine Transparenz: Die transparenten Teile werden weiß.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>%1 loses a little quality each time it is saved; Lumen keeps the quality the file had (%2 of 100).</source>
+        <translation>%1 verliert bei jedem Speichern etwas Qualität; Lumen behält die Qualität bei, die die Datei hatte (%2 von 100).</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>%1 loses a little quality each time it is saved.</source>
+        <translation>%1 verliert bei jedem Speichern etwas Qualität.</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Untitled</source>
+        <translation>Unbenannt</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>%1 copy</source>
+        <translation>%1 Kopie</translation>
+    </message>
+    <message>
+        <location line="+25"/>
+        <source>Lumen cannot write %1 files. Choose one of the formats in the list.</source>
+        <translation>Lumen kann keine %1-Dateien schreiben. Wählen Sie eines der Formate in der Liste.</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Lumen cannot write %1 files: choose a file to save the picture as.</source>
+        <translation>Lumen kann keine %1-Dateien schreiben: Wählen Sie eine Datei, unter der das Bild gespeichert werden soll.</translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <source>Another program changed %1 since Lumen opened or saved it; saving over it loses those changes.</source>
+        <translation>Ein anderes Programm hat %1 geändert, seit Lumen es geöffnet oder gespeichert hat; beim Überschreiben gehen diese Änderungen verloren.</translation>
+    </message>
+    <message>
+        <location line="+32"/>
+        <source>Save as</source>
+        <translation>Speichern unter</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Export a copy</source>
+        <translation>Eine Kopie exportieren</translation>
     </message>
     <message>
         <location line="+13"/>
+        <source>Exported a copy as %1.</source>
+        <translation>Eine Kopie als %1 exportiert.</translation>
+    </message>
+    <message>
+        <location line="+60"/>
+        <source>Saved %1.</source>
+        <translation>%1 gespeichert.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>%1 was not saved, the file is as it was: %2</source>
+        <translation>%1 wurde nicht gespeichert, die Datei ist unverändert: %2</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::ui::EditorPage</name>
+    <message>
+        <location filename="../src/ui/pages/EditorPage.cpp" line="+107"/>
         <source>Undo (Ctrl+Z)</source>
         <translation>Rückgängig (Strg+Z)</translation>
     </message>
@@ -6376,7 +8538,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Farben tauschen (X)</translation>
     </message>
     <message>
-        <location line="+28"/>
+        <location line="+32"/>
         <source>Zoom out (Ctrl+-)</source>
         <translation>Verkleinern (Strg+-)</translation>
     </message>
@@ -6391,27 +8553,45 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>In Fenster einpassen (Strg+0)</translation>
     </message>
     <message>
-        <location line="+20"/>
+        <location line="+21"/>
         <source>Original</source>
         <translation>Original</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+10"/>
         <source>AI</source>
         <translation>KI</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-9"/>
+        <location line="+161"/>
         <source>Layers</source>
         <translation>Ebenen</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-285"/>
+        <source>New blank canvas (Ctrl+N)</source>
+        <translation>Neue leere Arbeitsfläche (Strg+N)</translation>
+    </message>
+    <message>
+        <location line="+125"/>
+        <location line="+160"/>
         <source>History</source>
         <translation>Protokoll</translation>
     </message>
     <message>
-        <location line="+60"/>
+        <location line="-158"/>
+        <location line="+158"/>
+        <source>Filters</source>
+        <translation>Filter</translation>
+    </message>
+    <message>
+        <location line="-151"/>
+        <source>Close the AI tab</source>
+        <translation>Registerkarte „KI“ schließen</translation>
+    </message>
+    <message>
+        <location line="+91"/>
         <source>Editor</source>
         <translation>Editor</translation>
     </message>
@@ -6496,13 +8676,23 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Nach unten zusammenfügen</translation>
     </message>
     <message>
-        <location line="+60"/>
-        <location line="+45"/>
+        <location line="+3"/>
+        <source>Generate from the prompt bar</source>
+        <translation>Aus der Prompt-Leiste generieren</translation>
+    </message>
+    <message>
+        <location line="+159"/>
+        <location filename="../src/ui/dialogs/NewCanvasDialog.cpp" line="+27"/>
         <source>Untitled</source>
         <translation>Unbenannt</translation>
     </message>
     <message>
-        <location line="-30"/>
+        <location line="+15"/>
+        <source>Changed since it was saved to the file: File → Save (Ctrl+S) writes it.</source>
+        <translation>Seit dem Speichern in die Datei geändert: Datei → Speichern (Strg+S) schreibt sie.</translation>
+    </message>
+    <message>
+        <location line="+11"/>
         <source>No document</source>
         <translation>Kein Dokument</translation>
     </message>
@@ -6512,17 +8702,17 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Pixel löschen</translation>
     </message>
     <message>
-        <location line="+6"/>
-        <source>New document</source>
-        <translation>Neues Dokument</translation>
+        <location line="+21"/>
+        <source>Saved to the project images (File → Browse project images).</source>
+        <translation>In den Projektbildern gespeichert (Datei → Projektbilder ansehen).</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location filename="../src/ui/dialogs/NewCanvasDialog.cpp" line="+5"/>
         <source>Square 1024</source>
         <translation>Quadrat 1024</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="+1"/>
         <source>Portrait 832 × 1216 (2:3)</source>
         <translation>Hochformat 832 × 1216 (2:3)</translation>
     </message>
@@ -6532,22 +8722,27 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Querformat 1216 × 832 (3:2)</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="+6"/>
         <source>Live2D sheet 2048 × 3072</source>
         <translation>Live2D-Bogen 2048 × 3072</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-5"/>
         <source>Full HD 1920 × 1080</source>
         <translation>Full HD 1920 × 1080</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="-13"/>
+        <source>New blank canvas</source>
+        <translation>Neue leere Arbeitsfläche</translation>
+    </message>
+    <message>
+        <location line="+14"/>
         <source>4K 3840 × 2160</source>
         <translation>4K 3840 × 2160</translation>
     </message>
     <message>
-        <location line="+18"/>
+        <location line="+38"/>
         <source>White</source>
         <translation>Weiß</translation>
     </message>
@@ -6567,62 +8762,42 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Grau</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-49"/>
+        <location line="+50"/>
         <source>Name</source>
         <translation>Name</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Preset</source>
-        <translation>Vorgabe</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="-32"/>
+        <location line="+34"/>
         <source>Width</source>
         <translation>Breite</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-33"/>
+        <location line="+34"/>
         <source>Height</source>
         <translation>Höhe</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-8"/>
+        <location line="+9"/>
         <source>Background</source>
         <translation>Hintergrund</translation>
     </message>
     <message>
-        <location line="+14"/>
-        <source>Export image</source>
-        <translation>Bild exportieren</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>PNG (*.png);;JPEG (*.jpg *.jpeg);;WebP (*.webp);;Layered Photoshop (*.psd)</source>
-        <translation>PNG (*.png);;JPEG (*.jpg *.jpeg);;WebP (*.webp);;Photoshop mit Ebenen (*.psd)</translation>
-    </message>
-    <message>
-        <location line="+21"/>
-        <source>Exported %1</source>
-        <translation>%1 exportiert</translation>
-    </message>
-    <message>
-        <location line="+15"/>
-        <source>Saved to the library.</source>
-        <translation>In der Bibliothek gespeichert.</translation>
-    </message>
-    <message>
-        <location line="+13"/>
+        <location filename="../src/ui/pages/EditorPage.cpp" line="+13"/>
         <source>Copied %1 × %2 px</source>
         <translation>%1 × %2 px kopiert</translation>
     </message>
     <message>
         <location line="+9"/>
+        <location line="+21"/>
         <source>Pasted image</source>
         <translation>Eingefügtes Bild</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="-10"/>
         <source>Pasted</source>
         <translation>Eingefügt</translation>
     </message>
@@ -6632,7 +8807,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Einfügen</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+7"/>
+        <source>The clipboard has no picture. Copy one first (for example from a browser or a screenshot).</source>
+        <translation>Die Zwischenablage enthält kein Bild. Kopieren Sie zuerst eines (zum Beispiel aus einem Browser oder einem Bildschirmfoto).</translation>
+    </message>
+    <message>
+        <location line="+8"/>
         <source>Import image as layer</source>
         <translation>Bild als Ebene importieren</translation>
     </message>
@@ -6642,12 +8822,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Bilder (*.png *.jpg *.jpeg *.webp *.bmp *.tif *.tiff)</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+12"/>
         <source>Cannot read %1: %2</source>
         <translation>%1 kann nicht gelesen werden: %2</translation>
     </message>
     <message>
-        <location line="+32"/>
+        <location line="+28"/>
         <source>Dropped image</source>
         <translation>Abgelegtes Bild</translation>
     </message>
@@ -6655,7 +8835,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::ExpressionCheck</name>
     <message>
-        <location filename="../src/ui/parts/ExpressionCheck.cpp" line="+83"/>
+        <location filename="../src/plugins/parts/ExpressionCheck.cpp" line="+83"/>
         <source>the Critic sees a change: %1</source>
         <translation>der Kritiker sieht eine Änderung: %1</translation>
     </message>
@@ -6713,320 +8893,446 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
 </context>
 <context>
-    <name>lumen::ui::GeneratePage</name>
+    <name>lumen::ui::FilterCatalog</name>
     <message>
-        <location filename="../src/ui/pages/GeneratePage.cpp" line="+86"/>
-        <location line="+168"/>
-        <location line="+3"/>
-        <location line="+1"/>
-        <location line="+88"/>
-        <source>Generate</source>
-        <translation>Generieren</translation>
+        <location filename="../src/ui/filters/FilterCatalog.cpp" line="+205"/>
+        <source>Could not create the filters folder: %1</source>
+        <translation>Der Filterordner konnte nicht erstellt werden: %1</translation>
     </message>
     <message>
-        <location line="-251"/>
-        <source>default model</source>
-        <translation>Standardmodell</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Load models from the provider</source>
-        <translation>Modelle vom Anbieter laden</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Provider</source>
-        <translation>Anbieter</translation>
-    </message>
-    <message>
-        <location line="+6"/>
-        <source>Model</source>
-        <translation>Modell</translation>
-    </message>
-    <message>
-        <location line="+6"/>
-        <source>Prompt</source>
-        <translation>Prompt</translation>
-    </message>
-    <message>
-        <location line="+6"/>
-        <source>Enhance</source>
-        <translation>Verbessern</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Let the prompt-writer model improve the prompt for the selected image model</source>
-        <translation>Den Prompt vom Prompt-Modell für das gewählte Bildmodell verbessern lassen</translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>A portrait of a silver-haired knight in ornate armour, dramatic rim light…</source>
-        <translation>Ein Porträt eines silberhaarigen Ritters in verzierter Rüstung, dramatisches Kantenlicht…</translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>Negative prompt (what to avoid)</source>
-        <translation>Negativer Prompt (was vermieden werden soll)</translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>Size</source>
-        <translation>Größe</translation>
-    </message>
-    <message>
-        <location line="+15"/>
-        <source>Custom</source>
-        <translation>Benutzerdefiniert</translation>
+        <location line="+55"/>
+        <source>New filter</source>
+        <translation>Neuer Filter</translation>
     </message>
     <message>
         <location line="+25"/>
-        <source>Steps</source>
-        <translation>Schritte</translation>
+        <source>%1 copy</source>
+        <translation>%1 Kopie</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>CFG</source>
-        <translation>CFG</translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <location line="+3"/>
-        <source>default</source>
-        <translation>Standard</translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>Sampler</source>
-        <translation>Sampler</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Scheduler</source>
-        <translation>Scheduler</translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Random</source>
-        <translation>Zufällig</translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Images</source>
-        <translation>Bilder</translation>
+        <location line="+7"/>
+        <source>Built-in filters cannot be deleted.</source>
+        <translation>Integrierte Filter können nicht gelöscht werden.</translation>
     </message>
     <message>
         <location line="+6"/>
-        <source>Seed</source>
-        <translation>Seed</translation>
+        <source>Could not delete the filter: %1</source>
+        <translation>Der Filter konnte nicht gelöscht werden: %1</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::ui::FilterRunner</name>
+    <message>
+        <location filename="../src/ui/filters/FilterRunner.cpp" line="+511"/>
+        <location line="+97"/>
+        <location line="+21"/>
+        <source>Open an image first.</source>
+        <translation>Öffnen Sie zuerst ein Bild.</translation>
+    </message>
+    <message>
+        <location line="-38"/>
+        <source>Cancelled.</source>
+        <translation>Abgebrochen.</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <location line="+20"/>
+        <source>The filter is already running.</source>
+        <translation>Der Filter läuft bereits.</translation>
+    </message>
+    <message>
+        <location line="-18"/>
+        <location line="+20"/>
+        <source>Choose a filter first.</source>
+        <translation>Wählen Sie zuerst einen Filter.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>The layer is locked. Unlock it, or put the result on a new layer.</source>
+        <translation>Die Ebene ist gesperrt. Entsperren Sie sie oder legen Sie das Ergebnis auf eine neue Ebene.</translation>
+    </message>
+    <message>
+        <location line="+25"/>
+        <source>Filter</source>
+        <translation>Filter</translation>
+    </message>
+    <message>
+        <location line="+23"/>
+        <location line="+89"/>
+        <source>Cancelled. Nothing was changed.</source>
+        <translation>Abgebrochen. Es wurde nichts geändert.</translation>
+    </message>
+    <message>
+        <location line="-84"/>
+        <source>The picture changed while the filter ran (a layer was deleted or the size changed), so nothing was changed.</source>
+        <translation>Das Bild hat sich geändert, während der Filter lief (eine Ebene wurde gelöscht oder die Größe geändert), daher wurde nichts geändert.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>The layer was locked while the filter ran, so nothing was changed.</source>
+        <translation>Die Ebene wurde gesperrt, während der Filter lief, daher wurde nichts geändert.</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>The picture changed while the filter ran: your changes stay outside the area the filter changed.</source>
+        <translation>Das Bild hat sich geändert, während der Filter lief: Ihre Änderungen bleiben außerhalb des Bereichs erhalten, den der Filter geändert hat.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Quality</source>
-        <translation>Qualität</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Transparent background (if supported)</source>
-        <translation>Transparenter Hintergrund (falls unterstützt)</translation>
+        <source>The layer changed while the filter ran: your changes stay outside the area the filter changed.</source>
+        <translation>Die Ebene hat sich geändert, während der Filter lief: Ihre Änderungen bleiben außerhalb des Bereichs erhalten, den der Filter geändert hat.</translation>
     </message>
     <message>
         <location line="+3"/>
-        <source>References</source>
-        <translation>Referenzen</translation>
+        <source>Filter: %1</source>
+        <translation>Filter: %1</translation>
     </message>
     <message>
-        <location line="+4"/>
-        <source>Pose control</source>
-        <translation>Posensteuerung</translation>
+        <location line="+31"/>
+        <source>The picture is now %1 × %2 pixels.</source>
+        <translation>Das Bild hat jetzt %1 × %2 Pixel.</translation>
     </message>
     <message>
-        <location line="+8"/>
-        <source>Preset…</source>
-        <translation>Vorgabe…</translation>
+        <location line="+2"/>
+        <source>Outside the selection it was only resized.</source>
+        <translation>Außerhalb der Auswahl wurde es nur in der Größe geändert.</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+3"/>
+        <source>The layers are hidden under it, so the cut-out shows.</source>
+        <translation>Die Ebenen sind darunter ausgeblendet, damit die Freistellung sichtbar ist.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The original layer is hidden under it, so the cut-out shows.</source>
+        <translation>Die ursprüngliche Ebene ist darunter ausgeblendet, damit die Freistellung sichtbar ist.</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::ui::FiltersPanel</name>
+    <message>
+        <location filename="../src/ui/filters/FiltersPanel.cpp" line="+99"/>
+        <source>Filters</source>
+        <translation>Filter</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>New filter…</source>
+        <translation>Neu…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Build a filter of your own in the filter editor</source>
+        <translation>Einen eigenen Filter im Filtereditor erstellen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+456"/>
         <source>Edit…</source>
         <translation>Bearbeiten…</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <location line="+18"/>
-        <location line="+28"/>
-        <source>Clear</source>
-        <translation>Leeren</translation>
+        <location line="-455"/>
+        <source>More: duplicate, delete, filters folder</source>
+        <translation>Mehr: duplizieren, löschen, Filterordner</translation>
     </message>
     <message>
-        <location line="-40"/>
-        <source>Strength</source>
-        <translation>Stärke</translation>
+        <location line="+4"/>
+        <source>Duplicate</source>
+        <translation>Duplizieren</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Make a copy in your filters to change</source>
+        <translation>Eine Kopie unter Ihren Filtern anlegen, um sie zu ändern</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Delete</source>
+        <translation>Löschen</translation>
     </message>
     <message>
         <location line="+3"/>
-        <source>Start from an image (img2img)</source>
-        <translation>Von einem Bild ausgehen (img2img)</translation>
+        <source>Open filters folder</source>
+        <translation>Filterordner öffnen</translation>
     </message>
     <message>
-        <location line="+2"/>
-        <location line="+227"/>
-        <location line="+17"/>
-        <source>none</source>
-        <translation>keine</translation>
+        <location line="+24"/>
+        <source>Preview on the canvas</source>
+        <translation>Vorschau auf der Arbeitsfläche</translation>
     </message>
     <message>
-        <location line="-238"/>
-        <source>Choose…</source>
-        <translation>Auswählen…</translation>
+        <location line="+1"/>
+        <source>Shows the filter on the picture while you change its settings, at a lower resolution. Apply keeps it.</source>
+        <translation>Zeigt den Filter auf dem Bild, während Sie seine Einstellungen ändern, in geringerer Auflösung. Anwenden übernimmt ihn.</translation>
     </message>
     <message>
         <location line="+6"/>
-        <source>Denoise</source>
-        <translation>Entrauschen</translation>
+        <source>Result on</source>
+        <translation>Ergebnis auf</translation>
     </message>
     <message>
-        <location line="+8"/>
-        <source>Generate (Ctrl+Enter)</source>
-        <translation>Generieren (Strg+Eingabe)</translation>
+        <location line="+2"/>
+        <source>A new layer</source>
+        <translation>Eine neue Ebene</translation>
     </message>
     <message>
-        <location line="+10"/>
-        <source>Results</source>
-        <translation>Ergebnisse</translation>
+        <location line="+1"/>
+        <source>This layer</source>
+        <translation>Diese Ebene</translation>
     </message>
     <message>
-        <location line="+21"/>
-        <source>Results appear here. Write a prompt, optionally add references or a pose, and press Generate (Ctrl+Enter).</source>
-        <translation>Hier erscheinen die Ergebnisse. Schreiben Sie einen Prompt, fügen Sie optional Referenzen oder eine Pose hinzu und klicken Sie auf Generieren (Strg+Eingabe).</translation>
+        <location line="+1"/>
+        <location line="+425"/>
+        <source>The result goes on a new layer above, so the original stays underneath.</source>
+        <translation>Das Ergebnis kommt auf eine neue Ebene darüber, sodass das Original darunter erhalten bleibt.</translation>
     </message>
     <message>
-        <location line="+4"/>
-        <source>Double-click a result to open it in the editor. All results are stored in the Library.</source>
-        <translation>Doppelklicken Sie auf ein Ergebnis, um es im Editor zu öffnen. Alle Ergebnisse werden in der Bibliothek gespeichert.</translation>
+        <location line="-424"/>
+        <source>The result replaces the pixels of the layer (undo brings them back).</source>
+        <translation>Das Ergebnis ersetzt die Pixel der Ebene (Rückgängig holt sie zurück).</translation>
     </message>
     <message>
-        <location line="+56"/>
-        <source>Start image</source>
-        <translation>Startbild</translation>
+        <location line="+1"/>
+        <source>Put the result on</source>
+        <translation>Ergebnis ablegen auf</translation>
     </message>
     <message>
-        <location line="+0"/>
-        <source>Images (*.png *.jpg *.jpeg *.webp *.bmp)</source>
-        <translation>Bilder (*.png *.jpg *.jpeg *.webp *.bmp)</translation>
+        <location line="+16"/>
+        <source>The canvas shows the AI results to choose from. Keep or discard them to see the filter there.</source>
+        <translation>Die Arbeitsfläche zeigt die KI-Ergebnisse. Behalten oder verwerfen Sie sie, um den Filter zu sehen.</translation>
     </message>
     <message>
         <location line="+18"/>
-        <source>Open in editor</source>
-        <translation>Im Editor öffnen</translation>
+        <source>Run AI steps</source>
+        <translation>KI-Schritte ausführen</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Use as reference</source>
-        <translation>Als Referenz verwenden</translation>
+        <source>This filter has AI steps. They take a while, so the preview runs them only when you ask.</source>
+        <translation>Dieser Filter hat KI-Schritte. Sie dauern eine Weile, daher führt die Vorschau sie nur auf Wunsch aus.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Use as start image</source>
-        <translation>Als Startbild verwenden</translation>
+        <source>Apply</source>
+        <translation>Anwenden</translation>
     </message>
     <message>
-        <location line="+4"/>
-        <source>Re-run with these settings</source>
-        <translation>Mit diesen Einstellungen erneut ausführen</translation>
-    </message>
-    <message>
-        <location line="+32"/>
-        <source>%1 × %2 px</source>
-        <translation>%1 × %2 px</translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source> (the provider uses the closest supported size)</source>
-        <translation> (der Anbieter verwendet die nächstliegende unterstützte Größe)</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source> (the provider uses the closest aspect ratio)</source>
-        <translation> (der Anbieter verwendet das nächstliegende Seitenverhältnis)</translation>
-    </message>
-    <message>
-        <location line="+20"/>
-        <source>No image provider configured — add one in Settings.</source>
-        <translation>Kein Bildanbieter konfiguriert – fügen Sie einen in den Einstellungen hinzu.</translation>
-    </message>
-    <message>
-        <location line="+17"/>
-        <source>up to %1 reference images</source>
-        <translation>bis zu %1 Referenzbilder</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>pose control</source>
-        <translation>Posensteuerung</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>instruction edits</source>
-        <translation>Bearbeitung per Anweisung</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>tag-style prompts</source>
-        <translation>Prompts im Tag-Stil</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>natural-language prompts</source>
-        <translation>Prompts in natürlicher Sprache</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Supports: %1</source>
-        <translation>Unterstützt: %1</translation>
+        <location line="+16"/>
+        <source>Cancel</source>
+        <translation>Abbrechen</translation>
     </message>
     <message>
         <location line="+36"/>
-        <source>Add an image provider in Settings → Providers first.</source>
-        <translation>Fügen Sie zuerst unter Einstellungen → Anbieter einen Bildanbieter hinzu.</translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>Write a prompt first.</source>
-        <translation>Schreiben Sie zuerst einen Prompt.</translation>
-    </message>
-    <message>
-        <location line="+103"/>
-        <source>Write a short idea first, then enhance it.</source>
-        <translation>Schreiben Sie zuerst eine kurze Idee und verbessern Sie sie dann.</translation>
-    </message>
-    <message>
-        <location line="+7"/>
-        <source>Enhancing…</source>
-        <translation>Wird verbessert…</translation>
+        <source>Delete filter</source>
+        <translation>Filter löschen</translation>
     </message>
     <message>
         <location line="+58"/>
-        <source>The LoRA of %1 has changed since; the current one is used.</source>
-        <translation>Die LoRA von %1 hat sich seitdem geändert; die aktuelle wird verwendet.</translation>
+        <source>Applying…</source>
+        <translation>Wird angewendet…</translation>
     </message>
     <message>
-        <location line="+2"/>
-        <source>%1 is no longer in the character library.</source>
-        <translation>%1 ist nicht mehr in der Charakterbibliothek.</translation>
+        <location line="+0"/>
+        <source>Running the AI steps…</source>
+        <translation>Die KI-Schritte laufen…</translation>
     </message>
     <message>
-        <location line="+4"/>
-        <source>The image was drawn without a character, so the character is switched off here.</source>
-        <translation>Das Bild wurde ohne Charakter gezeichnet, daher ist der Charakter hier ausgeschaltet.</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Settings restored from &apos;%1&apos;.</source>
-        <translation>Einstellungen aus „%1“ wiederhergestellt.</translation>
+        <location line="+12"/>
+        <location line="+9"/>
+        <source>%1 (step %2 of %3)</source>
+        <translation>%1 (Schritt %2 von %3)</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Settings restored from &apos;%1&apos;. %2</source>
-        <translation>Einstellungen aus „%1“ wiederhergestellt. %2</translation>
+        <source>%1: %2</source>
+        <translation>%1: %2</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>on a new layer</source>
+        <translation>auf eine neue Ebene</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>on the layer</source>
+        <translation>auf die Ebene</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Applied “%1” %2.</source>
+        <translation>„%1“ %2 angewendet.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Undo (Ctrl+Z) takes it back.</source>
+        <translation>Rückgängig (Strg+Z) nimmt es zurück.</translation>
+    </message>
+    <message>
+        <location line="+74"/>
+        <source>Built in</source>
+        <translation>Integriert</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Built in, with AI</source>
+        <translation>Integriert, mit KI</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <location line="+17"/>
+        <source>Your filters</source>
+        <translation>Ihre Filter</translation>
+    </message>
+    <message>
+        <location line="-10"/>
+        <source>Uses AI: the preview runs when you ask.</source>
+        <translation>Verwendet KI: Die Vorschau läuft auf Wunsch.</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>None yet: “New filter…” starts one.</source>
+        <translation>Noch keine: „Neuer Filter…“ beginnt einen.</translation>
+    </message>
+    <message>
+        <location line="+56"/>
+        <source>No filter chosen</source>
+        <translation>Kein Filter gewählt</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Choose a filter in the list.</source>
+        <translation>Wählen Sie einen Filter in der Liste.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>This filter cannot be used.</source>
+        <translation>Dieser Filter kann nicht verwendet werden.</translation>
+    </message>
+    <message>
+        <location line="+54"/>
+        <source>This filter has no settings to change here.</source>
+        <translation>Dieser Filter hat hier keine Einstellungen zum Ändern.</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Edit a copy…</source>
+        <translation>Kopie ändern…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Built-in filters stay as they are: this edits a copy in your filters</source>
+        <translation>Integrierte Filter bleiben, wie sie sind: Damit bearbeiten Sie eine Kopie unter Ihren Filtern</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Open the filter in the filter editor</source>
+        <translation>Den Filter im Filtereditor öffnen</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Built-in filters cannot be deleted</source>
+        <translation>Integrierte Filter können nicht gelöscht werden</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Delete the filter</source>
+        <translation>Den Filter löschen</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Keep or discard the AI results first</source>
+        <translation>Behalten oder verwerfen Sie zuerst die KI-Ergebnisse</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Apply the filter to the whole picture (only the selected area changes)</source>
+        <translation>Den Filter auf das ganze Bild anwenden (nur der ausgewählte Bereich ändert sich)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Apply the filter to the active layer (only the selected area changes)</source>
+        <translation>Den Filter auf die aktive Ebene anwenden (nur der ausgewählte Bereich ändert sich)</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The result goes on a new layer above all the others, so the picture stays underneath.</source>
+        <translation>Das Ergebnis kommt auf eine neue Ebene über allen anderen, sodass das Bild darunter erhalten bleibt.</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Open an image to use a filter.</source>
+        <translation>Öffnen Sie ein Bild, um einen Filter zu verwenden.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>The picture becomes %1 × %2 pixels.</source>
+        <translation>Das Bild wird %1 × %2 Pixel groß.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The picture becomes about %1 × %2 pixels.</source>
+        <translation>Das Bild wird etwa %1 × %2 Pixel groß.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1 Only the selected area gets the filter; the rest is only resized.</source>
+        <translation>%1 Nur der ausgewählte Bereich erhält den Filter; der Rest wird nur in der Größe geändert.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Reads the whole picture; only the selected area goes onto a new layer.</source>
+        <translation>Liest das ganze Bild; nur der ausgewählte Bereich kommt auf eine neue Ebene.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Reads the whole picture; only the selected area changes.</source>
+        <translation>Liest das ganze Bild; nur der ausgewählte Bereich ändert sich.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Reads the whole picture; the result goes onto a new layer.</source>
+        <translation>Liest das ganze Bild; das Ergebnis kommt auf eine neue Ebene.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Reads the whole picture; the result goes into the active layer.</source>
+        <translation>Liest das ganze Bild; das Ergebnis kommt in die aktive Ebene.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Only the selected area changes.</source>
+        <translation>Nur der ausgewählte Bereich ändert sich.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Nothing is selected, so the whole layer changes.</source>
+        <translation>Keine Auswahl: Die ganze Ebene ändert sich.</translation>
+    </message>
+    <message>
+        <location line="+63"/>
+        <source>New filter</source>
+        <translation>Neuer Filter</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Name:</source>
+        <translation>Name:</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>My filter</source>
+        <translation>Mein Filter</translation>
+    </message>
+    <message>
+        <location line="+62"/>
+        <source>Delete the filter “%1”? Its file is removed from the filters folder.</source>
+        <translation>Den Filter „%1“ löschen? Seine Datei wird aus dem Filterordner entfernt.</translation>
+    </message>
+    <message>
+        <location line="+29"/>
+        <source>Keep or discard the AI results first: the canvas shows them, not the layer the filter would change.</source>
+        <translation>Behalten oder verwerfen Sie zuerst die KI-Ergebnisse: Die Arbeitsfläche zeigt sie, nicht die Ebene, die der Filter ändern würde.</translation>
     </message>
 </context>
 <context>
@@ -7369,12 +9675,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::LibraryPage</name>
     <message>
-        <location filename="../src/ui/pages/LibraryPage.cpp" line="+214"/>
-        <source>Library</source>
-        <translation>Bibliothek</translation>
-    </message>
-    <message>
-        <location line="+6"/>
+        <location filename="../src/ui/pages/LibraryPage.cpp" line="+215"/>
         <source>All</source>
         <translation>Alle</translation>
     </message>
@@ -7399,52 +9700,47 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Importiert</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+6"/>
         <source>Poses</source>
         <translation>Posen</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-5"/>
         <source>Exports</source>
         <translation>Exporte</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+7"/>
         <source>Parts</source>
         <translation>Teile</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-6"/>
         <source>Documents</source>
         <translation>Dokumente</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+16"/>
         <source>Favourites only</source>
         <translation>Nur Favoriten</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+3"/>
         <source>Search prompts, names, tags…</source>
         <translation>Prompts, Namen, Tags durchsuchen…</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+7"/>
         <source>Thumbnail size</source>
         <translation>Miniaturgröße</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Import</source>
         <translation>Importieren</translation>
     </message>
     <message>
-        <location line="+27"/>
-        <source>&lt;h3&gt;No images yet&lt;/h3&gt;&lt;p&gt;Generated images, edits, references and imports of this project appear here.&lt;br&gt;Drag images in, use Import, or create something on the Generate and Create pages.&lt;/p&gt;</source>
-        <translation>&lt;h3&gt;Noch keine Bilder&lt;/h3&gt;&lt;p&gt;Generierte Bilder, Bearbeitungen, Referenzen und Importe dieses Projekts erscheinen hier.&lt;br&gt;Ziehen Sie Bilder hierher, verwenden Sie Importieren oder erstellen Sie etwas auf den Seiten Generieren und Erstellen.&lt;/p&gt;</translation>
-    </message>
-    <message>
-        <location line="+33"/>
+        <location line="+60"/>
         <source>Image name</source>
         <translation>Bildname</translation>
     </message>
@@ -7459,54 +9755,43 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Favorit</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+33"/>
         <location line="+3"/>
         <source>Prompt</source>
         <translation>Prompt</translation>
     </message>
     <message>
-        <location line="+3"/>
-        <location line="+3"/>
-        <source>Parameters</source>
-        <translation>Parameter</translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <location line="+101"/>
+        <location line="-26"/>
+        <location line="+137"/>
         <source>Open in editor</source>
         <translation>Im Editor öffnen</translation>
     </message>
     <message>
-        <location line="-99"/>
-        <location line="+103"/>
+        <location line="-135"/>
+        <location line="+139"/>
         <source>Use as reference</source>
         <translation>Als Referenz</translation>
     </message>
     <message>
-        <location line="-102"/>
+        <location line="-137"/>
         <source>Reuse prompt</source>
         <translation>Prompt übernehmen</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Re-run</source>
-        <translation>Erneut ausführen</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <location line="+120"/>
+        <location line="+5"/>
+        <location line="+154"/>
         <source>Export…</source>
         <translation>Exportieren…</translation>
     </message>
     <message>
-        <location line="-119"/>
-        <location line="+121"/>
-        <location line="+137"/>
+        <location line="-153"/>
+        <location line="+155"/>
+        <location line="+181"/>
         <source>Delete</source>
         <translation>Löschen</translation>
     </message>
     <message>
-        <location line="-223"/>
+        <location line="-270"/>
         <source>Import images</source>
         <translation>Bilder importieren</translation>
     </message>
@@ -7516,17 +9801,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Bilder (*.png *.jpg *.jpeg *.webp *.bmp *.tif *.tiff)</translation>
     </message>
     <message>
-        <location line="+19"/>
-        <source>Added to the references of the Generate page.</source>
-        <translation>Zu den Referenzen der Seite Generieren hinzugefügt.</translation>
-    </message>
-    <message>
-        <location line="+48"/>
+        <location line="+69"/>
         <source>Slice into parts (Live2D)</source>
         <translation>In Teile zerlegen (Live2D)</translation>
     </message>
     <message numerus="yes">
-        <location line="+4"/>
+        <location line="+5"/>
         <source> (%n images)</source>
         <translation>
             <numerusform> (%n Bild)</numerusform>
@@ -7555,12 +9835,47 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <source>No configured provider can run &quot;%1&quot;. Add SD WebUI (rembg extension), ComfyUI, Stability AI or fal.ai in Settings → Providers.</source>
         <translation>Kein konfigurierter Anbieter kann „%1“ ausführen. Fügen Sie unter Einstellungen → Anbieter SD WebUI (rembg-Erweiterung), ComfyUI, Stability AI oder fal.ai hinzu.</translation>
     </message>
+    <message>
+        <location line="-232"/>
+        <source>&lt;h3&gt;No images yet&lt;/h3&gt;&lt;p&gt;Generated images, edits, references and imports of this project appear here.&lt;br&gt;Drag images in, use Import, or make one with File → New from prompt.&lt;/p&gt;</source>
+        <translation>&lt;h3&gt;Noch keine Bilder&lt;/h3&gt;&lt;p&gt;Generierte Bilder, Bearbeitungen, Referenzen und Importe dieses Projekts erscheinen hier.&lt;br&gt;Ziehen Sie Bilder hierher, verwenden Sie Importieren oder erstellen Sie eines mit Datei → Neu aus Prompt.&lt;/p&gt;</translation>
+    </message>
+    <message>
+        <location line="+48"/>
+        <source>Add to the reference images of the editor&apos;s AI tab</source>
+        <translation>Zu den Referenzbildern der KI-Registerkarte des Editors hinzufügen</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Put the image&apos;s prompt into the editor&apos;s prompt bar</source>
+        <translation>Den Prompt des Bildes in die Prompt-Leiste des Editors übernehmen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Make another like this</source>
+        <translation>Noch eins wie dieses erstellen</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>New from prompt with the image&apos;s words, size and seed</source>
+        <translation>Neu aus Prompt mit den Worten, der Größe und dem Seed des Bildes</translation>
+    </message>
+    <message>
+        <location line="+24"/>
+        <source>Details</source>
+        <translation>Details</translation>
+    </message>
+    <message>
+        <location line="+64"/>
+        <source>Added to the references in the editor&apos;s AI tab.</source>
+        <translation>Zu den Referenzen in der KI-Registerkarte des Editors hinzugefügt.</translation>
+    </message>
     <message numerus="yes">
-        <location line="+13"/>
-        <source>Queued %n job(s). The results appear in the library.</source>
+        <location line="+104"/>
+        <source>Queued %n job(s). The results appear in the project images.</source>
         <translation>
-            <numerusform>%n Auftrag in die Warteschlange gestellt. Die Ergebnisse erscheinen in der Bibliothek.</numerusform>
-            <numerusform>%n Aufträge in die Warteschlange gestellt. Die Ergebnisse erscheinen in der Bibliothek.</numerusform>
+            <numerusform>%n Auftrag in die Warteschlange gestellt. Die Ergebnisse erscheinen in den Projektbildern.</numerusform>
+            <numerusform>%n Aufträge in die Warteschlange gestellt. Die Ergebnisse erscheinen in den Projektbildern.</numerusform>
         </translation>
     </message>
     <message>
@@ -7569,17 +9884,82 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Bild auswählen</translation>
     </message>
     <message>
-        <location line="+20"/>
+        <location line="+23"/>
         <source>%1 selected</source>
         <translation>%1 ausgewählt</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+11"/>
         <source>Loading…</source>
         <translation>Wird geladen…</translation>
     </message>
     <message>
-        <location line="+22"/>
+        <location line="+23"/>
+        <source>Made with: %1</source>
+        <translation>Erstellt mit: %1</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Upscaled</source>
+        <translation>Hochskaliert</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Background removed</source>
+        <translation>Hintergrund entfernt</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>A new image from a description</source>
+        <translation>Ein neues Bild nach einer Beschreibung</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Changed from a description</source>
+        <translation>Nach einer Beschreibung geändert</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>An area painted anew</source>
+        <translation>Ein Bereich neu gemalt</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Redrawn from the picture</source>
+        <translation>Aus dem Bild neu gezeichnet</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>How: %1</source>
+        <translation>Wie: %1</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Drawn at: %1 × %2 px</source>
+        <translation>Gezeichnet mit: %1 × %2 px</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>How much could change: %1 %</source>
+        <translation>Wie viel sich ändern durfte: %1 %</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Steps: %1</source>
+        <translation>Schritte: %1</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Seed: %1</source>
+        <translation>Seed: %1</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Left out: %1</source>
+        <translation>Weggelassen: %1</translation>
+    </message>
+    <message>
+        <location line="+12"/>
         <source>Export image</source>
         <translation>Bild exportieren</translation>
     </message>
@@ -7647,7 +10027,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::LocalServersPage</name>
     <message>
-        <location filename="../src/ui/dialogs/LocalServersPage.cpp" line="-771"/>
+        <location filename="../src/ui/dialogs/LocalServersPage.cpp" line="-767"/>
         <source>Existing install</source>
         <translation>Vorhandene Installation</translation>
     </message>
@@ -7687,12 +10067,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Lokale KI einrichten…</translation>
     </message>
     <message>
-        <location line="+2"/>
-        <source>Download the programs and a set of models that suit this computer, and set everything up</source>
-        <translation>Die Programme und passende Modelle für diesen Computer herunterladen und alles einrichten</translation>
-    </message>
-    <message>
-        <location line="+9"/>
+        <location line="+7"/>
         <source>Programs</source>
         <translation>Programme</translation>
     </message>
@@ -7833,7 +10208,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Selbst installierten llama-server, sd-server, ComfyUI oder Stable Diffusion WebUI verwenden</translation>
     </message>
     <message>
-        <location line="+181"/>
+        <location line="-13"/>
+        <source>Download the program and a model that suit this computer, or use the ones you have, and set everything up</source>
+        <translation>Das Programm und ein Modell herunterladen, die zu diesem Computer passen, oder vorhandene verwenden, und alles einrichten</translation>
+    </message>
+    <message>
+        <location line="+194"/>
         <source>%1 added.</source>
         <translation>%1 hinzugefügt.</translation>
     </message>
@@ -7926,7 +10306,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::LocalSetup</name>
     <message>
-        <location filename="../src/ui/dialogs/LocalSetupDialog.cpp" line="+202"/>
+        <location filename="../src/ui/dialogs/LocalSetupDialog.cpp" line="+218"/>
         <source>%1 cannot be downloaded: %2</source>
         <translation>%1 kann nicht heruntergeladen werden: %2</translation>
     </message>
@@ -7936,7 +10316,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>kein Release gefunden</translation>
     </message>
     <message>
-        <location line="+29"/>
+        <location line="+45"/>
         <source>A step was removed from the Queue.</source>
         <translation>Ein Schritt wurde aus der Warteschlange entfernt.</translation>
     </message>
@@ -7946,22 +10326,27 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>abgebrochen</translation>
     </message>
     <message>
-        <location line="+40"/>
+        <location line="+41"/>
         <source>Local assistant</source>
         <translation>Lokaler Assistent</translation>
     </message>
     <message>
-        <location line="+18"/>
+        <location line="+20"/>
         <source>Local images</source>
         <translation>Lokale Bilder</translation>
     </message>
     <message>
-        <location line="+22"/>
+        <location line="+26"/>
+        <source>Corrected the settings of %1.</source>
+        <translation>Die Einstellungen von %1 wurden korrigiert.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Everything was already set up.</source>
         <translation>Es war bereits alles eingerichtet.</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="-3"/>
         <source>Added: %1.</source>
         <translation>Hinzugefügt: %1.</translation>
     </message>
@@ -7969,7 +10354,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::LocalSetupDialog</name>
     <message>
-        <location line="-256"/>
+        <location line="-293"/>
         <source>Compact — for GPUs under 8 GB and computers without one</source>
         <translation>Kompakt — für GPUs unter 8 GB und Computer ohne GPU</translation>
     </message>
@@ -7984,7 +10369,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Groß — für GPUs mit 12 GB oder mehr</translation>
     </message>
     <message>
-        <location line="+262"/>
+        <location line="+384"/>
         <location line="+11"/>
         <source>Set up local AI</source>
         <translation>Lokale KI einrichten</translation>
@@ -8131,6 +10516,11 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+2"/>
+        <source>Models are saved in %1 (Settings → Models can move the folder).</source>
+        <translation>Modelle werden in %1 gespeichert (Einstellungen → Modelle kann den Ordner verschieben).</translation>
+    </message>
+    <message>
+        <location line="+3"/>
         <source>Not enough disk space.</source>
         <translation>Nicht genug Speicherplatz.</translation>
     </message>
@@ -8196,7 +10586,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::LoraDatasetDialog</name>
     <message>
-        <location filename="../src/ui/dialogs/LoraDatasetDialog.cpp" line="+81"/>
+        <location filename="../src/plugins/characters/training/LoraDatasetDialog.cpp" line="+81"/>
         <source>LoRA training set — %1</source>
         <translation>LoRA-Trainingsset — %1</translation>
     </message>
@@ -8918,9 +11308,14 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
 <context>
     <name>lumen::ui::LoraEvaluation</name>
     <message>
-        <location filename="../src/ui/LoraEvaluation.cpp" line="+103"/>
+        <location filename="../src/plugins/characters/training/LoraEvaluation.cpp" line="+103"/>
         <source>The character is not in the character library.</source>
         <translation>Der Charakter ist nicht in der Charakterbibliothek.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>The models folder is being moved. Test the LoRA when that is done.</source>
+        <translation>Der Modellordner wird gerade verschoben. Testen Sie die LoRA, wenn das erledigt ist.</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -8999,7 +11394,12 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         <translation>Epoche %1 dieses Trainings fehlt.</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+6"/>
+        <source>The models folder is being moved. Try again when that is done.</source>
+        <translation>Der Modellordner wird gerade verschoben. Versuchen Sie es erneut, wenn das erledigt ist.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
         <source>Cannot copy the LoRA to %1.</source>
         <translation>Die LoRA kann nicht nach %1 kopiert werden.</translation>
     </message>
@@ -9007,106 +11407,42 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
 <context>
     <name>lumen::ui::MainWindow</name>
     <message>
-        <location filename="../src/ui/MainWindow.cpp" line="+154"/>
+        <location filename="../src/plugins/characters/CharactersPlugin.cpp" line="+12"/>
         <source>Create</source>
         <translation>Erstellen</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="+1"/>
         <source>AI director: plan character shots from references and a description</source>
         <translation>KI-Regie: Charakteraufnahmen aus Referenzen und einer Beschreibung planen</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Generate</source>
-        <translation>Generieren</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Text/image to image generation</source>
-        <translation>Bildgenerierung aus Text/Bild</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Edit</source>
-        <translation>Bearbeiten</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Layered editor with inpainting and AI tools</source>
-        <translation>Ebenen-Editor mit Inpainting und KI-Werkzeugen</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location filename="../src/plugins/poses/PosesPlugin.cpp" line="+10"/>
         <source>Poses</source>
         <translation>Posen</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="+1"/>
         <source>Pose editor and library</source>
         <translation>Posen-Editor und -Bibliothek</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location filename="../src/plugins/parts/PartsPlugin.cpp" line="+10"/>
         <source>Parts</source>
         <translation>Teile</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="+1"/>
         <source>Slice a character into parts for Live2D</source>
         <translation>Einen Charakter für Live2D in Teile zerlegen</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Library</source>
-        <translation>Bibliothek</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>All images of the project</source>
-        <translation>Alle Bilder des Projekts</translation>
-    </message>
-    <message>
-        <location line="+15"/>
-        <source>Pages</source>
-        <translation>Seiten</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Go to %1</source>
-        <translation>Zu %1 wechseln</translation>
-    </message>
-    <message>
-        <location line="+35"/>
-        <location line="+1"/>
-        <location line="+212"/>
-        <source>Queue</source>
-        <translation>Warteschlange</translation>
-    </message>
-    <message>
-        <location line="-206"/>
-        <source>Show running and finished jobs</source>
-        <translation>Laufende und abgeschlossene Aufträge anzeigen</translation>
-    </message>
-    <message>
-        <location line="+7"/>
-        <location line="+1"/>
-        <source>Settings</source>
-        <translation>Einstellungen</translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>Providers, models and preferences (Ctrl+,)</source>
-        <translation>Anbieter, Modelle und Einstellungen (Strg+,)</translation>
-    </message>
-    <message>
-        <location line="-33"/>
-        <location line="+41"/>
+        <location filename="../src/ui/MainWindow.cpp" line="+304"/>
         <source>General</source>
         <translation>Allgemein</translation>
     </message>
     <message>
-        <location line="-150"/>
+        <location line="-26"/>
         <source>Safe for work is on: nudity and explicit content are kept out of generated images. Click to turn it off.</source>
         <translation>Jugendfrei ist an: Nacktheit und explizite Inhalte werden aus erzeugten Bildern herausgehalten. Klicken zum Ausschalten.</translation>
     </message>
@@ -9116,95 +11452,49 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         <translation>Jugendfrei ist aus. Klicken, um Nacktheit und explizite Inhalte aus erzeugten Bildern herauszuhalten.</translation>
     </message>
     <message>
-        <location line="+101"/>
-        <location line="+1"/>
-        <location line="+6"/>
+        <location filename="../src/plugins/characters/CharactersPlugin.cpp" line="+12"/>
         <source>Assistant</source>
         <translation>Assistent</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+1"/>
         <source>Ask the assistant to plan, generate, edit and pose for you</source>
         <translation>Lassen Sie den Assistenten für Sie planen, generieren, bearbeiten und posieren</translation>
     </message>
     <message>
-        <location line="+41"/>
+        <location filename="../src/ui/MainWindow.cpp" line="+42"/>
         <source>&amp;File</source>
         <translation>&amp;Datei</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>New document...</source>
-        <translation>Neues Dokument...</translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Open image...</source>
-        <translation>Bild öffnen...</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Import images to library...</source>
-        <translation>Bilder in Bibliothek importieren...</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Save all</source>
-        <translation>Alles speichern</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Project saved.</source>
-        <translation>Projekt gespeichert.</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Export image...</source>
-        <translation>Bild exportieren...</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Save image to library</source>
-        <translation>Bild in Bibliothek speichern</translation>
-    </message>
-    <message>
-        <location line="+2"/>
+        <location line="+43"/>
         <source>Close document</source>
         <translation>Dokument schließen</translation>
     </message>
     <message>
-        <location line="+2"/>
-        <source>New project...</source>
-        <translation>Neues Projekt...</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Open project...</source>
-        <translation>Projekt öffnen...</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+24"/>
         <source>Recent projects</source>
         <translation>Zuletzt verwendete Projekte</translation>
     </message>
     <message>
         <location line="+9"/>
+        <location line="+713"/>
         <source>(none)</source>
         <translation>(keine)</translation>
     </message>
     <message>
-        <location line="+3"/>
-        <location line="+287"/>
+        <location line="-709"/>
+        <location line="+665"/>
         <source>Quit</source>
         <translation>Beenden</translation>
     </message>
     <message>
-        <location line="-285"/>
+        <location line="-663"/>
         <source>&amp;Edit</source>
         <translation>&amp;Bearbeiten</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+15"/>
         <source>Copy merged</source>
         <translation>Auf eine Ebene reduziert kopieren</translation>
     </message>
@@ -9214,32 +11504,17 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         <translation>Als Ebene einfügen</translation>
     </message>
     <message>
-        <location line="+4"/>
-        <source>Import image as layer...</source>
-        <translation>Bild als Ebene importieren...</translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>Settings...</source>
-        <translation>Einstellungen...</translation>
-    </message>
-    <message>
-        <location line="+2"/>
+        <location line="+19"/>
         <source>&amp;View</source>
         <translation>&amp;Ansicht</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+13"/>
         <source>Job queue</source>
         <translation>Auftragswarteschlange</translation>
     </message>
     <message>
-        <location line="+4"/>
-        <source>Generative toolbar on the canvas</source>
-        <translation>Generative Werkzeugleiste auf der Arbeitsfläche</translation>
-    </message>
-    <message>
-        <location line="+10"/>
+        <location line="+21"/>
         <source>Toggle light/dark theme</source>
         <translation>Helles/dunkles Design umschalten</translation>
     </message>
@@ -9254,22 +11529,22 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         <translation>Das Design %1 wird beim nächsten Start von Lumen Studio angewendet.</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+82"/>
         <source>&amp;Help</source>
         <translation>&amp;Hilfe</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+12"/>
         <source>Open log folder</source>
         <translation>Protokollordner öffnen</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location filename="../src/ui/dialogs/SettingsDialog.cpp" line="+216"/>
         <source>Open ComfyUI workflow folder</source>
         <translation>ComfyUI-Workflow-Ordner öffnen</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location filename="../src/ui/MainWindow.cpp" line="+4"/>
         <location line="+1"/>
         <source>About Lumen Studio</source>
         <translation>Über Lumen Studio</translation>
@@ -9280,12 +11555,289 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         <translation>&lt;h3&gt;Lumen Studio %1&lt;/h3&gt;&lt;p&gt;KI-gestützte Bildgenerierung und -bearbeitung.&lt;/p&gt;&lt;p&gt;Erstellt mit Qt %2.&lt;/p&gt;</translation>
     </message>
     <message>
-        <location line="+22"/>
+        <location line="-279"/>
+        <location line="+404"/>
         <source>Jobs</source>
         <translation>Aufträge</translation>
     </message>
     <message>
+        <location line="-619"/>
+        <source>Project images — Lumen Studio</source>
+        <translation>Projektbilder — Lumen Studio</translation>
+    </message>
+    <message>
+        <location line="+174"/>
+        <source>Image engine</source>
+        <translation>Bild-Engine</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <location line="+1"/>
+        <source>Safe for work</source>
+        <translation>Jugendfrei</translation>
+    </message>
+    <message>
+        <location line="+25"/>
+        <source>Show running and finished jobs (Ctrl+Shift+Q)</source>
+        <translation>Laufende und abgeschlossene Aufträge anzeigen (Strg+Umschalt+Q)</translation>
+    </message>
+    <message>
+        <location line="+25"/>
+        <source>New blank canvas…</source>
+        <translation>Neue leere Arbeitsfläche…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>New from prompt…</source>
+        <translation>Neu aus Prompt…</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>New from prompt</source>
+        <translation>Neu aus Prompt</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Open image…</source>
+        <translation>Bild öffnen…</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Open recent</source>
+        <translation>Zuletzt geöffnet</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Paste from clipboard</source>
+        <translation>Aus Zwischenablage einfügen</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Browse project images…</source>
+        <translation>Projektbilder ansehen…</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Browse project images</source>
+        <translation>Projektbilder ansehen</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Save</source>
+        <translation>Speichern</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Write the picture to the file it was opened from or last saved as (a new picture asks for a file)</source>
+        <translation>Das Bild in die Datei schreiben, aus der es geöffnet oder unter der es zuletzt gespeichert wurde (ein neues Bild fragt nach einer Datei)</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Save as…</source>
+        <translation>Speichern unter…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Write the picture to a new file (PNG, JPEG, layered PSD…); Save writes to that file from then on</source>
+        <translation>Das Bild in eine neue Datei schreiben (PNG, JPEG, PSD mit Ebenen…); Speichern schreibt von da an in diese Datei</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Export a copy…</source>
+        <translation>Eine Kopie exportieren…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Write a copy of the picture to a file; Save keeps writing to the picture&apos;s own file</source>
+        <translation>Eine Kopie des Bildes in eine Datei schreiben; Speichern schreibt weiter in die eigene Datei des Bildes</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Close the picture (asks first when it has changes not saved to its file)</source>
+        <translation>Das Bild schließen (fragt vorher, wenn es Änderungen hat, die nicht in seiner Datei gespeichert sind)</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Save to project</source>
+        <translation>Im Projekt speichern</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Saved to the project with their layers. File → Save writes the picture&apos;s file.</source>
+        <translation>Mit ihren Ebenen im Projekt gespeichert. Datei → Speichern schreibt die Datei des Bildes.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Save the open documents, with their layers, in the project now (it also does so by itself). File → Save writes the picture&apos;s file.</source>
+        <translation>Die geöffneten Dokumente jetzt mit ihren Ebenen im Projekt speichern (das geschieht auch von selbst). Datei → Speichern schreibt die Datei des Bildes.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Save a copy to project images</source>
+        <translation>Eine Kopie in den Projektbildern speichern</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Add the picture, merged, to the project&apos;s images (File → Browse project images)</source>
+        <translation>Das Bild zusammengeführt zu den Bildern des Projekts hinzufügen (Datei → Projektbilder ansehen)</translation>
+    </message>
+    <message>
         <location line="+5"/>
+        <source>New project…</source>
+        <translation>Neues Projekt…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Open project…</source>
+        <translation>Projekt öffnen…</translation>
+    </message>
+    <message>
+        <location line="+37"/>
+        <source>Import image as layer…</source>
+        <translation>Bild als Ebene importieren…</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Settings…</source>
+        <translation>Einstellungen…</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>&amp;Select</source>
+        <translation>Au&amp;swahl</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Filters</source>
+        <translation>Filter</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Show the Filters panel: black and white, old photo, colorize with AI and your own filters</source>
+        <translation>Das Filter-Bedienfeld anzeigen: Schwarzweiß, altes Foto, mit KI einfärben und Ihre eigenen Filter</translation>
+    </message>
+    <message>
+        <location line="+32"/>
+        <source>&amp;AI</source>
+        <translation>&amp;KI</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Upscale</source>
+        <translation>Hochskalieren</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>A larger copy of the image, %1 times as wide, as a new document</source>
+        <translation>Eine größere Kopie des Bildes, %1-mal so breit, als neues Dokument</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Remove background</source>
+        <translation>Hintergrund entfernen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Cut out the subject onto a transparent layer</source>
+        <translation>Das Motiv auf eine transparente Ebene freistellen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Expand canvas…</source>
+        <translation>Arbeitsfläche erweitern…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Make the canvas larger and let the image engine paint the new area</source>
+        <translation>Die Arbeitsfläche vergrößern und die Bild-Engine den neuen Bereich malen lassen</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Variation</source>
+        <translation>Variation</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Re-imagine the image (or the selection), keeping its layout; the words in the prompt bar guide it</source>
+        <translation>Das Bild (oder die Auswahl) neu interpretieren und dabei den Aufbau behalten; die Worte in der Prompt-Leiste lenken es</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Detect pose</source>
+        <translation>Pose erkennen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Find the people&apos;s pose in the image; it becomes the document&apos;s control pose</source>
+        <translation>Die Pose der Personen im Bild finden; sie wird zur Steuerpose des Dokuments</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>All AI options…</source>
+        <translation>Alle KI-Optionen…</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>&amp;Tools</source>
+        <translation>&amp;Werkzeuge</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>New filter…</source>
+        <translation>Neuer Filter…</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Build a filter of your own from steps in the filter editor; it is listed in the Filters panel</source>
+        <translation>Einen eigenen Filter aus Schritten im Filtereditor erstellen; er erscheint im Filter-Bedienfeld</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Filter editor…</source>
+        <translation>Filtereditor…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Choose a filter in the Filters panel to open it in the filter editor.</source>
+        <translation>Wählen Sie einen Filter im Filter-Bedienfeld, um ihn im Filtereditor zu öffnen.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Open the filter chosen in the Filters panel in the filter editor (a built-in filter as a copy to change)</source>
+        <translation>Den im Filter-Bedienfeld gewählten Filter im Filtereditor öffnen (einen integrierten Filter als Kopie zum Ändern)</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Open %1</source>
+        <translation>%1 öffnen</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Plugins…</source>
+        <translation>Plugins…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Character creation, poses and Live2D parts are plugins: switch them on in Settings → Plugins</source>
+        <translation>Charaktererstellung, Posen und Live2D-Teile sind Plugins: Schalten Sie sie unter Einstellungen → Plugins ein</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Set up AI…</source>
+        <translation>KI einrichten…</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Get an image engine: on this computer, an online service or a server that is already running</source>
+        <translation>Eine Bild-Engine einrichten: auf diesem Computer, ein Online-Dienst oder ein bereits laufender Server</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Open models folder</source>
+        <translation>Modellordner öffnen</translation>
+    </message>
+    <message>
+        <location line="+142"/>
         <source>Clear finished</source>
         <translation>Abgeschlossene entfernen</translation>
     </message>
@@ -9295,27 +11847,105 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         <translation>Alle abbrechen</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+4"/>
         <source>Close</source>
         <translation>Schließen</translation>
     </message>
     <message>
-        <location line="+66"/>
-        <source>Idle</source>
-        <translation>Leerlauf</translation>
+        <location line="+6"/>
+        <source>Nothing is running. Generations, upscales and downloads appear here.</source>
+        <translation>Nichts läuft. Generierungen, Hochskalierungen und Downloads erscheinen hier.</translation>
+    </message>
+    <message>
+        <location line="+113"/>
+        <source>No jobs running</source>
+        <translation>Keine laufenden Aufträge</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>No image engine – Set up AI</source>
+        <translation>Keine Bild-Engine – KI einrichten</translation>
     </message>
     <message>
         <location line="+2"/>
+        <source>Nothing can draw or change images yet. Click to set up an image engine on this computer or online.</source>
+        <translation>Noch kann nichts Bilder zeichnen oder ändern. Klicken Sie, um eine Bild-Engine auf diesem Computer oder online einzurichten.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>The image engine the prompt bar uses now (%1), chosen in the editor. Click to choose the engines in Settings → AI; a choice there replaces it.</source>
+        <translation>Die Bild-Engine, die die Prompt-Leiste jetzt verwendet (%1), im Editor gewählt. Klicken Sie, um die Engines unter Einstellungen → KI zu wählen; eine Wahl dort ersetzt sie.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>The image engine the prompt bar uses now (%1). Click to choose the engines for new images and for changes in Settings → AI.</source>
+        <translation>Die Bild-Engine, die die Prompt-Leiste jetzt verwendet (%1). Klicken Sie, um die Engines für neue Bilder und für Änderungen unter Einstellungen → KI zu wählen.</translation>
+    </message>
+    <message>
+        <location line="+99"/>
+        <source>Models folder</source>
+        <translation>Modellordner</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Lumen keeps using %1 for models: %2
+
+You can move them later in Settings → Models.</source>
+        <translation>Lumen verwendet für Modelle weiterhin %1: %2
+
+Sie können sie später unter Einstellungen → Modelle verschieben.</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+5"/>
+        <source>Lumen now keeps models in a folder that is easy to find: %1
+
+The models of the earlier version are in %2 (%n file(s), %3). Move them to the new folder?</source>
+        <translation>
+            <numerusform>Lumen speichert Modelle jetzt in einem Ordner, der leicht zu finden ist: %1
+
+Die Modelle der früheren Version liegen in %2 (%n Datei, %3). In den neuen Ordner verschieben?</numerusform>
+            <numerusform>Lumen speichert Modelle jetzt in einem Ordner, der leicht zu finden ist: %1
+
+Die Modelle der früheren Version liegen in %2 (%n Dateien, %3). In den neuen Ordner verschieben?</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Server settings that use them are updated. You can move the folder later in Settings → Models.</source>
+        <translation>Servereinstellungen, die sie verwenden, werden aktualisiert. Sie können den Ordner später unter Einstellungen → Modelle verschieben.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Move models</source>
+        <translation>Modelle verschieben</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Keep them where they are</source>
+        <translation>Dort lassen, wo sie sind</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Moving the models — progress is shown in the Queue.</source>
+        <translation>Die Modelle werden verschoben — der Fortschritt wird in der Warteschlange angezeigt.</translation>
+    </message>
+    <message>
+        <location line="+129"/>
+        <source>%1 is not there any more</source>
+        <translation>%1 ist nicht mehr vorhanden</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Clear the list</source>
+        <translation>Liste leeren</translation>
+    </message>
+    <message>
+        <location line="-281"/>
         <source>%1 running · %2 queued</source>
         <translation>%1 laufend · %2 in Warteschlange</translation>
     </message>
     <message>
-        <location line="+2"/>
-        <source>Queue (%1)</source>
-        <translation>Warteschlange (%1)</translation>
-    </message>
-    <message>
-        <location line="+9"/>
+        <location line="+34"/>
         <source>Project: %1</source>
         <translation>Projekt: %1</translation>
     </message>
@@ -9325,7 +11955,7 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         <translation>Kein Projekt</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+19"/>
         <location line="+8"/>
         <source>New project</source>
         <translation>Neues Projekt</translation>
@@ -9347,25 +11977,12 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         <translation>Projekt öffnen</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+10"/>
         <source>Open images</source>
         <translation>Bilder öffnen</translation>
     </message>
     <message>
-        <location line="+10"/>
-        <source>Import images</source>
-        <translation>Bilder importieren</translation>
-    </message>
-    <message numerus="yes">
-        <location line="+7"/>
-        <source>Importing %n image(s)...</source>
-        <translation>
-            <numerusform>%n Bild wird importiert...</numerusform>
-            <numerusform>%n Bilder werden importiert...</numerusform>
-        </translation>
-    </message>
-    <message>
-        <location line="+39"/>
+        <location line="+87"/>
         <source>Cloud GPUs still rented</source>
         <translation>Noch gemietete Cloud-GPUs</translation>
     </message>
@@ -9407,7 +12024,7 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         <translation>Die Cloud-GPU %1 konnte nicht heruntergefahren werden: %2. Stoppen Sie sie auf runpod.io.</translation>
     </message>
     <message numerus="yes">
-        <location line="+23"/>
+        <location line="+46"/>
         <source>%n job(s) are still running. Quit anyway?</source>
         <translation>
             <numerusform>%n Auftrag läuft noch. Trotzdem beenden?</numerusform>
@@ -9415,7 +12032,7 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         </translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+16"/>
         <source>Saving...</source>
         <translation>Wird gespeichert...</translation>
     </message>
@@ -9423,14 +12040,14 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
 <context>
     <name>lumen::ui::MaskBrushTool</name>
     <message>
-        <location filename="../src/ui/canvas/Tools.cpp" line="-280"/>
-        <source>Erase mask</source>
-        <translation>Maske radieren</translation>
+        <location filename="../src/ui/canvas/Tools.cpp" line="-279"/>
+        <source>Erase from selection</source>
+        <translation>Aus der Auswahl radieren</translation>
     </message>
     <message>
         <location line="+0"/>
-        <source>Paint mask</source>
-        <translation>Maske malen</translation>
+        <source>Paint selection</source>
+        <translation>Auswahl malen</translation>
     </message>
     <message>
         <location line="+46"/>
@@ -9444,23 +12061,18 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
     </message>
     <message>
         <location line="+1"/>
-        <source>Show mask</source>
-        <translation>Maske anzeigen</translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Alt / right button: erase</source>
-        <translation>Alt / rechte Maustaste: radieren</translation>
+        <source>Tint the selection</source>
+        <translation>Auswahl einfärben</translation>
     </message>
     <message>
         <location filename="../src/ui/canvas/Tools.h" line="-140"/>
-        <source>Mask brush</source>
-        <translation>Maskenpinsel</translation>
+        <source>Selection brush</source>
+        <translation>Auswahlpinsel</translation>
     </message>
     <message>
         <location line="+3"/>
-        <source>Paint the area to regenerate. Alt or right button erases the mask.</source>
-        <translation>Malen Sie den neu zu generierenden Bereich. Alt oder die rechte Maustaste radiert die Maske.</translation>
+        <source>Paint over what should change; Alt or the right button takes it out of the selection.</source>
+        <translation>Übermalen Sie, was sich ändern soll; Alt oder die rechte Maustaste nimmt es aus der Auswahl heraus.</translation>
     </message>
 </context>
 <context>
@@ -9777,12 +12389,12 @@ Trotzdem herunterladen?</translation>
 <context>
     <name>lumen::ui::ModelsPage</name>
     <message>
-        <location filename="../src/ui/dialogs/ModelsPage.cpp" line="+161"/>
+        <location filename="../src/ui/dialogs/ModelsPage.cpp" line="+167"/>
         <source>No matching models in the library</source>
         <translation>Keine passenden Modelle in der Bibliothek</translation>
     </message>
     <message>
-        <location line="+52"/>
+        <location line="+60"/>
         <source>Models</source>
         <translation>Modelle</translation>
     </message>
@@ -9792,7 +12404,7 @@ Trotzdem herunterladen?</translation>
         <translation>Modelldateien auf diesem Computer: Lumens Modellordner und die Ordner, die Sie hinzufügen (ComfyUI, WebUI, LM Studio, Downloads…). Die Dateien bleiben, wo sie sind; Lumen liest ihre Header, um zu erkennen, was sie sind.</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+30"/>
         <source>Search models…</source>
         <translation>Modelle suchen…</translation>
     </message>
@@ -9847,12 +12459,22 @@ Trotzdem herunterladen?</translation>
         <translation>Ordner</translation>
     </message>
     <message>
-        <location line="-58"/>
+        <location line="-83"/>
         <source>Fits</source>
         <translation>Passt</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-37"/>
+        <source>Nothing in the library fits</source>
+        <translation>Nichts in der Bibliothek passt</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Other files of this kind (they may not fit):</source>
+        <translation>Andere Dateien dieser Art (sie passen eventuell nicht):</translation>
+    </message>
+    <message>
+        <location line="+34"/>
         <source>Partly</source>
         <translation>Teilweise</translation>
     </message>
@@ -9862,7 +12484,32 @@ Trotzdem herunterladen?</translation>
         <translation>Zu groß</translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location line="+27"/>
+        <source>Models folder:</source>
+        <translation>Modellordner:</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Open folder</source>
+        <translation>Ordner öffnen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Move…</source>
+        <translation>Verschieben…</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Moves the models in this folder to another folder, for example on a larger drive</source>
+        <translation>Verschiebt die Modelle in diesem Ordner in einen anderen Ordner, zum Beispiel auf ein größeres Laufwerk</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Move the models to</source>
+        <translation>Modelle verschieben nach</translation>
+    </message>
+    <message>
+        <location line="+16"/>
         <source>Download…</source>
         <translation>Herunterladen…</translation>
     </message>
@@ -9872,7 +12519,47 @@ Trotzdem herunterladen?</translation>
         <translation>Modelle auf Hugging Face und Civitai finden und herunterladen</translation>
     </message>
     <message>
-        <location line="+101"/>
+        <location line="+57"/>
+        <source>%1
+Downloads and trained LoRAs go here, in sub-folders named like ComfyUI&apos;s (checkpoints, loras, vae…), so ComfyUI can use the same folder.</source>
+        <translation>%1
+Downloads und trainierte LoRAs kommen hierher, in Unterordner mit Namen wie bei ComfyUI (checkpoints, loras, vae…), sodass ComfyUI denselben Ordner verwenden kann.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Move models folder</source>
+        <translation>Modellordner verschieben</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+7"/>
+        <source>Move %n model(s) (%1) from %2 to %3?</source>
+        <translation>
+            <numerusform>%n Modell (%1) von %2 nach %3 verschieben?</numerusform>
+            <numerusform>%n Modelle (%1) von %2 nach %3 verschieben?</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Use %1 as the models folder? There are no models to move.</source>
+        <translation>%1 als Modellordner verwenden? Es gibt keine Modelle zu verschieben.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Servers that are running stop while the files move and start again afterwards. Server settings and characters&apos; LoRAs that use these files are updated. Other folders you added stay where they are.</source>
+        <translation>Laufende Server halten an, während die Dateien verschoben werden, und starten danach wieder. Servereinstellungen und LoRAs von Charakteren, die diese Dateien verwenden, werden aktualisiert. Andere Ordner, die Sie hinzugefügt haben, bleiben, wo sie sind.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Move</source>
+        <translation>Verschieben</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Moving the models folder — progress is shown in the Queue.</source>
+        <translation>Der Modellordner wird verschoben — der Fortschritt wird in der Warteschlange angezeigt.</translation>
+    </message>
+    <message>
+        <location line="+52"/>
         <source> · GPU: %1</source>
         <translation> · GPU: %1</translation>
     </message>
@@ -10095,12 +12782,12 @@ Trotzdem herunterladen?</translation>
         <translation>%1 benötigt %2, das noch nicht in der Bibliothek ist: Laden Sie es in den Details des Modells herunter.</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+30"/>
         <source>Use in %1</source>
         <translation>In %1 verwenden</translation>
     </message>
     <message>
-        <location line="+27"/>
+        <location line="+33"/>
         <source>%1 uses it after a restart.</source>
         <translation>%1 verwendet es nach einem Neustart.</translation>
     </message>
@@ -10123,7 +12810,7 @@ Trotzdem herunterladen?</translation>
 <context>
     <name>lumen::ui::MoveTool</name>
     <message>
-        <location filename="../src/ui/canvas/Tools.cpp" line="+248"/>
+        <location filename="../src/ui/canvas/Tools.cpp" line="+251"/>
         <source>The active layer is locked.</source>
         <translation>Die aktive Ebene ist gesperrt.</translation>
     </message>
@@ -10145,9 +12832,611 @@ Trotzdem herunterladen?</translation>
     </message>
 </context>
 <context>
+    <name>lumen::ui::NewCanvasDialog</name>
+    <message>
+        <location filename="../src/ui/dialogs/NewCanvasDialog.cpp" line="-52"/>
+        <location line="+49"/>
+        <source>Size</source>
+        <translation>Größe</translation>
+    </message>
+    <message>
+        <location line="-36"/>
+        <source>Custom size</source>
+        <translation>Eigene Größe</translation>
+    </message>
+    <message>
+        <location line="+41"/>
+        <source>Create</source>
+        <translation>Erstellen</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::ui::NewFromPromptDialog</name>
+    <message>
+        <location filename="../src/ui/dialogs/NewFromPromptDialog.cpp" line="+55"/>
+        <source>New from prompt</source>
+        <translation>Neu aus Prompt</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Describe the image</source>
+        <translation>Beschreiben Sie das Bild</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Prompt</source>
+        <translation>Prompt</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>A lighthouse on a cliff at sunset, painted in watercolour…</source>
+        <translation>Ein Leuchtturm auf einer Klippe bei Sonnenuntergang, in Aquarell gemalt…</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Size</source>
+        <translation>Größe</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Square</source>
+        <translation>Quadratisch</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Portrait (%1)</source>
+        <translation>Hochformat (%1)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Landscape (%1)</source>
+        <translation>Querformat (%1)</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Custom size</source>
+        <translation>Eigene Größe</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Width</source>
+        <translation>Breite</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Height</source>
+        <translation>Höhe</translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <location line="+2"/>
+        <source>Images to make</source>
+        <translation>Anzahl Bilder</translation>
+    </message>
+    <message>
+        <location line="-1"/>
+        <source>How many images to make. They are shown over the new document one at a time, and you keep the one you like.</source>
+        <translation>Wie viele Bilder erstellt werden. Sie werden nacheinander über dem neuen Dokument gezeigt, und Sie behalten das, das Ihnen gefällt.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Image engine</source>
+        <translation>Bild-Engine</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>No image engine is set up yet.</source>
+        <translation>Es ist noch keine Bild-Engine eingerichtet.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Set up AI…</source>
+        <translation>KI einrichten…</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Connect an image engine on this computer or online</source>
+        <translation>Eine Bild-Engine auf diesem Computer oder online verbinden</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>No pose</source>
+        <translation>Keine Pose</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Make the image without this pose</source>
+        <translation>Das Bild ohne diese Pose erstellen</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>More options</source>
+        <translation>Weitere Optionen</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Leave out</source>
+        <translation>Weglassen</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Negative prompt</source>
+        <translation>Negativer Prompt</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Things that should not be in the image, e.g. text, watermark (negative prompt)</source>
+        <translation>Was nicht im Bild sein soll, z. B. Text, Wasserzeichen (negativer Prompt)</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <location line="+3"/>
+        <source>Seed</source>
+        <translation>Seed</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The same seed, prompt and size give the same image again.</source>
+        <translation>Derselbe Seed, Prompt und dieselbe Größe ergeben wieder dasselbe Bild.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Random</source>
+        <translation>Zufällig</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Create</source>
+        <translation>Erstellen</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Make a new document of this size and draw the image into it (Ctrl+Enter)</source>
+        <translation>Ein neues Dokument dieser Größe anlegen und das Bild hineinzeichnen (Strg+Eingabe)</translation>
+    </message>
+    <message>
+        <location line="+122"/>
+        <source>The engine draws the closest size it supports; the image is scaled to this size.</source>
+        <translation>Die Engine zeichnet die nächstliegende Größe, die sie unterstützt; das Bild wird auf diese Größe skaliert.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The engine draws the closest shape it supports; the image is scaled to this size.</source>
+        <translation>Die Engine zeichnet das nächstliegende Format, das sie unterstützt; das Bild wird auf diese Größe skaliert.</translation>
+    </message>
+    <message>
+        <location line="+27"/>
+        <source>This engine cannot follow a pose; the pose is kept with the new document.</source>
+        <translation>Diese Engine kann keiner Pose folgen; die Pose bleibt beim neuen Dokument.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The image follows this pose.</source>
+        <translation>Das Bild folgt dieser Pose.</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::ui::NodeEditorWindow</name>
+    <message>
+        <location filename="../src/ui/filters/NodeEditorWindow.cpp" line="+98"/>
+        <source>Filter editor</source>
+        <translation>Filtereditor</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Add node</source>
+        <translation>Knoten hinzufügen</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Add a node (Shift+A, or right-click on an empty place)</source>
+        <translation>Einen Knoten hinzufügen (Umschalt+A oder Rechtsklick auf eine leere Stelle)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Delete</source>
+        <translation>Löschen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Delete the selected nodes and links (Del)</source>
+        <translation>Die ausgewählten Knoten und Verbindungen löschen (Entf)</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Show all</source>
+        <translation>Alles zeigen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Show every node (Home)</source>
+        <translation>Alle Knoten zeigen (Pos1)</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Undo</source>
+        <translation>Rückgängig</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Redo</source>
+        <translation>Wiederholen</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Save</source>
+        <translation>Speichern</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Save into the filters folder (Ctrl+S)</source>
+        <translation>Im Filterordner speichern (Strg+S)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Save as…</source>
+        <translation>Speichern unter…</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Save as a new filter</source>
+        <translation>Als neuen Filter speichern</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <location line="+185"/>
+        <location line="+586"/>
+        <source>Run AI steps</source>
+        <translation>KI-Schritte ausführen</translation>
+    </message>
+    <message>
+        <location line="-770"/>
+        <source>AI steps take a while, so the preview runs them only when you ask. Applying the saved filter to the same layer from the Filters panel then uses what they made.</source>
+        <translation>KI-Schritte dauern eine Weile, daher führt die Vorschau sie nur auf Wunsch aus. Wenn Sie den gespeicherten Filter dann im Filter-Bedienfeld auf dieselbe Ebene anwenden, wird verwendet, was sie erzeugt haben.</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>Drag from a port to another to connect them. Right-click to add a node. The wheel zooms; the middle button or Space and drag moves around.</source>
+        <translation>Ziehen Sie von einem Anschluss zu einem anderen, um sie zu verbinden. Rechtsklick fügt einen Knoten hinzu. Das Mausrad zoomt; mit der mittleren Taste oder Leertaste und Ziehen bewegen Sie die Ansicht.</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>Save filter as</source>
+        <translation>Filter speichern unter</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <location line="+325"/>
+        <source>Name:</source>
+        <translation>Name:</translation>
+    </message>
+    <message>
+        <location line="-286"/>
+        <source>Save the filter?</source>
+        <translation>Den Filter speichern?</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>“%1” has changes that are not saved.</source>
+        <translation>„%1“ hat Änderungen, die nicht gespeichert sind.</translation>
+    </message>
+    <message>
+        <location line="+53"/>
+        <source>Built-in filters cannot be changed. Duplicate one to edit the copy.</source>
+        <translation>Integrierte Filter können nicht geändert werden. Duplizieren Sie einen, um die Kopie zu bearbeiten.</translation>
+    </message>
+    <message>
+        <location line="+41"/>
+        <location line="+6"/>
+        <source>Preview</source>
+        <translation>Vorschau</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <location line="+9"/>
+        <source>Problems</source>
+        <translation>Probleme</translation>
+    </message>
+    <message>
+        <location line="-8"/>
+        <source>None: the filter can be used.</source>
+        <translation>Keine: Der Filter kann verwendet werden.</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>Filter</source>
+        <translation>Filter</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Filter name</source>
+        <translation>Filtername</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>What the filter does</source>
+        <translation>Was der Filter macht</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>What the filter does, in a sentence</source>
+        <translation>Was der Filter macht, in einem Satz</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Name</source>
+        <translation>Name</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>About</source>
+        <translation>Info</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <location line="+168"/>
+        <source>Rename filter</source>
+        <translation>Filter umbenennen</translation>
+    </message>
+    <message>
+        <location line="-162"/>
+        <source>Change the description</source>
+        <translation>Beschreibung ändern</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Settings shown in the Filters panel</source>
+        <translation>Im Filter-Bedienfeld gezeigte Einstellungen</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>None yet. Select a node and click the slider button next to a setting.</source>
+        <translation>Noch keine. Wählen Sie einen Knoten aus und klicken Sie auf die Schieberegler-Schaltfläche neben einer Einstellung.</translation>
+    </message>
+    <message>
+        <location line="+42"/>
+        <source>Add “%1”</source>
+        <translation>„%1“ hinzufügen</translation>
+    </message>
+    <message>
+        <location line="+34"/>
+        <source>Change “%1”</source>
+        <translation>„%1“ ändern</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <location line="+188"/>
+        <location line="+39"/>
+        <source>Show “%1” in the Filters panel</source>
+        <translation>„%1“ im Filter-Bedienfeld zeigen</translation>
+    </message>
+    <message>
+        <location line="-210"/>
+        <source>Remove from the Filters panel</source>
+        <translation>Aus dem Filter-Bedienfeld entfernen</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>Save filter</source>
+        <translation>Filter speichern</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <location line="+27"/>
+        <source>Saved “%1”.</source>
+        <translation>„%1“ gespeichert.</translation>
+    </message>
+    <message>
+        <location line="-18"/>
+        <source>Give the filter a name.</source>
+        <translation>Geben Sie dem Filter einen Namen.</translation>
+    </message>
+    <message>
+        <location line="+50"/>
+        <location line="+368"/>
+        <source>Untitled filter</source>
+        <translation>Unbenannter Filter</translation>
+    </message>
+    <message>
+        <location line="-367"/>
+        <source>%1[*] — Filter editor</source>
+        <translation>%1[*] — Filtereditor</translation>
+    </message>
+    <message>
+        <location line="+44"/>
+        <source>Preview of “%1”</source>
+        <translation>Vorschau von „%1“</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Preview of the result</source>
+        <translation>Vorschau des Ergebnisses</translation>
+    </message>
+    <message>
+        <location line="+23"/>
+        <source>This node has no settings.</source>
+        <translation>Dieser Knoten hat keine Einstellungen.</translation>
+    </message>
+    <message>
+        <location line="+45"/>
+        <source>Set by what is connected to the “%1” input.</source>
+        <translation>Festgelegt durch das, was am Eingang „%1“ angeschlossen ist.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Shown in the Filters panel; click to remove it from there</source>
+        <translation>Im Filter-Bedienfeld gezeigt; klicken Sie, um es dort zu entfernen</translation>
+    </message>
+    <message>
+        <location line="+33"/>
+        <source>%1 (%2). Click to select the node.</source>
+        <translation>%1 (%2). Klicken Sie, um den Knoten auszuwählen.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Remove “%1” from the Filters panel</source>
+        <translation>„%1“ aus dem Filter-Bedienfeld entfernen</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>%1
+Click to select the node.</source>
+        <translation>%1
+Klicken Sie, um den Knoten auszuwählen.</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>Show in the Filters panel</source>
+        <translation>Im Filter-Bedienfeld zeigen</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>People using the filter see this setting as a slider (or a list), without opening the editor.</source>
+        <translation>Wer den Filter verwendet, sieht diese Einstellung als Schieberegler (oder als Liste), ohne den Editor zu öffnen.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Label</source>
+        <translation>Beschriftung</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Lowest</source>
+        <translation>Kleinster Wert</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Highest</source>
+        <translation>Größter Wert</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>The lowest value must be below the highest.</source>
+        <translation>Der kleinste Wert muss unter dem größten liegen.</translation>
+    </message>
+    <message>
+        <location line="+40"/>
+        <source>Add an “Output” node to see the result.</source>
+        <translation>Fügen Sie einen Knoten „Ausgabe“ hinzu, um das Ergebnis zu sehen.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Running the AI steps…</source>
+        <translation>Die KI-Schritte laufen…</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Running the AI steps… %1</source>
+        <translation>Die KI-Schritte laufen… %1</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>This filter has AI steps. They take a while, so they run when you click “Run AI steps”.</source>
+        <translation>Dieser Filter hat KI-Schritte. Sie dauern eine Weile, daher laufen sie, wenn Sie auf „KI-Schritte ausführen“ klicken.</translation>
+    </message>
+    <message>
+        <location line="+32"/>
+        <source>Stopped.</source>
+        <translation>Angehalten.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Stop AI steps</source>
+        <translation>KI-Schritte anhalten</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>No picture</source>
+        <translation>Kein Bild</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::ui::NodeItem</name>
+    <message numerus="yes">
+        <location filename="../src/ui/filters/NodeScene.cpp" line="-234"/>
+        <source>%1: %n point(s)</source>
+        <translation>
+            <numerusform>%1: %n Punkt</numerusform>
+            <numerusform>%1: %n Punkte</numerusform>
+        </translation>
+    </message>
+</context>
+<context>
+    <name>lumen::ui::NodeMenu</name>
+    <message>
+        <location line="+769"/>
+        <location line="+1"/>
+        <source>Search nodes</source>
+        <translation>Knoten suchen</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Nodes</source>
+        <translation>Knoten</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::ui::NodeScene</name>
+    <message>
+        <location line="-265"/>
+        <source>Move node</source>
+        <translation>Knoten verschieben</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Move nodes</source>
+        <translation>Knoten verschieben</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Disconnect</source>
+        <translation>Trennen</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Both are outputs. Connect an output (on the right of a node) to an input (on the left).</source>
+        <translation>Beide sind Ausgänge. Verbinden Sie einen Ausgang (rechts an einem Knoten) mit einem Eingang (links).</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+24"/>
+        <source>Both are inputs. Connect an output (on the right of a node) to an input (on the left).</source>
+        <translation>Beide sind Eingänge. Verbinden Sie einen Ausgang (rechts an einem Knoten) mit einem Eingang (links).</translation>
+    </message>
+    <message>
+        <location line="-18"/>
+        <location line="+22"/>
+        <source>Connect</source>
+        <translation>Verbinden</translation>
+    </message>
+    <message>
+        <location line="+40"/>
+        <source>Delete nodes</source>
+        <translation>Knoten löschen</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Delete node</source>
+        <translation>Knoten löschen</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Delete link</source>
+        <translation>Verbindung löschen</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::ui::NodeView</name>
+    <message>
+        <location line="+36"/>
+        <source>Filter graph</source>
+        <translation>Filtergraph</translation>
+    </message>
+</context>
+<context>
     <name>lumen::ui::OnboardingDialog</name>
     <message>
-        <location filename="../src/ui/dialogs/SettingsDialog.cpp" line="+670"/>
+        <location filename="../src/ui/dialogs/SettingsDialog.cpp" line="+622"/>
         <source>Find servers on this computer</source>
         <translation>Server auf diesem Computer finden</translation>
     </message>
@@ -10173,11 +13462,21 @@ Trotzdem herunterladen?</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Add cloud provider...</source>
-        <translation>Cloud-Anbieter hinzufügen...</translation>
+        <source>Use an online service…</source>
+        <translation>Einen Online-Dienst verwenden…</translation>
     </message>
     <message>
         <location line="+1"/>
+        <source>fal.ai, OpenAI or Gemini with your key, checked with a test image (the setup wizard)</source>
+        <translation>fal.ai, OpenAI oder Gemini mit Ihrem Schlüssel, geprüft mit einem Testbild (der Einrichtungsassistent)</translation>
+    </message>
+    <message>
+        <location line="+31"/>
+        <source>No local servers found. Start SD WebUI with --api, ComfyUI, llama-server, Ollama or LM Studio and search again — or use an online service.</source>
+        <translation>Keine lokalen Server gefunden. Starten Sie SD WebUI mit --api, ComfyUI, llama-server, Ollama oder LM Studio und suchen Sie erneut – oder verwenden Sie einen Online-Dienst.</translation>
+    </message>
+    <message>
+        <location line="-30"/>
         <source>Set up local AI…</source>
         <translation>Lokale KI einrichten…</translation>
     </message>
@@ -10192,17 +13491,12 @@ Trotzdem herunterladen?</translation>
         <translation>Schließen</translation>
     </message>
     <message>
-        <location line="+29"/>
+        <location line="+22"/>
         <source>Searching for local servers...</source>
         <translation>Lokale Server werden gesucht...</translation>
     </message>
-    <message>
-        <location line="+6"/>
-        <source>No local servers found. Start SD WebUI with --api, ComfyUI, llama-server, Ollama or LM Studio and search again — or add a cloud provider.</source>
-        <translation>Keine lokalen Server gefunden. Starten Sie SD WebUI mit --api, ComfyUI, llama-server, Ollama oder LM Studio und suchen Sie erneut – oder fügen Sie einen Cloud-Anbieter hinzu.</translation>
-    </message>
     <message numerus="yes">
-        <location line="+4"/>
+        <location line="+10"/>
         <source>Found %n server(s):</source>
         <translation>
             <numerusform>%n Server gefunden:</numerusform>
@@ -10227,9 +13521,17 @@ Trotzdem herunterladen?</translation>
     </message>
 </context>
 <context>
+    <name>lumen::ui::ParamField</name>
+    <message>
+        <location filename="../src/ui/filters/ParamWidgets.cpp" line="+247"/>
+        <source>Describe it in your own words</source>
+        <translation>Beschreiben Sie es in Ihren eigenen Worten</translation>
+    </message>
+</context>
+<context>
     <name>lumen::ui::PartBrushTool</name>
     <message>
-        <location filename="../src/ui/parts/PartTools.cpp" line="+184"/>
+        <location filename="../src/plugins/parts/PartTools.cpp" line="+184"/>
         <source>Part brush</source>
         <translation>Teilepinsel</translation>
     </message>
@@ -10310,7 +13612,7 @@ Trotzdem herunterladen?</translation>
         </translation>
     </message>
     <message>
-        <location filename="../src/ui/parts/PartTools.h" line="+153"/>
+        <location filename="../src/plugins/parts/PartTools.h" line="+153"/>
         <source>Cut line</source>
         <translation>Schnittlinie</translation>
     </message>
@@ -10318,7 +13620,7 @@ Trotzdem herunterladen?</translation>
 <context>
     <name>lumen::ui::PartLassoTool</name>
     <message>
-        <location filename="../src/ui/parts/PartTools.cpp" line="-189"/>
+        <location filename="../src/plugins/parts/PartTools.cpp" line="-189"/>
         <source>Draw around an area to add it to the selected part. Alt or right button removes it. Ctrl+click picks a part.</source>
         <translation>Umranden Sie einen Bereich, um ihn dem ausgewählten Teil hinzuzufügen. Alt oder die rechte Maustaste entfernt ihn. Strg+Klick wählt ein Teil.</translation>
     </message>
@@ -10333,7 +13635,7 @@ Trotzdem herunterladen?</translation>
         <translation>Lasso-Bereich hinzufügen</translation>
     </message>
     <message>
-        <location filename="../src/ui/parts/PartTools.h" line="-37"/>
+        <location filename="../src/plugins/parts/PartTools.h" line="-37"/>
         <source>Lasso</source>
         <translation>Lasso</translation>
     </message>
@@ -10341,7 +13643,7 @@ Trotzdem herunterladen?</translation>
 <context>
     <name>lumen::ui::PartListPanel</name>
     <message>
-        <location filename="../src/ui/parts/PartListPanel.cpp" line="+52"/>
+        <location filename="../src/plugins/parts/PartListPanel.cpp" line="+52"/>
         <source>Parts</source>
         <translation>Teile</translation>
     </message>
@@ -10661,12 +13963,12 @@ Trotzdem herunterladen?</translation>
 <context>
     <name>lumen::ui::PartPickTool</name>
     <message>
-        <location filename="../src/ui/parts/PartTools.cpp" line="+174"/>
+        <location filename="../src/plugins/parts/PartTools.cpp" line="+174"/>
         <source>Click a part on the canvas to select it.</source>
         <translation>Klicken Sie auf der Arbeitsfläche auf ein Teil, um es auszuwählen.</translation>
     </message>
     <message>
-        <location filename="../src/ui/parts/PartTools.h" line="+59"/>
+        <location filename="../src/plugins/parts/PartTools.h" line="+59"/>
         <source>Select part</source>
         <translation>Teil auswählen</translation>
     </message>
@@ -10674,7 +13976,7 @@ Trotzdem herunterladen?</translation>
 <context>
     <name>lumen::ui::PartToolBase</name>
     <message>
-        <location filename="../src/ui/parts/PartTools.cpp" line="-447"/>
+        <location filename="../src/plugins/parts/PartTools.cpp" line="-447"/>
         <source>Choose a source image first.</source>
         <translation>Wählen Sie zuerst ein Quellbild.</translation>
     </message>
@@ -10712,7 +14014,7 @@ Trotzdem herunterladen?</translation>
         <translation>Benachbart</translation>
     </message>
     <message>
-        <location filename="../src/ui/parts/PartTools.h" line="-37"/>
+        <location filename="../src/plugins/parts/PartTools.h" line="-37"/>
         <source>Magic wand</source>
         <translation>Zauberstab</translation>
     </message>
@@ -10720,7 +14022,7 @@ Trotzdem herunterladen?</translation>
 <context>
     <name>lumen::ui::PartsPage</name>
     <message>
-        <location filename="../src/ui/parts/PartsPage.cpp" line="-1295"/>
+        <location filename="../src/plugins/parts/PartsPage.cpp" line="-1299"/>
         <source>Slicing sessions of this project</source>
         <translation>Zerlegungssitzungen dieses Projekts</translation>
     </message>
@@ -10766,23 +14068,23 @@ Trotzdem herunterladen?</translation>
     </message>
     <message>
         <location line="+3"/>
-        <location line="+134"/>
+        <location line="+135"/>
         <source>Zoom out</source>
         <translation>Verkleinern</translation>
     </message>
     <message>
-        <location line="-133"/>
-        <location line="+132"/>
+        <location line="-134"/>
+        <location line="+133"/>
         <source>Zoom in</source>
         <translation>Vergrößern</translation>
     </message>
     <message>
-        <location line="-131"/>
+        <location line="-132"/>
         <source>Fit to window (Ctrl+0)</source>
         <translation>An Fenster anpassen (Strg+0)</translation>
     </message>
     <message>
-        <location line="+72"/>
+        <location line="+73"/>
         <source>Selected: %1</source>
         <translation>Ausgewählt: %1</translation>
     </message>
@@ -10806,13 +14108,13 @@ Trotzdem herunterladen?</translation>
     </message>
     <message>
         <location line="+15"/>
-        <location line="+1425"/>
+        <location line="+1428"/>
         <location line="+43"/>
         <source>Parts</source>
         <translation>Teile</translation>
     </message>
     <message>
-        <location line="-1466"/>
+        <location line="-1469"/>
         <source>Undo</source>
         <translation>Rückgängig</translation>
     </message>
@@ -10842,15 +14144,7 @@ Trotzdem herunterladen?</translation>
         <translation>Quellbild</translation>
     </message>
     <message>
-        <location line="+5"/>
-        <location line="+793"/>
-        <source>Drop an image here
-or drag one from the Library</source>
-        <translation>Bild hier ablegen
-oder aus der Bibliothek ziehen</translation>
-    </message>
-    <message>
-        <location line="-788"/>
+        <location line="+10"/>
         <source>Open image...</source>
         <translation>Bild öffnen...</translation>
     </message>
@@ -10876,22 +14170,23 @@ oder aus der Bibliothek ziehen</translation>
     </message>
     <message>
         <location line="+3"/>
-        <location line="+758"/>
+        <location line="+761"/>
         <source>Remove background</source>
         <translation>Hintergrund entfernen</translation>
     </message>
     <message>
-        <location line="-757"/>
+        <location line="-760"/>
         <source>Makes the background transparent with a background-removal provider; the character silhouette then guides every mask.</source>
         <translation>Macht den Hintergrund mit einem Anbieter zur Hintergrundentfernung transparent; die Silhouette der Figur steuert danach jede Maske.</translation>
     </message>
     <message>
         <location line="+5"/>
+        <location line="+2"/>
         <source>Part layout</source>
         <translation>Teile-Layout</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+8"/>
         <source>Live2D-ready source art</source>
         <translation>Live2D-taugliches Ausgangsbild</translation>
     </message>
@@ -10922,7 +14217,7 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Weiter zu den Masken</translation>
     </message>
     <message>
-        <location line="+22"/>
+        <location line="+24"/>
         <source>Automatic masks</source>
         <translation>Automatische Masken</translation>
     </message>
@@ -11116,7 +14411,15 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Alle generieren</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-172"/>
+        <location line="+796"/>
+        <source>Drop an image here
+or drag one from Browse project images</source>
+        <translation>Bild hier ablegen
+oder eines aus den Projektbildern ziehen</translation>
+    </message>
+    <message>
+        <location line="-623"/>
         <source>Selected</source>
         <translation>Ausgewählte</translation>
     </message>
@@ -11504,7 +14807,7 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Pose bearbeiten</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+8"/>
         <source>Rotate</source>
         <translation>Drehen</translation>
     </message>
@@ -11548,7 +14851,7 @@ oder aus der Bibliothek ziehen</translation>
 <context>
     <name>lumen::ui::PosePage</name>
     <message>
-        <location filename="../src/ui/pages/PosePage.cpp" line="+25"/>
+        <location filename="../src/plugins/poses/PosePage.cpp" line="+25"/>
         <source>Poses</source>
         <translation>Posen</translation>
     </message>
@@ -11603,17 +14906,19 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Ein Gelenk mit allem, was daran hängt, verschieben (Umschalt)</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+16"/>
+        <location line="+1"/>
         <source>Canvas</source>
         <translation>Arbeitsfläche</translation>
     </message>
     <message>
+        <location line="+2"/>
         <location line="+5"/>
         <source>Person</source>
         <translation>Person</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="-3"/>
         <source>Add a person</source>
         <translation>Person hinzufügen</translation>
     </message>
@@ -11628,7 +14933,7 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Ausgewählte Person spiegeln</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+2"/>
         <source>Undo</source>
         <translation>Rückgängig</translation>
     </message>
@@ -11638,7 +14943,7 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Wiederholen</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+9"/>
         <source>Hands</source>
         <translation>Hände</translation>
     </message>
@@ -11673,7 +14978,7 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Die Pose einer Person in einem Bild erkennen</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+3"/>
         <source>File</source>
         <translation>Datei</translation>
     </message>
@@ -11704,11 +15009,16 @@ oder aus der Bibliothek ziehen</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Use in Generate</source>
-        <translation>In Generieren verwenden</translation>
+        <source>New image with this pose</source>
+        <translation>Neues Bild mit dieser Pose</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+1"/>
+        <source>Describe a new image in the editor&apos;s New from prompt; it is drawn in this pose</source>
+        <translation>Beschreiben Sie im Editor unter „Neu aus Prompt“ ein neues Bild; es wird in dieser Pose gezeichnet</translation>
+    </message>
+    <message>
+        <location line="+12"/>
         <source>Describe the pose</source>
         <translation>Pose beschreiben</translation>
     </message>
@@ -11947,17 +15257,361 @@ oder aus der Bibliothek ziehen</translation>
     </message>
 </context>
 <context>
+    <name>lumen::ui::PromptBar</name>
+    <message>
+        <location filename="../src/ui/pages/PromptBar.cpp" line="+57"/>
+        <source>Progress</source>
+        <translation>Fortschritt</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Select an area</source>
+        <translation>Einen Bereich auswählen</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Draw a selection around what should change; only that area is then changed (M)</source>
+        <translation>Ziehen Sie eine Auswahl um das, was sich ändern soll; dann wird nur dieser Bereich geändert (M)</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Prompt</source>
+        <translation>Prompt</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Enter runs it; Shift+Enter starts a new line.</source>
+        <translation>Eingabe führt es aus; Umschalt+Eingabe beginnt eine neue Zeile.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <location line="+307"/>
+        <source>Generate</source>
+        <translation>Generieren</translation>
+    </message>
+    <message>
+        <location line="-302"/>
+        <source>Remove object</source>
+        <translation>Objekt entfernen</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Remove what is in the selected area and fill it in from its surroundings</source>
+        <translation>Entfernen, was im ausgewählten Bereich ist, und ihn aus der Umgebung auffüllen</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>More options</source>
+        <translation>Weitere Optionen</translation>
+    </message>
+    <message>
+        <location line="+52"/>
+        <source>How much may change</source>
+        <translation>Wie stark ändern</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <location line="+3"/>
+        <source>Results per run</source>
+        <translation>Ergebnisse je Lauf</translation>
+    </message>
+    <message>
+        <location line="-1"/>
+        <source>How many results each run makes to choose from.</source>
+        <translation>Wie viele Ergebnisse jeder Durchlauf zur Auswahl erzeugt.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Negative prompt</source>
+        <translation>Negativer Prompt</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Things that should not be in the result</source>
+        <translation>Was nicht im Ergebnis sein soll</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Leave out</source>
+        <translation>Weglassen</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Pictures the engine follows for a character, a style or an object (in the AI tab)</source>
+        <translation>Bilder, denen die Engine für einen Charakter, einen Stil oder ein Objekt folgt (in der KI-Registerkarte)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>References</source>
+        <translation>Referenzen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Follow the document&apos;s control pose</source>
+        <translation>Der Steuerpose des Dokuments folgen</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <location line="+274"/>
+        <location line="+1"/>
+        <source>Image engine</source>
+        <translation>Bild-Engine</translation>
+    </message>
+    <message>
+        <location line="-271"/>
+        <source>Advanced</source>
+        <translation>Erweitert</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <location line="+4"/>
+        <source>Steps</source>
+        <translation>Schritte</translation>
+    </message>
+    <message>
+        <location line="-2"/>
+        <source>Model&apos;s choice</source>
+        <translation>Wahl des Modells</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>More steps can add detail and take longer. The model&apos;s choice is right for most models.</source>
+        <translation>Mehr Schritte können Details hinzufügen und dauern länger. Die Wahl des Modells passt für die meisten Modelle.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <location line="+6"/>
+        <source>Seed</source>
+        <translation>Seed</translation>
+    </message>
+    <message>
+        <location line="-4"/>
+        <source>The same seed, words and settings give the same result again.</source>
+        <translation>Derselbe Seed, dieselben Worte und Einstellungen ergeben wieder dasselbe Ergebnis.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Random</source>
+        <translation>Zufällig</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>All AI options…</source>
+        <translation>Alle KI-Optionen…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The AI tab: every option, and the actions that are not a description (upscale, expand, remove background…)</source>
+        <translation>Die KI-Registerkarte: alle Optionen und die Aktionen, die keine Beschreibung sind (Hochskalieren, Erweitern, Hintergrund entfernen…)</translation>
+    </message>
+    <message>
+        <location line="+140"/>
+        <source>Describe the change, e.g. “colorize it” or “replace the cup with a candle”</source>
+        <translation>Beschreiben Sie die Änderung, z. B. „färbe es ein“ oder „ersetze die Tasse durch eine Kerze“</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>AI editing needs an image engine. Set one up to change this picture with words.</source>
+        <translation>Bearbeiten mit KI braucht eine Bild-Engine. Richten Sie eine ein, um dieses Bild mit Worten zu ändern.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Set up an image engine first (Set up AI…)</source>
+        <translation>Richten Sie zuerst eine Bild-Engine ein (KI einrichten…)</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Changes the selected area. Describe the change; the rest of the image stays as it is.</source>
+        <translation>Ändert den ausgewählten Bereich. Beschreiben Sie die Änderung; der Rest des Bildes bleibt, wie er ist.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Changes the selected area. Describe what should be there; the rest of the image stays as it is.</source>
+        <translation>Ändert den ausgewählten Bereich. Beschreiben Sie, was dort sein soll; der Rest des Bildes bleibt, wie er ist.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+4"/>
+        <source>Describe what should be there, e.g. “a red scarf” or “an empty table”</source>
+        <translation>Beschreiben Sie, was dort sein soll, z. B. „ein roter Schal“ oder „ein leerer Tisch“</translation>
+    </message>
+    <message>
+        <location line="-1"/>
+        <source>Changes the selected area by redrawing it. Describe what should be there; the rest stays as it is.</source>
+        <translation>Ändert den ausgewählten Bereich, indem er neu gezeichnet wird. Beschreiben Sie, was dort sein soll; der Rest bleibt, wie er ist.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Changes the whole image. Describe the change, or select an area to change only that.</source>
+        <translation>Ändert das ganze Bild. Beschreiben Sie die Änderung, oder wählen Sie einen Bereich aus, um nur diesen zu ändern.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Describe the change, e.g. “colorize this photo” or “make it night”</source>
+        <translation>Beschreiben Sie die Änderung, z. B. „färbe dieses Foto ein“ oder „mach es nachts“</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>This engine cannot change the whole picture from words: make a variation, or select an area to change.</source>
+        <translation>Diese Engine kann nicht das ganze Bild nach Worten ändern: Erstellen Sie eine Variation oder wählen Sie einen Bereich aus.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This engine cannot change the whole picture from words: select an area to change.</source>
+        <translation>Diese Engine kann nicht das ganze Bild nach Worten ändern: Wählen Sie einen Bereich aus.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>To change the whole picture from a description, use an engine with an edit model, such as FLUX.2 [klein] (Help → Set up AI…).</source>
+        <translation>Um das ganze Bild nach einer Beschreibung zu ändern, verwenden Sie eine Engine mit einem Bearbeitungsmodell, etwa FLUX.2 [klein] (Hilfe → KI einrichten…).</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Optional: words that guide the variation, e.g. “evening light”</source>
+        <translation>Optional: Worte, die die Variation lenken, z. B. „Abendlicht“</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Select an area first, then describe what should be there</source>
+        <translation>Wählen Sie zuerst einen Bereich aus und beschreiben Sie dann, was dort sein soll</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Creates an image of %1 × %2 px. Describe what it should show.</source>
+        <translation>Erstellt ein Bild mit %1 × %2 px. Beschreiben Sie, was es zeigen soll.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Describe the image, e.g. “a lighthouse on a cliff at dusk”</source>
+        <translation>Beschreiben Sie das Bild, z. B. „ein Leuchtturm auf einer Klippe in der Abenddämmerung“</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>This image engine cannot create an image from a description.</source>
+        <translation>Diese Bild-Engine kann kein Bild nach einer Beschreibung erstellen.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>This image engine only creates new images; it cannot change this one.</source>
+        <translation>Diese Bild-Engine erstellt nur neue Bilder; sie kann dieses nicht ändern.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Working on %1 results…</source>
+        <translation>%1 Ergebnisse werden erstellt…</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Working on it…</source>
+        <translation>Wird erstellt…</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>Run it (Enter)</source>
+        <translation>Ausführen (Eingabe)</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Cancel</source>
+        <translation>Abbrechen</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Stop the run</source>
+        <translation>Den Durchlauf anhalten</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Set up AI…</source>
+        <translation>KI einrichten…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Connect an image engine on this computer or online</source>
+        <translation>Eine Bild-Engine auf diesem Computer oder online verbinden</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Make a variation</source>
+        <translation>Eine Variation erstellen</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Redraws the whole image, keeping its layout, guided by your words if any. How much it may change is in the ⋯ menu (Enter).</source>
+        <translation>Zeichnet das ganze Bild neu, behält seinen Aufbau und folgt Ihren Worten, falls vorhanden. Wie stark es sich ändern darf, steht im Menü ⋯ (Eingabe).</translation>
+    </message>
+    <message>
+        <location line="+34"/>
+        <location line="+1"/>
+        <source>Engine for changes</source>
+        <translation>Engine für Änderungen</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>How much a variation may change the image: a little keeps more of it.</source>
+        <translation>Wie stark eine Variation das Bild ändern darf: wenig behält mehr davon.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>How much the selected area may change: a little keeps more of what is there.</source>
+        <translation>Wie stark sich der ausgewählte Bereich ändern darf: wenig behält mehr vom Vorhandenen.</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Add in the AI tab…</source>
+        <translation>In der KI-Registerkarte hinzufügen…</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+0"/>
+        <source>%n picture(s) in the AI tab…</source>
+        <translation>
+            <numerusform>%n Bild in der KI-Registerkarte…</numerusform>
+            <numerusform>%n Bilder in der KI-Registerkarte…</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+86"/>
+        <source>Removed</source>
+        <translation>Entfernt</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Variation</source>
+        <translation>Variation</translation>
+    </message>
+</context>
+<context>
     <name>lumen::ui::ProviderCombo</name>
     <message>
-        <location filename="../src/ui/widgets/ProviderCombo.cpp" line="+34"/>
-        <source>No provider configured</source>
-        <translation>Kein Anbieter konfiguriert</translation>
+        <location filename="../src/ui/widgets/ProviderCombo.cpp" line="+28"/>
+        <source>%1 on this computer</source>
+        <translation>%1 auf diesem Computer</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>Image engine</source>
+        <translation>Bild-Engine</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Language model</source>
+        <translation>Sprachmodell</translation>
+    </message>
+    <message>
+        <location line="+59"/>
+        <source>No image engine</source>
+        <translation>Keine Bild-Engine</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>No language model</source>
+        <translation>Kein Sprachmodell</translation>
     </message>
 </context>
 <context>
     <name>lumen::ui::ProviderForm</name>
     <message>
-        <location filename="../src/ui/dialogs/SettingsDialog.cpp" line="-690"/>
+        <location filename="../src/ui/dialogs/SettingsDialog.cpp" line="-789"/>
         <source>Documentation</source>
         <translation>Dokumentation</translation>
     </message>
@@ -12002,7 +15656,12 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Speichern</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+7"/>
+        <source>Workflows (.json, API format) put here are offered for this provider</source>
+        <translation>Hier abgelegte Workflows (.json, API-Format) werden für diesen Anbieter angeboten</translation>
+    </message>
+    <message>
+        <location line="+16"/>
         <source>Note: API keys are stored in a private file because no system keychain is available.</source>
         <translation>Hinweis: API-Schlüssel werden in einer privaten Datei gespeichert, da kein System-Schlüsselbund verfügbar ist.</translation>
     </message>
@@ -12053,7 +15712,7 @@ oder aus der Bibliothek ziehen</translation>
 <context>
     <name>lumen::ui::PuppetPreview</name>
     <message>
-        <location filename="../src/ui/parts/PuppetPreview.cpp" line="+312"/>
+        <location filename="../src/plugins/parts/PuppetPreview.cpp" line="+312"/>
         <source>Generate or cut out parts to preview the character as a 2.5D puppet.</source>
         <translation>Generieren Sie Teile oder schneiden Sie sie aus, um die Figur als 2,5D-Puppe in der Vorschau zu sehen.</translation>
     </message>
@@ -12135,8 +15794,8 @@ oder aus der Bibliothek ziehen</translation>
     </message>
     <message>
         <location line="+8"/>
-        <source>From library (drag images here)</source>
-        <translation>Aus Bibliothek (Bilder hierher ziehen)</translation>
+        <source>From project images (drag images here)</source>
+        <translation>Aus den Projektbildern (Bilder hierher ziehen)</translation>
     </message>
 </context>
 <context>
@@ -12165,7 +15824,7 @@ oder aus der Bibliothek ziehen</translation>
 <context>
     <name>lumen::ui::ServerLogDialog</name>
     <message>
-        <location filename="../src/ui/dialogs/LocalServersPage.cpp" line="+601"/>
+        <location filename="../src/ui/dialogs/LocalServersPage.cpp" line="+1356"/>
         <source>Server log — %1</source>
         <translation>Serverprotokoll – %1</translation>
     </message>
@@ -12203,7 +15862,7 @@ oder aus der Bibliothek ziehen</translation>
 <context>
     <name>lumen::ui::ServerProfileDialog</name>
     <message>
-        <location line="-394"/>
+        <location line="-1012"/>
         <source>New server</source>
         <translation>Neuer Server</translation>
     </message>
@@ -12213,13 +15872,13 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Servereinstellungen</translation>
     </message>
     <message>
-        <location line="-735"/>
-        <location line="+750"/>
+        <location line="-868"/>
+        <location line="+880"/>
         <source>Name</source>
         <translation>Name</translation>
     </message>
     <message>
-        <location line="-749"/>
+        <location line="-879"/>
         <source>Model file</source>
         <translation>Modelldatei</translation>
     </message>
@@ -12249,17 +15908,67 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Modell hinzufügen</translation>
     </message>
     <message>
-        <location line="+722"/>
+        <location line="+852"/>
         <source>Program</source>
         <translation>Programm</translation>
     </message>
     <message>
+        <location line="+10"/>
+        <source>Server</source>
+        <translation>Server</translation>
+    </message>
+    <message>
         <location line="+4"/>
+        <source>Up to 8 GB of memory</source>
+        <translation>Bis 8 GB Speicher</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>12 GB of memory</source>
+        <translation>12 GB Speicher</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>16 GB of memory or more</source>
+        <translation>16 GB Speicher oder mehr</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Custom (set under Advanced)</source>
+        <translation>Benutzerdefiniert (unter Erweitert festlegen)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Sets the memory options under Advanced for a graphics card with this much memory. Measured on an 8 GB laptop GPU.</source>
+        <translation>Legt die Speicheroptionen unter Erweitert für eine Grafikkarte mit so viel Speicher fest. Gemessen auf einer 8-GB-Laptop-GPU.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Graphics card</source>
+        <translation>Grafikkarte</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Lumen talks to the server at this port of this computer.</source>
+        <translation>Lumen spricht mit dem Server über diesen Port dieses Computers.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Port</source>
         <translation>Port</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+19"/>
+        <source>Memory and speed settings, extra arguments, when the server starts and stops, and its command line</source>
+        <translation>Speicher- und Geschwindigkeitseinstellungen, zusätzliche Argumente, wann der Server startet und anhält, und seine Befehlszeile</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Starting and stopping</source>
+        <translation>Starten und Anhalten</translation>
+    </message>
+    <message>
+        <location line="+6"/>
         <source>“When needed” starts the server on the first request that uses it.</source>
         <translation>„Bei Bedarf“ startet den Server bei der ersten Anfrage, die ihn nutzt.</translation>
     </message>
@@ -12289,98 +15998,172 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Im Leerlauf beenden</translation>
     </message>
     <message>
+        <location line="+883"/>
+        <source>Download missing files (%1)</source>
+        <translation>Fehlende Dateien herunterladen (%1)</translation>
+    </message>
+    <message>
+        <location line="-881"/>
         <location line="+3"/>
-        <source>Custom</source>
-        <translation>Benutzerdefiniert</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>GPUs up to 8 GB</source>
-        <translation>GPUs bis 8 GB</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>GPUs with 12 GB</source>
-        <translation>GPUs mit 12 GB</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>GPUs with 16 GB or more</source>
-        <translation>GPUs mit 16 GB oder mehr</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Fills in memory-related options for a GPU size. Measured on an 8 GB laptop GPU.</source>
-        <translation>Füllt speicherbezogene Optionen für eine GPU-Größe aus. Gemessen auf einer 8-GB-Laptop-GPU.</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Tuned for</source>
-        <translation>Abgestimmt auf</translation>
-    </message>
-    <message>
-        <location line="+8"/>
         <source>Command line</source>
         <translation>Befehlszeile</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="-50"/>
         <source>Add it as a provider</source>
         <translation>Als Anbieter hinzufügen</translation>
     </message>
     <message>
-        <location line="+75"/>
+        <location line="+320"/>
         <source>%1 options</source>
         <translation>%1-Optionen</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="-305"/>
         <source>Advanced</source>
         <translation>Erweitert</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+251"/>
+        <source>Model</source>
+        <translation>Modell</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <location line="+6"/>
+        <source>Model type</source>
+        <translation>Modelltyp</translation>
+    </message>
+    <message>
+        <location line="-5"/>
+        <source>What kind of model the server runs: it decides which files are asked for. Choosing a model file sets it; Other shows every field, for models Lumen does not know.</source>
+        <translation>Welche Art von Modell der Server ausführt: Davon hängt ab, welche Dateien abgefragt werden. Die Wahl einer Modelldatei legt ihn fest; Andere zeigt alle Felder, für Modelle, die Lumen nicht kennt.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Other (every field)</source>
+        <translation>Andere (alle Felder)</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Add-ons</source>
+        <translation>Zusätze</translation>
+    </message>
+    <message>
+        <location line="+83"/>
+        <location line="+170"/>
         <source>required</source>
         <translation>erforderlich</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="-170"/>
+        <location line="+168"/>
         <source>none</source>
         <translation>keine</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-154"/>
         <source>Browse…</source>
         <translation>Durchsuchen…</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="-8"/>
         <source>Choose from the model library</source>
         <translation>Aus der Modellbibliothek wählen</translation>
     </message>
     <message>
-        <location line="+20"/>
-        <location line="+57"/>
+        <location line="+15"/>
+        <location line="+66"/>
         <source>All files (*)</source>
         <translation>Alle Dateien (*)</translation>
     </message>
     <message>
-        <location line="-36"/>
+        <location line="-30"/>
         <source>Automatic</source>
         <translation>Automatisch</translation>
     </message>
     <message>
-        <location line="+74"/>
+        <location line="-72"/>
         <source>Lumen has no provider for %1 yet.</source>
         <translation>Lumen hat noch keinen Anbieter für %1.</translation>
     </message>
     <message>
-        <location line="+62"/>
+        <location line="+187"/>
+        <source>the checkpoint&apos;s own</source>
+        <translation>der eigene des Checkpoints</translation>
+    </message>
+    <message>
+        <location line="+193"/>
+        <source>Downloading %1 — progress is shown in the Queue. The server form fills in when it is done.</source>
+        <translation>%1 wird heruntergeladen — der Fortschritt wird in der Warteschlange angezeigt. Das Serverformular wird ausgefüllt, wenn das erledigt ist.</translation>
+    </message>
+    <message>
+        <location line="+110"/>
+        <source>This is a %1 model: choose its type, %2.</source>
+        <translation>Ein %1-Modell: Wählen Sie den Typ %2.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>This is a complete checkpoint, and this model type takes a diffusion model: choose another type, or Other.</source>
+        <translation>Dies ist ein vollständiger Checkpoint, und dieser Modelltyp nimmt ein Diffusionsmodell: Wählen Sie einen anderen Typ oder Andere.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This is a diffusion model, and this model type takes a complete checkpoint: choose another type, or Other.</source>
+        <translation>Dies ist ein Diffusionsmodell, und dieser Modelltyp nimmt einen vollständigen Checkpoint: Wählen Sie einen anderen Typ oder Andere.</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Choose the checkpoint file: type its path, Browse…, or pick it from the model library.</source>
+        <translation>Wählen Sie die Checkpoint-Datei: Geben Sie ihren Pfad ein, klicken Sie auf Durchsuchen… oder wählen Sie sie aus der Modellbibliothek.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Choose the diffusion model file: type its path, Browse…, or pick it from the model library.</source>
+        <translation>Wählen Sie die Datei des Diffusionsmodells: Geben Sie ihren Pfad ein, klicken Sie auf Durchsuchen… oder wählen Sie sie aus der Modellbibliothek.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>%1: %2</source>
+        <translation>%1: %2</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Lumen cannot tell what this file is; it is used as chosen.</source>
+        <translation>Lumen kann nicht erkennen, was diese Datei ist; sie wird wie gewählt verwendet.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Lumen does not know this model: choose the files it needs by hand.</source>
+        <translation>Lumen kennt dieses Modell nicht: Wählen Sie die benötigten Dateien von Hand.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>This folder does not exist.</source>
+        <translation>Dieser Ordner existiert nicht.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Found</source>
+        <translation>Gefunden</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Will be downloaded (%1)</source>
+        <translation>Wird heruntergeladen (%1)</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Missing (%1)</source>
+        <translation>Fehlt (%1)</translation>
+    </message>
+    <message>
+        <location line="+24"/>
         <source>Choose a program.</source>
         <translation>Wählen Sie ein Programm.</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+12"/>
         <source>Port %1 is already used by the server &apos;%2&apos;.</source>
         <translation>Port %1 wird bereits vom Server „%2“ verwendet.</translation>
     </message>
@@ -12449,7 +16232,17 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Einstellungen</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+9"/>
+        <source>Settings pages</source>
+        <translation>Einstellungsseiten</translation>
+    </message>
+    <message>
+        <location line="+24"/>
+        <source>AI</source>
+        <translation>KI</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Providers</source>
         <translation>Anbieter</translation>
     </message>
@@ -12469,12 +16262,12 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Modelle</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location filename="../src/plugins/characters/CharactersPlugin.cpp" line="+17"/>
         <source>Cloud training</source>
         <translation>Cloud-Training</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location filename="../src/ui/dialogs/SettingsDialog.cpp" line="+1"/>
         <source>General</source>
         <translation>Allgemein</translation>
     </message>
@@ -12484,7 +16277,32 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Tastenkürzel</translation>
     </message>
     <message>
-        <location line="+36"/>
+        <location line="+1"/>
+        <source>Plugins</source>
+        <translation>Plugins</translation>
+    </message>
+    <message>
+        <location line="+56"/>
+        <source>Plugins add features to Lumen Studio. Switching one on or off takes effect the next time Lumen Studio starts; what a plugin saved in a project is kept while it is off.</source>
+        <translation>Plugins fügen Lumen Studio Funktionen hinzu. Das Ein- oder Ausschalten wirkt beim nächsten Start von Lumen Studio; was ein Plugin in einem Projekt gespeichert hat, bleibt erhalten, solange es ausgeschaltet ist.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>No plugins are installed.</source>
+        <translation>Es sind keine Plugins installiert.</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Turns on when Lumen Studio starts again.</source>
+        <translation>Wird beim nächsten Start von Lumen Studio eingeschaltet.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Turns off when Lumen Studio starts again.</source>
+        <translation>Wird beim nächsten Start von Lumen Studio ausgeschaltet.</translation>
+    </message>
+    <message>
+        <location line="+27"/>
         <source>Add provider</source>
         <translation>Anbieter hinzufügen</translation>
     </message>
@@ -12534,22 +16352,17 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Kein Anbieter ausgewählt</translation>
     </message>
     <message>
-        <location line="+4"/>
-        <source>Add an image generator (Stable Diffusion WebUI, ComfyUI, OpenAI, Gemini, Stability) and a language model (llama.cpp, Ollama, LM Studio, OpenAI, Anthropic, Gemini, OpenRouter) to get started.</source>
-        <translation>Fügen Sie zum Einstieg einen Bildgenerator (Stable Diffusion WebUI, ComfyUI, OpenAI, Gemini, Stability) und ein Sprachmodell (llama.cpp, Ollama, LM Studio, OpenAI, Anthropic, Gemini, OpenRouter) hinzu.</translation>
+        <location line="+5"/>
+        <source>Add an image engine to change pictures with words (Help → Set up AI… helps with that). A language model is only needed by some plugins.</source>
+        <translation>Fügen Sie eine Bild-Engine hinzu, um Bilder mit Worten zu ändern (Hilfe → KI einrichten… hilft dabei). Ein Sprachmodell brauchen nur einige Plugins.</translation>
     </message>
     <message>
-        <location line="+30"/>
-        <source>Choose which provider handles each task. Roles without an assignment fall back to the chat assistant.</source>
-        <translation>Wählen Sie, welcher Anbieter welche Aufgabe übernimmt. Rollen ohne Zuweisung greifen auf den Chat-Assistenten zurück.</translation>
+        <location line="+31"/>
+        <source>Choose which language model handles each task of the plugins. Tasks without one use the chat assistant&apos;s.</source>
+        <translation>Wählen Sie, welches Sprachmodell welche Aufgabe der Plugins übernimmt. Aufgaben ohne eines verwenden das des Chat-Assistenten.</translation>
     </message>
     <message>
-        <location line="+11"/>
-        <source>Default image generator</source>
-        <translation>Standard-Bildgenerator</translation>
-    </message>
-    <message>
-        <location line="+9"/>
+        <location line="+14"/>
         <source>provider default model</source>
         <translation>Standardmodell des Anbieters</translation>
     </message>
@@ -12635,6 +16448,714 @@ oder aus der Bibliothek ziehen</translation>
     </message>
 </context>
 <context>
+    <name>lumen::ui::SetupWizard</name>
+    <message>
+        <location filename="../src/ui/dialogs/SetupWizard.cpp" line="+63"/>
+        <source>FLUX models: new images, changes from a description (FLUX Kontext) and filling a selected area.</source>
+        <translation>FLUX-Modelle: neue Bilder, Änderungen nach einer Beschreibung (FLUX Kontext) und das Füllen eines ausgewählten Bereichs.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>GPT Image: new images and changes from a description, with or without a selection.</source>
+        <translation>GPT Image: neue Bilder und Änderungen nach einer Beschreibung, mit oder ohne Auswahl.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Gemini image models: new images and changes from a description.</source>
+        <translation>Gemini-Bildmodelle: neue Bilder und Änderungen nach einer Beschreibung.</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+18"/>
+        <source>about %n minute(s) at 100 Mbit/s</source>
+        <translation>
+            <numerusform>etwa %n Minute bei 100 Mbit/s</numerusform>
+            <numerusform>etwa %n Minuten bei 100 Mbit/s</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Makes new images and changes them from a description: colorize a photo, remove or replace an object, keep everything else.</source>
+        <translation>Erstellt neue Bilder und ändert sie nach einer Beschreibung: ein Foto einfärben, ein Objekt entfernen oder ersetzen, alles andere behalten.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Makes new images and repaints a selected area. It follows edit instructions such as &quot;colorize this&quot; less well than FLUX.2 [klein], which needs an 8 GB graphics card.</source>
+        <translation>Erstellt neue Bilder und malt einen ausgewählten Bereich neu. Bearbeitungsanweisungen wie „färbe das ein“ befolgt es weniger gut als FLUX.2 [klein], das eine Grafikkarte mit 8 GB braucht.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Without an NVIDIA or AMD graphics card it runs on the processor: several minutes per image.</source>
+        <translation>Ohne NVIDIA- oder AMD-Grafikkarte läuft es auf dem Prozessor: mehrere Minuten pro Bild.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>About 20 to 40 seconds per image on an 8 GB graphics card.</source>
+        <translation>Etwa 20 bis 40 Sekunden pro Bild auf einer Grafikkarte mit 8 GB.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Your graphics card has less than 8 GB, so much of the model waits in the computer&apos;s memory: a few minutes per image.</source>
+        <translation>Ihre Grafikkarte hat weniger als 8 GB, daher wartet ein großer Teil des Modells im Arbeitsspeicher des Computers: einige Minuten pro Bild.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>About 30 to 60 seconds per image.</source>
+        <translation>Etwa 30 bis 60 Sekunden pro Bild.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>About 30 to 60 seconds per image, longer on graphics cards with less than 6 GB.</source>
+        <translation>Etwa 30 bis 60 Sekunden pro Bild, länger auf Grafikkarten mit weniger als 6 GB.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The first image after a start takes a minute longer while the model loads.</source>
+        <translation>Das erste Bild nach einem Start dauert eine Minute länger, während das Modell lädt.</translation>
+    </message>
+    <message>
+        <location line="+51"/>
+        <location line="+88"/>
+        <source>Set up AI</source>
+        <translation>KI einrichten</translation>
+    </message>
+    <message>
+        <location line="-65"/>
+        <source>Local AI is set up. %1</source>
+        <translation>Die lokale KI ist eingerichtet. %1</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>The local AI setup did not finish: %1</source>
+        <translation>Die Einrichtung der lokalen KI wurde nicht abgeschlossen: %1</translation>
+    </message>
+    <message>
+        <location line="+52"/>
+        <location line="+944"/>
+        <source>Back</source>
+        <translation>Zurück</translation>
+    </message>
+    <message>
+        <location line="-928"/>
+        <source>Lumen changes and creates images from what you describe. For that it needs an image engine: choose where it runs. You can change this later in Settings → AI.</source>
+        <translation>Lumen ändert und erstellt Bilder nach Ihrer Beschreibung. Dafür braucht es eine Bild-Engine: Wählen Sie, wo sie läuft. Sie können das später unter Einstellungen → KI ändern.</translation>
+    </message>
+    <message>
+        <location line="+32"/>
+        <location line="+41"/>
+        <source>Run on this computer</source>
+        <translation>Auf diesem Computer ausführen</translation>
+    </message>
+    <message>
+        <location line="-40"/>
+        <source>Free and private: the model runs on your graphics card and your images stay here. Lumen downloads the program and one model once (7 to 13 GB, 10 to 20 minutes on a fast connection) and sets everything up; after that an image takes under a minute.</source>
+        <translation>Kostenlos und privat: Das Modell läuft auf Ihrer Grafikkarte und Ihre Bilder bleiben hier. Lumen lädt das Programm und ein Modell einmal herunter (7 bis 13 GB, 10 bis 20 Minuten bei einer schnellen Verbindung) und richtet alles ein; danach dauert ein Bild weniger als eine Minute.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Set up here…</source>
+        <translation>Hier einrichten…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+45"/>
+        <location line="+482"/>
+        <source>Use an online service</source>
+        <translation>Einen Online-Dienst verwenden</translation>
+    </message>
+    <message>
+        <location line="-526"/>
+        <source>fal.ai, OpenAI or Google Gemini. You need an account there and paste its key; the service charges a few cents per image. Ready in two minutes, nothing to download.</source>
+        <translation>fal.ai, OpenAI oder Google Gemini. Sie brauchen dort ein Konto und fügen dessen Schlüssel ein; der Dienst berechnet einige Cent pro Bild. In zwei Minuten bereit, nichts herunterzuladen.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Choose a service…</source>
+        <translation>Dienst wählen…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+673"/>
+        <source>Connect a server that is already running</source>
+        <translation>Einen bereits laufenden Server verbinden</translation>
+    </message>
+    <message>
+        <location line="-672"/>
+        <source>ComfyUI, Forge / Stable Diffusion WebUI or stable-diffusion.cpp&apos;s sd-server, on this computer or another one. Lumen uses the models it has; nothing is downloaded.</source>
+        <translation>ComfyUI, Forge / Stable Diffusion WebUI oder sd-server von stable-diffusion.cpp, auf diesem oder einem anderen Computer. Lumen verwendet die Modelle, die er hat; es wird nichts heruntergeladen.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Connect…</source>
+        <translation>Verbinden…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Checking this computer…</source>
+        <translation>Dieser Computer wird geprüft…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+681"/>
+        <location line="+31"/>
+        <source>Looking for servers…</source>
+        <translation>Server werden gesucht…</translation>
+    </message>
+    <message>
+        <location line="-708"/>
+        <source>Not now? Help → Set up AI… opens this again.</source>
+        <translation>Nicht jetzt? Hilfe → KI einrichten… öffnet dies erneut.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Skip for now</source>
+        <translation>Vorerst überspringen</translation>
+    </message>
+    <message>
+        <location line="+25"/>
+        <source>Checking this computer and looking for models you already have…</source>
+        <translation>Dieser Computer wird geprüft und nach vorhandenen Modellen durchsucht…</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>Model</source>
+        <translation>Modell</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>What</source>
+        <translation>Was</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Size</source>
+        <translation>Größe</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>From</source>
+        <translation>Quelle</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Licence</source>
+        <translation>Lizenz</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Use models from a folder…</source>
+        <translation>Modelle aus einem Ordner verwenden…</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Lumen looked in the model library, ComfyUI, WebUI, LM Studio and Downloads. Choose another folder with the model files, such as a portable ComfyUI: they are used where they are.</source>
+        <translation>Lumen hat in der Modellbibliothek, in ComfyUI, WebUI, LM Studio und in Downloads gesucht. Wählen Sie einen anderen Ordner mit den Modelldateien, etwa ein portables ComfyUI: Sie werden dort verwendet, wo sie sind.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Folder with model files</source>
+        <translation>Ordner mit Modelldateien</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Open models folder</source>
+        <translation>Modellordner öffnen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Where Lumen saves models (Settings → Models can move it)</source>
+        <translation>Wo Lumen Modelle speichert (Einstellungen → Modelle kann ihn verschieben)</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Model set for Characters (pose control)…</source>
+        <translation>Modellsatz für Charaktere (Posensteuerung)…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Instead of this model: an SDXL model with pose control, character references, an upscaler and a language model, as the Characters plugin uses them (about 17 GB)</source>
+        <translation>Statt dieses Modells: ein SDXL-Modell mit Posensteuerung, Charakterreferenzen, einem Hochskalierer und einem Sprachmodell, wie sie das Plugin „Charaktere“ verwendet (etwa 17 GB)</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <location line="+322"/>
+        <source>Set up</source>
+        <translation>Einrichten</translation>
+    </message>
+    <message>
+        <location line="-309"/>
+        <source>Setting up…</source>
+        <translation>Wird eingerichtet…</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>You can close this window: downloads continue in the Queue, and Lumen finishes the setup when they are done. An interrupted download resumes where it stopped.</source>
+        <translation>Sie können dieses Fenster schließen: Downloads laufen in der Warteschlange weiter, und Lumen schließt die Einrichtung ab, wenn sie fertig sind. Ein unterbrochener Download wird dort fortgesetzt, wo er aufgehört hat.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Step</source>
+        <translation>Schritt</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Progress</source>
+        <translation>Fortschritt</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Close</source>
+        <translation>Schließen</translation>
+    </message>
+    <message>
+        <location line="+48"/>
+        <source>Reading %1…</source>
+        <translation>%1 wird gelesen…</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <location line="+60"/>
+        <source>This computer: %1</source>
+        <translation>Dieser Computer: %1</translation>
+    </message>
+    <message numerus="yes">
+        <location line="-56"/>
+        <source>%n model file(s) found in %1.</source>
+        <translation>
+            <numerusform>%n Modelldatei in %1 gefunden.</numerusform>
+            <numerusform>%n Modelldateien in %1 gefunden.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>No model files in %1 (Lumen reads its subfolders too).</source>
+        <translation>Keine Modelldateien in %1 (Lumen liest auch seine Unterordner).</translation>
+    </message>
+    <message>
+        <location line="+59"/>
+        <source>Suggested for your %1: %2.</source>
+        <translation>Empfohlen für Ihre %1: %2.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Suggested for your %1: %2, a lighter model. Changing images from a description works best with 8 GB or an online service.</source>
+        <translation>Empfohlen für Ihre %1: %2, ein leichteres Modell. Bilder nach einer Beschreibung ändern klappt am besten mit 8 GB oder einem Online-Dienst.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Your graphics card has less than 8 GB. %1 runs on it, but FLUX.2 [klein], which follows edit instructions best, needs 8 GB; an online service can do that too.</source>
+        <translation>Ihre Grafikkarte hat weniger als 8 GB. %1 läuft darauf, aber FLUX.2 [klein], das Bearbeitungsanweisungen am besten befolgt, braucht 8 GB; ein Online-Dienst kann das auch.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>This computer has no NVIDIA or AMD graphics card, so images would take many minutes each: an online service is the better choice.</source>
+        <translation>Dieser Computer hat keine NVIDIA- oder AMD-Grafikkarte, daher würde jedes Bild viele Minuten dauern: Ein Online-Dienst ist die bessere Wahl.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>No NVIDIA or AMD graphics card was found. The models run on the processor then, which takes many minutes per image. An online service is the better choice here.</source>
+        <translation>Es wurde keine NVIDIA- oder AMD-Grafikkarte gefunden. Die Modelle laufen dann auf dem Prozessor, was viele Minuten pro Bild dauert. Ein Online-Dienst ist hier die bessere Wahl.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Setting up: the downloads are running.</source>
+        <translation>Wird eingerichtet: Die Downloads laufen.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>%1 (suggested)</source>
+        <translation>%1 (empfohlen)</translation>
+    </message>
+    <message>
+        <location line="+48"/>
+        <source>Also set up a language model for %1</source>
+        <translation>Auch ein Sprachmodell für %1 einrichten</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1, %2 more. It shares the graphics card with the image model, so images get slower; the editor works without it.</source>
+        <translation>%1, %2 zusätzlich. Es teilt sich die Grafikkarte mit dem Bildmodell, daher werden Bilder langsamer; der Editor funktioniert ohne.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>%1, already on this computer. It shares the graphics card with the image model, so images get slower; the editor works without it.</source>
+        <translation>%1, bereits auf diesem Computer. Es teilt sich die Grafikkarte mit dem Bildmodell, daher werden Bilder langsamer; der Editor funktioniert ohne.</translation>
+    </message>
+    <message>
+        <location line="+20"/>
+        <location line="+2"/>
+        <location line="+4"/>
+        <source>%1 (the program)</source>
+        <translation>%1 (das Programm)</translation>
+    </message>
+    <message>
+        <location line="-6"/>
+        <source>Installed</source>
+        <translation>Installiert</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>%1 %2 (the program)</source>
+        <translation>%1 %2 (das Programm)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Download from GitHub</source>
+        <translation>Von GitHub herunterladen</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Looking up…</source>
+        <translation>Wird nachgeschlagen…</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <location line="+13"/>
+        <source>On this computer</source>
+        <translation>Auf diesem Computer</translation>
+    </message>
+    <message>
+        <location line="-13"/>
+        <source>On this computer (found)</source>
+        <translation>Auf diesem Computer (gefunden)</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <location line="+9"/>
+        <source>Download from Hugging Face</source>
+        <translation>Von Hugging Face herunterladen</translation>
+    </message>
+    <message>
+        <location line="-5"/>
+        <source>Missing</source>
+        <translation>Fehlt</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Not needed</source>
+        <translation>Nicht nötig</translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <source>To download: &lt;b&gt;%1&lt;/b&gt;, %2.</source>
+        <translation>Herunterzuladen: &lt;b&gt;%1&lt;/b&gt;, %2.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Free on %1: %2.</source>
+        <translation>Frei auf %1: %2.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Models are saved in %1.</source>
+        <translation>Modelle werden in %1 gespeichert.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>&lt;b&gt;Everything is on this computer already&lt;/b&gt;; nothing to download.</source>
+        <translation>&lt;b&gt;Alles ist bereits auf diesem Computer&lt;/b&gt;; nichts herunterzuladen.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Files are used where they are; %1 joins the model library (nothing there is moved or changed).</source>
+        <translation>Dateien werden dort verwendet, wo sie sind; %1 kommt zur Modellbibliothek hinzu (dort wird nichts verschoben oder geändert).</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Your server &quot;%1&quot; runs this model already; Lumen uses it as it is.</source>
+        <translation>Ihr Server „%1“ führt dieses Modell bereits aus; Lumen verwendet ihn so, wie er ist.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Your server &quot;%1&quot; has this model with settings that cannot work; Lumen corrects them (the model in its slot, with its VAE and text encoder).</source>
+        <translation>Ihr Server „%1“ hat dieses Modell mit Einstellungen, die nicht funktionieren können; Lumen korrigiert sie (das Modell an seinem Platz, mit seinem VAE und Text-Encoder).</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Not enough disk space.</source>
+        <translation>Nicht genug Speicherplatz.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>By downloading you accept the models&apos; licences (see the Licence column).</source>
+        <translation>Mit dem Herunterladen akzeptieren Sie die Lizenzen der Modelle (siehe Spalte Lizenz).</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Then Lumen starts the model and makes a test image.</source>
+        <translation>Dann startet Lumen das Modell und erstellt ein Testbild.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Download and set up</source>
+        <translation>Herunterladen und einrichten</translation>
+    </message>
+    <message>
+        <location line="+36"/>
+        <location line="+424"/>
+        <source>Done</source>
+        <translation>Fertig</translation>
+    </message>
+    <message>
+        <location line="-423"/>
+        <source>Waiting</source>
+        <translation>Wartet</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Setting up the server…</source>
+        <translation>Der Server wird eingerichtet…</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+0"/>
+        <source>%n step(s)</source>
+        <translation>
+            <numerusform>%n Schritt</numerusform>
+            <numerusform>%n Schritte</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>The setup did not finish</source>
+        <translation>Die Einrichtung wurde nicht abgeschlossen</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Back shows the plan again; files that were downloaded are kept.</source>
+        <translation>Zurück zeigt den Plan erneut; heruntergeladene Dateien bleiben erhalten.</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>The image server was set up, but it has no provider.</source>
+        <translation>Der Bildserver wurde eingerichtet, hat aber keinen Anbieter.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>%1 is set up</source>
+        <translation>%1 ist eingerichtet</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Lumen starts the image engine and makes a test image. The first start loads the model, which takes a minute or two.</source>
+        <translation>Lumen startet die Bild-Engine und erstellt ein Testbild. Der erste Start lädt das Modell, was ein bis zwei Minuten dauert.</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Lumen sends your description and the image (or the selected part) to the service, which makes the result and charges your account a few cents per image. The key is kept in the Windows Credential Manager, never in a file.</source>
+        <translation>Lumen sendet Ihre Beschreibung und das Bild (oder den ausgewählten Teil) an den Dienst, der das Ergebnis erstellt und Ihrem Konto einige Cent pro Bild berechnet. Der Schlüssel wird in der Windows-Anmeldeinformationsverwaltung aufbewahrt, nie in einer Datei.</translation>
+    </message>
+    <message>
+        <location line="+20"/>
+        <source>Paste the key here</source>
+        <translation>Schlüssel hier einfügen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>API key</source>
+        <translation>API-Schlüssel</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Connect and make a test image</source>
+        <translation>Verbinden und ein Testbild erstellen</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Checks the key, makes the service Lumen&apos;s image engine and makes one test image (a few cents)</source>
+        <translation>Prüft den Schlüssel, macht den Dienst zur Bild-Engine von Lumen und erstellt ein Testbild (einige Cent)</translation>
+    </message>
+    <message>
+        <location line="+20"/>
+        <source>No key yet? Create one at &lt;a href=&quot;%1&quot;&gt;%2&lt;/a&gt; (you need an account with %3).</source>
+        <translation>Noch keinen Schlüssel? Erstellen Sie einen unter &lt;a href=&quot;%1&quot;&gt;%2&lt;/a&gt; (Sie brauchen ein Konto bei %3).</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Paste the key first.</source>
+        <translation>Fügen Sie zuerst den Schlüssel ein.</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <location line="+24"/>
+        <source>This service is not available in this version of Lumen.</source>
+        <translation>Dieser Dienst ist in dieser Version von Lumen nicht verfügbar.</translation>
+    </message>
+    <message>
+        <location line="-19"/>
+        <source>Checking the key…</source>
+        <translation>Der Schlüssel wird geprüft…</translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <source>Connected.</source>
+        <translation>Verbunden.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <location line="+143"/>
+        <source>%1 is connected</source>
+        <translation>%1 ist verbunden</translation>
+    </message>
+    <message>
+        <location line="-142"/>
+        <source>Lumen asks the service for a test image; this takes a few seconds.</source>
+        <translation>Lumen fordert beim Dienst ein Testbild an; das dauert einige Sekunden.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>The service did not accept the key: %1</source>
+        <translation>Der Dienst hat den Schlüssel nicht akzeptiert: %1</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Lumen works with ComfyUI, Forge / Stable Diffusion WebUI (started with --api) and stable-diffusion.cpp&apos;s sd-server, and uses the model loaded there. Nothing is downloaded; the server keeps running on its own.</source>
+        <translation>Lumen arbeitet mit ComfyUI, Forge / Stable Diffusion WebUI (gestartet mit --api) und sd-server von stable-diffusion.cpp und verwendet das dort geladene Modell. Es wird nichts heruntergeladen; der Server läuft eigenständig weiter.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Found on this computer</source>
+        <translation>Auf diesem Computer gefunden</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Search again</source>
+        <translation>Erneut suchen</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Or by address</source>
+        <translation>Oder über die Adresse</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Connect</source>
+        <translation>Verbinden</translation>
+    </message>
+    <message>
+        <location line="+57"/>
+        <source>Use it again</source>
+        <translation>Wieder verwenden</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Use this</source>
+        <translation>Diesen verwenden</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>None found on the usual ports (ComfyUI 8188 and 8000, WebUI 7860, Forge 7861, sd-server 1234 and 7861). Start the server, then search again, or type its address below.</source>
+        <translation>Keiner auf den üblichen Ports gefunden (ComfyUI 8188 und 8000, WebUI 7860, Forge 7861, sd-server 1234 und 7861). Starten Sie den Server und suchen Sie erneut, oder geben Sie unten seine Adresse ein.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>None running on the usual ports right now; you can type an address.</source>
+        <translation>Zurzeit läuft keiner auf den üblichen Ports; Sie können eine Adresse eingeben.</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+2"/>
+        <source>Found %n server(s).</source>
+        <translation>
+            <numerusform>%n Server gefunden.</numerusform>
+            <numerusform>%n Server gefunden.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Found: %1.</source>
+        <translation>Gefunden: %1.</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>%1 is not available in this version of Lumen.</source>
+        <translation>%1 ist in dieser Version von Lumen nicht verfügbar.</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Lumen asks the server for a test image with its model.</source>
+        <translation>Lumen fordert beim Server ein Testbild mit seinem Modell an.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Asking %1 for its models…</source>
+        <translation>%1 wird nach seinen Modellen gefragt…</translation>
+    </message>
+    <message>
+        <location line="+24"/>
+        <source>Type the server&apos;s address, for example http://127.0.0.1:8188.</source>
+        <translation>Geben Sie die Adresse des Servers ein, zum Beispiel http://127.0.0.1:8188.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Asking %1…</source>
+        <translation>%1 wird gefragt…</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>No ComfyUI, WebUI / Forge or sd-server answers at %1. Is it running, and started with --listen (ComfyUI) or --api (WebUI) when it is on another computer?</source>
+        <translation>Unter %1 antwortet kein ComfyUI, WebUI / Forge oder sd-server. Läuft er, und wurde er mit --listen (ComfyUI) oder --api (WebUI) gestartet, wenn er auf einem anderen Computer läuft?</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Found %1.</source>
+        <translation>%1 gefunden.</translation>
+    </message>
+    <message>
+        <location line="+36"/>
+        <source>Stop</source>
+        <translation>Stopp</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Stops the test image; the engine stays set up</source>
+        <translation>Hält das Testbild an; die Engine bleibt eingerichtet</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Make another test image</source>
+        <translation>Noch ein Testbild erstellen</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Lumen makes another test image.</source>
+        <translation>Lumen erstellt ein weiteres Testbild.</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <location line="+22"/>
+        <source>Making a test image…</source>
+        <translation>Testbild wird erstellt…</translation>
+    </message>
+    <message>
+        <location line="-12"/>
+        <source>Test image</source>
+        <translation>Testbild</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Waiting for the engine</source>
+        <translation>Warten auf die Engine</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>The test image was stopped. The engine is set up; Make another test image tries again.</source>
+        <translation>Das Testbild wurde angehalten. Die Engine ist eingerichtet; „Noch ein Testbild erstellen“ versucht es erneut.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>The test image did not work: %1</source>
+        <translation>Das Testbild hat nicht funktioniert: %1</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Back lets you check the settings; Settings → AI shows the engine and its status.</source>
+        <translation>Mit Zurück können Sie die Einstellungen prüfen; Einstellungen → KI zeigt die Engine und ihren Status.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>It works. Open an image, select an area and describe what should change, or start a new image from a description. Settings → AI shows and changes the engine.</source>
+        <translation>Es funktioniert. Öffnen Sie ein Bild, wählen Sie einen Bereich aus und beschreiben Sie, was sich ändern soll, oder beginnen Sie ein neues Bild nach einer Beschreibung. Einstellungen → KI zeigt und ändert die Engine.</translation>
+    </message>
+</context>
+<context>
     <name>lumen::ui::ShortcutsPage</name>
     <message>
         <location filename="../src/ui/dialogs/ShortcutsPage.cpp" line="+32"/>
@@ -12711,7 +17232,7 @@ oder aus der Bibliothek ziehen</translation>
 <context>
     <name>lumen::ui::ShotCard</name>
     <message>
-        <location filename="../src/ui/director/ShotCard.cpp" line="+48"/>
+        <location filename="../src/plugins/characters/director/ShotCard.cpp" line="+48"/>
         <source>Edit the pose</source>
         <translation>Pose bearbeiten</translation>
     </message>
@@ -12774,20 +17295,150 @@ oder aus der Bibliothek ziehen</translation>
 <context>
     <name>lumen::ui::SkeletonTool</name>
     <message>
-        <location filename="../src/ui/parts/PartTools.cpp" line="+155"/>
+        <location filename="../src/plugins/parts/PartTools.cpp" line="+155"/>
         <source>Drag the joints onto the character. Shift+drag moves the whole skeleton. Used by the skeleton segmenter and skeleton splits.</source>
         <translation>Ziehen Sie die Gelenke auf die Figur. Umschalt+Ziehen verschiebt das gesamte Skelett. Wird vom Skelett-Segmentierer und von Skelett-Teilungen verwendet.</translation>
     </message>
     <message>
-        <location filename="../src/ui/parts/PartTools.h" line="+56"/>
+        <location filename="../src/plugins/parts/PartTools.h" line="+56"/>
         <source>Skeleton</source>
         <translation>Skelett</translation>
     </message>
 </context>
 <context>
+    <name>lumen::ui::StartScreen</name>
+    <message>
+        <location filename="../src/ui/pages/StartScreen.cpp" line="+59"/>
+        <source>Layers</source>
+        <translation>Ebenen</translation>
+    </message>
+    <message>
+        <location line="+83"/>
+        <source>Open a picture to change it with words, or start a new one.</source>
+        <translation>Öffnen Sie ein Bild, um es mit Worten zu ändern, oder beginnen Sie ein neues.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Open image…</source>
+        <translation>Bild öffnen…</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Open a photo or picture from this computer (Ctrl+O)</source>
+        <translation>Ein Foto oder Bild von diesem Computer öffnen (Strg+O)</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Paste from clipboard</source>
+        <translation>Aus Zwischenablage einfügen</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Open the picture you copied as a new document</source>
+        <translation>Das kopierte Bild als neues Dokument öffnen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>New from prompt…</source>
+        <translation>Neu aus Prompt…</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Describe a picture and let the AI draw it</source>
+        <translation>Ein Bild beschreiben und von der KI zeichnen lassen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>New blank canvas…</source>
+        <translation>Neue leere Arbeitsfläche…</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>An empty canvas of the size you choose (Ctrl+N)</source>
+        <translation>Eine leere Arbeitsfläche in der Größe Ihrer Wahl (Strg+N)</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Set up AI</source>
+        <translation>KI einrichten</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>To change pictures with words, Lumen needs an image engine: a model that runs on this computer, or an online service.</source>
+        <translation>Um Bilder mit Worten zu ändern, braucht Lumen eine Bild-Engine: ein Modell, das auf diesem Computer läuft, oder einen Online-Dienst.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Set up AI…</source>
+        <translation>KI einrichten…</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Recent files</source>
+        <translation>Zuletzt verwendete Dateien</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Recent in this project</source>
+        <translation>Zuletzt in diesem Projekt</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Browse project images…</source>
+        <translation>Projektbilder ansehen…</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Every image of this project, with background removal and upscaling (Alt+6)</source>
+        <translation>Alle Bilder dieses Projekts, mit Hintergrundentfernung und Hochskalierung (Alt+6)</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>The documents and images of this project appear here.</source>
+        <translation>Die Dokumente und Bilder dieses Projekts erscheinen hier.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Tip: drop an image file here to open it.</source>
+        <translation>Tipp: Ziehen Sie eine Bilddatei hierher, um sie zu öffnen.</translation>
+    </message>
+    <message>
+        <location line="+141"/>
+        <source>Untitled</source>
+        <translation>Unbenannt</translation>
+    </message>
+    <message>
+        <location line="+31"/>
+        <source>%1
+Changed %2</source>
+        <translation>%1
+Geändert %2</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>Document with layers · %1 × %2 px · %3</source>
+        <translation>Dokument mit Ebenen · %1 × %2 px · %3</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>%1 · %2 × %3 px · %4</source>
+        <translation>%1 · %2 × %3 px · %4</translation>
+    </message>
+</context>
+<context>
     <name>lumen::ui::Studio</name>
     <message>
-        <location filename="../src/ui/Studio.cpp" line="+134"/>
+        <location filename="../src/ui/Studio.cpp" line="+22"/>
+        <source>The models are now in %1.</source>
+        <translation>Die Modelle sind jetzt in %1.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The models folder was not moved: %1</source>
+        <translation>Der Modellordner wurde nicht verschoben: %1</translation>
+    </message>
+    <message>
+        <location line="+169"/>
         <source>Could not open project %1: %2</source>
         <translation>Projekt %1 konnte nicht geöffnet werden: %2</translation>
     </message>
@@ -12802,20 +17453,25 @@ oder aus der Bibliothek ziehen</translation>
         <translation>Besetzung</translation>
     </message>
     <message>
-        <location line="+150"/>
+        <location line="+155"/>
         <source>Background</source>
         <translation>Hintergrund</translation>
     </message>
     <message>
         <location line="+10"/>
-        <location line="+61"/>
+        <location line="+138"/>
         <source>Image</source>
         <translation>Bild</translation>
     </message>
     <message>
-        <location line="-52"/>
+        <location line="-129"/>
         <source>Images (*.png *.jpg *.jpeg *.webp *.bmp *.tif *.tiff *.psd);;Layered Photoshop (*.psd)</source>
         <translation>Bilder (*.png *.jpg *.jpeg *.webp *.bmp *.tif *.tiff *.psd);;Photoshop mit Ebenen (*.psd)</translation>
+    </message>
+    <message>
+        <location line="+36"/>
+        <source>%1 is not there any more.</source>
+        <translation>%1 ist nicht mehr vorhanden.</translation>
     </message>
     <message>
         <location line="+13"/>
@@ -12823,12 +17479,37 @@ oder aus der Bibliothek ziehen</translation>
         <translation>%1 kann nicht geöffnet werden: %2</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+14"/>
+        <source>The file has 16 bits per colour; Lumen saves 8, so the finest shades are lost.</source>
+        <translation>Die Datei hat 16 Bit pro Farbe; Lumen speichert 8, daher gehen die feinsten Abstufungen verloren.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>a colour profile of its own</source>
+        <translation>ein eigenes Farbprofil</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The file has %1; Lumen saves it in standard colours (sRGB), so the most vivid colours may be a little duller.</source>
+        <translation>Die Datei hat %1; Lumen speichert sie in Standardfarben (sRGB), daher können die leuchtendsten Farben etwas matter werden.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>The photo&apos;s details from the camera (date, place, camera) are not kept.</source>
+        <translation>Die Angaben der Kamera zum Foto (Datum, Ort, Kamera) bleiben nicht erhalten.</translation>
+    </message>
+    <message>
+        <location line="+11"/>
         <source>Opening %1...</source>
         <translation>%1 wird geöffnet...</translation>
     </message>
     <message>
-        <location line="+17"/>
+        <location line="+8"/>
+        <source>Lumen could not keep everything of this Photoshop file (%1).</source>
+        <translation>Lumen konnte nicht alles aus dieser Photoshop-Datei übernehmen (%1).</translation>
+    </message>
+    <message>
+        <location line="+19"/>
         <source>Opened %1 (%2).</source>
         <translation>%1 geöffnet (%2).</translation>
     </message>
@@ -12936,6 +17617,79 @@ oder aus der Bibliothek ziehen</translation>
         <location filename="../src/ui/canvas/TransformTool.h" line="+35"/>
         <source>Free transform</source>
         <translation>Frei transformieren</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::ui::VariantStrip</name>
+    <message>
+        <location filename="../src/ui/pages/VariantStrip.cpp" line="+41"/>
+        <source>Results</source>
+        <translation>Ergebnisse</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Keep</source>
+        <translation>Behalten</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Add this result as a new layer (Enter)</source>
+        <translation>Dieses Ergebnis als neue Ebene hinzufügen (Eingabe)</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Discard</source>
+        <translation>Verwerfen</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Drop all the results; the image stays as it is (Esc)</source>
+        <translation>Alle Ergebnisse verwerfen; das Bild bleibt, wie es ist (Esc)</translation>
+    </message>
+    <message>
+        <location line="+319"/>
+        <source>Result %1 of %2 · more on the way</source>
+        <translation>Ergebnis %1 von %2 · weitere folgen</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Keep it (Enter) or discard it (Esc)</source>
+        <translation>Behalten (Eingabe) oder verwerfen (Esc)</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Keep it or discard it</source>
+        <translation>Behalten oder verwerfen</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Result %1 of %2 · ←/→ to compare</source>
+        <translation>Ergebnis %1 von %2 · ←/→ zum Vergleichen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Result %1 of %2 · click one to compare</source>
+        <translation>Ergebnis %1 von %2 · klicken Sie auf eines, um zu vergleichen</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Keep (Enter) adds the result shown as a layer on top; Discard (Esc) drops them all. Generate again replaces these results.</source>
+        <translation>Behalten (Eingabe) fügt das gezeigte Ergebnis als Ebene oben hinzu; Verwerfen (Esc) verwirft alle. Erneutes Generieren ersetzt diese Ergebnisse.</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Keep AI result</source>
+        <translation>KI-Ergebnis behalten</translation>
+    </message>
+    <message>
+        <location line="+79"/>
+        <source>Result %1</source>
+        <translation>Ergebnis %1</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Result %1 (←/→)</source>
+        <translation>Ergebnis %1 (←/→)</translation>
     </message>
 </context>
 </TS>
