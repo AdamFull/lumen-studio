@@ -20,7 +20,8 @@ namespace lumen::ui {
 
 class FilterPreviewCache;
 
-// Runs a filter on the active layer of a document (M17 §17.6), for the Filters panel:
+// Runs a filter on the active layer of a document, or on the whole picture when its Input node reads
+// that (M17 §17.6), for the Filters panel:
 // * a preview of the whole picture at reduced resolution while the filter's settings change, for
 //   the canvas (previewChanged); a filter with AI steps previews only after run();
 // * apply(): the filter at full resolution on the active layer, through the selection (also the
@@ -35,7 +36,8 @@ class FilterPreviewCache;
 // the same undo step, and the result goes on through the selection scaled with it (outside the
 // selection the picture is only resized). A result that takes opacity away from the layer (a
 // cut-out, "Remove background") goes onto the new layer whole and the layer is hidden, so the
-// transparency shows. When the layer changes while apply() runs (a brush stroke, an undo), the
+// transparency shows. A filter of the whole picture puts its new layer on top of the others (and a
+// cut-out hides them all). When the layer changes while apply() runs (a brush stroke, an undo), the
 // result is put together again with the layer as it is then, so nothing outside where the filter
 // applies goes back. GUI-thread object.
 class FilterRunner : public QObject
@@ -85,6 +87,12 @@ public:
     // AI steps that the filter editor ran on the same inputs are taken from `results` (and the
     // ones run here are left there).
     void setSharedResults(std::shared_ptr<filters::SharedResults> results);
+    // The document's visible layers merged, as an Input node set to "Whole picture" reads it: the
+    // same image while the layers stay as they are.
+    QImage wholePicture();
+    // The filter reads the whole picture: its result goes over every layer (on a new layer on top,
+    // or into the active layer for Target::Layer), and a cut-out hides every layer under it.
+    bool readsWholePicture() const;
 
     // Previews the filter with its AI steps (they run at full resolution, so apply() reuses them).
     bool run(QString *why = nullptr);
@@ -138,6 +146,8 @@ private:
 
     QPointer<doc::Document> m_doc;
     QList<QMetaObject::Connection> m_docConnections;
+    QImage m_picture; // wholePicture(), made of the layers m_pictureKey describes
+    QByteArray m_pictureKey;
     std::optional<filters::Graph> m_graph;
     QString m_name;
     QString m_appliedNote;

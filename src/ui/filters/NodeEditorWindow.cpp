@@ -396,10 +396,11 @@ void NodeEditorWindow::setGraph(const filters::Graph &graph)
     updateTitle();
 }
 
-void NodeEditorWindow::setSource(const QImage &image, const QImage &selection)
+void NodeEditorWindow::setSource(const QImage &image, const QImage &selection, const QImage &picture)
 {
     m_source = image;
     m_selection = selection;
+    m_picture = picture;
     schedulePreview();
 }
 
@@ -848,7 +849,10 @@ void NodeEditorWindow::startPreview()
         };
     }
     const filters::NodeTypePtr type = node->type;
-    m_previewFuture = m_evaluator->evaluate(g, {source, m_source.isNull() ? QImage() : m_selection}, options);
+    // The whole picture only for a filter that reads it, as the Filters panel does: it is part of the
+    // AI steps' keys, which the panel's Apply looks up.
+    const QImage picture = !m_source.isNull() && g.readsWholePicture() ? m_picture : QImage();
+    m_previewFuture = m_evaluator->evaluate(g, {source, m_source.isNull() ? QImage() : m_selection, picture}, options);
     m_previewFuture
         .then(this, [this, alive = m_alive, generation, type](const filters::EvalResult &r) {
             if (!*alive || generation != m_previewGeneration)

@@ -45,8 +45,12 @@ private:
 // What a filter is applied to.
 struct EvalInputs
 {
-    QImage image;     // the layer or the whole picture (any format)
+    QImage image;     // the active layer, or the picture the filter is shown on (any format)
     QImage selection; // a mask, stretched to the image when its size differs; null: everything
+    // The whole picture (every visible layer merged), for an Input node that reads it; null: the
+    // image is the whole picture. Of the image's size. Callers give it only to a graph that reads it
+    // (Graph::readsWholePicture), since its cacheKey is part of the Input node's cache key.
+    QImage picture;
 };
 
 struct EvalOptions

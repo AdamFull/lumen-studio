@@ -373,6 +373,18 @@ public:
 
     QSize sourceSize() const override { return m_inputs.image.size(); }
 
+    QImage picture(double scale) override
+    {
+        if (m_inputs.picture.isNull())
+            return source(scale);
+        QImage &picture = m_picture[laneOf(scale)];
+        if (picture.isNull()) {
+            const QImage image = img::normalized(m_inputs.picture);
+            picture = img::scaled(image, scaledSize(image.size(), scale), true);
+        }
+        return picture;
+    }
+
     std::function<void(double, const QString &)> progressReporter() override
     {
         if (!m_options.stepProgress)
@@ -399,7 +411,8 @@ private:
     QByteArray sourceKey() const
     {
         return QByteArray::number(m_inputs.image.cacheKey()) + 'x' + QByteArray::number(m_inputs.image.width()) + 'x'
-             + QByteArray::number(m_inputs.image.height()) + '/' + QByteArray::number(m_inputs.selection.cacheKey());
+             + QByteArray::number(m_inputs.image.height()) + '/' + QByteArray::number(m_inputs.selection.cacheKey()) + '/'
+             + QByteArray::number(m_inputs.picture.cacheKey());
     }
 
     // Computes every step's key and takes what the cache holds for it, before anything runs: a
@@ -611,6 +624,7 @@ private:
     EvalResult m_result;
     std::array<QImage, 2> m_source; // per lane
     std::array<QImage, 2> m_selection;
+    std::array<QImage, 2> m_picture;
 
     mutable QMutex m_mutex;
     std::atomic_bool m_cancelledFlag = false; // m_cancelled, readable without the lock
@@ -746,6 +760,7 @@ public:
     QImage source(double) override { return {}; }
     QImage selection(double) override { return {}; }
     QSize sourceSize() const override { return {}; }
+    QImage picture(double) override { return {}; }
 };
 
 } // namespace

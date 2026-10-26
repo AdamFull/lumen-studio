@@ -1,7 +1,7 @@
 // Files as in an image editor (M17): File → Save writes a picture back to the file it came from,
 // Save as… and Export a copy…, the unsaved-changes marker and the questions on closing and quitting,
 // recent files; the main window's keys in other windows; closing a document stops its prompt-bar
-// run.
+// run; a filter of the whole picture.
 
 #include "MockHttpServer.h"
 #include "ai/ModelDefaults.h"
@@ -240,6 +240,51 @@ ai::ModelDefaults kleinPreset()
     return klein;
 }
 
+// A node type for the tests: makes the left half of the picture transparent (a cut-out).
+filters::NodeTypePtr cutLeftHalf()
+{
+    filters::NodeTypeInfo info;
+    info.id = QStringLiteral("test-cut-left");
+    info.name = QStringLiteral("Cut left half");
+    info.category = filters::categories::Color;
+    info.inputs = {{QStringLiteral("image"), QStringLiteral("Image"), filters::PortType::Image, false}};
+    info.outputs = {{QStringLiteral("image"), QStringLiteral("Image"), filters::PortType::Image, false}};
+    return filters::makeNodeType(info, [](const filters::NodeArgs &args, filters::EvalContext &) -> filters::NodeResult {
+        QImage im = args.image(QStringLiteral("image")).copy();
+        QPainter p(&im);
+        p.setCompositionMode(QPainter::CompositionMode_Clear);
+        p.fillRect(QRect(0, 0, im.width() / 2, im.height()), Qt::transparent);
+        p.end();
+        return filters::Values{{QStringLiteral("image"), im}};
+    });
+}
+
+// Input → `middle` → Output, the Input reading the layer or the whole picture.
+filters::Graph oneStep(const QString &middle, bool whole, const filters::NodeRegistry &registry = filters::NodeRegistry::global())
+{
+    filters::Graph g;
+    g.name = QStringLiteral("One step");
+    const QString in = g.addNode(QStringLiteral("input"), QPointF(0, 0), registry);
+    const QString mid = g.addNode(middle, QPointF(260, 0), registry);
+    const QString out = g.addNode(QStringLiteral("output"), QPointF(520, 0), registry);
+    g.connect(in, QStringLiteral("image"), mid, QStringLiteral("image"));
+    g.connect(mid, QStringLiteral("image"), out, QStringLiteral("image"));
+    if (whole)
+        g.setParam(in, QStringLiteral("source"), QStringLiteral("picture"));
+    return g;
+}
+
+bool applyAndWait(FilterRunner &runner, FilterRunner::Target target)
+{
+    QSignalSpy finished(&runner, &FilterRunner::finished);
+    QString why;
+    if (!runner.apply(target, &why)) {
+        qWarning() << why;
+        return false;
+    }
+    return finished.wait(10000) && finished.first().at(0).toBool();
+}
+
 } // namespace
 
 class TestFiles : public QObject
@@ -255,6 +300,7 @@ private slots:
     void recentFiles();
     void shortcutsInOtherWindows();
     void closingStopsItsRun();
+    void wholePictureInput();
 };
 
 void TestFiles::initTestCase()
@@ -872,6 +918,126 @@ void TestFiles::closingStopsItsRun()
     QCOMPARE(strip->count(), 0);
     QVERIFY(!strip->isRunning());
     sd.hold = false;
+}
+
+// The filters' Input node reads the active layer or the whole picture (every visible layer merged);
+// with the whole picture the result goes on a new layer above all the others, as one undo step,
+// and a cut-out hides every layer under it. The built-in AI filters read the whole picture.
+void TestFiles::wholePictureInput()
+{
+    // The node's setting and the built-in filters.
+    const filters::NodeTypePtr input = filters::NodeRegistry::global().find(QStringLiteral("input"));
+    QVERIFY(input);
+    const filters::ParamSpec *source = input->info().param(QStringLiteral("source"));
+    QVERIFY(source);
+    QCOMPARE(source->defaultValue.toString(), QStringLiteral("layer"));
+    QCOMPARE(source->choices.size(), 2);
+    QCOMPARE(source->choices.at(0).label, QStringLiteral("Active layer"));
+    QCOMPARE(source->choices.at(1).label, QStringLiteral("Whole picture"));
+    Studio studio;
+    FilterCatalog *catalog = FilterCatalog::of(&studio);
+    for (const QString &name : {QStringLiteral("colorize-with-ai"), QStringLiteral("clean-up-background"), QStringLiteral("remove-background"),
+                                QStringLiteral("upscale-2x"), QStringLiteral("black-and-white"), QStringLiteral("old-photo")}) {
+        const std::optional<filters::Graph> g = catalog->load(QStringLiteral(":/filters/builtin/%1.lumenfilter").arg(name));
+        QVERIFY2(g, qPrintable(name));
+        const bool ai = !name.contains(QStringLiteral("black")) && !name.contains(QStringLiteral("old"));
+        QCOMPARE(g->readsWholePicture(), ai);
+    }
+
+    // Two layers: a red background and a blue square on the upper layer; the lower one is active.
+    const QSize size(80, 60);
+    doc::Document *doc = studio.newDocument(size, QStringLiteral("Layers"), QColor(200, 0, 0));
+    const QUuid background = doc->activeLayerId();
+    QImage square(size, QImage::Format_ARGB32_Premultiplied);
+    square.fill(Qt::transparent);
+    QPainter(&square).fillRect(QRect(40, 0, 40, 60), QColor(0, 0, 200));
+    const QUuid top = doc->addLayer(QStringLiteral("Square"), square);
+    doc->setActiveLayer(background);
+    doc->undoStack()->clear();
+
+    FilterRunner runner;
+    runner.setPreviewEnabled(false);
+    runner.setDocument(doc);
+    // The active layer: the result goes above it, the square stays over it.
+    runner.setGraph(oneStep(QStringLiteral("invert"), false), QStringLiteral("Invert"));
+    QVERIFY(!runner.readsWholePicture());
+    QVERIFY(applyAndWait(runner, FilterRunner::Target::NewLayer));
+    QCOMPARE(doc->layerCount(), 3);
+    QCOMPARE(doc->indexOf(top), 2);
+    QCOMPARE(QColor(doc->layerAt(1)->image.pixel(60, 30)), QColor(55, 255, 255)); // the red layer inverted
+    doc->undoStack()->undo();
+    QCOMPARE(doc->layerCount(), 2);
+
+    // The whole picture: one new layer on top with the picture inverted, the others as they were.
+    runner.setGraph(oneStep(QStringLiteral("invert"), true), QStringLiteral("Invert all"));
+    QVERIFY(runner.readsWholePicture());
+    QCOMPARE(runner.wholePicture(), doc->flattened());
+    const QImage picture = runner.wholePicture();
+    QVERIFY(runner.wholePicture().cacheKey() == picture.cacheKey()); // kept while nothing changes
+    const int steps = doc->undoStack()->index();
+    QVERIFY(applyAndWait(runner, FilterRunner::Target::NewLayer));
+    QCOMPARE(doc->undoStack()->index(), steps + 1);
+    QCOMPARE(doc->layerCount(), 3);
+    const doc::LayerPtr result = doc->layerAt(2);
+    QCOMPARE(result->props.name, QStringLiteral("Invert all"));
+    QCOMPARE(QColor(result->image.pixel(10, 30)), QColor(55, 255, 255));  // red inverted
+    QCOMPARE(QColor(result->image.pixel(60, 30)), QColor(255, 255, 55));  // blue inverted
+    QCOMPARE(doc->indexOf(top), 1);
+    QCOMPARE(QColor(doc->findLayer(top)->image.pixel(60, 30)), QColor(0, 0, 200));
+    QCOMPARE(QColor(doc->findLayer(background)->image.pixel(10, 30)), QColor(200, 0, 0));
+    doc->undoStack()->undo();
+    QCOMPARE(doc->layerCount(), 2);
+
+    // Through a selection: only there.
+    QImage left = img::createMask(size);
+    QPainter(&left).fillRect(QRect(0, 0, 40, 60), Qt::white);
+    doc->applySelection(left, QStringLiteral("Select"));
+    QVERIFY(applyAndWait(runner, FilterRunner::Target::NewLayer));
+    QCOMPARE(qAlpha(doc->layerAt(2)->image.pixel(10, 30)), 255);
+    QCOMPARE(qAlpha(doc->layerAt(2)->image.pixel(60, 30)), 0);
+    doc->undoStack()->undo();
+    doc->undoStack()->undo(); // the selection
+    QVERIFY(!doc->hasSelection());
+
+    // The preview shows the same: the inverted picture over the layers.
+    runner.setPreviewEnabled(true);
+    runner.resumePreview(); // off since the last Apply
+    runner.setPreviewSize(80);
+    QTRY_VERIFY(!runner.previewImage().isNull());
+    QCOMPARE(QColor(runner.previewImage().pixel(60, 30)), QColor(255, 255, 55));
+    runner.setPreviewEnabled(false);
+
+    // Into the active layer: the picture's result replaces the layer's pixels.
+    QVERIFY(applyAndWait(runner, FilterRunner::Target::Layer));
+    QCOMPARE(doc->layerCount(), 2);
+    QCOMPARE(QColor(doc->findLayer(background)->image.pixel(60, 30)), QColor(255, 255, 55));
+    doc->undoStack()->undo();
+
+    // A cut-out of the whole picture hides every layer under its new layer, in the same step.
+    filters::NodeRegistry registry = filters::NodeRegistry::global();
+    registry.add(cutLeftHalf());
+    runner.setGraph(oneStep(QStringLiteral("test-cut-left"), true, registry), QStringLiteral("Cut"));
+    const int before = doc->undoStack()->index();
+    QVERIFY(applyAndWait(runner, FilterRunner::Target::NewLayer));
+    QCOMPARE(doc->undoStack()->index(), before + 1);
+    QCOMPARE(doc->layerCount(), 3);
+    QVERIFY(!doc->findLayer(background)->props.visible);
+    QVERIFY(!doc->findLayer(top)->props.visible);
+    QCOMPARE(qAlpha(doc->flattened().pixel(10, 30)), 0);
+    QCOMPARE(QColor(doc->flattened().pixel(60, 30)), QColor(0, 0, 200));
+    QVERIFY(runner.appliedNote().contains(QStringLiteral("layers are hidden")));
+    doc->undoStack()->undo();
+    QVERIFY(doc->findLayer(background)->props.visible && doc->findLayer(top)->props.visible);
+    QCOMPARE(doc->layerCount(), 2);
+
+    // The Filters panel says what it reads and where the result goes.
+    FiltersPanel panel(&studio, nullptr, nullptr, catalog);
+    QVERIFY(panel.selectFilter(QStringLiteral(":/filters/builtin/colorize-with-ai.lumenfilter")));
+    auto *hint = panel.findChild<QLabel *>(QStringLiteral("FilterSelectionHint"));
+    QVERIFY(hint);
+    QVERIFY2(hint->text().contains(QStringLiteral("every visible layer")), qPrintable(hint->text()));
+    QVERIFY(panel.selectFilter(QStringLiteral(":/filters/builtin/black-and-white.lumenfilter")));
+    QCOMPARE(hint->text(), QStringLiteral("Nothing is selected, so the whole layer changes."));
 }
 
 QTEST_MAIN(TestFiles)

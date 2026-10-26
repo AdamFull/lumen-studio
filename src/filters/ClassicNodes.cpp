@@ -129,12 +129,16 @@ void add(NodeRegistry &registry, NodeTypeInfo info, NodeFunction function)
 void addInputOutput(NodeRegistry &r)
 {
     NodeTypeInfo input = describe(QStringLiteral("input"), Text::tr("Input"), categories::InputOutput,
-                                  Text::tr("The picture the filter is applied to (the layer or the whole image) and "
-                                           "the selection."));
+                                  Text::tr("The picture the filter is applied to, the active layer or the whole picture, "
+                                           "and the selection."));
     input.outputs = {imagePort(), maskPort(QStringLiteral("selection"), Text::tr("Selection"))};
+    input.params = {choice(QStringLiteral("source"), Text::tr("Reads"), QStringLiteral("layer"),
+                           {{QStringLiteral("layer"), Text::tr("Active layer")}, {QStringLiteral("picture"), Text::tr("Whole picture")}},
+                           Text::tr("Active layer: the layer chosen in the Layers panel. Whole picture: every visible layer "
+                                    "merged, as you see it; the result then goes over all the layers."))};
     input.readsSource = true;
-    add(r, input, [](const NodeArgs &, EvalContext &ctx) -> NodeResult {
-        const QImage source = ctx.source();
+    add(r, input, [](const NodeArgs &args, EvalContext &ctx) -> NodeResult {
+        const QImage source = args.text(QStringLiteral("source")) == QLatin1String("picture") ? ctx.picture() : ctx.source();
         if (source.isNull())
             throw Error(Text::tr("There is no image to apply the filter to."));
         return Values{{ImagePort, source}, {QStringLiteral("selection"), ctx.selection()}};

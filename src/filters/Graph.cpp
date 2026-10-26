@@ -273,6 +273,17 @@ bool Graph::needsExplicitRun() const
     return false;
 }
 
+bool Graph::readsWholePicture() const
+{
+    for (const QString &id : evaluationOrder(outputNode())) {
+        const Node *n = node(id);
+        if (n && n->type && n->type->info().id == QLatin1String("input")
+            && n->param(QStringLiteral("source")).toString() == QLatin1String("picture"))
+            return true;
+    }
+    return false;
+}
+
 QStringList Graph::evaluationOrder(const QString &target) const
 {
     if (!node(target))

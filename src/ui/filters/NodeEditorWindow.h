@@ -57,9 +57,9 @@ public:
     void setGraph(const filters::Graph &graph);
     QString path() const { return m_path; }
 
-    // The picture the previews show (the active layer) and its selection; a null image shows the
-    // sample picture.
-    void setSource(const QImage &image, const QImage &selection = {});
+    // The picture the previews show (the active layer), its selection and the whole picture (every
+    // visible layer merged, for an Input node that reads it); a null image shows the sample picture.
+    void setSource(const QImage &image, const QImage &selection = {}, const QImage &picture = {});
 
     GraphModel *model() const { return m_model; }
     NodeScene *scene() const { return m_scene; }
@@ -165,6 +165,7 @@ private:
     // Previews of the selected node.
     QImage m_source;
     QImage m_selection;
+    QImage m_picture;
     std::unique_ptr<filters::Evaluator> m_evaluator;
     QFuture<filters::EvalResult> m_previewFuture;
     QTimer m_previewTimer;

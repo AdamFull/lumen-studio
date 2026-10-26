@@ -69,6 +69,7 @@ struct PreviewJob
     QSize docSize;
     double scale = 1.0;
     FilterRunner::Target target = FilterRunner::Target::NewLayer;
+    bool whole = false; // the filter reads the whole picture
 };
 
 struct PreviewOut
@@ -82,12 +83,16 @@ struct PreviewOut
 struct ApplyJob
 {
     QUuid layer;
-    QImage image;          // the layer's pixels when apply() started
-    quint64 revision = 0;  // and its revision then
+    // What the result is put together with when apply() started: the layer's pixels, or the whole
+    // picture for a filter that reads it and puts its result on a new layer.
+    QImage image;
+    quint64 revision = 0;  // the layer's revision then
+    QByteArray pictureKey; // the picture's state then (wholePictureKey), for a filter that reads it
     QImage selection;
     QSize docSize;
     FilterRunner::Target target = FilterRunner::Target::NewLayer;
     bool alphaLocked = false;
+    bool whole = false; // the filter reads the whole picture
     QString name;
 };
 
@@ -101,6 +106,19 @@ struct ApplyOut
     QImage resultMask;
     bool cancelled = false;
 };
+
+// What the whole picture is made of: every layer's pixels and how it is blended, so the merged
+// picture is made again only when one of them changes.
+QByteArray wholePictureKey(const doc::Document *doc)
+{
+    QByteArray key = QByteArray::number(doc->size().width()) + 'x' + QByteArray::number(doc->size().height());
+    for (const doc::LayerPtr &l : doc->layers()) {
+        key += '|' + l->id.toByteArray() + ':' + QByteArray::number(l->revision) + ':' + QByteArray::number(l->image.cacheKey()) + ':'
+             + QByteArray::number(l->props.visible) + ':' + QByteArray::number(l->props.opacity, 'g', 9) + ':'
+             + QByteArray::number(static_cast<int>(l->props.blend));
+    }
+    return key;
+}
 
 bool isEverywhere(const QImage &mask)
 {
@@ -397,6 +415,25 @@ void FilterRunner::setSharedResults(std::shared_ptr<filters::SharedResults> resu
     m_evaluator->setSharedResults(std::move(results));
 }
 
+QImage FilterRunner::wholePicture()
+{
+    if (!m_doc)
+        return {};
+    // The same image while nothing changed: its cacheKey is part of the Input node's key, so a
+    // slider moved after an AI step does not run the step again.
+    const QByteArray key = wholePictureKey(m_doc);
+    if (m_picture.isNull() || key != m_pictureKey) {
+        m_pictureKey = key;
+        m_picture = m_doc->flattened();
+    }
+    return m_picture;
+}
+
+bool FilterRunner::readsWholePicture() const
+{
+    return m_graph && m_graph->readsWholePicture();
+}
+
 void FilterRunner::setResultSize(const QSize &size, bool exact)
 {
     if (m_resultSize == size && m_resultSizeExact == exact)
@@ -480,6 +517,7 @@ void FilterRunner::startPreview(bool runExpensive)
     job.scale = std::min(1.0, double(m_previewSize) / std::max(job.docSize.width(), job.docSize.height()));
     job.selection = m_doc->selection();
     job.target = m_target;
+    job.whole = readsWholePicture();
     QSet<QUuid> ids;
     for (const doc::LayerPtr &l : m_doc->layers()) {
         if (l == active)
@@ -498,7 +536,7 @@ void FilterRunner::startPreview(bool runExpensive)
     }
     const bool show = m_previewEnabled;
     std::shared_ptr<FilterPreviewCache> cache = m_scaled;
-    m_previewFuture = m_evaluator->evaluate(*m_graph, {active->image, job.selection}, options);
+    m_previewFuture = m_evaluator->evaluate(*m_graph, {active->image, job.selection, job.whole ? wholePicture() : QImage()}, options);
     m_previewFuture
         .then(async::pool(), [job, cache, show](const filters::EvalResult &r) {
             PreviewOut out;
@@ -604,8 +642,13 @@ bool FilterRunner::apply(Target target, QString *why)
 
     ApplyJob job;
     job.layer = layer->id;
-    job.image = layer->image;
+    job.whole = readsWholePicture();
+    const QImage picture = job.whole ? wholePicture() : QImage();
+    // A filter of the whole picture puts its result over every layer: on a new layer, it is put
+    // together with the picture; into the layer, with the layer as for any filter.
+    job.image = job.whole && target == Target::NewLayer ? picture : layer->image;
     job.revision = layer->revision;
+    job.pictureKey = job.whole ? m_pictureKey : QByteArray();
     job.selection = m_doc->selection();
     job.docSize = m_doc->size();
     job.target = target;
@@ -618,7 +661,7 @@ bool FilterRunner::apply(Target target, QString *why)
     m_cancelled = std::make_shared<std::atomic_bool>(false);
     const std::shared_ptr<std::atomic_bool> cancelled = m_cancelled;
     const int changes = m_changes;
-    m_evaluator->evaluate(*m_graph, {job.image, job.selection}, options)
+    m_evaluator->evaluate(*m_graph, {layer->image, job.selection, picture}, options)
         .then(async::pool(), [job, cancelled](const filters::EvalResult &r) {
             if (*cancelled) {
                 ApplyOut out;
@@ -648,12 +691,17 @@ bool FilterRunner::apply(Target target, QString *why)
             }
             QStringList notes;
             // Painted on, undone or otherwise changed while the filter ran: put together again with
-            // the layer as it is now, so nothing outside where the filter applies goes back.
-            if (layer->revision != job.revision || layer->image.cacheKey() != job.image.cacheKey()) {
+            // the layer (or the picture) as it is now, so nothing outside where the filter applies
+            // goes back.
+            const bool overPicture = job.whole && job.target == Target::NewLayer;
+            if (overPicture ? wholePictureKey(doc) != job.pictureKey
+                            : layer->revision != job.revision || layer->image.cacheKey() != job.image.cacheKey()) {
                 ApplyJob now = job;
                 now.alphaLocked = layer->props.alphaLocked;
-                result = composeApply(now, layer->image, result.result, result.resultMask);
-                notes << tr("The layer changed while the filter ran: your changes stay outside the area the filter changed.");
+                now.image = overPicture ? doc->flattened() : layer->image;
+                result = composeApply(now, now.image, result.result, result.resultMask);
+                notes << (overPicture ? tr("The picture changed while the filter ran: your changes stay outside the area the filter changed.")
+                                      : tr("The layer changed while the filter ran: your changes stay outside the area the filter changed."));
             }
             const FilterComposite &out = result.composite;
             const QString undoText = tr("Filter: %1").arg(job.name);
@@ -666,11 +714,20 @@ bool FilterRunner::apply(Target target, QString *why)
             QUuid changed = job.layer;
             if (job.target == Target::NewLayer) {
                 const QJsonObject meta{{QStringLiteral("filter"), job.name}};
-                changed = doc->addLayer(job.name, out.pixels, meta, doc->indexOf(job.layer) + 1, undoText);
+                // Above the layer, or above them all for a filter of the whole picture.
+                QList<QUuid> hide;
                 if (out.hidesLayer) {
-                    doc::LayerProps props = doc->findLayer(job.layer)->props;
+                    for (const doc::LayerPtr &l : doc->layers()) {
+                        if ((job.whole || l->id == job.layer) && l->props.visible)
+                            hide << l->id;
+                    }
+                }
+                const int index = job.whole ? doc->layerCount() : doc->indexOf(job.layer) + 1;
+                changed = doc->addLayer(job.name, out.pixels, meta, index, undoText);
+                for (const QUuid &id : std::as_const(hide)) {
+                    doc::LayerProps props = doc->findLayer(id)->props;
                     props.visible = false;
-                    doc->setLayerProps(job.layer, props, undoText);
+                    doc->setLayerProps(id, props, undoText);
                 }
             } else if (!out.rect.isEmpty()) {
                 doc->applyPixels(job.layer, out.rect, out.pixels, undoText);
@@ -683,7 +740,8 @@ bool FilterRunner::apply(Target target, QString *why)
                     notes << tr("Outside the selection it was only resized.");
             }
             if (out.hidesLayer)
-                notes << tr("The original layer is hidden under it, so the cut-out shows.");
+                notes << (job.whole ? tr("The layers are hidden under it, so the cut-out shows.")
+                                    : tr("The original layer is hidden under it, so the cut-out shows."));
             m_appliedNote = notes.join(QLatin1Char(' '));
             m_appliedName = job.name;
             // The active layer may now be the result: previewing again would apply the filter
@@ -726,6 +784,18 @@ namespace {
 QImage composePreview(const PreviewJob &job, const filters::EvalResult &r, FilterPreviewCache &cache)
 {
     const QSize size = scaledSize(job.docSize, job.scale);
+    if (job.whole && job.target == FilterRunner::Target::NewLayer) {
+        // The result over every layer, as apply() puts it on top.
+        doc::DocumentSnapshot all;
+        for (const LayerInput &l : job.layers)
+            all.append({cache.get(l, size), l.props});
+        const QImage picture = doc::flatten(all, size);
+        const FilterComposite c = composeFilterResult(picture, r.image, combinedMask(job.selection, r.mask, size), job.target, false);
+        if (c.hidesLayer) // a cut-out hides the layers under it
+            return c.pixels;
+        all.append({c.pixels, doc::LayerProps()});
+        return doc::flatten(all, size);
+    }
     doc::DocumentSnapshot snapshot;
     for (int i = 0; i < job.layers.size(); ++i) {
         const LayerInput &l = job.layers.at(i);

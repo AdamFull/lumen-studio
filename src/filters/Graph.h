@@ -110,6 +110,9 @@ public:
     QString outputNode() const;
     // Whether a node needs an explicit Run (an expensive node feeds the output).
     bool needsExplicitRun() const;
+    // Whether an Input node that feeds the output reads the whole picture (every visible layer
+    // merged) rather than the active layer: its result then goes over every layer.
+    bool readsWholePicture() const;
 
     // Errors (no output or several, loops, links between ports that do not fit, unconnected
     // required inputs of nodes that feed the output, published parameters that do not exist or

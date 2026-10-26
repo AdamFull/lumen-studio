@@ -286,6 +286,7 @@ FiltersPanel::FiltersPanel(Studio *studio, CanvasView *canvas, QWidget *parent, 
     connect(m_target, &QComboBox::currentIndexChanged, this, [this] {
         Settings::instance().setValue(kTargetKey, m_target->currentData());
         m_runner->setTarget(m_target->currentIndex() == 1 ? FilterRunner::Target::Layer : FilterRunner::Target::NewLayer);
+        updateSelectionHint();
     });
     m_runner->setTarget(m_target->currentIndex() == 1 ? FilterRunner::Target::Layer : FilterRunner::Target::NewLayer);
     connect(m_runner, &FilterRunner::previewChanged, this, [this](const QImage &image) {
@@ -497,6 +498,7 @@ void FiltersPanel::loadSelected()
     setStatus(m_filterProblem, !m_filterProblem.isEmpty());
     rebuildSettings();
     updateAvailability();
+    updateSelectionHint(); // the layer or the whole picture
     updateButtons();
 }
 
@@ -569,8 +571,13 @@ void FiltersPanel::updateButtons()
     // cannot be seen, under the result Keep then puts on top.
     const bool results = showsResults();
     m_applyButton->setEnabled(usable && layer && !busy && !results);
-    m_applyButton->setToolTip(results ? tr("Keep or discard the AI results first")
-                                      : tr("Apply the filter to the active layer (only the selected area changes)"));
+    m_applyButton->setToolTip(results                         ? tr("Keep or discard the AI results first")
+                              : m_runner->readsWholePicture() ? tr("Apply the filter to the whole picture (only the selected area changes)")
+                                                              : tr("Apply the filter to the active layer (only the selected area changes)"));
+    // A filter of the whole picture puts its new layer over all the others.
+    m_target->setItemData(0, m_runner->readsWholePicture() ? tr("The result goes on a new layer above all the others, so the picture stays underneath.")
+                                                          : tr("The result goes on a new layer above, so the original stays underneath."),
+                          Qt::ToolTipRole);
     m_runButton->setVisible(usable && m_runner->needsRun());
     m_runButton->setEnabled(!busy && layer && !results);
     m_target->setEnabled(!busy);
@@ -590,6 +597,12 @@ void FiltersPanel::updateSelectionHint()
                                     : tr("The picture becomes about %1 × %2 pixels.").arg(size.width()).arg(size.height());
         m_selectionHint->setText(m_doc->hasSelection() ? tr("%1 Only the selected area gets the filter; the rest is only resized.").arg(becomes)
                                                        : becomes);
+    } else if (m_runner->readsWholePicture()) {
+        // It sees every visible layer, as the canvas shows them.
+        const QString area = m_doc->hasSelection() ? tr("Only the selected area changes.") : tr("Nothing is selected, so the whole picture changes.");
+        m_selectionHint->setText(m_runner->target() == FilterRunner::Target::NewLayer
+                                     ? tr("%1 The filter reads every visible layer; its result goes on a new layer on top.").arg(area)
+                                     : tr("%1 The filter reads every visible layer; its result goes into the active layer.").arg(area));
     } else if (m_doc->hasSelection()) {
         m_selectionHint->setText(tr("Only the selected area changes."));
     } else {
@@ -647,7 +660,8 @@ void FiltersPanel::hideEvent(QHideEvent *e)
 void FiltersPanel::sendSourceTo(NodeEditorWindow *window) const
 {
     const doc::LayerPtr layer = m_doc ? m_doc->activeLayer() : nullptr;
-    window->setSource(layer ? layer->image : QImage(), m_doc ? m_doc->selection() : QImage());
+    // The picture as the panel's Apply sees it (the same image), so a Run there serves Apply here.
+    window->setSource(layer ? layer->image : QImage(), m_doc ? m_doc->selection() : QImage(), layer ? m_runner->wholePicture() : QImage());
 }
 
 QString FiltersPanel::newFilter(const QString &name)

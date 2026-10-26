@@ -72,7 +72,7 @@ struct NodeTypeInfo
     QList<PortSpec> inputs;
     QList<PortSpec> outputs;
     QList<ParamSpec> params;
-    bool readsSource = false; // reads the evaluation's source image and selection (the input node)
+    bool readsSource = false; // reads the evaluation's source image, picture and selection (the input node)
     bool isOutput = false;    // the graph's result; a valid graph has exactly one
     // Takes a queue job (the AI nodes of a later step): a graph with one previews only after an
     // explicit Run (EvalOptions::runExpensive), and its result is then reused from the cache. It
@@ -138,6 +138,8 @@ public:
         virtual QImage source(double scale) = 0;
         virtual QImage selection(double scale) = 0; // all 255 without a selection
         virtual QSize sourceSize() const = 0;       // full resolution
+        // The whole picture (every visible layer merged), the source when it is the picture.
+        virtual QImage picture(double scale) = 0;
         // A callable that passes a running node's own progress on (EvalOptions::stepProgress); it
         // may outlive the node's evaluate() and does nothing once the evaluation has ended. Empty
         // when nobody listens.
@@ -157,10 +159,12 @@ public:
     // Runs `handler` once if the evaluation is cancelled while this node runs or waits for its
     // future (an AI node cancels its job); at once when it is already cancelled. Any thread.
     void onCancel(std::function<void()> handler);
-    // The image the filter is applied to and the selection, at the node's scale.
+    // The image the filter is applied to (the active layer) and the selection, at the node's scale.
     QImage source() const;
     QImage selection() const;
     QSize sourceSize() const;
+    // Every visible layer merged, at the node's scale (EvalInputs::picture).
+    QImage picture() const;
     // Checks for cancellation as a callable, for the pixel operations in Ops.h.
     std::function<bool()> cancelCheck() const;
     // For a node that takes long (an AI step waiting for its queue job): reports how far it is,

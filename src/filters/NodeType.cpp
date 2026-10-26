@@ -215,6 +215,11 @@ QSize EvalContext::sourceSize() const
     return m_run ? m_run->sourceSize() : QSize();
 }
 
+QImage EvalContext::picture() const
+{
+    return m_run ? m_run->picture(m_scale) : QImage();
+}
+
 std::function<bool()> EvalContext::cancelCheck() const
 {
     Run *run = m_run;
