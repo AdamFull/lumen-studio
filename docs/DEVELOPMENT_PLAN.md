@@ -3459,7 +3459,42 @@ Survey of the code, the app log and user testing (October 2026):
     nothing; open plugin windows are not reopened at the next start; switching projects closes
     documents without asking (they stay in that project's session, with their marks); the German
     translation of the new texts.
-- [ ] User guide and README rewritten around the editor; plugins documented separately.
+- [x] User guide and README rewritten around the editor; plugins documented separately.
+  * `docs/USER_GUIDE.md` rewritten, in the order a new user meets things: installing; the first start
+    and Set up AI (the three ways); the window (start screen, editor, menus, other windows);
+    selecting an area; describing a change (a selected area, the whole picture with colorizing as
+    the example, *Remove object*, *Make a variation*, choosing and keeping a result, ⋯, the AI tab
+    and menu, edits on this computer); new images (New from prompt, a blank canvas); layers and
+    history; filters (the panel, the built-in ones, those with AI, the filter editor and its AI
+    steps); opening, saving and exporting; project images and projects; Settings with *AI* first,
+    then local servers (the server window by model type), models (folder, library, downloads,
+    presets), providers for advanced use, General, Shortcuts and Plugins; keyboard shortcuts;
+    troubleshooting in plain words (no engine, an engine without edits, a missing file, out of
+    memory, a slow first image, servers); data locations; the command line. Every menu name, label,
+    shortcut and path was checked against the code. Gone: the language-model material (one GPU for
+    two models, llama.cpp roles), the character, LoRA, Critic, assistant and Parts sections (to
+    PLUGINS.md), the developers' tests (to the README), "the first tab of Settings" (Settings lists
+    its pages on the left since step 13).
+  * `docs/PLUGINS.md` (new): what plugins are and how to switch them (Tools → Plugins…, Settings →
+    Plugins, from the next start; what each adds); Characters (the language model it needs, *Model
+    set for Characters*, one GPU for both, llama.cpp servers; the director and the Critic; the
+    character library, the project's character and the cast; the assistant; character LoRA,
+    training set, the kohya trainer, cloud training); Poses (rig, presets, detection, *Describe
+    pose*, *To document*, *New image with this pose*, OpenPose files); Live2D parts (the four steps,
+    the expression check, the Cubism preview, `--slice` / `--cubism`); writing a plugin
+    (`ui/ext/Extension.h`: `PageSpec`, `PanelSpec`, `SettingsTabSpec`, `needsLanguageModel`,
+    registration in `BuiltInPlugins.cpp`, off by default, the core never includes a plugin header
+    and the configure check, project data kept, `pluginsOff` and the layout audit). Fixed on the
+    way: the old guide's "Character → LoRA…" is *LoRA → Attach a LoRA…*.
+  * `README.md`: two sentences on what Lumen is, the editor's screenshot
+    (`docs/images/editor.png`: `tst_layout`'s editor with a selection and four results at
+    1280 × 720, quantised to 128 colours, 28 KB), the main features as the user described them,
+    plugins optional and off by default, a quick start, building, the tests with `LUMEN_DATA_DIR`
+    and the strict layout audit, packaging and translations, the project layout, links to the guide
+    and the plugins.
+  * Not yet: the German translation of the guide; screenshots inside the guide; mismatches between
+    the code and the guide found while checking (user-visible texts that still say "tab" for
+    Settings pages, the Create page's "No image provider is configured.") are left to the next step.
 - [ ] Short live check (RTX 4060 8 GB, FLUX.2 klein 4B through sd.cpp): one selection edit, one
   whole-image colorize, one new image. Everything before this step uses mock servers.
   * Done early for the selection edit (October 2026, `tst_live kleinEditServer`): the user's
