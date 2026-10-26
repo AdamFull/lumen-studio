@@ -42,7 +42,7 @@
 #include "plugins/characters/training/LoraEvaluation.h"
 #include "plugins/characters/director/DirectorSession.h"
 #include "ui/pages/AiPanel.h"
-#include "ui/pages/GeneratePage.h"
+#include "ui/dialogs/CharacterLoraDialog.h"
 #include "plugins/parts/ExpressionCheck.h"
 #include "ui/widgets/CharacterChip.h"
 #include "ui/widgets/Controls.h"
@@ -2189,8 +2189,8 @@ void TestLive::characterLoraEndToEnd()
 }
 
 // LUMEN_LIVE_EVERYWHERE=<library character with a trained LoRA and a LoRA test run> with
-// LUMEN_LIVE_LLAMA_*, LUMEN_LIVE_SD_* (M14 step 7): the character on the Generate page (8 prompts that
-// never name it, with and without the character, same seeds), 4 fixes with Fill selection in the
+// LUMEN_LIVE_LLAMA_*, LUMEN_LIVE_SD_* (M14 step 7): the character in new images (8 prompts that never
+// name it, with and without the character, same seeds), 4 fixes with Fill selection in the
 // editor and the 5 expression variants, each scored by the identity checklist.
 void TestLive::characterEverywhere()
 {
@@ -2294,60 +2294,41 @@ void TestLive::characterEverywhere()
     QElapsedTimer total;
     total.start();
 
-    // 1. Generate page: 8 prompts that never name the character, with and without it, same seeds.
+    // 1. New images: 8 prompts that never name the character, with and without it, same seeds. The
+    // Generate page that did this is gone (M17); the request is built as it built it, until the
+    // Characters plugin adds the character to requests itself.
     const QStringList prompts{QStringLiteral("reading in a library, evening light"), QStringLiteral("walking in the rain with an umbrella"),
                               QStringLiteral("sitting at a cafe table, smiling"), QStringLiteral("on a rooftop at night, city lights"),
                               QStringLiteral("standing in a snowy forest"), QStringLiteral("at the beach, sunset"),
                               QStringLiteral("playing the violin on a stage"), QStringLiteral("in a classroom, looking out of the window")};
     {
-        ui::GeneratePage page(&studio);
-        auto *chip = page.findChild<ui::CharacterChip *>();
-        ui::AutoTextEdit *promptEdit = nullptr;
-        for (ui::AutoTextEdit *e : page.findChildren<ui::AutoTextEdit *>()) {
-            if (e->placeholderText().startsWith(QLatin1String("A portrait")))
-                promptEdit = e;
-        }
-        QPushButton *go = nullptr;
-        for (QPushButton *b : page.findChildren<QPushButton *>()) {
-            if (b->text() == QLatin1String("Generate"))
-                go = b;
-        }
-        QCheckBox *random = nullptr;
-        for (QCheckBox *c : page.findChildren<QCheckBox *>()) {
-            if (c->text() == QLatin1String("Random"))
-                random = c;
-        }
-        QSpinBox *seed = nullptr;
-        for (QSpinBox *sp : page.findChildren<QSpinBox *>()) {
-            if (sp->maximum() >= 2147483646)
-                seed = sp;
-        }
-        QVERIFY(chip && promptEdit && go && random && seed);
-        random->setChecked(false);
+        ai::ImageProvider *provider = studio.providers()->imageProvider(sdProvider->instanceId());
+        QVERIFY(provider);
+        const ai::ImageCapabilities caps = provider->capabilities();
+        const ai::PromptStyle style = ai::promptStyleFor(provider);
+        const QString family = ui::checkpointFamily(&studio, provider);
         double sumWith = 0, sumWithout = 0;
         for (int i = 0; i < prompts.size(); ++i) {
             QImage images[2];
             for (int with = 1; with >= 0; --with) {
-                chip->setUsedHere(with == 1);
-                seed->setValue(1000 + i);
-                promptEdit->setPlainText(prompts[i]);
-                go->click();
-                // The image of this prompt, with the character or without (as the metadata says).
-                auto find = [&]() -> std::optional<doc::AssetInfo> {
-                    for (const doc::AssetInfo &a : studio.project()->assets()) {
-                        if (a.metadata.value(QStringLiteral("user_prompt")).toString() == prompts[i]
-                            && a.metadata.contains(QStringLiteral("character")) == (with == 1))
-                            return a;
-                    }
-                    return std::nullopt;
-                };
-                QVERIFY(QTest::qWaitFor([&] { return find().has_value(); }, 900000));
-                const doc::AssetInfo a = *find();
-                if (with == 1)
-                    qInfo().noquote() << "   sent:" << a.metadata.value(QStringLiteral("prompt")).toString().left(160);
-                auto loaded = studio.project()->loadImage(a.id);
-                QTRY_VERIFY_WITH_TIMEOUT(loaded.isFinished(), 10000);
-                images[with] = loaded.result();
+                ai::GenerationSpec spec;
+                spec.providerId = provider->instanceId();
+                spec.request.prompt = style.apply(prompts[i]);
+                spec.request.negativePrompt = style.supportsNegative ? style.defaultNegative : QString();
+                spec.request.size = Director::sizeForAspect(QStringLiteral("2:3"), caps.nativePixels, 64);
+                spec.request.seed = 1000 + i;
+                spec.title = prompts[i];
+                spec.meta = QJsonObject{{QStringLiteral("user_prompt"), prompts[i]}};
+                if (with == 1) {
+                    const ai::CharacterApplied applied = ai::applyCharacter(spec.request, character, caps, ai::CharacterUse::Full, style, family);
+                    spec.meta.insert(QStringLiteral("character"), applied.toJson(character));
+                    qInfo().noquote() << "   sent:" << spec.request.prompt.left(160);
+                }
+                Job *job = studio.generation()->submit(spec);
+                QVERIFY(QTest::qWaitFor([job] { return job->isFinished(); }, 900000));
+                QCOMPARE(job->state(), Job::State::Succeeded);
+                images[with] = ai::GenerationService::outputOf(job).images.value(0);
+                QVERIFY(!images[with].isNull());
                 save(images[with], QStringLiteral("m14_generate_%1_%2.png").arg(i).arg(with ? QStringLiteral("with") : QStringLiteral("without")));
             }
             const Score w = score(images[1], prompts[i], character.references);
@@ -2365,7 +2346,6 @@ void TestLive::characterEverywhere()
         qInfo().noquote() << QStringLiteral("GENERATE identity mean: with %1, without %2")
                                  .arg(sumWith / prompts.size(), 0, 'f', 2)
                                  .arg(sumWithout / prompts.size(), 0, 'f', 2);
-        chip->setUsedHere(true);
     }
 
     // The character's LoRA test images have known poses: their keypoints place the fixes.

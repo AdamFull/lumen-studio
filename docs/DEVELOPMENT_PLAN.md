@@ -2036,7 +2036,9 @@ Survey of the code, the app log and user testing (October 2026):
 * **First cut (step 3)**: the hooks that exist are rail pages (`PageSpec`: id, icon, label, order,
   a fixed default `Alt` key), rail panels over the page area (`PanelSpec`, the assistant) and
   Settings tabs (`SettingsTabSpec`); the other hooks come with the features that need them (prompt
-  bar §17.2, filter nodes §17.6, request decorators with the Characters work below). Differences
+  bar §17.2, filter nodes §17.6, request decorators with the Characters work below). Since the new
+  shell (§17.8) a `PageSpec` is a Tools menu action that opens the page in a window of its own, a
+  `PanelSpec` a checkable View menu action, and the plugins are off by default. Differences
   from the list above:
   * **Character LoRA** is part of **Characters**: the dataset builder is built on director
     sessions and only opens from the Create page.
@@ -2238,8 +2240,143 @@ Survey of the code, the app log and user testing (October 2026):
     `tst_canvas presetServerDialog` (a saved server's provider gets the preset).
   * The current editor uses this through the AI panel's *Instruct edit*; the prompt bar of §17.2
     picks it automatically later.
-- [ ] New shell: start screen, the editor as the main window, status bar with jobs, *New from
+- [x] New shell: start screen, the editor as the main window, status bar with jobs, *New from
   prompt*, *Browse project images*; the navigation rail and the Generate and Library pages go.
+  * `MainWindow` is the editor: `EditorPage` fills it; the Queue popup, the plugins' panels and
+    the toasts lie over it in a wrapper (outside the editor, so its `WidgetWithChildrenShortcut`
+    keys stay out of the assistant's text fields). The navigation rail, the page stack,
+    `PageFactory` / `corePages` and `GeneratePage` are gone.
+  * Menus. *File*: New blank canvas… (`Ctrl+N`), New from prompt… (`Alt+2`), Open image…
+    (`Ctrl+O`), Paste from clipboard (a new document; no key, `Ctrl+V` stays the editor's paste as
+    layer), Browse project images… (`Alt+6`), save all, export, *Save a copy to project images*
+    (was *Save image to library*, `Ctrl+Shift+S`), close document, projects and recent projects,
+    quit. *Edit* as before. *View*: Job queue (`Ctrl+Shift+Q`, checkable), one checkable action per
+    `PanelSpec` (the assistant, `Ctrl+Shift+A`), the generative toolbar, the theme. *Tools*: one
+    action per `PageSpec` (Create `Alt+1`, Poses `Alt+4`, Parts `Alt+5`) and *Plugins…* (Settings →
+    Plugins). *Help*: Set up AI… (the welcome `OnboardingDialog`, which offers the local setup;
+    the wizard of §17.5 replaces it), models, log and ComfyUI workflow folders, about. The actions
+    that replace rail pages keep the rail's shortcut ids (`nav.sparkles`, `nav.gallery`,
+    `nav.<icon>` of plugin pages), so customised keys carry over; `nav.brush` (`Alt+3`, *Go to
+    Edit*) went, since the editor is the window. *File → Import images to library…* went: Browse
+    project images has *Import*.
+  * Start screen (`ui/pages/StartScreen`): the editor page shows it in a stack while
+    `Studio::documents()` is empty; the main window answers its requests. Open image…, Paste from
+    clipboard, New from prompt…, New blank canvas…; a *Set up AI* card while no image engine is on
+    (`imageEngineInUse`); up to 6 saved documents (newest first, their thumbnails) and then the
+    newest images (not sliced parts), 12 tiles at most, a click opens one
+    (`openStoredDocument` / `openAssetInEditor`), rebuilt when it is seen after the project
+    changed; *Browse project images…*. An image file dropped on it opens (the editor page's drop
+    handling). Scrolls instead of setting the window's minimum height.
+  * Plugin pages (`ext::PageSpec`) open in windows of their own (`PageWindow`, no parent and no
+    `WA_QuitOnClose`, so a tool window can go behind the editor and does not keep Lumen running):
+    built by the first `showPage`, raised afterwards, closed with the main window, size and place
+    in `ui/windows/<id>/geometry`, with their own toasts (`Studio::notification` goes to the
+    active window's). `Studio::showPage`: `editor` raises the main window, `generate` opens New from
+    prompt, `library` Browse project images, a plugin id its window, an id of a plugin that is off
+    nothing. `Studio::editPose` opens the Poses window before its request, because the page
+    connects to it when it is built (`sliceAsset` did so already for Parts); `main` opens the Parts
+    window before `--slice` and `--cubism`, and `--page` opens a window after the editor is shown.
+    `MainWindow::pageWidget` gives a plugin page once its window was opened. The remembered page
+    (`ui/page`) is no longer used and is removed at start.
+  * Plugins are off by default (`ext::Extensions::kEnabledByDefault = false`); tests that need one
+    switch it on (`PluginsOn` in `tst_canvas`, `AllPlugins` in `tst_layout`).
+  * *New from prompt* (`ui/dialogs/NewFromPromptDialog`, window-modal, opened with `open()` so
+    other flows can fill it): prompt; size as aspect chips 1:1 … 16:9 at the engine's native pixels
+    (`Director::sizeForAspect`), shown in the width / height fields, or a custom size; variants
+    1–4; the image engine (`ProviderCombo`); *More options*: the negative prompt ("Leave out", only
+    for models that take one) and the seed. The aspect and the variants are remembered
+    (`newFromPrompt/*`). *Create* (`Ctrl+Enter`) makes a document of that size named after the
+    prompt and submits text-to-image with the prompt style's tags; steps, CFG and the sampler come
+    from the model preset and the provider (nothing is "chosen"). The results become layers
+    through `AiPanel::addResultLayers` (now static and shared): scaled to the document, the first
+    visible, the others hidden, one undo step. The prompt bar of the next step takes them over
+    with its variants strip.
+  * Every way into the Generate page has a new home: *Use as reference* (`referenceRequested`) →
+    the AI panel's references (the AI tab comes to the front); *Reuse prompt* (`promptRequested`)
+    → the AI panel's prompt (a mode with a prompt), or New from prompt while no document is open;
+    it now sends the words the user wrote (`user_prompt`). *Re-run* (`rerunRequested`) → New from
+    prompt with the image's words, negative prompt, size and seed. The Poses plugin's *Use in
+    Generate*, now *New image with this pose* (`poseForGenerationRequested`) → New from prompt with
+    the pose: the aspect closest to the pose's canvas, the pose fitted to the size becomes the new
+    document's control pose, and goes as OpenPose control when the engine has a ControlNet.
+  * The Generate page's controls and where each went:
+    * Provider → New from prompt's *Image engine*. Model (list, *Load models from the provider*)
+      → gone: the model is the server's (its preset) or the provider's default in Settings →
+      Providers.
+    * Prompt → New from prompt. *Enhance* (the prompt writer) → gone from the core, which needs no
+      language model (§17.5); the Characters plugin's director still writes prompts.
+    * Negative prompt → *More options*, only for models that take one.
+    * Aspect chips, *Custom* width × height and the size note → New from prompt.
+    * Steps, CFG, Sampler, Scheduler → the model preset's and the provider's defaults (§17.4);
+      steps come back in the prompt bar's *⋯* menu.
+    * Images (1–16) → *Variants* (1–4). Seed and *Random* → *More options*.
+    * Quality (OpenAI's tiers) → the provider's default. *Transparent background* → gone.
+    * References → the AI panel's references (*Use as reference*), later the prompt bar's *⋯* menu.
+    * Pose control (*Preset…*, *Edit…*, *Clear*, *Strength*) → the Poses plugin (*New image with
+      this pose*); the dialog shows the pose with *No pose*; the strength is 1.
+    * *Start from an image (img2img)* and *Denoise* → the editor: open the image, AI panel
+      *Variation* with *Strength*.
+    * Character chip (with the character's LoRA) → the AI panel and the Characters plugin; New
+      from prompt draws no character (request decorators of the Characters plugin, §17.7).
+    * Results grid (*Open in editor*, *Use as reference*, *Use as start image*, *Re-run*) and its
+      job cards → the results are layers of the new document and images of the project (Browse
+      project images has *Open in editor*, *Use as reference*, *Re-run*); jobs are in the Queue.
+    * `Ctrl+Return` (`generate.run`) → `Ctrl+Enter` in the dialog's prompt.
+  * *Browse project images*: `LibraryPage` in a window of its own (`ProjectImagesDialog`, no
+    parent, so *Open in editor* brings the editor in front of it; size and place remembered), from
+    File (`Alt+6`), the start screen and the reference strip's *From library*. Batch background
+    removal and upscaling are unchanged. Its title label went (the window's title names it); the
+    texts that named the Generate page now name the AI panel and New from prompt.
+  * Status bar: the project (`ElidedLabel`, "Project: My Studio", the path as tooltip); the image
+    engine in plain words (`imageEngineInUse`: the default image provider when it is on, else the
+    first one on; `imageEngineName`: "FLUX.2 [klein] 4B on this computer" for a server Lumen runs
+    with a preset, "<provider> on this computer" without one, else the provider's name; "No image
+    engine - Set up AI" without one; a click opens Settings → Providers); the local servers button
+    and the *Safe for work* shield as before; the jobs ("No jobs running", "1 running · 0 queued")
+    as a checkable button that opens the Queue popup above it (left of an open plugin panel), in
+    step with View → Job queue. The zoom stays in the editor's bottom row. The status bar has an
+    8 px side margin (§17.9 item 9).
+  * Found on the way: quitting did nothing when no document needed saving (the save future was
+    already finished, so its continuation called `close()` inside the close event, where Qt ignores
+    it); the close is queued now. The accessibility test only looked at the page shown last; now
+    that it checks every window, unnamed controls got names: `SliderField`'s slider and number box
+    take its label, `ProviderCombo` is "Image engine" / "Language model", the AI panel's and the
+    Create page's variants, the Poses page's canvas and person lists, the Parts page's part layout;
+    a scroll area's own scroll bars count as its parts.
+  * Tests (`tst_canvas`): `newFromPrompt` (replaces `generatePageCharacter`; File → New from
+    prompt… on the start screen, *Create* disabled without words, 3:2 and two variants: a document
+    of the native-pixel size named after the prompt, the request's size, `batch_count` and seed,
+    two layers scaled to the document with the second hidden, one undo step, the images in the
+    project with `user_prompt`, the choices kept; *Re-run* fills words, negative prompt, size and
+    seed into the request; *New image with this pose*: portrait, the control pose and
+    `control_image`; *Reuse prompt* and *Use as reference* in the AI panel, and New from prompt with
+    no document open), `startScreen` (*Set up AI* follows the providers; recent tiles, a click opens
+    the image or the document, the start screen after the last document closes; paste; a dropped
+    file; New from prompt and Browse project images), `shellStatusBar` (project, engine names,
+    default and switched-off providers, the click to Settings → Providers, the jobs summary and
+    the Queue in step with View → Job queue), `pluginWindows` (the Tools menu, a window built on
+    first use and raised afterwards, its place remembered in the next session, `editPose` builds
+    the Poses window, `showPage` of editor, generate and library, View → Assistant and its close
+    button, quitting closes the windows), `pluginsOff` (off by default; only the editor, no tool or
+    panel actions, `showPage` of an off plugin opens nothing; editing; Settings; the record
+    survives), `legacyPageSetting` (`ui/page` 3 or "poses": the editor, no window, the setting
+    removed), `accessibleNames` (start screen, editor with a document, each plugin window, Browse
+    project images, New from prompt), `shortcutsHaveNoConflicts` (every plugin on and its window
+    opened; `Alt+2`, `Alt+6`, `Ctrl+Shift+A`). Removed: `generatePageCharacter` (the Generate
+    page's character chip and *Re-run* restoring the character went with the page; the AI panel's
+    chip is `editorCharacter`'s) and the part of `safeContent` that moved the Generate page's CFG
+    slider (the recommended CFG is still checked through requests there). `tst_layout`: the start
+    screen, the editor, with the queue and with the assistant, the Create, Poses and Parts windows
+    and Browse project images at the three sizes; New from prompt (plain, and with a pose and
+    *More options*) with the dialogs; `mainWindowFitsSmallScreen` stays strict for the start
+    screen, the editor, the queue, the assistant, each plugin window and Browse project images.
+    Findings: 7 → 4 (the four tall dialogs of §17.9 item 8; item 6 went with the Generate page and
+    the rail). `tst_live characterEverywhere` builds its new-image requests without the page.
+  * Not yet: the prompt bar (next step), which takes over New from prompt's results; the setup
+    wizard behind *Set up AI* (§17.5); characters in new images (the Characters plugin's request
+    decorators); the German translation of the new texts; the main window's menu shortcuts do not
+    work while a plugin window is active, and open plugin windows are not reopened at the next
+    start.
 - [ ] Prompt bar (§17.2): selection, whole-image and blank-canvas modes, *Remove*, variants strip,
   results as masked layers. Test with the mock server: a selection edit leaves every pixel
   outside the feathered mask unchanged.
@@ -2437,6 +2574,13 @@ Root cause first; most findings follow from it.
 Items 2, 3, 5 and 7 are on pages that become plugins (§17.7), and the Generate and Library pages
 are replaced by the new shell; their fixes belong to those steps. Item 1 stays relevant until the
 new shell lands, and items 3, 6, 8 and 9 are shared widgets and dialogs that the redesign keeps.
+
+**New shell** (October 2026): with the editor as the main window and the plugin pages in windows
+of their own, the audit covers the start screen, the editor (with the queue and the assistant),
+the Create, Poses and Parts windows, Browse project images and New from prompt. Its findings went
+from 7 to 4: item 6 went with the Generate page (and the AI panel is wider without the rail), the
+status bar has its side margin (item 9) and the Generate page's chips and negative prompt went with
+it; the four tall dialogs of item 8 remain.
 
 ---
 

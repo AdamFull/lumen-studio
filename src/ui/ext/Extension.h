@@ -20,21 +20,23 @@ namespace ext {
 // against the core, register an Extension at start (Extensions::add), and the core asks the
 // registry for the contributions of the plugins that are switched on.
 
-// A page on the navigation rail.
+// A page of its own (Create, Poses, Parts): an action in the Tools menu opens it in a window of its
+// own, built the first time it is opened. The main window is always the editor.
 struct PageSpec
 {
-    QString id;      // "poses": Studio::showPage, the --page option, the remembered page
-    QString icon;    // Icons name; the rail shortcut is "nav.<icon>" (ids of earlier versions)
+    QString id;      // "poses": Studio::showPage, the --page option
+    QString icon;    // Icons name; the menu action's shortcut is "nav.<icon>" (ids of earlier versions)
     QString label;
     QString tooltip;
-    int order = 100; // position on the rail; the core pages are generate 20, editor 30, library 60
-    // Default key, the same whichever other plugins are on (Alt+1 create ... Alt+6 library).
+    int order = 100; // position in the Tools menu
+    // Default key, the same whichever other plugins are on (Alt+1 create, Alt+4 poses, Alt+5 parts;
+    // Alt+2 and Alt+6 are New from prompt and Browse project images).
     QKeySequence shortcut;
     std::function<QWidget *(Studio *studio, QWidget *parent)> create;
 };
 
-// A rail button under the pages that shows a panel over the page area, on the right (the
-// assistant). The panel is created when first shown; `close` hides it and releases the button.
+// A panel over the editor, on the right (the assistant), switched on and off from the View menu.
+// The panel is created when first shown; `close` hides it and unchecks the menu action.
 struct PanelSpec
 {
     QString id;
@@ -72,7 +74,7 @@ public:
 };
 
 // The registry. Which plugins are on is read once (the first query, or refresh()); switching one
-// takes effect at the next start, because pages and panels are built with the main window.
+// takes effect at the next start, because the menus and panels are built with the main window.
 class Extensions
 {
 public:
@@ -83,11 +85,11 @@ public:
     QList<const Extension *> all() const;
     const Extension *find(const QString &id) const;
 
-    // Stored in Settings ("plugins/<id>/enabled"). On by default until the editor-first shell
-    // replaces the page rail (plan M17).
+    // Stored in Settings ("plugins/<id>/enabled"). Off by default: the editor works without any
+    // of them (plan M17).
     bool isEnabled(const QString &id) const;
     void setEnabled(const QString &id, bool enabled);
-    static constexpr bool kEnabledByDefault = true;
+    static constexpr bool kEnabledByDefault = false;
 
     // The plugins that are on for this session.
     QList<const Extension *> active() const;

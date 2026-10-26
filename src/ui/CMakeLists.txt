@@ -6,7 +6,6 @@ add_library(lumen_ui STATIC
     ext/Extension.h ext/Extension.cpp
     Studio.h Studio.cpp
     MainWindow.h MainWindow.cpp
-    PageFactory.h PageFactory.cpp
     canvas/EditorState.h canvas/EditorState.cpp
     canvas/CanvasView.h canvas/CanvasView.cpp
     canvas/Tool.h
@@ -24,6 +23,8 @@ add_library(lumen_ui STATIC
     widgets/ServerStatus.h widgets/ServerStatus.cpp
     pages/AiPanel.h pages/AiPanel.cpp
     pages/EditorPage.h pages/EditorPage.cpp
+    pages/StartScreen.h pages/StartScreen.cpp
+    dialogs/NewFromPromptDialog.h dialogs/NewFromPromptDialog.cpp
     dialogs/SettingsDialog.h dialogs/SettingsDialog.cpp
     dialogs/ShortcutsPage.h dialogs/ShortcutsPage.cpp
     dialogs/LocalServersPage.h dialogs/LocalServersPage.cpp
@@ -35,7 +36,6 @@ add_library(lumen_ui STATIC
     widgets/ThumbnailCache.h widgets/ThumbnailCache.cpp
     pose/PoseCanvas.h pose/PoseCanvas.cpp
     pages/LibraryPage.h pages/LibraryPage.cpp
-    pages/GeneratePage.h pages/GeneratePage.cpp
 )
 target_include_directories(lumen_ui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
 target_link_libraries(lumen_ui PUBLIC lumen_ai lumen_runtime lumen_live2d lumen_doc lumen_pose lumen_filters lumen_core

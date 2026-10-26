@@ -13,6 +13,7 @@
 #include <QLineEdit>
 #include <QPlainTextEdit>
 #include <QRegularExpression>
+#include <QScrollBar>
 #include <QTextEdit>
 #include <QToolButton>
 
@@ -34,6 +35,9 @@ bool isInternal(const QWidget *w)
     for (const QWidget *p = w->parentWidget(); p; p = p->parentWidget()) {
         if (qobject_cast<const QComboBox *>(p) || qobject_cast<const QAbstractSpinBox *>(p) || qobject_cast<const QLineEdit *>(p)
             || qobject_cast<const QKeySequenceEdit *>(p))
+            return true;
+        // A scroll area's own scroll bars (in its qt_scrollarea_vcontainer / hcontainer).
+        if (qobject_cast<const QScrollBar *>(w) && p->objectName().startsWith(QLatin1String("qt_scrollarea")))
             return true;
     }
     return w->objectName().startsWith(QLatin1String("qt_"));

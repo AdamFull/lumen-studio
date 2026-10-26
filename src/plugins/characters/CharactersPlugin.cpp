@@ -16,9 +16,9 @@ QString CharactersPlugin::name() const
 QString CharactersPlugin::description() const
 {
     return QCoreApplication::translate("lumen::plugins::CharactersPlugin",
-                                       "The Create page: an AI director that builds a character sheet from reference images and plans "
-                                       "sets of shots with poses. Also the assistant, and training a character LoRA (locally or on a "
-                                       "rented cloud GPU).");
+                                       "Tools → Create: an AI director that builds a character sheet from reference images and plans "
+                                       "sets of shots with poses. Also the assistant (View → Assistant), and training a character LoRA "
+                                       "(locally or on a rented cloud GPU).");
 }
 
 // Labels keep the translation contexts they had before the plugin (MainWindow, SettingsDialog).

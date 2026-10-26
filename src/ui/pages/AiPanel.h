@@ -42,6 +42,12 @@ public:
     void runFromCanvas(Mode mode, const QString &prompt, bool withCharacter = true);
     QString prompt() const;
     int runningJobs() const { return m_running; }
+    ReferenceStrip *references() const { return m_refs; }
+
+    // Adds generated images to a document as new layers (scaled to its size) in one undo step;
+    // only the first stays visible, the others are variants to compare.
+    static void addResultLayers(Studio *studio, doc::Document *doc, const QList<QImage> &images, const QString &name,
+                                const QJsonObject &meta);
 
 signals:
     void runningJobsChanged(int count);
@@ -54,7 +60,10 @@ private:
     // request and the metadata of what went in (empty without a character).
     void withCharacter(ai::ImageRequest request, ai::CharacterUse use, std::function<void(ai::ImageRequest, QJsonObject)> then);
     void trackJob(Job *job, std::function<void(doc::Document *, const ai::GenerationOutput &)> apply);
-    void addResultLayers(doc::Document *doc, const QList<QImage> &images, const QString &name, const QJsonObject &meta);
+    void addResultLayers(doc::Document *doc, const QList<QImage> &images, const QString &name, const QJsonObject &meta)
+    {
+        addResultLayers(m_studio, doc, images, name, meta);
+    }
     ai::ImageRequest baseRequest() const;
 
     Studio *m_studio;

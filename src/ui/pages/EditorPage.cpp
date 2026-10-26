@@ -15,6 +15,7 @@
 #include "ui/canvas/Tools.h"
 #include "ui/canvas/TransformTool.h"
 #include "ui/pages/AiPanel.h"
+#include "ui/pages/StartScreen.h"
 #include "ui/widgets/Controls.h"
 #include "ui/widgets/LayersPanel.h"
 #include "ui/widgets/ReferenceStrip.h"
@@ -39,6 +40,7 @@
 #include <QPainter>
 #include <QSpinBox>
 #include <QSplitter>
+#include <QStackedWidget>
 #include <QTabBar>
 #include <QTabWidget>
 #include <QToolButton>
@@ -53,7 +55,15 @@ EditorPage::EditorPage(Studio *studio, QWidget *parent)
     , m_state(new EditorState(this))
 {
     setAcceptDrops(true);
-    auto *root = new QVBoxLayout(this);
+    auto *outer = new QVBoxLayout(this);
+    outer->setContentsMargins(0, 0, 0, 0);
+    m_stack = new QStackedWidget(this);
+    outer->addWidget(m_stack);
+    m_start = new StartScreen(studio, m_stack);
+    m_stack->addWidget(m_start);
+    m_body = new QWidget(m_stack);
+    m_stack->addWidget(m_body);
+    auto *root = new QVBoxLayout(m_body);
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
 
@@ -71,7 +81,7 @@ EditorPage::EditorPage(Studio *studio, QWidget *parent)
     m_tabs->setDocumentMode(true);
     m_tabs->setElideMode(Qt::ElideRight);
     tabLayout->addWidget(m_tabs);
-    auto *newDoc = iconButton(QStringLiteral("plus"), tr("New document (Ctrl+N)"), tabRow);
+    auto *newDoc = iconButton(QStringLiteral("plus"), tr("New blank canvas (Ctrl+N)"), tabRow);
     tabLayout->addWidget(newDoc);
     tabLayout->addStretch();
     root->addWidget(tabRow);
@@ -240,7 +250,11 @@ EditorPage::EditorPage(Studio *studio, QWidget *parent)
             m_studio->closeDocument(m_studio->documents().at(index));
     });
     connect(studio, &Studio::documentsChanged, this, &EditorPage::rebuildTabs);
+    connect(studio, &Studio::documentsChanged, this, &EditorPage::updateStack);
     connect(studio, &Studio::activeDocumentChanged, this, &EditorPage::setDocument);
+    // "Use as reference" and "Reuse prompt" go to the AI tab.
+    connect(studio, &Studio::referenceRequested, this, [this] { m_side->setCurrentWidget(m_ai); });
+    connect(studio, &Studio::promptRequested, this, [this] { m_side->setCurrentWidget(m_ai); });
 
     // Shortcuts.
     // Page shortcuts (customisable in Settings → Shortcuts).
@@ -278,6 +292,17 @@ EditorPage::EditorPage(Studio *studio, QWidget *parent)
     selectTool(QStringLiteral("mask"));
     rebuildTabs();
     setDocument(studio->activeDocument());
+    updateStack();
+}
+
+bool EditorPage::showsStartScreen() const
+{
+    return m_stack->currentWidget() == m_start;
+}
+
+void EditorPage::updateStack()
+{
+    m_stack->setCurrentWidget(m_studio->documents().isEmpty() ? static_cast<QWidget *>(m_start) : m_body);
 }
 
 void EditorPage::selectTool(const QString &id)
@@ -375,7 +400,7 @@ void EditorPage::deleteSelectionPixels()
 void EditorPage::newDocumentDialog()
 {
     QDialog dlg(this);
-    dlg.setWindowTitle(tr("New document"));
+    dlg.setWindowTitle(tr("New blank canvas"));
     auto *form = new QFormLayout(&dlg);
     auto *name = new QLineEdit(tr("Untitled"), &dlg);
     auto *preset = new QComboBox(&dlg);
@@ -459,7 +484,7 @@ void EditorPage::saveToLibrary()
     async::run([snap, size] { return doc::flatten(snap, size); }).then(this, [this, project, name](QImage img) {
         if (project)
             project->addAsset(img, doc::AssetKind::Export, name).then(this, [this](doc::AssetInfo) {
-                m_studio->notify(tr("Saved to the library."), QStringLiteral("success"));
+                m_studio->notify(tr("Saved to the project images (File → Browse project images)."), QStringLiteral("success"));
             });
     });
 }
@@ -493,6 +518,16 @@ void EditorPage::pasteAsLayer()
     p.drawImage((m_doc->size().width() - scaled.width()) / 2, (m_doc->size().height() - scaled.height()) / 2, scaled);
     p.end();
     m_doc->addLayer(tr("Pasted"), placed, {}, -1, tr("Paste"));
+}
+
+void EditorPage::pasteAsNewDocument()
+{
+    const QImage img = QApplication::clipboard()->image();
+    if (img.isNull()) {
+        m_studio->notify(tr("The clipboard has no picture. Copy one first (for example from a browser or a screenshot)."));
+        return;
+    }
+    m_studio->openImageAsDocument(img, tr("Pasted image"));
 }
 
 void EditorPage::importAsLayer()

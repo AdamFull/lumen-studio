@@ -195,6 +195,7 @@ CreatePage::CreatePage(Studio *studio, QWidget *parent)
     m_variants->setRange(1, 8);
     m_variants->setValue(2);
     m_variants->setSuffix(tr(" per shot"));
+    m_variants->setToolTip(tr("Images made for each shot"));
     optionsFlow->addWidget(m_variants);
     Settings &settings = Settings::instance();
     m_critic = new QCheckBox(tr("Critic"), board);

@@ -548,6 +548,7 @@ QWidget *PartsPage::buildSourcePanel()
     v->addSpacing(6);
     v->addWidget(sectionLabel(tr("Part layout")));
     m_taxonomy = new QComboBox(w);
+    m_taxonomy->setAccessibleName(tr("Part layout"));
     for (const doc::PartTaxonomy &t : doc::partTaxonomies()) {
         m_taxonomy->addItem(t.name, t.id);
         m_taxonomy->setItemData(m_taxonomy->count() - 1, t.description, Qt::ToolTipRole);

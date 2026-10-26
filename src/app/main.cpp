@@ -44,7 +44,10 @@ int main(int argc, char *argv[])
     parser.addVersionOption();
     QCommandLineOption projectOpt(QStringLiteral("project"), QStringLiteral("Open this project file."), QStringLiteral("path"));
     QCommandLineOption screenshotOpt(QStringLiteral("screenshot"), QStringLiteral("Render the window to a PNG and quit."), QStringLiteral("path"));
-    QCommandLineOption pageOpt(QStringLiteral("page"), QStringLiteral("Page to show (create, generate, editor, poses, parts, library)."), QStringLiteral("name"));
+    QCommandLineOption pageOpt(QStringLiteral("page"),
+                               QStringLiteral("Open generate (New from prompt), library (Browse project images) or a plugin's window "
+                                              "(create, poses, parts)."),
+                               QStringLiteral("name"));
     QCommandLineOption imageOpt(QStringLiteral("image"), QStringLiteral("Open an image (or layered PSD) in the editor."), QStringLiteral("path"));
     QCommandLineOption sizeOpt(QStringLiteral("size"), QStringLiteral("Window size WxH (screenshot mode)."), QStringLiteral("size"));
     QCommandLineOption sliceOpt(QStringLiteral("slice"), QStringLiteral("Start a part slicing session (Live2D) for this image."), QStringLiteral("path"));
@@ -112,18 +115,19 @@ int main(int argc, char *argv[])
     else
         studio.openDefaultProject();
 
+    // A plugin's window, New from prompt or Browse project images, once the editor is on screen.
     const QString page = parser.value(pageOpt).toLower();
-    if (window.pageIds().contains(page))
-        window.showPage(page);
+    if (!page.isEmpty() && page != ui::pages::Editor && studio.hasPage(page))
+        QTimer::singleShot(0, &window, [&window, page] { window.showPage(page); });
     if (parser.isSet(imageOpt))
         studio.openFile(QFileInfo(parser.value(imageOpt)).absoluteFilePath());
-    if (parser.isSet(toolOpt)) {
-        if (auto *editor = qobject_cast<ui::EditorPage *>(window.pageWidget(ui::pages::Editor)))
-            editor->selectTool(parser.value(toolOpt));
-    }
+    if (parser.isSet(toolOpt))
+        window.editor()->selectTool(parser.value(toolOpt));
     if (parser.isSet(sliceOpt)) {
         const QString file = QFileInfo(parser.value(sliceOpt)).absoluteFilePath();
         const int step = parser.value(sliceStepOpt).toInt();
+        // The Parts window is built when it is first opened.
+        window.showPage(QStringLiteral("parts"));
         if (auto *parts = qobject_cast<ui::PartsPage *>(window.pageWidget(QStringLiteral("parts"))); parts && parser.isSet(sliceStepOpt))
             parts->automate(step >= 2, std::clamp(step, 1, 4) - 1);
         auto start = [&studio, file] {

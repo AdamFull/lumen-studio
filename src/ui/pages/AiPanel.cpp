@@ -166,6 +166,7 @@ AiPanel::AiPanel(Studio *studio, QWidget *parent)
     auto *variantsRow = new QHBoxLayout;
     variantsRow->addWidget(new QLabel(tr("Variants"), content));
     m_variants = new QSpinBox(content);
+    m_variants->setAccessibleName(tr("Variants"));
     m_variants->setRange(1, 8);
     m_variants->setValue(2);
     variantsRow->addWidget(m_variants);
@@ -196,10 +197,14 @@ AiPanel::AiPanel(Studio *studio, QWidget *parent)
     connect(m_run, &QPushButton::clicked, this, &AiPanel::run);
     connect(m_prompt, &AutoTextEdit::submitted, this, &AiPanel::run);
     connect(m_provider, &ProviderCombo::providerChanged, this, &AiPanel::updateUi);
+    // "Reuse prompt" and "Use as reference" (Browse project images) land here.
     connect(studio, &Studio::promptRequested, this, [this](const QString &prompt, const QString &negative) {
+        if (!m_promptBox->isVisibleTo(this))
+            setMode(Mode::Inpaint);
         m_prompt->setPlainText(prompt);
         m_negative->setPlainText(negative);
     });
+    connect(studio, &Studio::referenceRequested, m_refs, &ReferenceStrip::addAsset);
     setMode(Mode::Inpaint);
 }
 
@@ -352,7 +357,7 @@ void AiPanel::submitWithComposite(std::function<void(QImage)> fn)
     async::run([snap, size] { return doc::flatten(snap, size); }).then(this, std::move(fn));
 }
 
-void AiPanel::addResultLayers(doc::Document *doc, const QList<QImage> &images, const QString &name, const QJsonObject &meta)
+void AiPanel::addResultLayers(Studio *studio, doc::Document *doc, const QList<QImage> &images, const QString &name, const QJsonObject &meta)
 {
     if (images.isEmpty())
         return;
@@ -377,7 +382,7 @@ void AiPanel::addResultLayers(doc::Document *doc, const QList<QImage> &images, c
     if (!ids.isEmpty())
         doc->setActiveLayer(ids.first());
     if (images.size() > 1)
-        m_studio->notify(tr("%1 variants were added as layers - toggle their visibility to compare.").arg(images.size()));
+        studio->notify(tr("%1 variants were added as layers - toggle their visibility to compare.").arg(images.size()));
 }
 
 void AiPanel::trackJob(Job *job, std::function<void(doc::Document *, const ai::GenerationOutput &)> apply)
@@ -565,7 +570,7 @@ void AiPanel::run()
                 if (auto pose = pose::Pose::fromOpenPoseJson(json, nullptr, d->size()); pose && !pose->isEmpty()) {
                     d->setControlPose(*pose);
                     if (m_studio->hasPage(QStringLiteral("poses"))) {
-                        m_studio->notify(tr("Pose detected - it is now the document's control pose. Open the Poses page to edit it."));
+                        m_studio->notify(tr("Pose detected - it is now the document's control pose, and open in the Poses window to edit."));
                         m_studio->editPose(*pose, d->name());
                     } else {
                         m_studio->notify(tr("Pose detected - it is now the document's control pose."));

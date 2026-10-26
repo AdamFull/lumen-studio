@@ -282,14 +282,11 @@ LibraryPage::LibraryPage(Studio *studio, QWidget *parent)
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
 
-    // Toolbar.
+    // Toolbar (the window's title names the page: File → Browse project images).
     auto *bar = new QWidget(this);
     bar->setObjectName(QStringLiteral("Panel"));
     auto *bh = new FlowLayout(bar);
     bh->setContentsMargins(16, 10, 16, 10);
-    auto *title = new QLabel(tr("Library"), bar);
-    Theme::setRole(title, QStringLiteral("title"));
-    bh->addWidget(title);
     m_kinds = new QButtonGroup(this);
     const QList<QPair<QString, int>> kinds = {
         {tr("All"), kAllFilter},
@@ -350,7 +347,7 @@ LibraryPage::LibraryPage(Studio *studio, QWidget *parent)
     gv->setContentsMargins(0, 0, 0, 0);
     gv->addWidget(m_view, 1);
     auto *empty = new QLabel(tr("<h3>No images yet</h3><p>Generated images, edits, references and imports of this project appear here.<br>"
-                                "Drag images in, use Import, or create something on the Generate and Create pages.</p>"), gallery);
+                                "Drag images in, use Import, or make one with File → New from prompt.</p>"), gallery);
     empty->setAlignment(Qt::AlignCenter);
     empty->setStyleSheet(QStringLiteral("color: %1;").arg(Theme::palette().textMuted.name()));
     gv->addWidget(empty, 1);
@@ -407,8 +404,11 @@ LibraryPage::LibraryPage(Studio *studio, QWidget *parent)
     auto *open = new QPushButton(Icons::get(QStringLiteral("brush")), tr("Open in editor"), inspector);
     Theme::setRole(open, QStringLiteral("primary"));
     auto *asRef = new QPushButton(Icons::get(QStringLiteral("link")), tr("Use as reference"), inspector);
+    asRef->setToolTip(tr("Add to the reference images of the editor's AI panel"));
     auto *usePrompt = new QPushButton(Icons::get(QStringLiteral("text")), tr("Reuse prompt"), inspector);
+    usePrompt->setToolTip(tr("Put the image's prompt into the editor's AI panel"));
     auto *rerun = new QPushButton(Icons::get(QStringLiteral("refresh")), tr("Re-run"), inspector);
+    rerun->setToolTip(tr("New from prompt with the image's prompt, size and seed"));
     auto *exportBtn = new QPushButton(Icons::get(QStringLiteral("download")), tr("Export…"), inspector);
     auto *del = new QPushButton(Icons::get(QStringLiteral("trash")), tr("Delete"), inspector);
     Theme::setRole(del, QStringLiteral("danger"));
@@ -467,20 +467,21 @@ LibraryPage::LibraryPage(Studio *studio, QWidget *parent)
     connect(asRef, &QPushButton::clicked, this, [this] {
         for (const QString &id : selectedIds())
             m_studio->useAsReference(id);
-        m_studio->notify(tr("Added to the references of the Generate page."));
+        m_studio->notify(tr("Added to the references in the editor's AI panel."));
     });
     connect(usePrompt, &QPushButton::clicked, this, [this] {
         const auto info = m_studio->project() ? m_studio->project()->asset(m_currentId) : std::nullopt;
         if (info) {
-            m_studio->usePrompt(info->prompt(), info->metadata.value(QStringLiteral("negative_prompt")).toString());
-            m_studio->showPage(pages::Generate);
+            // The words the user wrote, without the quality tags Lumen added, when known.
+            const QString words = info->metadata.value(QStringLiteral("user_prompt")).toString();
+            m_studio->usePrompt(words.isEmpty() ? info->prompt() : words, info->metadata.value(QStringLiteral("negative_prompt")).toString());
+            m_studio->showPage(pages::Editor);
         }
     });
+    // New from prompt, with the image's prompt, size and seed.
     connect(rerun, &QPushButton::clicked, this, [this] {
-        if (!m_currentId.isEmpty()) {
+        if (!m_currentId.isEmpty())
             m_studio->rerunAsset(m_currentId);
-            m_studio->showPage(pages::Generate);
-        }
     });
     connect(exportBtn, &QPushButton::clicked, this, &LibraryPage::exportSelected);
     connect(del, &QPushButton::clicked, this, &LibraryPage::deleteSelected);

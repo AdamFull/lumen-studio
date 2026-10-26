@@ -17,8 +17,16 @@
 #include "plugins/characters/director/DirectorSession.h"
 #include "plugins/characters/director/ShotCard.h"
 #include "plugins/characters/CreatePage.h"
-#include "ui/pages/GeneratePage.h"
+#include "ui/dialogs/NewFromPromptDialog.h"
 #include "ui/pages/AiPanel.h"
+#include "ui/pages/EditorPage.h"
+#include "ui/pages/LibraryPage.h"
+#include "ui/pages/StartScreen.h"
+#include "ui/widgets/JobCard.h"
+#include "ui/widgets/ProviderCombo.h"
+#include "ui/widgets/ReferenceStrip.h"
+#include "ai/ModelDefaults.h"
+#include "pose/PosePresets.h"
 #include "plugins/parts/PartsPage.h"
 #include "plugins/parts/ExpressionCheck.h"
 #include "doc/Parts.h"
@@ -52,7 +60,12 @@
 #include "ui/widgets/Controls.h"
 #include "ui/ext/Extension.h"
 
+#include <QClipboard>
 #include <QCryptographicHash>
+#include <QDragEnterEvent>
+#include <QMenuBar>
+#include <QMimeData>
+#include <QStatusBar>
 #include <QTreeWidgetItemIterator>
 #include <QComboBox>
 #include <QCheckBox>
@@ -97,6 +110,27 @@ QImage content()
     return im;
 }
 
+// Plugins are off by default: switches them on for one test (the main window reads which are on
+// when it is built) and back to the default afterwards.
+struct PluginsOn
+{
+    explicit PluginsOn(const QStringList &ids = {})
+    {
+        ext::Extensions &registry = ext::Extensions::instance();
+        for (const ext::Extension *e : registry.all()) {
+            if (ids.isEmpty() || ids.contains(e->id()))
+                registry.setEnabled(e->id(), true);
+        }
+        registry.refresh();
+    }
+    ~PluginsOn()
+    {
+        for (const ext::Extension *e : ext::Extensions::instance().all())
+            Settings::instance().remove(QStringLiteral("plugins/%1/enabled").arg(e->id()));
+        ext::Extensions::instance().refresh();
+    }
+};
+
 } // namespace
 
 class TestCanvas : public QObject
@@ -127,7 +161,7 @@ private slots:
     void loraTrainingRun();
     void loraEvaluation();
     void activeCharacter();
-    void generatePageCharacter();
+    void newFromPrompt();
     void editorCharacter();
     void partsPageCharacter();
     void expressionCheck();
@@ -137,6 +171,9 @@ private slots:
     void cloudTrainingTab();
     void hubCompanionFiles();
     void activeCast();
+    void startScreen();
+    void shellStatusBar();
+    void pluginWindows();
     void pluginsOff();
     void legacyPageSetting();
     void presetServerDialog();
@@ -473,8 +510,12 @@ void TestCanvas::shortcutRegistry()
 void TestCanvas::shortcutsHaveNoConflicts()
 {
     Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
+    PluginsOn plugins;
     Studio studio;
     MainWindow window(&studio);
+    // Plugin pages bind their shortcuts when their window is first opened.
+    for (const QString &page : window.pageIds())
+        window.showPage(page);
     Shortcuts &sc = Shortcuts::instance();
     int checked = 0;
     for (const Shortcuts::Info &info : sc.all()) {
@@ -492,6 +533,12 @@ void TestCanvas::shortcutsHaveNoConflicts()
     QVERIFY(sc.contains(QStringLiteral("editor.tool.transform")));
     QVERIFY(sc.contains(QStringLiteral("parts.tool.part-lasso")) || sc.contains(QStringLiteral("parts.tool.lasso")));
     QVERIFY(sc.contains(QStringLiteral("app.settings")));
+    // The keys of the old rail pages open what replaced them.
+    QCOMPARE(sc.keys(QStringLiteral("nav.sparkles")), QList<QKeySequence>{QKeySequence(QStringLiteral("Alt+2"))});
+    QCOMPARE(sc.keys(QStringLiteral("nav.gallery")), QList<QKeySequence>{QKeySequence(QStringLiteral("Alt+6"))});
+    QCOMPARE(sc.keys(QStringLiteral("app.assistant")), QList<QKeySequence>{QKeySequence(QStringLiteral("Ctrl+Shift+A"))});
+    // The Generate page's Ctrl+Enter went with it; the editor's AI panel keeps its own.
+    QVERIFY(sc.contains(QStringLiteral("editor.ai-run")));
 }
 
 void TestCanvas::themeContrast()
@@ -530,27 +577,38 @@ void TestCanvas::accessibleNames()
 {
     Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
     Accessibility::install();
+    PluginsOn plugins;
     Studio studio;
     MainWindow window(&studio);
     window.resize(1400, 900);
     window.show();
     QVERIFY(QTest::qWaitForWindowExposed(&window));
-    // Every page (and its widgets) gets polished once shown.
-    for (const QString &page : window.pageIds()) {
-        window.showPage(page);
-        QTest::qWait(30);
-    }
     QStringList missing;
-    for (QWidget *w : Accessibility::unnamed(&window)) {
-        if (w->isVisibleTo(&window))
-        {
+    QSet<QWidget *> reported;
+    auto check = [&missing, &reported](QWidget *root) {
+        QTest::qWait(30); // widgets get polished (and named) once shown
+        for (QWidget *w : Accessibility::unnamed(root)) {
+            if (!w->isVisibleTo(root) || reported.contains(w))
+                continue;
+            reported.insert(w);
             QStringList chain;
-            for (QWidget *p = w->parentWidget(); p && p != &window; p = p->parentWidget())
+            for (QWidget *p = w->parentWidget(); p && p != root; p = p->parentWidget())
                 chain << QLatin1String(p->metaObject()->className()) + (p->objectName().isEmpty() ? QString() : u':' + p->objectName());
             missing << QStringLiteral("%1 '%2' in %3").arg(QLatin1String(w->metaObject()->className()), w->objectName(),
                                                          chain.join(QStringLiteral(" < ")));
         }
+    };
+    // The start screen, the editor with a document, every plugin page's window, the dialogs.
+    QVERIFY(window.editor()->showsStartScreen());
+    check(&window);
+    studio.openImageAsDocument(content(), QStringLiteral("Named"));
+    check(&window);
+    for (const QString &page : window.pageIds().mid(1)) {
+        window.showPage(page);
+        check(window.pageWindow(page));
     }
+    check(window.browseProjectImages());
+    check(window.newFromPrompt());
     QVERIFY2(missing.isEmpty(), qPrintable(missing.join(QStringLiteral("\n"))));
     // An icon-only button gets its tool tip (without the shortcut suffix) as its name.
     QToolButton icon(&window);
@@ -1958,113 +2016,192 @@ void TestCanvas::activeCharacter()
     QCOMPARE(chip.text(), QStringLiteral("No character"));
 }
 
-void TestCanvas::generatePageCharacter()
+// File → New from prompt, which replaces the Generate page: a new document of the chosen size, the
+// request (prompt, size, variants, seed), the results as layers; and the ways in that went to the
+// Generate page: Re-run, Reuse prompt, Use as reference and the Poses plugin's pose.
+void TestCanvas::newFromPrompt()
 {
     Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
-    // stable-diffusion.cpp with the character's LoRA in its folder.
     MockHttpServer server;
     QList<QJsonObject> generations;
-    server.route("GET", QStringLiteral("/sdcpp/v1/capabilities"), [](const MockRequest &) {
-        return MockResponse::json({{QStringLiteral("loras"), QJsonArray{QJsonObject{{QStringLiteral("name"), QStringLiteral("lmn_aki")},
-                                                                                    {QStringLiteral("path"), QStringLiteral("lmn_aki.safetensors")}}}}});
-    });
+    server.route("GET", QStringLiteral("/sdcpp/v1/capabilities"), [](const MockRequest &) { return MockResponse::json({}); });
     server.route("POST", QStringLiteral("/sdcpp/v1/img_gen"), [&](const MockRequest &req) {
         generations << req.json();
-        return MockResponse::json({{QStringLiteral("id"), QStringLiteral("job_1")}}, 202);
+        return MockResponse::json({{QStringLiteral("id"), QStringLiteral("job_%1").arg(generations.size())}}, 202);
     });
-    server.route("GET", QStringLiteral("/sdcpp/v1/jobs/job_1"), [](const MockRequest &) {
-        QImage im(64, 64, QImage::Format_ARGB32);
-        im.fill(Qt::darkCyan);
-        const QJsonArray images{QJsonObject{{QStringLiteral("index"), 0}, {QStringLiteral("b64_json"), QString::fromLatin1(img::encode(im).toBase64())}}};
-        return MockResponse::json({{QStringLiteral("status"), QStringLiteral("completed")}, {QStringLiteral("result"), QJsonObject{{QStringLiteral("images"), images}}}});
-    });
+    // Two variants, smaller than the document (the editor scales them to its size).
+    for (int job = 1; job <= 3; ++job) {
+        server.route("GET", QStringLiteral("/sdcpp/v1/jobs/job_%1").arg(job), [](const MockRequest &) {
+            QJsonArray images;
+            for (const QColor &c : {QColor(Qt::darkCyan), QColor(Qt::darkRed)}) {
+                QImage im(96, 64, QImage::Format_ARGB32);
+                im.fill(c);
+                images.append(QJsonObject{{QStringLiteral("index"), images.size()}, {QStringLiteral("b64_json"), QString::fromLatin1(img::encode(im).toBase64())}});
+            }
+            return MockResponse::json({{QStringLiteral("status"), QStringLiteral("completed")}, {QStringLiteral("result"), QJsonObject{{QStringLiteral("images"), images}}}});
+        });
+    }
     QTemporaryDir dir;
     Studio studio;
     for (ai::Provider *p : studio.providers()->providers())
         studio.providers()->removeProvider(p->instanceId());
-    QVERIFY(studio.providers()->addProvider(QStringLiteral("sdcpp"), QStringLiteral("SD"), {{QStringLiteral("url"), server.baseUrl().toString()}}));
-    studio.openProject(dir.filePath(QStringLiteral("generate.lumen")));
-    QTRY_VERIFY_WITH_TIMEOUT(studio.isProjectOpen(), 5000);
-    QImage ref(64, 96, QImage::Format_ARGB32);
-    ref.fill(Qt::red);
-    auto saved = studio.characters()->save(QStringLiteral("Aki (generate test)"), {{QStringLiteral("tags"), QStringLiteral("red hair, green eyes")}}, {ref},
-                                           QString(), QString(),
-                                           QJsonObject{{QStringLiteral("file"), dir.filePath(QStringLiteral("lmn_aki.safetensors"))},
-                                                       {QStringLiteral("trigger"), QStringLiteral("lmn_aki")},
-                                                       {QStringLiteral("weight"), 0.7}});
-    QTRY_VERIFY(saved.isFinished());
-    const QString aki = saved.result().id;
+    QVERIFY(studio.providers()->addProvider(QStringLiteral("sdcpp"), QStringLiteral("SD"),
+                                            {{QStringLiteral("url"), server.baseUrl().toString()}, {QStringLiteral("control_net"), true}}));
     auto cleanup = qScopeGuard([&] {
-        Settings::instance().setValue(QStringLiteral("character/use/generate"), true);
-        studio.characters()->remove(aki);
         for (ai::Provider *p : studio.providers()->providers())
             studio.providers()->removeProvider(p->instanceId());
+        Settings::instance().remove(QStringLiteral("newFromPrompt"));
     });
-    studio.setActiveCharacter(aki);
+    studio.openProject(dir.filePath(QStringLiteral("new.lumen")));
+    QTRY_VERIFY_WITH_TIMEOUT(studio.isProjectOpen(), 5000);
+    MainWindow window(&studio);
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    QVERIFY(window.editor()->showsStartScreen());
 
-    GeneratePage page(&studio);
-    auto *chip = page.findChild<CharacterChip *>();
-    QVERIFY(chip);
-    chip->setUsedHere(true);
-    QCOMPARE(chip->characterId(), aki);
+    // File → New from prompt…: nothing to create without words.
+    auto *action = window.findChild<QAction *>(QStringLiteral("newFromPrompt"));
+    QVERIFY(action);
+    action->trigger();
+    QPointer<NewFromPromptDialog> dialog = window.newFromPromptDialog();
+    QVERIFY(dialog && dialog->isVisible());
+    QPushButton *create = nullptr;
+    for (QPushButton *b : dialog->findChildren<QPushButton *>()) {
+        if (b->text() == QLatin1String("Create"))
+            create = b;
+    }
     AutoTextEdit *prompt = nullptr;
-    for (AutoTextEdit *e : page.findChildren<AutoTextEdit *>()) {
-        if (e->placeholderText().startsWith(QLatin1String("A portrait")))
+    for (AutoTextEdit *e : dialog->findChildren<AutoTextEdit *>()) {
+        if (e->accessibleName() == QLatin1String("Prompt"))
             prompt = e;
     }
-    QPushButton *go = nullptr;
-    for (QPushButton *b : page.findChildren<QPushButton *>()) {
-        if (b->text() == QLatin1String("Generate"))
-            go = b;
+    QSpinBox *variants = nullptr;
+    for (QSpinBox *s : dialog->findChildren<QSpinBox *>()) {
+        if (s->maximum() == 4)
+            variants = s;
     }
-    QVERIFY(prompt && go);
-    // Generated images by the words the user wrote.
-    auto generated = [&studio](const QString &words) -> std::optional<doc::AssetInfo> {
-        for (const doc::AssetInfo &a : studio.project()->assets()) {
-            if (a.metadata.value(QStringLiteral("user_prompt")).toString() == words)
-                return a;
-        }
-        return std::nullopt;
-    };
+    QToolButton *landscape = nullptr;
+    for (QToolButton *b : dialog->findChildren<QToolButton *>()) {
+        if (b->text() == QLatin1String("3:2"))
+            landscape = b;
+    }
+    QVERIFY(create && prompt && variants && landscape);
+    QVERIFY(!create->isEnabled());
+    auto *engine = dialog->findChild<ProviderCombo *>(QStringLiteral("imageEngine"));
+    QVERIFY(engine);
+    QCOMPARE(engine->currentText(), QStringLiteral("SD"));
 
-    // The prompt never names the character: the LoRA and the description bring it.
-    prompt->setPlainText(QStringLiteral("reading in a library"));
-    go->click();
-    QTRY_VERIFY_WITH_TIMEOUT(generated(QStringLiteral("reading in a library")), 10000);
+    // A landscape picture, two variants: a new document of that size with both as layers.
+    prompt->setPlainText(QStringLiteral("a lighthouse at dusk"));
+    QVERIFY(create->isEnabled());
+    landscape->click();
+    variants->setValue(2);
+    const QSize size = dialog->requestedSize();
+    QCOMPARE(size, ai::Director::sizeForAspect(QStringLiteral("3:2"), 1024 * 1024, 64)); // at the model's pixels
+    QVERIFY(size.width() > size.height());
+    create->click();
+    QTRY_VERIFY(!dialog);
+    doc::Document *doc = studio.activeDocument();
+    QVERIFY(doc);
+    QCOMPARE(doc->size(), size);
+    QCOMPARE(doc->name(), QStringLiteral("a lighthouse at dusk"));
+    QVERIFY(!window.editor()->showsStartScreen());
+    QTRY_COMPARE_WITH_TIMEOUT(doc->layerCount(), 3, 10000); // the background and the two variants
     QCOMPARE(generations.size(), 1);
-    const QString sent = generations[0].value(QStringLiteral("prompt")).toString();
-    QVERIFY2(sent.startsWith(QStringLiteral("lmn_aki, ")), qPrintable(sent));
-    QVERIFY(sent.contains(QStringLiteral("reading in a library")) && sent.contains(QStringLiteral("red hair, green eyes")));
-    const QJsonArray lora = generations[0].value(QStringLiteral("lora")).toArray();
-    QCOMPARE(lora.size(), 1);
-    QCOMPARE(lora[0][QStringLiteral("path")].toString(), QStringLiteral("lmn_aki.safetensors"));
-    QCOMPARE(lora[0][QStringLiteral("multiplier")].toDouble(), 0.7);
-    const doc::AssetInfo first = *generated(QStringLiteral("reading in a library"));
-    QCOMPARE(first.metadata.value(QStringLiteral("user_prompt")).toString(), QStringLiteral("reading in a library"));
-    const QJsonObject used = first.metadata.value(QStringLiteral("character")).toObject();
-    QCOMPARE(used.value(QStringLiteral("character")).toString(), aki);
-    QCOMPARE(used.value(QStringLiteral("trigger")).toString(), QStringLiteral("lmn_aki"));
+    const QJsonObject sent = generations.first();
+    QVERIFY2(sent.value(QStringLiteral("prompt")).toString().contains(QStringLiteral("a lighthouse at dusk")), qPrintable(sent.value(QStringLiteral("prompt")).toString()));
+    QCOMPARE(sent.value(QStringLiteral("width")).toInt(), size.width());
+    QCOMPARE(sent.value(QStringLiteral("height")).toInt(), size.height());
+    QCOMPARE(sent.value(QStringLiteral("batch_count")).toInt(), 2);
+    QVERIFY(sent.value(QStringLiteral("seed")).toDouble() >= 0);
+    QVERIFY(!sent.contains(QStringLiteral("control_image"))); // no pose
+    const doc::LayerPtr first = doc->layers().at(1), second = doc->layers().at(2);
+    QCOMPARE(first->props.name, QStringLiteral("a lighthouse at dusk #1"));
+    QVERIFY(first->props.visible && !second->props.visible);
+    QCOMPARE(first->image.size(), size);
+    QCOMPARE(first->image.pixelColor(600, 400), QColor(Qt::darkCyan));
+    // One step to undo, and the images are in the project with the words the user wrote.
+    QCOMPARE(doc->undoStack()->count(), 1);
+    std::optional<doc::AssetInfo> made;
+    for (const doc::AssetInfo &a : studio.project()->assets()) {
+        if (a.metadata.value(QStringLiteral("user_prompt")).toString() == QLatin1String("a lighthouse at dusk"))
+            made = a;
+    }
+    QVERIFY(made);
+    QCOMPARE(made->metadata.value(QStringLiteral("source")).toString(), QStringLiteral("new_from_prompt"));
+    // The choices are kept for the next time.
+    QCOMPARE(Settings::instance().value(QStringLiteral("newFromPrompt/variants")).toInt(), 2);
 
-    // Switched off on this page: the prompt goes as written.
-    chip->setUsedHere(false);
-    prompt->setPlainText(QStringLiteral("a quiet street"));
-    go->click();
-    QTRY_VERIFY_WITH_TIMEOUT(generated(QStringLiteral("a quiet street")), 10000);
-    QVERIFY(!generations[1].value(QStringLiteral("prompt")).toString().contains(QStringLiteral("lmn_aki")));
-    QVERIFY(generations[1].value(QStringLiteral("lora")).toArray().isEmpty());
-    const doc::AssetInfo second = *generated(QStringLiteral("a quiet street"));
-    QVERIFY(!second.metadata.contains(QStringLiteral("character")));
+    // Re-run (Browse project images): the image's words, negative prompt, size and seed.
+    doc::AssetInfo rerun = *made;
+    rerun.metadata.insert(QStringLiteral("negative_prompt"), QStringLiteral("text, watermark"));
+    rerun.metadata.insert(QStringLiteral("width"), 640);
+    rerun.metadata.insert(QStringLiteral("height"), 960);
+    rerun.metadata.insert(QStringLiteral("seed"), 4242);
+    studio.project()->updateAsset(rerun);
+    studio.rerunAsset(made->id);
+    dialog = window.newFromPromptDialog();
+    QVERIFY(dialog && dialog->isVisible());
+    QCOMPARE(dialog->requestedSize(), QSize(640, 960));
+    QString negative;
+    QSpinBox *seed = nullptr;
+    for (AutoTextEdit *e : dialog->findChildren<AutoTextEdit *>()) {
+        if (e->accessibleName() == QLatin1String("Prompt"))
+            QCOMPARE(e->toPlainText(), QStringLiteral("a lighthouse at dusk"));
+        if (e->accessibleName() == QLatin1String("Negative prompt"))
+            negative = e->toPlainText();
+    }
+    for (QSpinBox *s : dialog->findChildren<QSpinBox *>()) {
+        if (s->accessibleName() == QLatin1String("Seed"))
+            seed = s;
+    }
+    QCOMPARE(negative, QStringLiteral("text, watermark"));
+    QVERIFY(seed && seed->isEnabled());
+    QCOMPARE(seed->value(), 4242);
+    doc::Document *again = dialog->create();
+    QVERIFY(again && again != doc);
+    QCOMPARE(again->size(), QSize(640, 960));
+    QTRY_COMPARE_WITH_TIMEOUT(generations.size(), 2, 10000);
+    QCOMPARE(generations[1].value(QStringLiteral("seed")).toDouble(), 4242.0);
+    QCOMPARE(generations[1].value(QStringLiteral("negative_prompt")).toString(), QStringLiteral("text, watermark"));
+    dialog->close();
+    QTRY_VERIFY(!dialog);
 
-    // Re-run brings back the user's words and the character (switched on again here).
-    studio.rerunAsset(first.id);
-    QCOMPARE(prompt->toPlainText(), QStringLiteral("reading in a library"));
-    QVERIFY(chip->isUsedHere());
-    QCOMPARE(chip->characterId(), aki);
-    // Re-running an image drawn without the character switches it off here.
-    studio.rerunAsset(second.id);
-    QCOMPARE(prompt->toPlainText(), QStringLiteral("a quiet street"));
-    QVERIFY(!chip->isUsedHere());
-    QCOMPARE(studio.activeCharacter(), aki);
+    // "New image with this pose" (the Poses plugin): the pose controls the image and stays with
+    // the new document; the shape follows the pose's canvas.
+    const pose::Pose standing = pose::findBuiltInPreset(QStringLiteral("standing"))->toPose(QSize(832, 1216));
+    studio.usePoseForGeneration(standing);
+    dialog = window.newFromPromptDialog();
+    QVERIFY(dialog && dialog->isVisible());
+    const QSize portrait = dialog->requestedSize();
+    QVERIFY2(portrait.height() > portrait.width(), qPrintable(QStringLiteral("%1×%2").arg(portrait.width()).arg(portrait.height())));
+    dialog->setPrompt(QStringLiteral("a dancer"));
+    doc::Document *posed = dialog->create();
+    QVERIFY(posed);
+    QVERIFY(posed->controlPose());
+    QCOMPARE(posed->controlPose()->canvas, portrait);
+    QTRY_COMPARE_WITH_TIMEOUT(generations.size(), 3, 10000);
+    QVERIFY(generations[2].contains(QStringLiteral("control_image")));
+    dialog->close();
+    QTRY_VERIFY(!dialog);
+
+    // Reuse prompt and Use as reference land in the editor's AI panel.
+    AiPanel *ai = window.editor()->aiPanel();
+    studio.usePrompt(QStringLiteral("a red umbrella"), QString());
+    QCOMPARE(ai->prompt(), QStringLiteral("a red umbrella"));
+    QCOMPARE(ai->references()->references().size(), 0);
+    studio.useAsReference(made->id);
+    QTRY_COMPARE(ai->references()->references().size(), 1);
+    QVERIFY(!window.newFromPromptDialog());
+    // With no document open, a reused prompt is one for a new image.
+    const auto open = studio.documents();
+    for (doc::Document *d : open)
+        studio.closeDocument(d);
+    studio.usePrompt(QStringLiteral("a quiet harbour"), QString());
+    dialog = window.newFromPromptDialog();
+    QVERIFY(dialog && dialog->isVisible());
+    QCOMPARE(dialog->findChild<AutoTextEdit *>()->toPlainText(), QStringLiteral("a quiet harbour"));
+    dialog->close();
 }
 
 void TestCanvas::editorCharacter()
@@ -2499,20 +2636,6 @@ void TestCanvas::safeContent()
     QCOMPARE(cfgSent(), 4.5);
     generate(7.0);
     QCOMPARE(cfgSent(), 7.0);
-
-    // The Generate page's CFG slider shows the recommendation of the model's family and keeps
-    // the user's value while the family stays.
-    GeneratePage page(&studio);
-    auto *cfg = page.findChild<SliderField *>(QStringLiteral("cfg"));
-    QVERIFY(cfg);
-    QCOMPARE(cfg->value(), 4.5);
-    cfg->setValue(5.0);
-    auto *model = page.findChild<QComboBox *>(QStringLiteral("model"));
-    QVERIFY(model);
-    model->setCurrentText(QStringLiteral("anima-preview2"));
-    QCOMPARE(cfg->value(), 5.0);
-    model->setCurrentText(QStringLiteral("waiIllustriousSDXL_v170"));
-    QCOMPARE(cfg->value(), 6.0);
 }
 
 void TestCanvas::cloudTrainingPage()
@@ -3068,20 +3191,308 @@ QAbstractButton *buttonNamed(QWidget *root, const QString &name)
 
 } // namespace
 
-// The core starts, edits and keeps plugin data with every plugin off (plan M17 §17.7).
+// The start screen while no document is open: the ways to start, the project's recent documents and
+// images (a click opens them), "Set up AI" while no image engine is configured, and an image file
+// dropped on it opens.
+void TestCanvas::startScreen()
+{
+    Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
+    QTemporaryDir dir;
+    Studio studio;
+    for (ai::Provider *p : studio.providers()->providers())
+        studio.providers()->removeProvider(p->instanceId());
+    studio.openProject(dir.filePath(QStringLiteral("start.lumen")));
+    QTRY_VERIFY_WITH_TIMEOUT(studio.isProjectOpen(), 5000);
+    // A saved document and an image in the project.
+    doc::Document *saved = studio.newDocument(QSize(64, 48), QStringLiteral("Saved"));
+    auto done = studio.project()->saveDocument(saved);
+    QTRY_VERIFY_WITH_TIMEOUT(done.isFinished(), 5000);
+    const QString savedId = saved->id();
+    studio.closeDocument(saved);
+    QImage red(40, 30, QImage::Format_ARGB32);
+    red.fill(kRed);
+    auto added = studio.project()->addAsset(red, doc::AssetKind::Import, QStringLiteral("Red square"));
+    QTRY_VERIFY_WITH_TIMEOUT(added.isFinished(), 5000);
+    const QString redId = added.result().id;
+
+    MainWindow window(&studio);
+    window.resize(1280, 720);
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    EditorPage *editor = window.editor();
+    QCOMPARE(window.centralWidget()->findChild<EditorPage *>(), editor);
+    QTRY_VERIFY(editor->showsStartScreen());
+    StartScreen *start = editor->startScreen();
+    QVERIFY(start->isVisible());
+
+    // "Set up AI" while nothing can draw or change images.
+    auto *card = start->findChild<QFrame *>(QStringLiteral("setUpAiCard"));
+    QVERIFY(card && card->isVisible());
+    ai::Provider *sd = studio.providers()->addProvider(QStringLiteral("sdcpp"), QStringLiteral("SD"), {{QStringLiteral("url"), QStringLiteral("http://127.0.0.1:1")}});
+    QVERIFY(sd);
+    QVERIFY(!card->isVisible());
+    studio.providers()->removeProvider(sd->instanceId());
+    QVERIFY(card->isVisible());
+
+    // The documents (newest first), then the images; a click opens one.
+    auto tile = [start](const char *property, const QString &id) -> QToolButton * {
+        for (QToolButton *t : start->recentTiles()) {
+            if (t->property(property).toString() == id)
+                return t;
+        }
+        return nullptr;
+    };
+    QTRY_COMPARE(start->recentTiles().size(), 2);
+    QCOMPARE(start->recentTiles().first(), tile("documentId", savedId));
+    QToolButton *redTile = tile("assetId", redId);
+    QVERIFY(redTile);
+    QCOMPARE(redTile->accessibleName(), QStringLiteral("Red square"));
+    redTile->click();
+    QTRY_VERIFY(!editor->showsStartScreen());
+    QCOMPARE(studio.activeDocument()->size(), QSize(40, 30));
+    // Closing the last document brings the start screen back.
+    studio.closeDocument(studio.activeDocument());
+    QVERIFY(editor->showsStartScreen());
+    QTRY_VERIFY(tile("documentId", savedId));
+    tile("documentId", savedId)->click();
+    QTRY_VERIFY(!editor->showsStartScreen());
+    QCOMPARE(studio.activeDocument()->id(), savedId);
+    studio.closeDocument(studio.activeDocument());
+
+    // Paste from clipboard: the copied picture as a new document.
+    QImage blue(20, 10, QImage::Format_ARGB32);
+    blue.fill(kBlue);
+    QApplication::clipboard()->setImage(blue);
+    QAbstractButton *paste = buttonNamed(start, QStringLiteral("Paste from clipboard"));
+    QVERIFY(paste);
+    paste->click();
+    QVERIFY(!editor->showsStartScreen());
+    QCOMPARE(studio.activeDocument()->size(), QSize(20, 10));
+    QCOMPARE(studio.activeDocument()->name(), QStringLiteral("Pasted image"));
+    studio.closeDocument(studio.activeDocument());
+
+    // An image file dropped on it opens.
+    const QString file = dir.filePath(QStringLiteral("dropped.png"));
+    QVERIFY(red.scaled(30, 20).save(file));
+    QMimeData mime;
+    mime.setUrls({QUrl::fromLocalFile(file)});
+    QDragEnterEvent enter(QPoint(200, 200), Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(editor, &enter);
+    QVERIFY(enter.isAccepted());
+    QDropEvent drop(QPointF(200, 200), Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(editor, &drop);
+    QTRY_VERIFY(!editor->showsStartScreen());
+    QCOMPARE(studio.activeDocument()->name(), QStringLiteral("dropped"));
+    QCOMPARE(studio.activeDocument()->size(), QSize(30, 20));
+    studio.closeDocument(studio.activeDocument());
+
+    // New from prompt… and Browse project images… open their windows.
+    QVERIFY(editor->showsStartScreen());
+    QAbstractButton *fromPrompt = buttonNamed(start, QStringLiteral("New from prompt…"));
+    QAbstractButton *browse = buttonNamed(start, QStringLiteral("Browse project images…"));
+    QVERIFY(fromPrompt && browse);
+    fromPrompt->click();
+    QPointer<NewFromPromptDialog> dialog = window.newFromPromptDialog();
+    QVERIFY(dialog && dialog->isVisible());
+    dialog->close();
+    QTRY_VERIFY(!dialog);
+    browse->click();
+    QDialog *images = window.projectImagesDialog();
+    QVERIFY(images && images->isVisible() && images->isWindow());
+    QVERIFY(images->findChild<LibraryPage *>());
+}
+
+// The status bar: the project, the image engine in use in plain words (a click opens Settings →
+// Providers), and the jobs, whose button opens the Queue popup as View → Job queue does.
+void TestCanvas::shellStatusBar()
+{
+    Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
+    QTemporaryDir dir;
+    Studio studio;
+    for (ai::Provider *p : studio.providers()->providers())
+        studio.providers()->removeProvider(p->instanceId());
+    auto cleanup = qScopeGuard([&] {
+        for (ai::Provider *p : studio.providers()->providers())
+            studio.providers()->removeProvider(p->instanceId());
+    });
+    studio.openProject(dir.filePath(QStringLiteral("Status test.lumen")));
+    QTRY_VERIFY_WITH_TIMEOUT(studio.isProjectOpen(), 5000);
+    MainWindow window(&studio);
+    window.resize(1280, 720);
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+
+    auto *project = window.statusBar()->findChild<ElidedLabel *>();
+    QVERIFY(project);
+    QCOMPARE(project->fullText(), QStringLiteral("Project: Status test"));
+    QVERIFY(project->toolTip().endsWith(QStringLiteral("Status test.lumen")));
+
+    auto *engine = window.findChild<QToolButton *>(QStringLiteral("imageEngine"));
+    QVERIFY(engine && engine->isVisible());
+    QCOMPARE(engine->text(), QStringLiteral("No image engine - Set up AI"));
+    // A provider by its name.
+    const QVariantMap url{{QStringLiteral("url"), QStringLiteral("http://127.0.0.1:1")}};
+    ai::Provider *workstation = studio.providers()->addProvider(QStringLiteral("sdcpp"), QStringLiteral("Workstation"), url);
+    QVERIFY(workstation);
+    QCOMPARE(engine->text(), QStringLiteral("Workstation"));
+    // A server Lumen runs, with a model it has a preset for: the model, and where it runs.
+    ai::ModelDefaults klein;
+    klein.id = QStringLiteral("flux2-klein-4b");
+    klein.name = QStringLiteral("FLUX.2 [klein] 4B");
+    QVariantMap managed = url;
+    managed.insert(QStringLiteral("managed_server"), QStringLiteral("not-running"));
+    managed.insert(QStringLiteral("model_preset"), klein.toVariant());
+    ai::Provider *local = studio.providers()->addProvider(QStringLiteral("sdcpp"), QStringLiteral("Local"), managed);
+    QVERIFY(local);
+    QCOMPARE(engine->text(), QStringLiteral("Workstation")); // the default one
+    studio.providers()->setDefaultImageProvider(local->instanceId());
+    QCOMPARE(engine->text(), QStringLiteral("FLUX.2 [klein] 4B on this computer"));
+    // Switched off: the next one that is on.
+    studio.providers()->setEnabled(local->instanceId(), false);
+    QCOMPARE(engine->text(), QStringLiteral("Workstation"));
+    studio.providers()->setEnabled(local->instanceId(), true);
+    // A click opens Settings → Providers.
+    QString tab;
+    QTimer::singleShot(200, &window, [&tab] {
+        if (auto *settings = qobject_cast<SettingsDialog *>(QApplication::activeModalWidget())) {
+            auto *tabs = settings->findChild<QTabWidget *>();
+            tab = tabs->tabText(tabs->currentIndex()).remove(u'&');
+            settings->reject();
+        }
+    });
+    engine->click();
+    QCOMPARE(tab, QStringLiteral("Providers"));
+
+    // The jobs: a summary, and the Queue above the button.
+    auto *jobs = window.findChild<QToolButton *>(QStringLiteral("jobs"));
+    QAction *queue = window.findChild<QAction *>(QStringLiteral("jobQueue"));
+    QVERIFY(jobs && queue);
+    QCOMPARE(jobs->text(), QStringLiteral("No jobs running"));
+    QPointer<Job> job = studio.jobs()->submit(QStringLiteral("Waiting job"), QStringLiteral("status-test"), [](Job *) {});
+    QTRY_COMPARE(jobs->text(), QStringLiteral("1 running · 0 queued"));
+    jobs->click();
+    QWidget *panel = window.queuePanel();
+    QVERIFY(panel && panel->isVisible());
+    QVERIFY(queue->isChecked() && jobs->isChecked());
+    QVERIFY(window.centralWidget()->rect().contains(panel->geometry()));
+    QVERIFY(panel->geometry().right() > window.centralWidget()->width() / 2); // on the side of the button
+    QCOMPARE(panel->findChildren<JobCard *>().size(), 1);
+    queue->trigger(); // View → Job queue (Ctrl+Shift+Q) closes it again
+    QVERIFY(!panel->isVisible() && !jobs->isChecked());
+    queue->trigger();
+    QVERIFY(panel->isVisible() && jobs->isChecked());
+    job->succeed();
+    QTRY_COMPARE(jobs->text(), QStringLiteral("No jobs running"));
+}
+
+// Plugin pages open in windows of their own from the Tools menu: built on first use, raised
+// afterwards, their place remembered. Studio::showPage reaches each of them and what replaced the
+// Generate and Library pages; plugin panels are switched from the View menu.
+void TestCanvas::pluginWindows()
+{
+    Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
+    PluginsOn plugins;
+    auto cleanup = qScopeGuard([] { Settings::instance().remove(QStringLiteral("ui/windows")); });
+    Studio studio;
+    QPoint place;
+    {
+        MainWindow window(&studio);
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        QCOMPARE(window.pageIds(), (QStringList{QStringLiteral("editor"), QStringLiteral("create"), QStringLiteral("poses"), QStringLiteral("parts")}));
+        // Tools: one action per page, and the way to the plugins.
+        QMenu *tools = nullptr;
+        for (QAction *a : window.menuBar()->actions()) {
+            if (a->text() == QLatin1String("&Tools"))
+                tools = a->menu();
+        }
+        QVERIFY(tools);
+        QStringList names;
+        for (QAction *a : tools->actions()) {
+            if (!a->isSeparator())
+                names << a->text();
+        }
+        QCOMPARE(names, (QStringList{QStringLiteral("Create"), QStringLiteral("Poses"), QStringLiteral("Parts"), QStringLiteral("Plugins...")}));
+        QCOMPARE(Shortcuts::instance().keys(QStringLiteral("nav.person")), QList<QKeySequence>{QKeySequence(QStringLiteral("Alt+4"))});
+
+        QVERIFY(!window.pageWindow(QStringLiteral("poses")) && !window.pageWidget(QStringLiteral("poses")));
+        window.findChild<QAction *>(QStringLiteral("tool-poses"))->trigger();
+        QWidget *poses = window.pageWindow(QStringLiteral("poses"));
+        QVERIFY(poses && poses->isWindow() && poses->isVisible());
+        QVERIFY(QTest::qWaitForWindowExposed(poses));
+        QCOMPARE(poses->windowTitle(), QStringLiteral("Poses — Lumen Studio"));
+        QVERIFY(window.pageWidget(QStringLiteral("poses")) && window.pageWidget(QStringLiteral("poses"))->window() == poses);
+        QVERIFY(!window.pageWindow(QStringLiteral("parts"))); // only what was opened
+        // Closed and opened again: the same window.
+        poses->move(30, 40);
+        place = poses->pos();
+        poses->close();
+        QVERIFY(!poses->isVisible());
+        studio.showPage(QStringLiteral("poses"));
+        QCOMPARE(window.pageWindow(QStringLiteral("poses")), poses);
+        QVERIFY(poses->isVisible());
+        QCOMPARE(poses->pos(), place);
+        poses->close();
+        QVERIFY(Settings::instance().contains(QStringLiteral("ui/windows/poses/geometry")));
+    }
+    MainWindow window(&studio);
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    // A pose to edit (the editor's Detect pose) opens the Poses window, built for it, where it was.
+    QVERIFY(!window.pageWindow(QStringLiteral("poses")));
+    studio.editPose(pose::findBuiltInPreset(QStringLiteral("standing"))->toPose(QSize(512, 768)));
+    QWidget *poses = window.pageWindow(QStringLiteral("poses"));
+    QVERIFY(poses && poses->isVisible());
+    // (The test screen is narrower than the page, so the restored window is moved left to fit.)
+    QCOMPARE(poses->y(), place.y());
+    // "editor" brings the main window back; "generate" and "library" open what replaced them.
+    studio.showPage(pages::Editor);
+    studio.showPage(pages::Generate);
+    QPointer<NewFromPromptDialog> dialog = window.newFromPromptDialog();
+    QVERIFY(dialog && dialog->isVisible() && dialog->parentWidget() == &window);
+    dialog->close();
+    QTRY_VERIFY(!dialog);
+    studio.showPage(pages::Library);
+    QVERIFY(window.projectImagesDialog() && window.projectImagesDialog()->isVisible());
+    QVERIFY(!window.projectImagesDialog()->parentWidget()); // a window of its own: the editor can come in front
+
+    // View → Assistant shows the panel over the editor; its close button unchecks the action.
+    QAction *assistant = window.findChild<QAction *>(QStringLiteral("panel-assistant"));
+    QVERIFY(assistant && assistant->isCheckable());
+    QCOMPARE(assistant->text(), QStringLiteral("Assistant"));
+    assistant->setChecked(true);
+    auto *panel = window.findChild<AssistantPanel *>();
+    QVERIFY(panel && panel->isVisible());
+    QCOMPARE(panel->parentWidget(), window.centralWidget());
+    emit panel->closeRequested();
+    QVERIFY(!assistant->isChecked());
+    QVERIFY(!panel->isVisible());
+
+    // Quitting closes the windows of their own with the main window.
+    window.close();
+    QTRY_VERIFY(!window.isVisible());
+    QVERIFY(!poses->isVisible());
+    QVERIFY(!window.projectImagesDialog()->isVisible());
+}
+
+// The core starts, edits and keeps plugin data with every plugin off (plan M17 §17.7); they are off
+// by default.
 void TestCanvas::pluginsOff()
 {
     Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
     ext::Extensions &registry = ext::Extensions::instance();
     QCOMPARE(registry.all().size(), 3);
-    for (const ext::Extension *e : registry.all())
-        registry.setEnabled(e->id(), false);
+    // Off by default.
+    for (const ext::Extension *e : registry.all()) {
+        Settings::instance().remove(QStringLiteral("plugins/%1/enabled").arg(e->id()));
+        QVERIFY2(!registry.isEnabled(e->id()), qPrintable(e->id()));
+    }
     registry.refresh();
+    QVERIFY(registry.active().isEmpty());
     auto restore = qScopeGuard([&registry] {
         for (const ext::Extension *e : registry.all())
-            registry.setEnabled(e->id(), true);
+            Settings::instance().remove(QStringLiteral("plugins/%1/enabled").arg(e->id()));
         registry.refresh();
-        Settings::instance().setValue(QStringLiteral("ui/page"), QVariant());
     });
 
     // A record of the Characters plugin, written while it was on.
@@ -3103,31 +3514,27 @@ void TestCanvas::pluginsOff()
     QVERIFY(studio.hasPage(pages::Editor));
     for (const QString &page : {QStringLiteral("create"), QStringLiteral("poses"), QStringLiteral("parts")})
         QVERIFY2(!studio.hasPage(page), qPrintable(page));
-    // The remembered page was a plugin's: the first core page instead.
-    Settings::instance().setValue(QStringLiteral("ui/page"), QStringLiteral("poses"));
     MainWindow window(&studio);
-    QCOMPARE(window.pageIds(), (QStringList{QStringLiteral("generate"), QStringLiteral("editor"), QStringLiteral("library")}));
+    QCOMPARE(window.pageIds(), QStringList{QStringLiteral("editor")});
     window.show();
     QVERIFY(QTest::qWaitForWindowExposed(&window));
-    QVERIFY(window.pageWidget(pages::Generate)->isVisible());
-    QVERIFY(!buttonNamed(&window, QStringLiteral("Assistant")));
-    QVERIFY(!window.pageWidget(QStringLiteral("create")));
+    // No tools but the way to the plugins, no panels in the View menu.
+    QVERIFY(!window.findChild<QAction *>(QStringLiteral("panel-assistant")));
+    for (QAction *a : window.findChildren<QAction *>())
+        QVERIFY2(!a->objectName().startsWith(QLatin1String("tool-")), qPrintable(a->objectName()));
+    QVERIFY(!window.findChild<AssistantPanel *>());
+    // A plugin page that is off opens nothing.
+    studio.showPage(QStringLiteral("poses"));
+    QVERIFY(!window.pageWindow(QStringLiteral("poses")));
 
     // Editing works.
     studio.openProject(path);
     QTRY_VERIFY_WITH_TIMEOUT(studio.isProjectOpen(), 5000);
     doc::Document *d = studio.newDocument(QSize(64, 48), QStringLiteral("Plain"));
-    window.showPage(pages::Editor);
-    QVERIFY(window.pageWidget(pages::Editor)->isVisible());
+    QVERIFY(!window.editor()->showsStartScreen());
     QCOMPARE(studio.activeDocument(), d);
     d->addLayer(QStringLiteral("Paint"));
     QCOMPARE(d->layerCount(), 2);
-
-    // No way into a plugin that is off: the Generate page's pose editor button is hidden.
-    auto *generate = window.pageWidget(pages::Generate);
-    QAbstractButton *editPose = buttonNamed(generate, QStringLiteral("Edit…"));
-    QVERIFY(editPose);
-    QVERIFY(!editPose->isVisibleTo(generate));
 
     // Settings: no Cloud training tab; the Plugins tab switches a plugin on for the next start.
     SettingsDialog settings(&studio);
@@ -3161,24 +3568,23 @@ void TestCanvas::pluginsOff()
     QCOMPARE(records.result().first().json.value(QStringLiteral("title")).toString(), QStringLiteral("Akane"));
 }
 
-// Before plugins, the remembered page was an index into a fixed list (3 was Poses).
+// Before the editor became the main window, the page the rail showed last was remembered ("ui/page",
+// before plugins an index into a fixed list: 3 was Poses). Now the main window always shows the
+// editor; the setting goes, and no plugin window opens by itself.
 void TestCanvas::legacyPageSetting()
 {
     Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
-    Settings::instance().setValue(QStringLiteral("ui/page"), 3);
-    auto restore = qScopeGuard([] { Settings::instance().setValue(QStringLiteral("ui/page"), QVariant()); });
-    Studio studio;
-    MainWindow window(&studio);
-    QCOMPARE(window.pageIds(), (QStringList{QStringLiteral("create"), QStringLiteral("generate"), QStringLiteral("editor"),
-                                            QStringLiteral("poses"), QStringLiteral("parts"), QStringLiteral("library")}));
-    window.show();
-    QVERIFY(QTest::qWaitForWindowExposed(&window));
-    QVERIFY(window.pageWidget(QStringLiteral("poses"))->isVisible());
-    QCOMPARE(Settings::instance().value(QStringLiteral("ui/page")).toString(), QStringLiteral("poses"));
-    // The rail keeps its order and Alt+number shortcuts; they do not depend on which plugins are on.
-    QCOMPARE(Shortcuts::instance().keys(QStringLiteral("nav.person")), QList<QKeySequence>{QKeySequence(QStringLiteral("Alt+4"))});
-    QCOMPARE(Shortcuts::instance().keys(QStringLiteral("nav.gallery")), QList<QKeySequence>{QKeySequence(QStringLiteral("Alt+6"))});
-    QVERIFY(buttonNamed(&window, QStringLiteral("Assistant")));
+    PluginsOn plugins;
+    for (const QVariant &old : {QVariant(3), QVariant(QStringLiteral("poses"))}) {
+        Settings::instance().setValue(QStringLiteral("ui/page"), old);
+        Studio studio;
+        MainWindow window(&studio);
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        QVERIFY(window.editor()->isVisible());
+        QVERIFY(!window.pageWindow(QStringLiteral("poses")));
+        QVERIFY(!Settings::instance().contains(QStringLiteral("ui/page")));
+    }
 }
 
 namespace {

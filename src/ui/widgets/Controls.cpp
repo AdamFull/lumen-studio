@@ -46,6 +46,9 @@ SliderField::SliderField(const QString &label, double min, double max, double va
     layout->addWidget(m_spin);
     if (label.isEmpty())
         m_label->hide();
+    // Screen readers announce the slider and the number box by the field's label.
+    m_slider->setAccessibleName(label);
+    m_spin->setAccessibleName(label);
     setValue(value);
     connect(m_slider, &QSlider::valueChanged, this, [this](int v) {
         const double d = v / m_scale;

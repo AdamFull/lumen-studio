@@ -19,10 +19,11 @@ in portable mode.
 
 ## 2. First run: providers
 
-On the first start, the assistant looks for local servers on their default ports (SD WebUI 7860,
-Forge 7861, ComfyUI 8188 / 8000, llama.cpp 8080, Ollama 11434, LM Studio 1234, KoboldCpp 5001, the
-Lumen part server 7870) and offers to add them. You can open the
-same list later with **Edit → Settings… → Providers** (`Ctrl+,`).
+On the first start, the welcome dialog looks for local servers on their default ports (SD WebUI
+7860, Forge 7861, ComfyUI 8188 / 8000, llama.cpp 8080, Ollama 11434, LM Studio 1234, KoboldCpp
+5001, the Lumen part server 7870) and offers to add them. **Help → Set up AI…** (or *Set up AI*
+on the start screen) opens it again; **Edit → Settings… → Providers** (`Ctrl+,`) lists every
+provider.
 
 * **SD WebUI / Forge**: start it with `--api`. Background removal needs the *rembg* extension; pose
   detection and pose control need *ControlNet*.
@@ -31,8 +32,8 @@ same list later with **Edit → Settings… → Providers** (`Ctrl+,`).
 * **Cloud providers**: paste the API key; **Test connection** checks it. Each provider has a
   *Parallel requests* limit that the job queue respects.
 
-Every generation runs as a job in the **Queue** (`Ctrl+Shift+Q`), where it can be cancelled or
-retried.
+Every generation runs as a job in the **Queue**, where it can be cancelled or retried: click the
+jobs button at the right of the status bar, or **View → Job queue** (`Ctrl+Shift+Q`).
 
 ### One GPU for the language model and the image model
 
@@ -196,9 +197,8 @@ their vision projectors, so ComfyUI can use the same folder. You can put model f
   * The sd.cpp server runs Anima with the usual 8 GB settings; on an RTX 4060 laptop the first
     image takes about a minute and a half, including starting the server.
   * Prompts for Anima use its tag style with "masterpiece, best quality, score_7" in front and
-    its own negative prompt, and CFG 4.5 (the Generate page's CFG slider moves there when you
-    switch to an Anima model; your own value then stays). With *Safe for work* on, Lumen also
-    adds Anima's "safe" rating tag.
+    its own negative prompt, and CFG 4.5. With *Safe for work* on, Lumen also adds Anima's
+    "safe" rating tag.
 * **Accounts…** stores access tokens in the Windows Credential Manager. Hugging Face needs a token
   for gated models such as FLUX.1 dev (accept the terms on the model's page first); Civitai asks
   for an API key for most downloads. A token is only sent to its own site.
@@ -221,40 +221,64 @@ The server button in the status bar shows what runs and offers start, stop, rest
 server's log. **Check for updates** downloads newer releases. Servers switch to them at their next
 start, and the previous version stays installed, so you can switch back in the server's settings.
 
-## 3. Pages
+## 3. The window
 
-The left bar switches pages (`Alt+1` … `Alt+6`).
+Lumen Studio opens as an image editor: tools on the left, the canvas with a tab per document in
+the middle, and the **AI**, **Layers** and **History** tabs on the right (§5, §6).
 
-| Page | Use it to |
-|---|---|
-| **Create** | chat with the director: describe a character or a story, attach references, get a character sheet and a shot plan with editable poses, then generate every shot |
-| **Generate** | classic prompt → images, with references, a control pose, size, seed, steps and batch |
-| **Edit** | the layered editor with AI editing (§5, §6) |
-| **Poses** | edit OpenPose skeletons, use presets (including the Live2D category), detect poses from images, ask the LLM to change a pose |
-| **Parts** | slice a character into parts for Live2D (§8) |
-| **Library** | every generated, imported and edited image with its full parameters (§7) |
+**Start screen.** While no document is open, the window shows how to start:
 
-`Ctrl+Return` starts the generation on the Create and Generate pages.
+* **Open image…** (`Ctrl+O`), **Paste from clipboard** (the copied picture as a new document),
+  **New from prompt…** and **New blank canvas…** (`Ctrl+N`);
+* the project's recent documents (with their layers) and images; click one to open it;
+  **Browse project images…** shows all of them;
+* **Set up AI** while no image engine is set up yet (it opens the welcome dialog of §2);
+* an image file dropped anywhere on it opens.
+
+**New from prompt** (**File → New from prompt…**, `Alt+2`) makes a new image from a description:
+write what you want, pick the shape (square, portrait or landscape ratios, or a custom width ×
+height) and how many variants to make (1 to 4), and click **Create** (`Ctrl+Enter`). Lumen makes a
+document of that size and draws into it with the image engine; each variant becomes a layer, the
+first one shown, so you can compare them in the Layers tab and keep one. *More options* has the
+seed and, for models that take one, a negative prompt ("leave out"). Steps, guidance and the
+sampler follow the model. The shape and the number of variants are kept for the next time.
+
+**Browse project images** (**File → Browse project images…**, `Alt+6`) opens every image of the
+project in a window of its own (§7).
+
+**The status bar** shows the project, the image engine in use ("FLUX.2 [klein] 4B on this
+computer" for a server Lumen runs, else the provider's name; "No image engine - Set up AI" without
+one; click it to change it in Settings → Providers), the local servers, the *Safe for work* shield
+and the jobs (click for the Queue).
+
+**Menus.** *File*: new, open, paste, browse, save, export and projects. *Edit*: copy and paste,
+importing an image as a layer, **Settings…** (`Ctrl+,`). *View*: the Queue, the panels of plugins
+(the assistant), the generative toolbar on the canvas, the theme. *Tools*: the tools of plugins
+(Create, Poses, Parts), each in a window of its own, and **Plugins…**. *Help*: **Set up AI…**, the
+models, log and ComfyUI workflow folders, *About*.
 
 ### Plugins
 
-Create, Poses and Parts, the assistant and character LoRA training are plugins. **Settings →
-Plugins** switches each one on or off; the change takes effect the next time Lumen Studio starts.
-With a plugin off, its page and buttons are gone, and what it saved in a project is kept until it
-is on again. The plugins are:
+Character creation (Create), poses, Live2D parts, the assistant and character LoRA training are
+plugins. They are off at first: **Tools → Plugins…** (Settings → Plugins) switches each one on or
+off, and the change takes effect the next time Lumen Studio starts. With a plugin off, its menu
+entries and windows are gone, and what it saved in a project is kept until it is on again. The
+plugins are:
 
-* **Characters**: the Create page, the assistant, and character LoRA training (including
-  **Settings → Cloud training**).
-* **Poses**: the Poses page. Without it, the Generate page still takes pose presets, but has no
-  *Edit…* button for the pose.
-* **Live2D parts**: the Parts page and *Slice into parts* in the Library.
+* **Characters**: **Tools → Create** (`Alt+1`), **View → Assistant** (`Ctrl+Shift+A`), and
+  character LoRA training (including **Settings → Cloud training**).
+* **Poses**: **Tools → Poses** (`Alt+4`). **New image with this pose** there opens New from
+  prompt with the pose: the image is drawn in it (with an image engine that has a pose ControlNet)
+  and the pose stays with the new document.
+* **Live2D parts**: **Tools → Parts** (`Alt+5`) and *Slice into parts* in Browse project images.
 
-A page keeps its `Alt` number whichever plugins are on (Generate is always `Alt+2`).
+Each tool opens in a window of its own, which comes back where you left it. Closing it keeps its
+work for the session; closing the main window closes it too.
 
 **Safe for work.** Some anime models draw nudity or underwear unasked. The shield in the status bar
 (also Settings → General) adds "nsfw, nude, nudity, explicit, cleavage, underwear, lingerie" to the
-negative prompt of every image request: Generate, Create, the editor, Parts, the assistant and
-the LoRA test. It is off by default and works where the model takes a negative prompt; cloud
+negative prompt of every image request: New from prompt, the editor, Create, Parts, the assistant
+and the LoRA test. It is off by default and works where the model takes a negative prompt; cloud
 APIs filter on their own.
 
 ### Reusing characters across projects
@@ -267,8 +291,8 @@ session, and the sheet is set. Saving under an existing name updates that charac
 ### The project's character
 
 A project has one **active character** from the character library. The character button (round
-picture and name, "· LoRA" when it has one) sits above the prompt on the Generate page, in the
-editor's AI panel and on the Parts page. Its menu picks another character or none.
+picture and name, "· LoRA" when it has one) sits above the prompt in the editor's AI panel and on
+the Parts page. Its menu picks another character or none. New from prompt draws no character.
 
 * The Create page makes a character active when you save it to the library or load it from there.
 * With a character active, the prompt only needs the scene ("reading in a library, evening light").
@@ -300,8 +324,6 @@ editor's AI panel and on the Parts page. Its menu picks another character or non
   changes the order, *Remove* takes one out, and picking a character in the list makes it the
   only one again. The cast is stored in the project. Drawing both in one image is being built
   (M16); until then the pages draw the first character.
-* **Re-run** (Library) brings back the words you wrote and the character. If the image was drawn
-  without one, the character is switched off on the Generate page.
 * The assistant knows the active character (and a cast of two) and can switch it ("use Akane",
   "use Akane and Bo"). Its images, edits and
   region fixes draw the character the same way as the pages do, so "draw her at the beach" is
@@ -403,15 +425,16 @@ the references, the character sheet and the planned pose and framing, and scores
 When no result of a shot reaches the minimum score, the shot is generated again with the critic's
 improved prompt, up to the number of retries you set. Result thumbnails get a green border when
 accepted and an amber one otherwise; hover them to read the scores and the issues. The verdict is also
-stored in the image's library entry. The critic uses the model assigned to *Vision analysis*
-(Settings → Models & roles).
+stored with the image (Browse project images). The critic uses the model assigned to *Vision
+analysis* (Settings → Models & roles).
 
 ## 4. The assistant
 
-**Assistant** in the left rail (`Ctrl+Shift+A`) opens a chat that works on every page. Describe
-what you want in your own words, and the assistant acts through the studio's tools:
+**View → Assistant** (`Ctrl+Shift+A`; the Characters plugin, §3) opens a chat over the right side
+of the editor. Describe what you want in your own words, and the assistant acts through the
+studio's tools:
 
-* look at the project and the library;
+* look at the project and its images;
 * generate images, with references for character consistency;
 * change an image by instruction or repaint a region;
 * remove backgrounds, upscale, and open results in the editor;
@@ -419,7 +442,7 @@ what you want in your own words, and the assistant acts through the studio's too
   Critic retries when the Critic is on.
 
 Every step shows as a card with its result; click a thumbnail to open the image in the editor. Results
-are new images in the library, and originals are never overwritten. **Stop** interrupts a run;
+are new images of the project, and originals are never overwritten. **Stop** interrupts a run;
 **+** starts a new chat.
 
 The assistant uses the model assigned to the *Assistant* role (Settings → Models & roles). Models
@@ -429,8 +452,11 @@ provider settings.
 
 ## 5. The editor
 
-Open images with **File → Open image…** (`Ctrl+O`) or drag them onto the window. PSD files open with their layers;
-**File → Export image…** (`Ctrl+Shift+E`) writes PNG, JPEG, WebP or a layered PSD.
+Open images with **File → Open image…** (`Ctrl+O`), **File → Paste from clipboard**, the start
+screen, or drag them onto the window. PSD files open with their layers; **File → Export image…**
+(`Ctrl+Shift+E`) writes PNG, JPEG, WebP or a layered PSD, and **File → Save a copy to project
+images** (`Ctrl+Shift+S`) keeps the flattened picture with the project's images. Closing the last
+document shows the start screen again.
 
 ### Tools
 
@@ -486,18 +512,27 @@ the AI tab works locally: "colorize it", "make it night", "replace the cup with 
 * Without a selection, the whole image is edited.
 * Reference images are passed to the model too (up to three besides the image for FLUX.2 [klein]).
 * Steps, CFG and the sampler follow the model: 4 steps at CFG 1 for FLUX.2 [klein], with no negative
-  prompt. Values you set on the Generate page still win there.
+  prompt.
 
-## 7. Library
+## 7. Project images
+
+**File → Browse project images…** (`Alt+6`, also on the start screen) shows every generated,
+imported and edited image of the project, in a window of its own.
 
 * Filter by kind, favourites or text; the inspector shows the prompt and all parameters.
+* **Open in editor** (or a double-click) opens the image in the main window.
+* **Use as reference** adds it to the references of the editor's AI tab; **Reuse prompt** puts its
+  prompt into the AI tab (with no document open, into New from prompt); **Re-run** opens New from
+  prompt with the image's prompt, negative prompt, size and seed.
 * Right-click selected images to open them in the editor, use them as references, slice them into
-  parts, export them, or run **Remove background** / **Upscale 2×** on all of them at once. Each
-  result becomes a new library image linked to its source.
+  parts (with the Live2D parts plugin), export them, or run **Remove background** / **Upscale 2×**
+  on all of them at once. Each result becomes a new project image linked to its source.
+* **Documents** lists the layered documents saved in the project.
 
 ## 8. Character part slicing (Live2D)
 
-The **Parts** page turns a character illustration into a layered PSD for rigging:
+**Tools → Parts** (the Live2D parts plugin, §3) turns a character illustration into a layered PSD
+for rigging:
 
 1. **Source**: pick an image (A-pose works best), or open a layered PSD.
 2. **Masks**: automatic segmentation (part server, ComfyUI or SD WebUI), then refine the masks
@@ -518,20 +553,24 @@ lip-sync a talking loop, and exposes every parameter as a slider.
 
 ## 9. Projects
 
-Everything lives in a project file (`.lumen`): the library images and the editor documents. Modified
-documents are saved into the project a few seconds after your last change, every 60 seconds, and
-when the project closes. The documents that were open come back when the project opens again, also
-after a crash. In that case Lumen tells you, and a crash report (`crash-*.txt` with a `.dmp`
-minidump) is in the log folder. Closed documents stay in the **Documents** view of the Library.
+Everything lives in a project file (`.lumen`): the project's images and the editor documents.
+Modified documents are saved into the project a few seconds after your last change, every 60
+seconds, and when the project closes. The documents that were open come back when the project
+opens again, also after a crash. In that case Lumen tells you, and a crash report (`crash-*.txt`
+with a `.dmp` minidump) is in the log folder. Closed documents are on the start screen and in the
+**Documents** view of Browse project images.
 **File → Open project…** (`Ctrl+Shift+O`) switches projects; the last one opens on start.
 
 ## 10. Command line
 
 ```
-LumenStudio [--project file.lumen] [--page editor|generate|create|poses|parts|library]
+LumenStudio [--project file.lumen] [--page generate|library|create|poses|parts]
             [--image picture.png|layers.psd] [--tool transform] [--slice picture.png]
             [--cubism model.model3.json]
 ```
+
+`--page generate` opens New from prompt, `--page library` Browse project images, and `create`,
+`poses` or `parts` the window of that plugin (when it is on).
 
 ## 11. Language, themes and accessibility
 

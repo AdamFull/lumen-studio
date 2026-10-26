@@ -1,8 +1,35 @@
 #include "ui/widgets/ProviderCombo.h"
 
+#include "ai/ModelDefaults.h"
 #include "ui/Icons.h"
 
+#include <QCoreApplication>
+
 namespace lumen::ui {
+
+ai::ImageProvider *imageEngineInUse(const ai::ProviderRegistry *registry)
+{
+    if (ai::ImageProvider *p = registry->defaultImageProvider(); p && registry->isEnabled(p->instanceId()))
+        return p;
+    for (ai::ImageProvider *p : registry->imageProviders()) {
+        if (registry->isEnabled(p->instanceId()))
+            return p;
+    }
+    return nullptr;
+}
+
+QString imageEngineName(const ai::Provider *provider)
+{
+    if (!provider)
+        return QString();
+    // A server Lumen starts itself: the model it runs says more than the provider's name.
+    if (!provider->text(QStringLiteral("managed_server")).isEmpty()) {
+        const ai::ModelDefaults preset = ai::modelDefaultsOf(provider);
+        return QCoreApplication::translate("lumen::ui::ProviderCombo", "%1 on this computer")
+            .arg(preset.isValid() ? preset.name : provider->displayName());
+    }
+    return provider->displayName();
+}
 
 ProviderCombo::ProviderCombo(ai::ProviderRegistry *registry, ai::ProviderKind kind, QWidget *parent)
     : QComboBox(parent)
@@ -10,6 +37,7 @@ ProviderCombo::ProviderCombo(ai::ProviderRegistry *registry, ai::ProviderKind ki
     , m_kind(kind)
 {
     setMinimumWidth(160);
+    setAccessibleName(kind == ai::ProviderKind::Image ? tr("Image engine") : tr("Language model"));
     reload();
     connect(registry, &ai::ProviderRegistry::providersChanged, this, &ProviderCombo::reload);
     connect(this, &QComboBox::currentIndexChanged, this, [this] { emit providerChanged(providerId()); });
