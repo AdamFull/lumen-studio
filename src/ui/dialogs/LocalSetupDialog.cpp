@@ -87,31 +87,37 @@ QStringList LocalSetup::kindsFor(const Options &o)
     return kinds;
 }
 
-QFuture<void> LocalSetup::prepare(const std::optional<runtime::HardwareInfo> &hardware)
+QFuture<void> LocalSetup::prepare(const std::optional<runtime::HardwareInfo> &hardware, const QStringList &programs)
 {
     auto promise = std::make_shared<QPromise<void>>();
     promise->start();
     QFuture<void> future = promise->future();
     QPointer<LocalSetup> self(this);
-    (hardware ? QtFuture::makeReadyValueFuture(*hardware) : runtime::probeHardware()).then(this, [self, promise](runtime::HardwareInfo hw) {
+    const QStringList kinds = programs.isEmpty() ? QStringList{kLlama, kSd} : programs;
+    (hardware ? QtFuture::makeReadyValueFuture(*hardware) : runtime::probeHardware()).then(this, [self, promise, kinds](runtime::HardwareInfo hw) {
         if (!self) {
             promise->finish();
             return;
         }
         self->m_hw = hw;
-        auto pending = std::make_shared<int>(0);
-        auto done = [promise, pending] {
-            if (--*pending == 0)
-                promise->finish();
-        };
-        ++*pending; // held until every lookup is started
         for (const QString &kind : {kLlama, kSd}) {
             RuntimeStep step;
             step.kind = kind;
             step.existingId = existingRuntime(self->m_studio, kind);
             self->m_runtimeSteps.insert(kind, step);
+        }
+        emit self->hardwareReady();
+        auto pending = std::make_shared<int>(0);
+        auto done = [self, promise, pending](bool lookedUp) {
+            if (lookedUp && self)
+                emit self->runtimesChanged();
+            if (--*pending == 0)
+                promise->finish();
+        };
+        ++*pending; // held until every lookup is started
+        for (const QString &kind : kinds) {
             const runtime::RuntimeSpec *spec = runtime::Catalog::instance().runtime(kind);
-            if (!step.existingId.isEmpty() || !spec)
+            if (!self->m_runtimeSteps.value(kind).existingId.isEmpty() || !spec)
                 continue;
             ++*pending;
             const runtime::RuntimeSpec specCopy = *spec;
@@ -125,15 +131,15 @@ QFuture<void> LocalSetup::prepare(const std::optional<runtime::HardwareInfo> &ha
                         if (!s.plan.ok())
                             s.error = s.plan.error;
                     }
-                    done();
+                    done(true);
                 })
                 .onFailed(self, [self, kind, done](const std::exception &e) {
                     if (self)
                         self->m_runtimeSteps[kind].error = describeException(e);
-                    done();
+                    done(true);
                 });
         }
-        done();
+        done(false);
     });
     return future;
 }
@@ -288,6 +294,7 @@ void LocalSetup::configure()
             set = &s;
     }
     QStringList created;
+    QStringList corrected;
 
     if (m_options.language) {
         const QString model = m_paths.value(QStringLiteral("language"));
@@ -311,9 +318,7 @@ void LocalSetup::configure()
         }
     }
     if (m_options.images && m_options.model) {
-        const QString name = configureModel(tier);
-        if (!name.isEmpty())
-            created << name;
+        configureModel(tier, &created, &corrected);
     } else if (m_options.images) {
         const QString model = m_paths.value(QStringLiteral("checkpoint"));
         for (const runtime::ServerProfile &p : servers->profiles()) {
@@ -344,27 +349,72 @@ void LocalSetup::configure()
         if (ai::Provider *provider = m_studio->providerForServer(m_sdProfile))
             m_studio->providers()->setDefaultImageProvider(provider->instanceId());
     }
-    emit finished(true, created.isEmpty() ? tr("Everything was already set up.") : tr("Added: %1.").arg(created.join(QStringLiteral(", "))));
+    QStringList done;
+    if (!created.isEmpty())
+        done << tr("Added: %1.").arg(created.join(QStringLiteral(", ")));
+    if (!corrected.isEmpty())
+        done << tr("Corrected the settings of %1.").arg(corrected.join(QStringLiteral(", ")));
+    emit finished(true, done.isEmpty() ? tr("Everything was already set up.") : done.join(QLatin1Char(' ')));
 }
 
-QString LocalSetup::configureModel(runtime::VramTier tier)
+QString LocalSetup::serverWithModel(const QString &model, const QString &option, bool *works) const
+{
+    runtime::ServerSupervisor *servers = m_studio->servers();
+    auto same = [](const QString &a, const QString &b) {
+        return !a.isEmpty() && !b.isEmpty() && QFileInfo(QDir::fromNativeSeparators(a)) == QFileInfo(QDir::fromNativeSeparators(b));
+    };
+    QString found;
+    bool foundWorks = false;
+    for (const runtime::ServerProfile &p : servers->profiles()) {
+        if (servers->kindOf(p.id) != kSd)
+            continue;
+        if (!same(p.options.value(QStringLiteral("model")).toString(), model)
+            && !same(p.options.value(QStringLiteral("diffusion_model")).toString(), model))
+            continue;
+        const bool ok = same(p.options.value(option).toString(), model) && runtime::checkSdProfile(m_studio->models(), p).isEmpty();
+        if (found.isEmpty() || (ok && !foundWorks)) {
+            found = p.id;
+            foundWorks = ok;
+        }
+    }
+    if (works)
+        *works = foundWorks;
+    return found;
+}
+
+void LocalSetup::configureModel(runtime::VramTier tier, QStringList *created, QStringList *corrected)
 {
     for (auto it = m_modelJobs.cbegin(); it != m_modelJobs.cend(); ++it)
         m_modelPaths.insert(it.key(), it.value()->result().toString());
     const runtime::LocalModelPlan &plan = *m_options.model;
     runtime::ServerSupervisor *servers = m_studio->servers();
     const QString model = m_modelPaths.value(plan.model()->option);
-    QString created;
-    m_sdProfile.clear(); // an earlier run may have set up another model
-    // A server that runs this model already stays as it is.
-    for (const runtime::ServerProfile &p : servers->profiles()) {
-        if (servers->kindOf(p.id) != kSd)
-            continue;
-        for (const QString &key : {QStringLiteral("model"), QStringLiteral("diffusion_model")}) {
-            const QString file = p.options.value(key).toString();
-            if (!file.isEmpty() && QFileInfo(QDir::fromNativeSeparators(file)) == QFileInfo(model))
-                m_sdProfile = p.id;
+    // The preset's options: the model in its slot, its components, the GPU tier's options.
+    QVariantMap options = runtime::planServerOptions(m_studio->models(), plan, m_modelPaths, tier);
+    if (plan.preset.loras)
+        options.insert(QStringLiteral("lora_dir"),
+                       QDir::toNativeSeparators(QDir(m_studio->models()->defaultFolder()).filePath(runtime::ModelLibrary::subfolderFor(runtime::ModelKind::Lora))));
+    // A server that runs this model already stays as it is when it works. One that does not (a
+    // standalone diffusion model in the checkpoint slot without its VAE and text encoder, as in
+    // the log of §17.1) gets the preset's options, keeping its name, port and program.
+    bool works = false;
+    m_sdProfile = serverWithModel(model, plan.model()->option, &works);
+    if (!m_sdProfile.isEmpty() && !works) {
+        runtime::ServerProfile p = *servers->profile(m_sdProfile);
+        for (const char *key : {"model", "diffusion_model", "vae", "clip_l", "clip_g", "t5xxl", "llm"}) {
+            if (!options.contains(QLatin1String(key)))
+                p.options.remove(QLatin1String(key));
         }
+        p.options.insert(options);
+        // Add-ons of another family (an SDXL ControlNet next to FLUX) go too.
+        for (const runtime::ProfileProblem &problem : runtime::checkSdProfile(m_studio->models(), p)) {
+            if (!options.contains(problem.option))
+                p.options.remove(problem.option);
+        }
+        servers->updateProfile(p);
+        if (servers->needsRestart(p.id))
+            servers->restart(p.id);
+        *corrected << p.name;
     }
     if (m_sdProfile.isEmpty()) {
         auto runtimeId = [this] {
@@ -374,17 +424,19 @@ QString LocalSetup::configureModel(runtime::VramTier tier)
             return existing.isEmpty() ? existingRuntime(m_studio, kSd) : existing;
         };
         runtime::ServerProfile p = servers->createProfile(runtimeId(), plan.preset.name);
-        p.options = runtime::planServerOptions(m_studio->models(), plan, m_modelPaths, tier);
-        if (plan.preset.loras)
-            p.options.insert(QStringLiteral("lora_dir"),
-                             QDir::toNativeSeparators(QDir(m_studio->models()->defaultFolder()).filePath(runtime::ModelLibrary::subfolderFor(runtime::ModelKind::Lora))));
+        p.options = options;
         addServer(m_studio, p, true);
         m_sdProfile = p.id;
-        created = p.name;
+        *created << p.name;
+    }
+    // A server set up by hand may have no provider yet.
+    if (!m_studio->providerForServer(m_sdProfile)) {
+        if (const auto p = servers->profile(m_sdProfile))
+            m_studio->providers()->addProvider(runtime::providerTypeFor(kSd), p->name,
+                                               {{QStringLiteral("url"), runtime::providerUrl(kSd, p->port)}, {QStringLiteral("managed_server"), p->id}});
     }
     if (ai::Provider *provider = m_studio->providerForServer(m_sdProfile))
         m_studio->providers()->setDefaultImageProvider(provider->instanceId());
-    return created;
 }
 
 // ---- LocalSetupDialog -------------------------------------------------------------------------------

@@ -4,9 +4,14 @@
 // Report-only by default (the M17 checklist is built from it); LUMEN_LAYOUT_STRICT=1 fails on any
 // finding. With LUMEN_SCREENSHOT_DIR, every state is saved as a PNG next to layout-report.md.
 
+#include "core/JobQueue.h"
 #include "core/Settings.h"
 #include "plugins/BuiltInPlugins.h"
 #include "pose/Skeleton.h"
+#include "runtime/Download.h"
+#include "runtime/ModelHub.h"
+#include "runtime/ModelPresets.h"
+#include "runtime/RuntimeStore.h"
 #include "runtime/ServerProfile.h"
 #include "ui/Accessibility.h"
 #include "ui/MainWindow.h"
@@ -42,7 +47,9 @@
 #include <QScrollBar>
 #include <QSplitter>
 #include <QStandardPaths>
+#include <QTabBar>
 #include <QTabWidget>
+#include <QTcpServer>
 #include <QTextDocumentFragment>
 #include <QToolButton>
 #include <QVBoxLayout>
@@ -457,6 +464,10 @@ void TestLayout::settingsDialog()
     m_auditor.auditDialog(&dialog, QStringLiteral("Settings"));
     auto *tabs = dialog.findChild<QTabWidget *>();
     QVERIFY(tabs);
+    // Not report-only: every tab label fits the tab bar whole (no tab behind scroll arrows, none
+    // shortened), with the plugins' tabs too.
+    QVERIFY2(tabs->tabBar()->sizeHint().width() <= tabs->width(),
+             qPrintable(QStringLiteral("the tabs need %1 px, the bar has %2").arg(tabs->tabBar()->sizeHint().width()).arg(tabs->width())));
     for (int i = 0; i < tabs->count(); ++i) {
         tabs->setCurrentIndex(i);
         Auditor::settle();
@@ -529,6 +540,53 @@ void TestLayout::dialogs()
                 QTRY_VERIFY_WITH_TIMEOUT(planned.size() == 1, 30000);
             m_auditor.auditDialog(&d, QStringLiteral("Setup wizard - %1").arg(name));
         }
+        // The result page while the test image is made, and the local setup while it downloads,
+        // against a server that takes every request and never answers.
+        QTcpServer silent;
+        QVERIFY(silent.listen(QHostAddress::LocalHost));
+        const QString silentUrl = QStringLiteral("http://127.0.0.1:%1").arg(silent.serverPort());
+        ai::Provider *engine = studio.providers()->addProvider(QStringLiteral("sdcpp"), QStringLiteral("stable-diffusion.cpp"),
+                                                               {{QStringLiteral("url"), silentUrl}});
+        auto removeEngine = qScopeGuard([&] { studio.providers()->removeProvider(engine->instanceId()); });
+        d.runTestImage(engine->instanceId(), QStringLiteral("FLUX.2 [klein] 4B is set up"),
+                       QStringLiteral("Lumen starts the image engine and makes a test image. The first start loads the model, which takes a "
+                                      "minute or two."));
+        m_auditor.auditDialog(&d, QStringLiteral("Setup wizard - test image"));
+
+        runtime::InstalledRuntime rt;
+        rt.id = QStringLiteral("adopted/layout-audit");
+        rt.kind = QStringLiteral("sd.cpp");
+        rt.directory = QDir::temp().filePath(QStringLiteral("lumen-layout-audit"));
+        rt.executable = QDir(rt.directory).filePath(QStringLiteral("sd-server.exe"));
+        studio.runtimes()->addInstalled(rt);
+        auto removeRuntime = qScopeGuard([&] { studio.runtimes()->remove(rt.id); });
+        studio.hub()->setBaseUrls(silentUrl, silentUrl);
+        SetupWizard setting(&studio);
+        setting.hardwareOverride = hw;
+        setting.searchFolders = QStringList();
+        // Small files, so the free disk space never stops the start.
+        runtime::ModelPreset klein = *runtime::presetById(QStringLiteral("flux2-klein-4b"));
+        klein.download.size = 4LL << 20;
+        for (runtime::PresetSlot &slot : klein.components)
+            slot.file.size = 1LL << 20;
+        setting.presets = {klein, *runtime::presetById(QStringLiteral("sdxl"))};
+        QSignalSpy plannedAgain(&setting, &SetupWizard::localPlanReady);
+        setting.show();
+        setting.showPage(SetupWizard::Page::Local);
+        QTRY_VERIFY_WITH_TIMEOUT(plannedAgain.size() == 1, 30000);
+        auto *start = setting.findChild<QPushButton *>(QStringLiteral("setupStart"));
+        QVERIFY(start && start->isEnabled());
+        QList<QString> parts;
+        for (const runtime::PlannedFile &f : setting.localPlan().downloads())
+            parts << runtime::FileDownload::partPath(studio.hub()->destinationFor(runtime::plannedDownload(setting.localPlan(), f, silentUrl)));
+        start->click();
+        QTRY_VERIFY_WITH_TIMEOUT(setting.localSetup()->jobs().size() == 3, 10000);
+        m_auditor.auditDialog(&setting, QStringLiteral("Setup wizard - setting up"));
+        QSignalSpy finished(setting.localSetup(), &LocalSetup::finished);
+        studio.jobs()->cancelAll();
+        QTRY_VERIFY_WITH_TIMEOUT(finished.size() == 1, 10000);
+        for (const QString &part : std::as_const(parts))
+            QFile::remove(part);
     }
     // Settings → AI with an engine in each row.
     {

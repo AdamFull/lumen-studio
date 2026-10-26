@@ -398,7 +398,8 @@ ai::ToolSet assistantTools(Studio *studio)
               [s](const QJsonObject &args) {
                   if (!s)
                       return fail(QStringLiteral("closed"));
-                  ai::ImageProvider *provider = s->providers()->defaultImageProvider();
+                  // A change to an image: the engine for changes of Settings → AI.
+                  ai::ImageProvider *provider = s->providers()->imageProviderFor(true);
                   if (!provider)
                       return fail(QObject::tr("No image provider is configured."));
                   const QString assetId = args.value(QStringLiteral("asset_id")).toString();
@@ -455,7 +456,7 @@ ai::ToolSet assistantTools(Studio *studio)
                       spec.parentAssetId = assetId;
                       spec.title = QObject::tr("Inpaint: %1").arg(spec.request.prompt.left(40));
                       spec.meta.insert(QStringLiteral("assistant"), true);
-                      ai::ImageProvider *provider = s->providers()->defaultImageProvider();
+                      ai::ImageProvider *provider = s->providers()->imageProviderFor(true);
                       if (provider)
                           spec.providerId = provider->instanceId();
                       return submitWithCharacter(s, provider, spec, ai::CharacterUse::Region, args);

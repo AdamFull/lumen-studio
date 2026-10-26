@@ -36,8 +36,8 @@ AiSettingsPage::AiSettingsPage(Studio *studio, QWidget *parent)
                             content));
     m_image = makeRow(QStringLiteral("aiImage"), tr("Image engine"), tr("Makes new images and changes them from your descriptions."));
     m_edit = makeRow(QStringLiteral("aiEdit"), tr("Engine for changes"),
-                     tr("Changes a selection or the whole image: colorize, remove, replace. Usually the image engine; choose another "
-                        "one when it is better at following such instructions."));
+                     tr("What the editor uses to change a selection or the whole image: colorize, remove, replace. Usually the "
+                        "image engine; choose another one when it follows such instructions better."));
     m_language = makeRow(QStringLiteral("aiLanguage"), tr("Language model"), QString());
     m_languageUsers = m_language.box->findChild<QLabel *>(QStringLiteral("aiLanguageText"));
     for (const Row *row : {&m_image, &m_edit, &m_language})
@@ -55,6 +55,11 @@ AiSettingsPage::AiSettingsPage(Studio *studio, QWidget *parent)
     outer->addWidget(verticalScroll(content, this));
 
     connect(m_image.menu, &QMenu::aboutToShow, this, [this] { fillImageMenu(m_image.menu, false); });
+    // Without an engine there is nothing to pick: Set up… opens the wizard.
+    connect(m_image.change, &QPushButton::clicked, this, [this] {
+        if (!m_image.change->menu())
+            openWizard();
+    });
     connect(m_edit.menu, &QMenu::aboutToShow, this, [this] { fillImageMenu(m_edit.menu, true); });
     connect(m_language.menu, &QMenu::aboutToShow, this, [this] { fillLanguageMenu(m_language.menu); });
     connect(m_studio->providers(), &ai::ProviderRegistry::providersChanged, this, [this] {
@@ -207,6 +212,7 @@ void AiSettingsPage::refresh()
     ai::ImageProvider *image = registry->defaultImageProvider();
     fill(m_image, image, tr("No image engine yet"), false);
     m_image.change->setText(image ? tr("Change…") : tr("Set up…"));
+    m_image.change->setMenu(registry->imageProviders().isEmpty() ? nullptr : m_image.menu);
 
     const QString editId = registry->editImageProviderId();
     ai::ImageProvider *edit = editId.isEmpty() ? nullptr : registry->imageProvider(editId);

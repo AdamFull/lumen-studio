@@ -179,6 +179,19 @@ Provider *ProviderRegistry::addProvider(const QString &typeId, const QString &na
     return p;
 }
 
+Provider *ProviderRegistry::createUnsaved(const QString &typeId, const QVariantMap &settings, QObject *parent)
+{
+    const auto t = type(typeId);
+    if (!t || !m_factories.contains(typeId))
+        return nullptr;
+    Provider *p = m_factories.value(typeId)(*t, typeId + QStringLiteral("-unsaved"), m_http, parent);
+    if (p) {
+        p->setDisplayName(t->name);
+        p->configure(settings);
+    }
+    return p;
+}
+
 void ProviderRegistry::updateProvider(const QString &id, const QString &name, const QVariantMap &settings)
 {
     Provider *p = m_instances.value(id);

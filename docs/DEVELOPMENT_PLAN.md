@@ -2208,12 +2208,11 @@ Survey of the code, the app log and user testing (October 2026):
     label, a profile, a character's LoRA and where downloads go; a stopped training finds its moved
     base model; no training starts while moving; and back, which clears the setting; the Help
     action; no question without an old folder).
-  * Not yet: *Open models folder* in the setup wizard (§17.5); a move stops every running server,
-    also those that use no file in the folder; a LoRA evaluation that runs when a move starts
-    fails (its server stops); the start-up path with models in an old folder (`Studio` constructor,
-    `MainWindow::offerModelsFolderMove`) is untested, because with `LUMEN_DATA_DIR` the old and the
-    new folder are the same (only `settleLegacyModels` is); the German translation of the new
-    texts.
+  * Not yet: a move stops every running server, also those that use no file in the folder; a LoRA
+    evaluation that runs when a move starts fails (its server stops); the start-up path with models
+    in an old folder (`Studio` constructor, `MainWindow::offerModelsFolderMove`) is untested,
+    because with `LUMEN_DATA_DIR` the old and the new folder are the same (only
+    `settleLegacyModels` is); the German translation of the new texts.
 - [x] Sampling defaults from presets (CFG, guidance, image CFG, negative prompt) through
   `PromptStyle` and the request; sd.cpp instruction edit (§17.4) with a mock-server contract test.
   * `ai::ModelDefaults`: the preset as the image back-end sees it; Studio passes it to the provider
@@ -2245,14 +2244,18 @@ Survey of the code, the app log and user testing (October 2026):
   outside the feathered mask unchanged.
 - [x] Setup wizard and Settings → AI (§17.5).
   * `ui/dialogs/SetupWizard` replaces the first-run `OnboardingDialog` (which stays as Providers →
-    *Detect local*). One entry point, `ui::openSetupWizard(studio, parent, page)`: one wizard at a
-    time, not modal, a child of the modal dialog that is open (Settings would block it otherwise),
-    else of the main window. It opens at the first start (`MainWindow::maybeShowOnboarding`, once,
-    `app/onboarded`), from *Help → Set up AI…*, and on *Run on this computer* from the Local servers
-    page's *Set up local AI…* and the *Detect local* dialog; the start screen's card calls it after
-    the merge. The first page offers the three ways with what they cost in time, size and money, the
-    suggested model and the servers found; each way ends on a result page with a test image
-    (`saveAssets` off; quality "low" where a service charges by quality).
+    *Detect local*, now titled *Find servers on this computer*). One entry point,
+    `ui::openSetupWizard(studio, parent, page)`: one wizard at a time, not modal. Over a modal dialog
+    (Settings runs `exec()`) it is that dialog's child, also when it was open already (it moves
+    there), or the dialog would block it; when that dialog closes, it moves to the window under it
+    instead of closing with it. Else it belongs to the main window. It opens at the first start
+    (`MainWindow::maybeShowOnboarding`, once, `app/onboarded`), from *Help → Set up AI…*, and on
+    *Run on this computer* from the Local servers page's *Set up local AI…* and the *Detect local*
+    dialog; the start screen's card calls it after the merge. The first page offers the three ways
+    with what they cost in time, size and money, the suggested model and the servers found; each way
+    ends on a result page with a test image (`saveAssets` off; quality "low" where a service charges
+    by quality), its progress (the job's status under the heading: the theme's progress bars show no
+    text) and *Stop* (`runTestImage`, public).
   * *Run on this computer* (`runtime/AiSetup`):
     * `recommendLocalModel`: the discrete NVIDIA or AMD GPU with the most memory (`imageGpu`; Intel
       and integrated GPUs do not count). From 7 GiB (8 GB cards report a little less) FLUX.2 [klein]
@@ -2261,70 +2264,109 @@ Survey of the code, the app log and user testing (October 2026):
       on by default only above the 8 GB tier.
     * The presets' new `download`: the pinned main file, looked up through the Hugging Face API like
       the components. klein 4B as the Q8_0 GGUF of `leejet/FLUX.2-klein-4B-GGUF` (the repository
-      sd.cpp's `flux2.md` lists; 4.3 GB, apache-2.0), SDXL as RealVisXL 5.0 fp16 (a photographic
-      fine-tune, 6.9 GB, openrail++; the docs list no GGUF for SDXL). Both ungated. `presetById`.
+      sd.cpp's `flux2.md` lists; 4.0 GB, apache-2.0), SDXL as RealVisXL 5.0 fp16 (a photographic
+      fine-tune, 6.5 GB, openrail++; the docs list no GGUF for SDXL). Both ungated. `presetById`.
+      (Sizes here as the wizard shows them, 1 GB = 1024³ bytes.)
     * `readFolders` (`ModelLibrary::readFolder`, headers and sidecars like a scan, nothing added)
-      reads `suggestedRoots` (with the servers' model files) once the page opens; `planLocalModel`
-      takes a library or found file the preset matches (a file another preset claims first, such as
-      klein base, is not it), preferring one whose components are there, then the pinned file, then
-      one in the library; each component by `slotStandIn`'s rules over both, preferring the model's
-      folder; the rest from the pinned downloads. `plannedDownload` (sub-folder by kind, the pinned
-      size and SHA-256, a test server's address), `planServerOptions` (the tier's options,
-      `modelServerOptions`, the plan's components, which the library may not have read yet, the
-      preset's VRAM and launch options).
-    * The page: the computer, the model with what it can do and how fast (klein: 20–40 s per image on
-      8 GB, the live check), the plan (the program and each file with its name, size, where from and
-      licence), the total with the time at 100 Mbit/s, the free space and the models folder; *Open
-      models folder* (the "not yet" of the models folder step); *Set with pose control…* opens the
-      old SDXL starter set while a plugin needs a language model. The language model is a check box
-      only then (`Extension::needsLanguageModel`, `Extensions::needingLanguageModel`: Characters).
+      reads `suggestedRoots` (with the servers' model files) once the page opens, and *Use models
+      from a folder…* (`useModelsFolder`) any other folder, such as a portable ComfyUI, which
+      `suggestedRoots` only knows when it is an adopted runtime or ComfyUI Desktop; its files come
+      first. `planLocalModel` takes a library or found file the preset matches (a file another
+      preset claims first, such as klein base, is not it), preferring one whose components are
+      there, then the pinned file, then one in the library; each component by `slotStandIn`'s rules
+      over both, preferring the model's folder; the rest from the pinned downloads. `plannedDownload`
+      (sub-folder by kind, the pinned size and SHA-256, a test server's address), `planServerOptions`
+      (the tier's options, `modelServerOptions`, the plan's components, which the library may not
+      have read yet, the preset's VRAM and launch options).
+    * The page: the computer, the model with what it can do and how fast on this computer (klein:
+      20–40 s per image on 8 GB, the live check; a few minutes below 8 GB; several minutes on the
+      processor without an NVIDIA or AMD GPU), the plan (the program and each file with its name,
+      size, where from and licence), the total with the time at 100 Mbit/s, the free space and the
+      models folder, and what happens to a server that has the model already; *Use models from a
+      folder…* and *Open models folder* (the "not yet" of the models folder step); *Model set for
+      Characters (pose control)…* opens the old SDXL starter set while a plugin needs a language
+      model. The language model is a check box only then (`Extension::needsLanguageModel`,
+      `Extensions::needingLanguageModel`: Characters). The plan does not wait for GitHub:
+      `LocalSetup::prepare(hardware, programs)` says `hardwareReady` first and `runtimesChanged`
+      after each release lookup, whose row says "Looking up…" until then; llama.cpp is looked up
+      only while a plugin needs a language model.
     * `LocalSetup` takes the plan (`Options::model`): the found folders become library folders, the
       missing files Queue downloads, the sd.cpp server comes from `planServerOptions` with the LoRA
-      folder (a server with the same model is reused), its provider becomes the image engine; the
-      runtime install and the language model work as before (`prepare` takes the hardware, for
-      tests). Then the wizard starts the server with a test image. Closed while downloading, the
-      setup still finishes and says so in a toast.
+      folder, its provider becomes the image engine; the runtime install and the language model work
+      as before. A server with the same model (`serverWithModel`) is reused as it is only when the
+      model is in the planned slot and `checkSdProfile` finds nothing; otherwise (klein in the
+      checkpoint slot without its VAE and text encoder, as in §17.1's log) it gets the plan's
+      options, keeping its name, port and program, the encoders the preset does not use and add-ons
+      that do not fit go, and a running one restarts. A server without a provider gets one. Then
+      the wizard starts the server with a test image. Closed while downloading, the setup still
+      finishes and says so in a toast; a wizard opened meanwhile shows its progress instead of
+      offering a second setup.
   * *Use an online service*: fal.ai, OpenAI, Google Gemini; one key field (hidden) with a link to the
-    service's key page; *Connect and make a test image* reuses the service's provider (a new key
-    replaces the old), checks the key with `testConnection`, says in plain words when it is refused,
-    and makes it the image engine.
+    service's key page; *Connect and make a test image* checks the key with `testConnection` on a
+    provider that is not saved (`ProviderRegistry::createUnsaved`) and says in plain words when it
+    is refused. Only an accepted key replaces the old one of the service's provider (or adds one),
+    turns it on and makes it the image engine, so a mistyped key leaves the stored key, the provider
+    and the image engine as they were. Enter while a key is checked starts no second check.
   * *Connect a running server*: `ProviderRegistry::serverProbes` (the defaults plus sd-server on
     1234 and 7861; tests replace them; results now in probe order) lists the image servers that
     answer, `probeAddress` finds sd-server, ComfyUI or WebUI / Forge at a typed address (without
-    `http://` too). A server added before is reused; ComfyUI gets its first checkpoint when none is
-    set (its built-in graph needs one).
+    `http://` too). An sd-server also answers WebUI's API, so at an address where both answer it is
+    listed once, as sd-server; only the last search fills the list (*Search again* while one runs).
+    A server added before is reused; ComfyUI gets its first checkpoint when none is set (its
+    built-in graph needs one).
   * Settings → AI (`ui/dialogs/AiSettingsPage`, the first tab, `showTab("ai")`): the image engine,
     the engine for changes and, while a plugin needs one, the language model, each with its name,
     model (the preset's name, else the provider's model setting), status (a managed server's state,
     else one connection check while the page is open) and *Change…* (the configured engines,
-    *Set up a new engine…*; for the language model the Models & roles and Local servers tabs).
-    The engine for changes is new: `ProviderRegistry::editImageProvider` (saved as `defaultEdit`,
-    cleared with its provider); `GenerationService::submit` sends requests without a provider that
-    change an existing image (a region, image-to-image, inpainting, edits) to it (`providerFor`;
-    `execute` keeps the default provider, the queue group of its callers).
-  * Tests (`tst_setup`, 9 functions): `recommendation` (8 GB with an Intel GPU listed first, 12 and
-    24 GB, AMD, 7.5 and 6 GB, Intel Arc, an integrated Radeon, none), `pinnedDownloads` (both main
-    files pinned, the empty-library plan with sizes, URLs and destinations, a test server's
-    address), `planFindsFiles` (a ComfyUI folder with klein, klein base, the VAE and both Qwen3s:
-    nothing to download, the folder to add, the server options; the same from the library; only
-    the VAE), `localReusesFiles` (the wizard on that folder: the plan, no request to Hugging Face, the
-    profile, the folder in the library, the provider with the preset's name, no language model, the
-    test image through the fake server and a mock sd-server; a second run reuses the server),
-    `localDownloadsMissing` (sizes and licences, the SDXL choice, three checked downloads from a mock
-    Hugging Face into the models folder, the profile, the test image), `onlineService` (no key, a
-    refused key, then the test image with quality "low" against a mock OpenAI), `runningServer` (a
-    mock ComfyUI found, its checkpoint, not added twice; a typed address without an answer, then a
-    mock sd-server and its test image), `settingsAi` (nothing set up; a managed klein server and its
-    preset name; the engine for changes chosen, used for edits and regions, kept in providers.json,
-    cleared with its provider; an unreachable engine; the language model row with and without the
-    Characters plugin), `entryPoints` (the first start once, *Help → Set up AI…*, one wizard at a
-    time, the Local servers page). `tst_layout`: the wizard's four pages and Settings → AI with an
-    engine, no findings.
-  * Not yet: the AI panel still picks its provider itself (the prompt bar of §17.2 should use
-    `imageProviderFor`); the start screen card (new shell); Qwen3 4B as a GGUF text encoder (unsloth's
-    Q8_0, 4.3 GB instead of 8 GB) is untested with the pinned sd.cpp, so klein's download stays
-    12.7 GB; the per-image times are from the 8 GB live check only (AMD / Vulkan untested); the online
-    services keep their default models; the German translation of the new texts.
+    *Set up a new engine…*; *Set up…* opens the wizard directly while there is no engine; for the
+    language model the Roles and Local servers tabs). The engine for changes is new:
+    `ProviderRegistry::editImageProvider` (saved as `defaultEdit`, cleared with its provider);
+    `GenerationService::submit` sends requests without a provider that change an existing image (a
+    region, image-to-image, inpainting, edits) to it (`providerFor`; `execute` keeps the default
+    provider, the queue group of its callers). `ProviderCombo` (image kind) shows the engine of
+    Settings → AI for its use (`Use::NewImages`, `Use::Changes`) and follows it on `rolesChanged`
+    until a provider is picked in it by hand (picking that engine again follows it again); the AI
+    panel uses the engine for changes, and so do the assistant's `edit_image` and `inpaint_region`
+    (`imageProviderFor(true)`). The Settings tab "Models & roles" is now "Roles", and the tab bar
+    shortens labels instead of scrolling, so the AI tab does not push Plugins out of sight.
+  * English plural forms of the new texts in `translations/lumen_en.ts` (also those of the models
+    folder step); the German file keeps its translations of the renamed texts.
+  * Tests (`tst_setup`, 10 functions; GitHub lookups go to a closed port): `recommendation` (8 GB
+    with an Intel GPU listed first, 12 and 24 GB, AMD, 7.5 and 6 GB, Intel Arc, an integrated
+    Radeon, none), `pinnedDownloads` (both main files pinned, the empty-library plan with sizes,
+    URLs and destinations, a test server's address), `planFindsFiles` (a ComfyUI folder with klein,
+    klein base, the VAE and both Qwen3s: nothing to download, the folder to add, the server options;
+    the same from the library; only the VAE), `localReusesFiles` (the wizard on that folder: the
+    plan, no request to Hugging Face, the profile, the folder in the library, the provider with the
+    preset's name, no language model, the test image through the fake server and a mock sd-server;
+    a second run reuses the server), `localCorrectsServer` (klein in the checkpoint slot without its
+    components, a ControlNet file that is gone and no provider: the plan says it corrects it; the
+    same profile, name, port and program with klein in its slot, the VAE and encoder, no ControlNet;
+    a provider, the image engine; the test image; planned again, it is used as it is),
+    `localDownloadsMissing` (sizes and licences, the SDXL choice, a folder chosen with *Use models
+    from a folder…* that has the VAE, two checked downloads from a mock Hugging Face into the models
+    folder, the profile with the found VAE, the folder in the library, the test image),
+    `onlineService` (no key; a refused key adds nothing and sets no engine; Enter twice: one check,
+    one test image with quality "low" against a mock OpenAI; the AI panel follows the new engine; a
+    refused key for the working service keeps the stored key and leaves it off; a provider picked
+    by hand in the panel stays, the engine for changes is followed; the test image's progress and
+    *Stop*), `runningServer` (a mock ComfyUI found, its checkpoint, not added twice, also with two
+    searches at once; a typed address without an answer, then a mock sd-server and its test image;
+    an sd-server that also answers as WebUI listed once), `settingsAi` (nothing set up, *Set up…*
+    without a menu; a managed klein server and its preset name; the engine for changes chosen, used
+    for edits and regions, kept in providers.json, cleared with its provider; an unreachable
+    engine; the language model row with and without the Characters plugin), `entryPoints` (the
+    first start once, *Help → Set up AI…*, one wizard at a time, an open wizard moved over a modal
+    Settings and back to the main window when it closes, one opened from Settings kept when it
+    closes, the Local servers page). `tst_layout`: the wizard's pages (also the test image and the
+    setup's progress, against a server that never answers), Settings → AI with an engine, no
+    findings; every Settings tab fits the tab bar (strict).
+  * Not yet: the start screen card (new shell); the prompt bar of §17.2 should choose its engine
+    with `imageProviderFor` as the AI panel does; Qwen3 4B as a GGUF text encoder (unsloth's Q8_0,
+    4.0 GB instead of 7.5 GB) is untested with the pinned sd.cpp, so klein's download stays 11.8 GB;
+    the per-image times are from the 8 GB live check only (AMD / Vulkan untested); the online
+    services keep their default models; using the model folder of a ComfyUI found running on the
+    server page; the German translation of the new texts.
 - [x] Filter graph core and classic nodes; golden-image tests per node.
   * `src/filters` (`lumen_filters`, `lumen::filters`): on `lumen_core` (`ImageOps`, `Async`) and Qt
     Gui only, no UI, AI, document or runtime code; `lumen_ui` links it. No UI yet.

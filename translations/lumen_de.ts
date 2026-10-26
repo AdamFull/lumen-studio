@@ -10148,13 +10148,13 @@ Trotzdem herunterladen?</translation>
     <name>lumen::ui::OnboardingDialog</name>
     <message>
         <location filename="../src/ui/dialogs/SettingsDialog.cpp" line="+670"/>
-        <source>Welcome to Lumen Studio</source>
-        <translation>Willkommen bei Lumen Studio</translation>
+        <source>Find servers on this computer</source>
+        <translation>Server auf diesem Computer finden</translation>
     </message>
     <message>
         <location line="+8"/>
-        <source>Connect your AI back-ends</source>
-        <translation>KI-Backends verbinden</translation>
+        <source>Servers on this computer</source>
+        <translation>Server auf diesem Computer</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -10188,8 +10188,8 @@ Trotzdem herunterladen?</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Continue</source>
-        <translation>Weiter</translation>
+        <source>Close</source>
+        <translation>Schließen</translation>
     </message>
     <message>
         <location line="+29"/>
@@ -12455,8 +12455,8 @@ oder aus der Bibliothek ziehen</translation>
     </message>
     <message>
         <location line="+2"/>
-        <source>Models &amp; roles</source>
-        <translation>Modelle &amp; Rollen</translation>
+        <source>Roles</source>
+        <translation>Rollen</translation>
     </message>
     <message>
         <location line="+1"/>

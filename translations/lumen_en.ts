@@ -197,6 +197,17 @@
         <source>%n job(s) are still running. Quit anyway?</source>
         <translation><numerusform>%n job is still running. Quit anyway?</numerusform><numerusform>%n jobs are still running. Quit anyway?</numerusform></translation>
     </message>
+    <message numerus="yes">
+        <location filename="../src/ui/MainWindow.cpp" line="+1" />
+        <source>Lumen now keeps models in a folder that is easy to find: %1
+
+The models of the earlier version are in %2 (%n file(s), %3). Move them to the new folder?</source>
+        <translation><numerusform>Lumen now keeps models in a folder that is easy to find: %1
+
+The models of the earlier version are in %2 (%n file, %3). Move it to the new folder?</numerusform><numerusform>Lumen now keeps models in a folder that is easy to find: %1
+
+The models of the earlier version are in %2 (%n files, %3). Move them to the new folder?</numerusform></translation>
+    </message>
 </context>
 <context>
     <name>lumen::ui::OnboardingDialog</name>
@@ -281,6 +292,11 @@
         <source> · %n folder(s)</source>
         <translation><numerusform> · %n folder</numerusform><numerusform> · %n folders</numerusform></translation>
     </message>
+    <message numerus="yes">
+        <location filename="../src/ui/dialogs/ModelsPage.cpp" line="+1" />
+        <source>Move %n model(s) (%1) from %2 to %3?</source>
+        <translation><numerusform>Move %n model (%1) from %2 to %3?</numerusform><numerusform>Move %n models (%1) from %2 to %3?</numerusform></translation>
+    </message>
 </context>
 <context>
     <name>lumen::ui::ModelHubDialog</name>
@@ -352,6 +368,42 @@
         <location filename="../src/ui/dialogs/CloudTrainingPage.cpp" line="+1" />
         <source>Connected: %n GPU type(s) with %1 GB or more.</source>
         <translation><numerusform>Connected: %n GPU type with %1 GB or more.</numerusform><numerusform>Connected: %n GPU types with %1 GB or more.</numerusform></translation>
+    </message>
+</context>
+<context>
+    <name>lumen::runtime::ModelsFolder</name>
+    <message numerus="yes">
+        <location filename="../src/runtime/ModelsFolder.cpp" line="+1" />
+        <source>%n model(s) moved to %1</source>
+        <translation><numerusform>%n model moved to %1</numerusform><numerusform>%n models moved to %1</numerusform></translation>
+    </message>
+    <message numerus="yes">
+        <location filename="../src/runtime/ModelsFolder.cpp" line="+1" />
+        <source>%n file(s) added meanwhile stayed in %1.</source>
+        <translation><numerusform>%n file added meanwhile stayed in %1.</numerusform><numerusform>%n files added meanwhile stayed in %1.</numerusform></translation>
+    </message>
+</context>
+<context>
+    <name>lumen::ui::SetupWizard</name>
+    <message numerus="yes">
+        <location filename="../src/ui/dialogs/SetupWizard.cpp" line="+1" />
+        <source>about %n minute(s) at 100 Mbit/s</source>
+        <translation><numerusform>about %n minute at 100 Mbit/s</numerusform><numerusform>about %n minutes at 100 Mbit/s</numerusform></translation>
+    </message>
+    <message numerus="yes">
+        <location filename="../src/ui/dialogs/SetupWizard.cpp" line="+1" />
+        <source>%n model file(s) found in %1.</source>
+        <translation><numerusform>%n model file found in %1.</numerusform><numerusform>%n model files found in %1.</numerusform></translation>
+    </message>
+    <message numerus="yes">
+        <location filename="../src/ui/dialogs/SetupWizard.cpp" line="+1" />
+        <source>%n step(s)</source>
+        <translation><numerusform>%n step</numerusform><numerusform>%n steps</numerusform></translation>
+    </message>
+    <message numerus="yes">
+        <location filename="../src/ui/dialogs/SetupWizard.cpp" line="+1" />
+        <source>Found %n server(s).</source>
+        <translation><numerusform>Found %n server.</numerusform><numerusform>Found %n servers.</numerusform></translation>
     </message>
 </context>
 </TS>

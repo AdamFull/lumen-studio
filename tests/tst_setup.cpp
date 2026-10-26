@@ -1,6 +1,7 @@
 // Setting up AI (plan M17 §17.5): the setup wizard's three ways and Settings → AI. Everything runs
 // against mock servers (Hugging Face, sd-server through the fake server, OpenAI, ComfyUI) and tiny
-// model files with real headers; nothing touches the GPU or the network.
+// model files with real headers; nothing touches the GPU or the network (GitHub's release lookups
+// go to a closed port).
 
 #include "MockHttpServer.h"
 
@@ -9,6 +10,7 @@
 #include "core/ImageOps.h"
 #include "core/Job.h"
 #include "core/JobQueue.h"
+#include "core/SecretStore.h"
 #include "core/Settings.h"
 #include "net/HttpClient.h"
 #include "plugins/BuiltInPlugins.h"
@@ -25,7 +27,9 @@
 #include "ui/dialogs/SettingsDialog.h"
 #include "ui/dialogs/SetupWizard.h"
 #include "ui/ext/Extension.h"
+#include "ui/pages/AiPanel.h"
 #include "ui/widgets/Controls.h"
+#include "ui/widgets/ProviderCombo.h"
 
 #include <QAction>
 #include <QApplication>
@@ -194,6 +198,7 @@ private slots:
     void pinnedDownloads();
     void planFindsFiles();
     void localReusesFiles();
+    void localCorrectsServer();
     void localDownloadsMissing();
     void onlineService();
     void runningServer();
@@ -228,6 +233,7 @@ void TestSetup::init()
 
 void TestSetup::reset(Studio &studio)
 {
+    studio.runtimes()->feed()->setApiBase(QUrl(QStringLiteral("http://127.0.0.1:9"))); // no GitHub lookups
     runtime::ServerSupervisor *servers = studio.servers();
     for (const runtime::ServerProfile &p : servers->profiles()) {
         servers->stop(p.id);
@@ -581,6 +587,86 @@ void TestSetup::localReusesFiles()
     studio.servers()->stop(p.id);
 }
 
+// The profile of §17.1's log: FLUX.2 klein put in the checkpoint slot by hand, without its VAE and
+// text encoder (and here with a ControlNet file that is gone), and no provider. The wizard does not
+// take it as it is: it corrects it from the preset, keeping its name, port and program, adds its
+// provider, and the test image works.
+void TestSetup::localCorrectsServer()
+{
+    QTemporaryDir dir;
+    const QString models = QDir::cleanPath(dir.filePath(QStringLiteral("ComfyUI/models")));
+    const QString klein = write(models + QStringLiteral("/diffusion_models/flux-2-klein-4b.safetensors"), flux2Klein());
+    const QString vae = write(models + QStringLiteral("/vae/flux2-vae.safetensors"), flux2Vae());
+    const QString qwen = write(models + QStringLiteral("/text_encoders/qwen_3_4b.safetensors"), qwen3(2560));
+    MockHttpServer sd;
+    int generations = 0;
+    routeSdServer(sd, &generations);
+
+    Studio studio;
+    reset(studio);
+    auto guard = qScopeGuard([&] { reset(studio); });
+    const QString runtimeId = adoptFakeServer(studio, dir.path());
+    QVERIFY(!runtimeId.isEmpty());
+    runtime::ServerProfile broken = studio.servers()->createProfile(runtimeId, QStringLiteral("Klein by hand"));
+    broken.options.insert(QStringLiteral("model"), QDir::toNativeSeparators(klein));
+    broken.options.insert(QStringLiteral("control_net"), QDir::toNativeSeparators(dir.filePath(QStringLiteral("gone/openpose-sdxl.safetensors"))));
+    addServer(&studio, broken, false);
+    QVERIFY(!runtime::checkSdProfile(studio.models(), broken).isEmpty());
+
+    SetupWizard wizard(&studio);
+    wizard.hardwareOverride = rtx4060();
+    wizard.searchFolders = QStringList{models};
+    runtime::ModelPreset preset = *runtime::presetById(QStringLiteral("flux2-klein-4b"));
+    preset.serverOptions.insert(QStringLiteral("extra_args"), QStringLiteral("--fake-ready-ms 0 --fake-proxy %1").arg(sd.port()));
+    wizard.presets = {preset, *runtime::presetById(QStringLiteral("sdxl"))};
+    QSignalSpy planned(&wizard, &SetupWizard::localPlanReady);
+    wizard.resize(780, 600);
+    wizard.show();
+    wizard.showPage(SetupWizard::Page::Local);
+    QTRY_VERIFY_WITH_TIMEOUT(planned.size() == 1, 20000);
+    // The plan says so.
+    const QString summary = named<QLabel>(&wizard, QStringLiteral("setupSummary"))->text();
+    QVERIFY2(summary.contains(QLatin1String("Klein by hand")) && summary.contains(QLatin1String("Lumen corrects them")), qPrintable(summary));
+
+    QSignalSpy finished(wizard.localSetup(), &LocalSetup::finished);
+    QSignalSpy tested(&wizard, &SetupWizard::testImageFinished);
+    named<QPushButton>(&wizard, QStringLiteral("setupStart"))->click();
+    QTRY_VERIFY_WITH_TIMEOUT(finished.size() == 1, 20000);
+    QVERIFY2(finished.first().at(0).toBool(), qPrintable(finished.first().at(1).toString()));
+    QVERIFY2(finished.first().at(1).toString().contains(QLatin1String("Corrected the settings of Klein by hand")),
+             qPrintable(finished.first().at(1).toString()));
+
+    // The same server, corrected: klein in the diffusion model slot with its VAE and text encoder,
+    // the 8 GB options, no ControlNet; its name, port and program kept.
+    const QList<runtime::ServerProfile> profiles = studio.servers()->profiles();
+    QCOMPARE(profiles.size(), 1);
+    const runtime::ServerProfile &p = profiles.first();
+    QCOMPARE(p.id, broken.id);
+    QCOMPARE(p.name, QStringLiteral("Klein by hand"));
+    QCOMPARE(p.port, broken.port);
+    QCOMPARE(p.runtimeId, runtimeId);
+    QCOMPARE(QDir::fromNativeSeparators(p.options.value(QStringLiteral("diffusion_model")).toString()), klein);
+    QCOMPARE(p.options.value(QStringLiteral("model")).toString(), QString());
+    QCOMPARE(QDir::fromNativeSeparators(p.options.value(QStringLiteral("vae")).toString()), vae);
+    QCOMPARE(QDir::fromNativeSeparators(p.options.value(QStringLiteral("llm")).toString()), qwen);
+    QCOMPARE(p.options.value(QStringLiteral("weight_type")).toString(), QStringLiteral("q8_0"));
+    QVERIFY(!p.options.contains(QStringLiteral("control_net")));
+    QVERIFY(runtime::checkSdProfile(studio.models(), p).isEmpty());
+    // It had no provider: now it has one, the image engine.
+    ai::Provider *provider = studio.providerForServer(p.id);
+    QVERIFY(provider);
+    QCOMPARE(studio.providers()->defaultImageProvider(), provider);
+    QTRY_VERIFY_WITH_TIMEOUT(tested.size() == 1, 30000);
+    QVERIFY2(tested.first().at(0).toBool(), qPrintable(named<QLabel>(&wizard, QStringLiteral("resultText"))->text()));
+    QCOMPARE(generations, 1);
+
+    // Planned again, it runs as it is now.
+    wizard.showPage(SetupWizard::Page::Local);
+    QTRY_VERIFY(named<QPushButton>(&wizard, QStringLiteral("setupStart"))->isEnabled());
+    QVERIFY(named<QLabel>(&wizard, QStringLiteral("setupSummary"))->text().contains(QLatin1String("runs this model already")));
+    studio.servers()->stop(p.id);
+}
+
 // Nothing on this computer: the plan lists the downloads with their sizes, the setup downloads them
 // (checked against the pinned size and checksum) into the models folder, and sets the server up.
 void TestSetup::localDownloadsMissing()
@@ -636,26 +722,45 @@ void TestSetup::localDownloadsMissing()
     if (!shots.isEmpty())
         wizard.grab().save(shots + QStringLiteral("/setup-local-download.png"));
 
+    // Use models from a folder…: one Lumen did not look in, with the VAE. It is used where it is;
+    // two downloads are left.
+    QTemporaryDir other;
+    const QString foundVae = write(other.filePath(QStringLiteral("vae/ae-flux2.safetensors")), flux2Vae());
+    QSignalSpy read(&wizard, &SetupWizard::folderRead);
+    wizard.useModelsFolder(QDir::toNativeSeparators(other.path()));
+    QTRY_VERIFY_WITH_TIMEOUT(read.size() == 1, 10000);
+    QCOMPARE(tree->topLevelItem(2)->text(2), QStringLiteral("On this computer (found)"));
+    QCOMPARE(wizard.localPlan().downloads().size(), 2);
+    QCOMPARE(wizard.localPlan().foldersToAdd(), QStringList{QDir::cleanPath(other.path())});
+    QVERIFY(named<QLabel>(&wizard, QStringLiteral("setupSummary"))->text().contains(QLatin1String("found in")));
+    QCOMPARE(start->text(), QStringLiteral("Download and set up"));
+
     QSignalSpy finished(wizard.localSetup(), &LocalSetup::finished);
     QSignalSpy tested(&wizard, &SetupWizard::testImageFinished);
     start->click();
     QTRY_VERIFY_WITH_TIMEOUT(finished.size() == 1, 30000);
     QVERIFY2(finished.first().at(0).toBool(), qPrintable(finished.first().at(1).toString()));
-    QCOMPARE(wizard.localSetup()->jobs().size(), 3);
+    QCOMPARE(wizard.localSetup()->jobs().size(), 2);
     const QList<runtime::ServerProfile> profiles = studio.servers()->profiles();
     QCOMPARE(profiles.size(), 1);
     const runtime::ServerProfile &p = profiles.first();
     QCOMPARE(QDir::fromNativeSeparators(p.options.value(QStringLiteral("diffusion_model")).toString()),
              own + QStringLiteral("/diffusion_models/flux-2-klein-4b-tiny.safetensors"));
-    QCOMPARE(QDir::fromNativeSeparators(p.options.value(QStringLiteral("vae")).toString()), own + QStringLiteral("/vae/flux2-vae.safetensors"));
+    QCOMPARE(QDir::fromNativeSeparators(p.options.value(QStringLiteral("vae")).toString()), foundVae);
     QCOMPARE(QDir::fromNativeSeparators(p.options.value(QStringLiteral("llm")).toString()), own + QStringLiteral("/text_encoders/qwen_3_4b.safetensors"));
     QVERIFY(QFileInfo::exists(runtime::sidecarPath(own + QStringLiteral("/diffusion_models/flux-2-klein-4b-tiny.safetensors"))));
     QVERIFY(runtime::checkSdProfile(studio.models(), p).isEmpty());
+    bool rooted = false;
+    for (const runtime::ModelRoot &r : studio.models()->roots())
+        rooted |= QDir::cleanPath(r.path) == QDir::cleanPath(other.path());
+    QVERIFY(rooted);
     ai::Provider *provider = studio.providerForServer(p.id);
     QVERIFY(provider);
     QCOMPARE(studio.providers()->defaultImageProvider(), provider);
     QTRY_VERIFY_WITH_TIMEOUT(tested.size() == 1, 30000);
     QVERIFY2(tested.first().at(0).toBool(), qPrintable(named<QLabel>(&wizard, QStringLiteral("resultText"))->text()));
+    // Done, the test image shows no progress any more.
+    QVERIFY(!named<QWidget>(&wizard, QStringLiteral("testProgress"))->isVisibleTo(&wizard));
     studio.servers()->stop(p.id);
 }
 
@@ -665,15 +770,22 @@ void TestSetup::onlineService()
 {
     MockHttpServer openai;
     QJsonObject generation;
+    int checks = 0;
+    int generations = 0;
+    int delayMs = 0;
     auto authorised = [](const MockRequest &req) { return req.headers.value("authorization") == "Bearer good-key"; };
-    openai.route("GET", QStringLiteral("/v1/models"), [authorised](const MockRequest &req) {
+    openai.route("GET", QStringLiteral("/v1/models"), [authorised, &checks](const MockRequest &req) {
+        ++checks;
         if (!authorised(req))
             return MockResponse::json({{QStringLiteral("error"), QJsonObject{{QStringLiteral("message"), QStringLiteral("Incorrect API key provided")}}}}, 401);
         return MockResponse::json({{QStringLiteral("data"), QJsonArray{QJsonObject{{QStringLiteral("id"), QStringLiteral("gpt-image-1")}}}}});
     });
     openai.route("POST", QStringLiteral("/v1/images/generations"), [&](const MockRequest &req) {
         generation = req.json();
-        return MockResponse::json({{QStringLiteral("data"), QJsonArray{QJsonObject{{QStringLiteral("b64_json"), pngB64(Qt::darkCyan, QSize(64, 64))}}}}});
+        ++generations;
+        MockResponse r = MockResponse::json({{QStringLiteral("data"), QJsonArray{QJsonObject{{QStringLiteral("b64_json"), pngB64(Qt::darkCyan, QSize(64, 64))}}}}});
+        r.delayMs = delayMs;
+        return r;
     });
 
     Studio studio;
@@ -704,7 +816,8 @@ void TestSetup::onlineService()
     QCOMPARE(status->text(), QStringLiteral("Paste the key first."));
     QVERIFY(studio.providers()->providers().isEmpty());
 
-    // A wrong key: said in plain words, no test image.
+    // A wrong key: said in plain words, no test image, and nothing added: no engine for a key the
+    // service refused.
     auto *key = named<QLineEdit>(&wizard, QStringLiteral("serviceKey"));
     QCOMPARE(key->echoMode(), QLineEdit::Password);
     key->setText(QStringLiteral("bad-key"));
@@ -712,19 +825,37 @@ void TestSetup::onlineService()
     QTRY_VERIFY_WITH_TIMEOUT(status->text().startsWith(QLatin1String("The service did not accept the key")), 10000);
     QCOMPARE(wizard.currentPage(), SetupWizard::Page::Online);
     QVERIFY(generation.isEmpty());
+    QVERIFY(studio.providers()->providers().isEmpty());
+    QVERIFY(!studio.providers()->defaultImageProvider());
 
-    // The right one: the same provider gets it, becomes the image engine and makes a cheap test image.
+    // Another engine is the image engine, and the editor's AI panel shows it.
+    ai::Provider *other = studio.providers()->addProvider(QStringLiteral("sdcpp"), QStringLiteral("Other sd-server"),
+                                                          {{QStringLiteral("url"), QStringLiteral("http://127.0.0.1:9")}});
+    QVERIFY(other);
+    AiPanel panel(&studio);
+    auto *panelEngine = panel.findChild<ProviderCombo *>();
+    QVERIFY(panelEngine);
+    QCOMPARE(panelEngine->providerId(), other->instanceId());
+
+    // The right one, with Enter pressed twice while it is checked: one check, one test image. The
+    // service gets a provider and becomes the image engine, the panel follows, and the test is cheap.
     QSignalSpy tested(&wizard, &SetupWizard::testImageFinished);
     key->setText(QStringLiteral("good-key"));
-    connectButton->click();
+    checks = 0;
+    emit key->returnPressed();
+    emit key->returnPressed();
     QTRY_VERIFY_WITH_TIMEOUT(tested.size() == 1, 10000);
     QVERIFY2(tested.first().at(0).toBool(), qPrintable(named<QLabel>(&wizard, QStringLiteral("resultText"))->text()));
-    QCOMPARE(studio.providers()->providers().size(), 1);
+    QCOMPARE(checks, 1);
+    QCOMPARE(generations, 1);
+    QCOMPARE(studio.providers()->providers().size(), 2);
     ai::ImageProvider *provider = studio.providers()->defaultImageProvider();
     QVERIFY(provider);
     QCOMPARE(provider->type().id, QStringLiteral("openai_image"));
     QCOMPARE(provider->displayName(), QStringLiteral("OpenAI"));
-    QCOMPARE(wizard.testedProvider(), provider->instanceId());
+    const QString id = provider->instanceId();
+    QCOMPARE(wizard.testedProvider(), id);
+    QCOMPARE(panelEngine->providerId(), id);
     QCOMPARE(generation.value(QStringLiteral("quality")).toString(), QStringLiteral("low"));
     QVERIFY(!generation.value(QStringLiteral("prompt")).toString().isEmpty());
     QCOMPARE(wizard.currentPage(), SetupWizard::Page::Result);
@@ -732,6 +863,45 @@ void TestSetup::onlineService()
     const QString shots = qEnvironmentVariable("LUMEN_SCREENSHOT_DIR");
     if (!shots.isEmpty())
         wizard.grab().save(shots + QStringLiteral("/setup-online-result.png"));
+
+    // A mistyped key later, for the service that works (turned off meanwhile): refused before it
+    // replaces anything, so the old key stays stored and the engine stays off.
+    studio.providers()->setEnabled(id, false);
+    wizard.showPage(SetupWizard::Page::Online);
+    key->setText(QStringLiteral("good-key-typo"));
+    connectButton->click();
+    QTRY_VERIFY_WITH_TIMEOUT(status->text().startsWith(QLatin1String("The service did not accept the key")), 10000);
+    QCOMPARE(studio.providers()->settingsFor(id).value(QStringLiteral("api_key")).toString(), QStringLiteral("good-key"));
+    QCOMPARE(SecretStore::read(QStringLiteral("provider/%1/api_key").arg(id)), QStringLiteral("good-key"));
+    QVERIFY(!studio.providers()->isEnabled(id));
+    QCOMPARE(studio.providers()->providers().size(), 2);
+    studio.providers()->setEnabled(id, true);
+
+    // Picked by hand in the panel, a provider stays when the engine changes; picking the engine of
+    // Settings → AI again follows it. The panel changes images, so it follows the engine for changes.
+    panelEngine->setProviderId(other->instanceId());
+    studio.providers()->setDefaultImageProvider(id);
+    QCOMPARE(panelEngine->providerId(), other->instanceId());
+    panelEngine->setProviderId(id);
+    QVERIFY(panelEngine->followsSettings());
+    studio.providers()->setEditImageProvider(other->instanceId());
+    QCOMPARE(panelEngine->providerId(), other->instanceId());
+    studio.providers()->setEditImageProvider(QString());
+    QCOMPARE(panelEngine->providerId(), id);
+
+    // The test image shows its progress and can be stopped; the engine stays set up.
+    delayMs = 5000;
+    wizard.runTestImage(id, QStringLiteral("OpenAI is connected"), QStringLiteral("Another test."));
+    auto *stop = named<QPushButton>(&wizard, QStringLiteral("stopTest"));
+    QVERIFY(stop->isVisibleTo(&wizard));
+    QVERIFY(named<QWidget>(&wizard, QStringLiteral("testProgress"))->isVisibleTo(&wizard));
+    QTRY_VERIFY_WITH_TIMEOUT(generations == 2, 10000);
+    stop->click();
+    QTRY_VERIFY_WITH_TIMEOUT(tested.size() == 2, 10000);
+    QVERIFY(!tested.last().at(0).toBool());
+    QVERIFY(named<QLabel>(&wizard, QStringLiteral("resultText"))->text().startsWith(QLatin1String("The test image was stopped")));
+    QVERIFY(!stop->isVisibleTo(&wizard));
+    QCOMPARE(studio.providers()->defaultImageProvider()->instanceId(), id);
 }
 
 // ---- Connect a running server ------------------------------------------------------------------------------
@@ -796,12 +966,16 @@ void TestSetup::runningServer()
     QTRY_VERIFY_WITH_TIMEOUT(tested.size() == 1, 20000);
     QVERIFY(!tested.first().at(0).toBool());
     QVERIFY(named<QLabel>(&wizard, QStringLiteral("resultText"))->text().startsWith(QLatin1String("The test image did not work")));
-    // Found again, it is not added twice.
+    // Found again, it is not added twice. Two searches at once (Search again while the first
+    // still waits) list it once.
     wizard.showPage(SetupWizard::Page::Server);
     QPushButton *again = buttonWithText(&wizard, QStringLiteral("Search again"));
     QVERIFY(again);
     again->click();
+    again->click();
     QTRY_VERIFY_WITH_TIMEOUT(found.size() == 2, 10000);
+    QTest::qWait(300); // the first search's answer too
+    QCOMPARE(found.size(), 2);
     uses = wizard.findChildren<QPushButton *>(QStringLiteral("useServer"));
     QCOMPARE(uses.size(), 1);
     QCOMPARE(uses.first()->text(), QStringLiteral("Use it again"));
@@ -825,6 +999,17 @@ void TestSetup::runningServer()
     QCOMPARE(provider->text(QStringLiteral("url")), sd.baseUrl().toString());
     QCOMPARE(generations, 1);
     QCOMPARE(studio.providers()->providers().size(), 2);
+
+    // An sd-server also answers WebUI's API: on a port both could use it is listed once, as sd-server.
+    sd.route("GET", QStringLiteral("/sdapi/v1/sd-models"), [](const MockRequest &) { return MockResponse::json(QJsonObject{}); });
+    studio.providers()->serverProbes = {{QStringLiteral("sdwebui"), QStringLiteral("Stable Diffusion WebUI (Forge)"), sd.baseUrl().toString(), QStringLiteral("/sdapi/v1/sd-models")},
+                                        {QStringLiteral("sdcpp"), QStringLiteral("stable-diffusion.cpp (sd-server)"), sd.baseUrl().toString(), QStringLiteral("/sdcpp/v1/capabilities")}};
+    wizard.showPage(SetupWizard::Page::Server);
+    again->click();
+    QTRY_VERIFY_WITH_TIMEOUT(found.size() == 3, 10000);
+    uses = wizard.findChildren<QPushButton *>(QStringLiteral("useServer"));
+    QCOMPARE(uses.size(), 1);
+    QCOMPARE(uses.first()->text(), QStringLiteral("Use it again")); // the sd-server added above
 }
 
 // ---- Settings → AI ---------------------------------------------------------------------------------------
@@ -859,6 +1044,7 @@ void TestSetup::settingsAi()
         QCOMPARE(named<ElidedLabel>(&dlg, QStringLiteral("aiImageEngine"))->fullText(), QStringLiteral("No image engine yet"));
         QCOMPARE(named<QLabel>(&dlg, QStringLiteral("aiImageStatus"))->text(), QStringLiteral("Not set up"));
         QCOMPARE(named<QPushButton>(&dlg, QStringLiteral("aiImageChange"))->text(), QStringLiteral("Set up…"));
+        QVERIFY(!named<QPushButton>(&dlg, QStringLiteral("aiImageChange"))->menu()); // nothing to pick: it opens the wizard
     }
 
     // A server Lumen runs with FLUX.2 klein from the preset, and a second, unmanaged engine.
@@ -885,6 +1071,7 @@ void TestSetup::settingsAi()
     QCOMPARE(named<ElidedLabel>(&dlg, QStringLiteral("aiImageModel"))->fullText(), QStringLiteral("Model: FLUX.2 [klein] 4B"));
     QCOMPARE(named<QLabel>(&dlg, QStringLiteral("aiImageStatus"))->text(), QStringLiteral("On this computer; starts when it is needed"));
     QCOMPARE(named<QPushButton>(&dlg, QStringLiteral("aiImageChange"))->text(), QStringLiteral("Change…"));
+    QVERIFY(named<QPushButton>(&dlg, QStringLiteral("aiImageChange"))->menu());
     // Changes use the image engine until another is chosen.
     QCOMPARE(named<ElidedLabel>(&dlg, QStringLiteral("aiEditEngine"))->fullText(), QStringLiteral("The image engine (Klein here)"));
     ai::GenerationSpec edit;
@@ -988,7 +1175,42 @@ void TestSetup::entryPoints()
         SetupWizard *first = openWizard();
         QCOMPARE(openSetupWizard(&studio, &window, SetupWizard::Page::Online), first);
         QCOMPARE(first->currentPage(), SetupWizard::Page::Online);
+        QCOMPARE(first->parentWidget(), &window);
+
+        // Asked for from Settings (modal, so it would block a wizard of the main window): the open
+        // wizard moves over Settings, and back to the main window when Settings closes.
+        {
+            SettingsDialog settings(&studio, &window);
+            settings.setWindowModality(Qt::ApplicationModal);
+            settings.show();
+            QCOMPARE(QApplication::activeModalWidget(), &settings);
+            settings.showTab(QStringLiteral("ai"));
+            named<QPushButton>(&settings, QStringLiteral("aiSetUp"))->click();
+            QCOMPARE(openWizard(), first);
+            QCOMPARE(first->parentWidget(), &settings);
+            QVERIFY(first->isVisible());
+            settings.reject();
+            QCOMPARE(first->parentWidget(), &window);
+            QVERIFY(first->isVisible());
+        }
         first->close();
+        QTRY_VERIFY(!openWizard());
+
+        // Opened from Settings, it does not close with it either.
+        {
+            SettingsDialog settings(&studio, &window);
+            settings.setWindowModality(Qt::ApplicationModal);
+            settings.show();
+            settings.showTab(QStringLiteral("ai"));
+            named<QPushButton>(&settings, QStringLiteral("aiImageChange"))->click(); // no engine: Set up… opens the wizard
+            SetupWizard *fromSettings = openWizard();
+            QVERIFY(fromSettings);
+            QCOMPARE(fromSettings->parentWidget(), &settings);
+            settings.accept();
+        }
+        QVERIFY(openWizard());
+        QCOMPARE(openWizard()->parentWidget(), &window);
+        openWizard()->close();
         QTRY_VERIFY(!openWizard());
     }
     {

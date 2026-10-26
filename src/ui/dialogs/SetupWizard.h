@@ -14,6 +14,7 @@ class QCheckBox;
 class QComboBox;
 class QLabel;
 class QLineEdit;
+class QProgressBar;
 class QPushButton;
 class QStackedWidget;
 class QTreeWidget;
@@ -64,6 +65,12 @@ public:
     static inline std::optional<runtime::HardwareInfo> testHardware;
     static inline std::optional<QStringList> testSearchFolders;
 
+    // Makes a test image on a provider and shows it on the result page, with its progress and Stop.
+    void runTestImage(const QString &providerId, const QString &title, const QString &intro);
+    // Reads a folder with model files the wizard did not look in (Use models from a folder…) and
+    // plans again with its files; folderRead() when done.
+    void useModelsFolder(const QString &folder);
+
     // What the local page found and plans (after localPlanReady).
     std::optional<runtime::LocalRecommendation> recommendation() const { return m_recommendation; }
     const runtime::LocalModelPlan &localPlan() const { return m_plan; }
@@ -73,6 +80,7 @@ public:
 
 signals:
     void localPlanReady();
+    void folderRead();
     void serversFound();
     void testImageFinished(bool ok);
 
@@ -107,9 +115,6 @@ private:
     void useServer(const ai::DetectedServer &server);
     void connectAddress();
 
-    // The test image on the result page.
-    void runTestImage(const QString &providerId, const QString &title, const QString &intro);
-
     Studio *m_studio;
     QStackedWidget *m_pages;
     Page m_backTo = Page::Choose;
@@ -125,6 +130,7 @@ private:
     bool m_lookingForFiles = false;
     bool m_foldersReady = false;
     QList<runtime::FoundFolder> m_found;
+    QString m_folderNote; // what was found in a folder chosen with Use models from a folder…
     std::optional<runtime::LocalRecommendation> m_recommendation;
     runtime::LocalModelPlan m_plan;
     QStackedWidget *m_localStack;
@@ -148,6 +154,7 @@ private:
     QLabel *m_keyLink;
     QLabel *m_onlineStatus;
     QPushButton *m_connectService;
+    bool m_checkingKey = false;
 
     // Server.
     QVBoxLayout *m_foundList;
@@ -155,19 +162,24 @@ private:
     QLineEdit *m_address;
     QLabel *m_serverStatus;
     QList<ai::DetectedServer> m_servers;
+    int m_serverSearch = 0; // the search whose answers fill the list
 
     // Result.
     QLabel *m_resultTitle;
     QLabel *m_resultText;
     QLabel *m_resultImage;
     QPushButton *m_retry;
+    QProgressBar *m_testProgress;
+    QPushButton *m_stopTest;
     QString m_testedProvider;
     QPointer<Job> m_testJob;
 };
 
 // Opens the setup wizard on a page: one at a time (an open one comes to the front), not modal,
 // deleted when closed. The entry point for the first start, the Help menu, the Local servers page
-// and the start screen.
+// and the start screen. Over a modal dialog (Settings) the wizard is that dialog's child, also when
+// it was open already, so the dialog does not block it; when the dialog closes, the wizard moves
+// to the window under it.
 SetupWizard *openSetupWizard(Studio *studio, QWidget *parent, SetupWizard::Page page = SetupWizard::Page::Choose);
 
 } // namespace lumen::ui

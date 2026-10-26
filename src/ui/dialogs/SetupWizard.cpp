@@ -19,6 +19,7 @@
 #include <QComboBox>
 #include <QDesktopServices>
 #include <QDir>
+#include <QFileDialog>
 #include <QFileInfo>
 #include <QFormLayout>
 #include <QHBoxLayout>
@@ -36,6 +37,7 @@
 #include <QUrl>
 #include <QVBoxLayout>
 
+#include <algorithm>
 #include <cmath>
 
 namespace lumen::ui {
@@ -85,16 +87,25 @@ QString downloadTime(qint64 bytes)
     return SetupWizard::tr("about %n minute(s) at 100 Mbit/s", nullptr, minutes);
 }
 
-// What a model can do and how fast it is, in plain words.
-QString modelSummary(const runtime::ModelPreset &p)
+// What a model can do and how fast it is on this computer, in plain words.
+QString modelSummary(const runtime::ModelPreset &p, runtime::LocalRecommendation::Fit fit)
 {
+    using Fit = runtime::LocalRecommendation::Fit;
     QString what = p.edit ? SetupWizard::tr("Makes new images and changes them from a description: colorize a photo, remove or replace "
                                             "an object, keep everything else.")
                           : SetupWizard::tr("Makes new images and repaints a selected area. It follows edit instructions such as "
                                             "\"colorize this\" less well than FLUX.2 [klein], which needs an 8 GB graphics card.");
-    const QString speed = p.familyFile == QLatin1String("flux2")
-                              ? SetupWizard::tr("About 20 to 40 seconds per image on an 8 GB graphics card.")
-                              : SetupWizard::tr("About 30 to 60 seconds per image.");
+    const bool flux = p.familyFile == QLatin1String("flux2");
+    QString speed;
+    if (fit == Fit::NoGpu)
+        speed = SetupWizard::tr("Without an NVIDIA or AMD graphics card it runs on the processor: several minutes per image.");
+    else if (flux)
+        speed = fit == Fit::Full ? SetupWizard::tr("About 20 to 40 seconds per image on an 8 GB graphics card.")
+                                 : SetupWizard::tr("Your graphics card has less than 8 GB, so much of the model waits in the computer's "
+                                                   "memory: a few minutes per image.");
+    else
+        speed = fit == Fit::Full ? SetupWizard::tr("About 30 to 60 seconds per image.")
+                                 : SetupWizard::tr("About 30 to 60 seconds per image, longer on graphics cards with less than 6 GB.");
     return what + QLatin1Char(' ') + speed + QLatin1Char(' ')
            + SetupWizard::tr("The first image after a start takes a minute longer while the model loads.");
 }
@@ -123,16 +134,30 @@ ai::Provider *providerAt(ai::ProviderRegistry *registry, const QString &typeId, 
 }
 
 QPointer<SetupWizard> g_open; // openSetupWizard: one at a time
+QList<SetupWizard *> g_wizards; // every wizard, for the setup they show
+QPointer<LocalSetup> g_running;  // the local setup that is downloading, also after its wizard closed
+
+bool shownByAWizard(const LocalSetup *setup)
+{
+    for (const SetupWizard *w : std::as_const(g_wizards)) {
+        if (w->localSetup() == setup)
+            return true;
+    }
+    return false;
+}
 
 } // namespace
 
 SetupWizard::SetupWizard(Studio *studio, QWidget *parent)
     : QDialog(parent)
     , m_studio(studio)
-    , m_setup(new LocalSetup(studio, studio)) // outlives the wizard while downloads run
 {
+    g_wizards << this;
     hardwareOverride = testHardware;
     searchFolders = testSearchFolders;
+    // A setup that still downloads (its wizard was closed) is shown again rather than started twice.
+    const bool resumed = g_running && g_running->isRunning() && g_running->studio() == studio;
+    m_setup = resumed ? g_running.data() : new LocalSetup(studio, studio); // outlives the wizard while downloads run
     setWindowTitle(tr("Set up AI"));
     resize(780, 600);
     auto *v = new QVBoxLayout(this);
@@ -147,14 +172,23 @@ SetupWizard::SetupWizard(Studio *studio, QWidget *parent)
 
     connect(m_setup, &LocalSetup::jobsChanged, this, &SetupWizard::showLocalProgress);
     connect(m_setup, &LocalSetup::finished, this, &SetupWizard::localFinished);
-    // The setup object goes once it is done and nobody shows it; then a message says how it went.
-    connect(m_setup, &LocalSetup::finished, m_setup, [studio, setup = m_setup, self = QPointer<SetupWizard>(this)](bool ok, const QString &message) {
-        if (self)
-            return;
-        studio->notify(ok ? tr("Local AI is set up. %1").arg(message) : tr("The local AI setup did not finish: %1").arg(message),
-                       ok ? QStringLiteral("success") : QStringLiteral("error"));
-        setup->deleteLater();
+    connect(m_setup, &LocalSetup::runtimesChanged, this, [this] {
+        if (m_hardwareReady && m_foldersReady)
+            refreshPlan();
     });
+    if (!resumed) {
+        // The setup object goes once it is done and no wizard shows it; then a message says how it went.
+        connect(m_setup, &LocalSetup::finished, m_setup, [studio, setup = m_setup](bool ok, const QString &message) {
+            if (!setup || shownByAWizard(setup))
+                return;
+            studio->notify(ok ? tr("Local AI is set up. %1").arg(message) : tr("The local AI setup did not finish: %1").arg(message),
+                           ok ? QStringLiteral("success") : QStringLiteral("error"));
+            setup->deleteLater();
+        });
+    } else {
+        m_localStack->setCurrentIndex(1);
+        showLocalProgress();
+    }
     // New library files (a scan that was still running) can change the plan.
     connect(m_studio->models(), &runtime::ModelLibrary::scanFinished, this, [this] {
         if (m_hardwareReady && m_foldersReady && m_localStack->currentIndex() == 0)
@@ -164,7 +198,8 @@ SetupWizard::SetupWizard(Studio *studio, QWidget *parent)
 
 SetupWizard::~SetupWizard()
 {
-    if (m_setup && !m_setup->isRunning())
+    g_wizards.removeAll(this);
+    if (m_setup && !m_setup->isRunning() && !shownByAWizard(m_setup))
         m_setup->deleteLater();
 }
 
@@ -331,8 +366,19 @@ QWidget *SetupWizard::buildLocalPage()
     m_summary->setObjectName(QStringLiteral("setupSummary"));
     m_summary->setTextFormat(Qt::RichText);
     v->addWidget(m_summary);
-    auto *buttons = new QHBoxLayout;
-    buttons->addWidget(backButton(planPage));
+    // Where the files come from and go: under the plan, as they are about it.
+    auto *folders = new QHBoxLayout;
+    // Models in a folder Lumen does not look in (a portable ComfyUI, a second drive).
+    auto *other = new QPushButton(Icons::get(QStringLiteral("folder")), tr("Use models from a folder…"), planPage);
+    other->setObjectName(QStringLiteral("setupUseFolder"));
+    other->setToolTip(tr("Lumen looked in the model library, ComfyUI, WebUI, LM Studio and Downloads. Choose another folder with the "
+                         "model files, such as a portable ComfyUI: they are used where they are."));
+    connect(other, &QPushButton::clicked, this, [this] {
+        const QString dir = QFileDialog::getExistingDirectory(this, tr("Folder with model files"));
+        if (!dir.isEmpty())
+            useModelsFolder(dir);
+    });
+    folders->addWidget(other);
     auto *folder = new QPushButton(Icons::get(QStringLiteral("folder")), tr("Open models folder"), planPage);
     folder->setToolTip(tr("Where Lumen saves models (Settings → Models can move it)"));
     connect(folder, &QPushButton::clicked, this, [this] {
@@ -340,12 +386,16 @@ QWidget *SetupWizard::buildLocalPage()
         QDir().mkpath(dir);
         QDesktopServices::openUrl(QUrl::fromLocalFile(dir));
     });
-    buttons->addWidget(folder);
+    folders->addWidget(folder);
+    folders->addStretch();
+    v->addLayout(folders);
+    auto *buttons = new QHBoxLayout;
+    buttons->addWidget(backButton(planPage));
     // The SDXL set with pose control and character references of the Characters plugin.
     if (!ext::Extensions::instance().needingLanguageModel().isEmpty()) {
-        auto *characters = new QPushButton(tr("Set with pose control…"), planPage);
-        characters->setToolTip(tr("An SDXL model with pose control, character references, an upscaler and a language model, "
-                                  "as the Characters plugin uses them (about 17 GB)"));
+        auto *characters = new QPushButton(tr("Model set for Characters (pose control)…"), planPage);
+        characters->setToolTip(tr("Instead of this model: an SDXL model with pose control, character references, an upscaler and a "
+                                  "language model, as the Characters plugin uses them (about 17 GB)"));
         connect(characters, &QPushButton::clicked, this, [this] {
             auto *dlg = new LocalSetupDialog(m_studio, this);
             dlg->setAttribute(Qt::WA_DeleteOnClose);
@@ -403,13 +453,48 @@ const runtime::ModelPreset *SetupWizard::preset(const QString &id) const
 
 void SetupWizard::startLooking()
 {
+    auto ready = [this] {
+        m_hardwareReady = true;
+        showRecommendation();
+        maybePlan();
+    };
+    // A setup that is running knows the computer and its programs already.
+    if (m_setup->isRunning() && m_setup->hardware()) {
+        ready();
+        return;
+    }
+    // The plan does not wait for the program releases on GitHub; their rows fill in when the lookup
+    // finishes (runtimesChanged). llama.cpp only while a plugin needs a language model.
+    connect(m_setup, &LocalSetup::hardwareReady, this, ready, Qt::SingleShotConnection);
+    QStringList programs{kSd};
+    if (!ext::Extensions::instance().needingLanguageModel().isEmpty())
+        programs << kLlama;
+    m_setup->prepare(hardwareOverride, programs);
+}
+
+void SetupWizard::useModelsFolder(const QString &folder)
+{
+    const QString clean = QDir::cleanPath(QDir::fromNativeSeparators(folder));
+    if (clean.isEmpty())
+        return;
+    m_hardware->setText(tr("Reading %1…").arg(shortFolder(clean)));
     QPointer<SetupWizard> self(this);
-    m_setup->prepare(hardwareOverride).then(this, [self] {
-        if (!self || !self->m_setup)
+    runtime::readFolders({clean}).then(this, [self, clean](QList<runtime::FoundFolder> found) {
+        if (!self)
             return;
-        self->m_hardwareReady = true;
-        self->showRecommendation();
-        self->maybePlan();
+        // The folder replaces what was read of it before, and is preferred like a suggested one.
+        self->m_found.removeIf([&clean](const runtime::FoundFolder &f) { return QDir::cleanPath(f.path) == clean; });
+        self->m_found = found + self->m_found;
+        if (self->m_setup && self->m_setup->hardware())
+            self->m_hardware->setText(tr("This computer: %1").arg(self->m_setup->hardware()->summary()));
+        int models = 0;
+        for (const runtime::FoundFolder &f : std::as_const(found))
+            models += int(f.entries.size());
+        self->m_folderNote = models > 0 ? tr("%n model file(s) found in %1.", nullptr, models).arg(shortFolder(clean))
+                                        : tr("No model files in %1 (Lumen reads its subfolders too).").arg(shortFolder(clean));
+        self->m_foldersReady = true;
+        self->refreshPlan();
+        emit self->folderRead();
     });
 }
 
@@ -433,7 +518,13 @@ void SetupWizard::lookForFiles()
     runtime::readFolders(folders).then(this, [self](QList<runtime::FoundFolder> found) {
         if (!self)
             return;
-        self->m_found = found;
+        // After a folder chosen meanwhile (Use models from a folder…), which stays first.
+        for (const runtime::FoundFolder &f : std::as_const(found)) {
+            const bool known = std::any_of(self->m_found.cbegin(), self->m_found.cend(),
+                                           [&f](const runtime::FoundFolder &k) { return QDir::cleanPath(k.path) == QDir::cleanPath(f.path); });
+            if (!known)
+                self->m_found << f;
+        }
         self->m_foldersReady = true;
         self->maybePlan();
     });
@@ -476,6 +567,8 @@ void SetupWizard::showRecommendation()
                              "minutes per image. An online service is the better choice here."));
         break;
     }
+    if (m_setup->isRunning())
+        m_localHint->setText(tr("Setting up: the downloads are running."));
     m_advice->setVisible(r.fit != runtime::LocalRecommendation::Fit::Full);
     m_adviceOnline->setVisible(r.fit != runtime::LocalRecommendation::Fit::Full);
 
@@ -509,7 +602,7 @@ void SetupWizard::refreshPlan()
         return;
     }
     m_plan = runtime::planLocalModel(m_studio->models(), m_found, *p);
-    m_modelInfo->setText(modelSummary(*p));
+    m_modelInfo->setText(modelSummary(*p, m_recommendation->fit));
 
     LocalSetup::Options o;
     o.setId = m_setup->recommendedSet();
@@ -613,6 +706,18 @@ void SetupWizard::refreshPlan()
     if (!m_plan.foldersToAdd().isEmpty())
         lines << tr("Files are used where they are; %1 joins the model library (nothing there is moved or changed).")
                      .arg(m_plan.foldersToAdd().join(QStringLiteral(", ")).toHtmlEscaped());
+    if (!m_folderNote.isEmpty())
+        lines << m_folderNote.toHtmlEscaped();
+    // A server of Lumen's that has this model already.
+    if (m_plan.ok() && !m_plan.model()->missing()) {
+        bool works = false;
+        const QString server = m_setup->serverWithModel(m_plan.model()->path, m_plan.model()->option, &works);
+        if (const auto profile = server.isEmpty() ? std::nullopt : m_studio->servers()->profile(server))
+            lines << (works ? tr("Your server \"%1\" runs this model already; Lumen uses it as it is.").arg(profile->name.toHtmlEscaped())
+                            : tr("Your server \"%1\" has this model with settings that cannot work; Lumen corrects them (the model "
+                                 "in its slot, with its VAE and text encoder).")
+                                  .arg(profile->name.toHtmlEscaped()));
+    }
     if (storage.isValid() && download > 0 && storage.bytesAvailable() < download + (1LL << 30)) {
         lines << QStringLiteral("<span style='color:%1'>%2</span>").arg(Theme::palette().danger.name(), tr("Not enough disk space."));
         blocked = true;
@@ -627,7 +732,7 @@ void SetupWizard::refreshPlan()
 
 void SetupWizard::startLocal()
 {
-    if (!m_setup || !m_plan.ok())
+    if (!m_setup || !m_plan.ok() || m_setup->isRunning())
         return;
     LocalSetup::Options o;
     o.setId = m_setup->recommendedSet();
@@ -635,6 +740,7 @@ void SetupWizard::startLocal()
     o.images = true;
     o.model = m_plan;
     m_localStack->setCurrentIndex(1);
+    g_running = m_setup.data();
     m_setup->run(o);
 }
 
@@ -681,6 +787,8 @@ void SetupWizard::localFinished(bool ok, const QString &message)
                               + tr("Back shows the plan again; files that were downloaded are kept."));
         m_resultImage->clear();
         m_retry->setVisible(false);
+        m_testProgress->setVisible(false);
+        m_stopTest->setVisible(false);
         refreshPlan();
         return;
     }
@@ -690,7 +798,8 @@ void SetupWizard::localFinished(bool ok, const QString &message)
         return;
     }
     m_backTo = Page::Local;
-    runTestImage(provider->instanceId(), tr("%1 is set up").arg(m_plan.preset.name),
+    const QString name = m_setup->options().model ? m_setup->options().model->preset.name : provider->displayName();
+    runTestImage(provider->instanceId(), tr("%1 is set up").arg(name),
                  tr("Lumen starts the image engine and makes a test image. The first start loads the model, which takes a minute "
                     "or two."));
     refreshPlan();
@@ -771,6 +880,10 @@ void SetupWizard::selectService(const QString &typeId)
 
 void SetupWizard::connectService()
 {
+    // Enter in the key field while a key is checked would check it again and pay for a second
+    // test image.
+    if (m_checkingKey)
+        return;
     const QString key = m_key->text().trimmed();
     if (key.isEmpty()) {
         m_onlineStatus->setText(tr("Paste the key first."));
@@ -779,45 +892,63 @@ void SetupWizard::connectService()
     }
     ai::ProviderRegistry *registry = m_studio->providers();
     // The service's provider if there is one already (a new key replaces the old), else a new one.
-    ai::Provider *provider = nullptr;
+    // The key is checked first on a provider that is not saved, so a mistyped one changes nothing:
+    // the old key stays in the Credential Manager and no engine is added.
+    QString existing;
     for (ai::Provider *p : registry->providers()) {
-        if (p->type().id == m_service && !provider)
-            provider = p;
+        if (p->type().id == m_service) {
+            existing = p->instanceId();
+            break;
+        }
     }
-    QVariantMap settings = provider ? registry->settingsFor(provider->instanceId()) : QVariantMap();
+    QVariantMap settings = existing.isEmpty() ? QVariantMap() : registry->settingsFor(existing);
     settings.insert(QStringLiteral("api_key"), key);
     if (serviceUrls.contains(m_service))
         settings.insert(QStringLiteral("url"), serviceUrls.value(m_service));
-    if (provider)
-        registry->updateProvider(provider->instanceId(), provider->displayName(), settings);
-    else
-        provider = registry->addProvider(m_service, serviceName(m_service), settings);
-    if (!provider) {
+    ai::Provider *check = registry->createUnsaved(m_service, settings, this);
+    if (!check) {
         m_onlineStatus->setText(tr("This service is not available in this version of Lumen."));
         Theme::setRole(m_onlineStatus, QStringLiteral("error"));
         return;
     }
-    registry->setEnabled(provider->instanceId(), true);
+    m_checkingKey = true;
     m_onlineStatus->setText(tr("Checking the key…"));
     Theme::setRole(m_onlineStatus, QStringLiteral("muted"));
     m_connectService->setEnabled(false);
     QPointer<SetupWizard> self(this);
-    const QString id = provider->instanceId();
-    provider->testConnection()
-        .then(this, [self, id](const QString &) {
+    const QString service = m_service;
+    check->testConnection()
+        .then(this, [self, check, existing, service, settings](const QString &) {
+            check->deleteLater();
             if (!self)
                 return;
+            self->m_checkingKey = false;
             self->m_connectService->setEnabled(true);
-            self->m_studio->providers()->setDefaultImageProvider(id);
+            ai::ProviderRegistry *registry = self->m_studio->providers();
+            ai::Provider *provider = existing.isEmpty() ? nullptr : registry->provider(existing);
+            if (provider)
+                registry->updateProvider(existing, provider->displayName(), settings);
+            else
+                provider = registry->addProvider(service, serviceName(service), settings);
+            if (!provider) {
+                self->m_onlineStatus->setText(tr("This service is not available in this version of Lumen."));
+                Theme::setRole(self->m_onlineStatus, QStringLiteral("error"));
+                return;
+            }
+            const QString id = provider->instanceId();
+            registry->setEnabled(id, true);
+            registry->setDefaultImageProvider(id);
             self->m_onlineStatus->setText(tr("Connected."));
             Theme::setRole(self->m_onlineStatus, QStringLiteral("success"));
             self->m_backTo = Page::Online;
-            self->runTestImage(id, tr("%1 is connected").arg(serviceName(self->m_service)),
+            self->runTestImage(id, tr("%1 is connected").arg(serviceName(service)),
                                tr("Lumen asks the service for a test image; this takes a few seconds."));
         })
-        .onFailed(this, [self](const std::exception &e) {
+        .onFailed(this, [self, check](const std::exception &e) {
+            check->deleteLater();
             if (!self)
                 return;
+            self->m_checkingKey = false;
             self->m_connectService->setEnabled(true);
             self->m_onlineStatus->setText(tr("The service did not accept the key: %1").arg(describeException(e)));
             Theme::setRole(self->m_onlineStatus, QStringLiteral("error"));
@@ -876,19 +1007,31 @@ QWidget *SetupWizard::buildServerPage()
 
 void SetupWizard::detectServers()
 {
-    while (QLayoutItem *item = m_foundList->takeAt(0)) {
-        delete item->widget();
-        delete item;
-    }
     m_foundStatus->setText(tr("Looking for servers…"));
     QPointer<SetupWizard> self(this);
-    m_studio->providers()->detectLocalServers().then(this, [self](QList<ai::DetectedServer> found) {
-        if (!self)
+    // Only the last search fills the list: "Search again" while the first search still waits for
+    // its ports would list every server twice.
+    const int search = ++m_serverSearch;
+    m_studio->providers()->detectLocalServers().then(this, [self, search](QList<ai::DetectedServer> found) {
+        if (!self || search != self->m_serverSearch)
             return;
+        while (QLayoutItem *item = self->m_foundList->takeAt(0)) {
+            delete item->widget();
+            delete item;
+        }
         // Image servers only: language model servers are set up elsewhere.
         static const QSet<QString> image{QStringLiteral("comfyui"), QStringLiteral("sdwebui"), QStringLiteral("sdcpp")};
         found.removeIf([](const ai::DetectedServer &s) { return !image.contains(s.typeId); });
-        // A port both an sd-server and Forge could use is listed once, as what answered.
+        // An sd-server also answers WebUI's API, so on a port both could use (7861) it would be
+        // listed twice: once, as sd-server, whose own API Lumen uses.
+        QSet<QString> sdServers;
+        for (const ai::DetectedServer &s : std::as_const(found)) {
+            if (s.typeId == QLatin1String("sdcpp"))
+                sdServers.insert(s.url.adjusted(QUrl::StripTrailingSlash).toString());
+        }
+        found.removeIf([&sdServers](const ai::DetectedServer &s) {
+            return s.typeId == QLatin1String("sdwebui") && sdServers.contains(s.url.adjusted(QUrl::StripTrailingSlash).toString());
+        });
         self->m_servers = found;
         QStringList names;
         for (const ai::DetectedServer &s : std::as_const(found)) {
@@ -1014,6 +1157,25 @@ QWidget *SetupWizard::buildResultPage()
     m_resultImage->setMinimumSize(1, 1);
     m_resultImage->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
     v->addWidget(m_resultImage, 1);
+    // While the test image is made: how far it is (starting the server, loading the model, the
+    // steps), and a way to stop it.
+    auto *progressRow = new QHBoxLayout;
+    m_testProgress = new QProgressBar(page);
+    m_testProgress->setObjectName(QStringLiteral("testProgress"));
+    m_testProgress->setRange(0, 1000);
+    m_testProgress->setTextVisible(false);
+    progressRow->addWidget(m_testProgress, 1);
+    m_stopTest = new QPushButton(tr("Stop"), page);
+    m_stopTest->setObjectName(QStringLiteral("stopTest"));
+    m_stopTest->setToolTip(tr("Stops the test image; the engine stays set up"));
+    connect(m_stopTest, &QPushButton::clicked, this, [this] {
+        if (m_testJob)
+            m_testJob->cancel();
+    });
+    progressRow->addWidget(m_stopTest);
+    m_testProgress->setVisible(false);
+    m_stopTest->setVisible(false);
+    v->addLayout(progressRow);
     auto *buttons = new QHBoxLayout;
     auto *back = new QPushButton(Icons::get(QStringLiteral("chevron-left")), tr("Back"), page);
     connect(back, &QPushButton::clicked, this, [this] { showPage(m_backTo); });
@@ -1041,6 +1203,9 @@ void SetupWizard::runTestImage(const QString &providerId, const QString &title, 
     m_resultText->setText(intro.toHtmlEscaped());
     m_resultImage->setText(tr("Making a test image…"));
     m_retry->setVisible(false);
+    m_testProgress->setValue(0);
+    m_testProgress->setVisible(true);
+    m_stopTest->setVisible(true);
     ai::GenerationSpec spec;
     spec.providerId = providerId;
     spec.request.prompt = QStringLiteral("A cup of coffee on a wooden table by a window, morning light, photo");
@@ -1051,13 +1216,30 @@ void SetupWizard::runTestImage(const QString &providerId, const QString &title, 
     Job *job = m_studio->generation()->submit(spec);
     m_testJob = job;
     QPointer<SetupWizard> self(this);
+    auto progress = [self, job] {
+        if (!self || self->m_testJob != job || job->isFinished())
+            return;
+        self->m_testProgress->setValue(int(std::clamp(job->progress(), 0.0, 1.0) * 1000));
+        // What it is doing (starting the server, loading the model, the steps) under the heading:
+        // the theme's progress bars show no text.
+        const QString status = job->state() == Job::State::Queued ? tr("Waiting for the engine") : job->statusText();
+        self->m_resultImage->setText(status.isEmpty() ? tr("Making a test image…") : tr("Making a test image…") + QLatin1Char('\n') + status);
+    };
+    connect(job, &Job::progressChanged, this, progress);
+    connect(job, &Job::stateChanged, this, progress);
+    progress();
     connect(job, &Job::finished, this, [self, job] {
         if (!self || self->m_testJob != job)
             return;
         self->m_retry->setVisible(true);
+        self->m_testProgress->setVisible(false);
+        self->m_stopTest->setVisible(false);
         const ai::GenerationOutput out = ai::GenerationService::outputOf(job);
         const bool ok = job->state() == Job::State::Succeeded && !out.images.isEmpty();
-        if (!ok) {
+        if (job->state() == Job::State::Cancelled) {
+            self->m_resultText->setText(tr("The test image was stopped. The engine is set up; Make another test image tries again.").toHtmlEscaped());
+            self->m_resultImage->clear();
+        } else if (!ok) {
             self->m_resultText->setText(tr("The test image did not work: %1").arg(job->errorString()).toHtmlEscaped() + QStringLiteral("<br>")
                                         + tr("Back lets you check the settings; Settings → AI shows the engine and its status.").toHtmlEscaped());
             self->m_resultImage->clear();
@@ -1072,19 +1254,47 @@ void SetupWizard::runTestImage(const QString &providerId, const QString &title, 
     });
 }
 
+namespace {
+
+// The window the wizard belongs to. Over a modal dialog (Settings, which runs exec()) it must be
+// that dialog's child, or the dialog blocks it; when that dialog closes, the wizard moves to the
+// window under it instead of closing with it.
+void adoptWizard(SetupWizard *wizard, QWidget *owner)
+{
+    if (wizard->parentWidget() == owner)
+        return;
+    const bool shown = wizard->isVisible();
+    wizard->setParent(owner, wizard->windowFlags()); // hides it
+    if (shown)
+        wizard->show();
+    if (auto *dialog = qobject_cast<QDialog *>(owner)) {
+        QObject::connect(dialog, &QDialog::finished, wizard, [wizard, dialog] {
+            if (wizard->parentWidget() == dialog)
+                adoptWizard(wizard, dialog->parentWidget() ? dialog->parentWidget()->window() : nullptr);
+        });
+    }
+}
+
+} // namespace
+
 SetupWizard *openSetupWizard(Studio *studio, QWidget *parent, SetupWizard::Page page)
 {
+    QWidget *modal = QApplication::activeModalWidget();
     if (!g_open) {
-        // Over a modal dialog (Settings) the wizard is its child, or the dialog would block it;
-        // otherwise it belongs to the main window, so it stays when the dialog that opened it closes.
-        QWidget *owner = QApplication::activeModalWidget();
+        // Not over a modal dialog: the main window, so the wizard stays when the page or dialog
+        // that opened it closes.
+        QWidget *owner = modal;
         if (!owner) {
             owner = parent;
             while (owner && owner->parentWidget())
                 owner = owner->parentWidget();
         }
-        g_open = new SetupWizard(studio, owner);
+        g_open = new SetupWizard(studio);
         g_open->setAttribute(Qt::WA_DeleteOnClose);
+        adoptWizard(g_open, owner);
+    } else if (modal && modal != g_open && !g_open->isAncestorOf(modal)) {
+        // Open already (from the first start or Help) and now asked for from Settings: over it.
+        adoptWizard(g_open, modal);
     }
     g_open->showPage(page);
     g_open->show();

@@ -50,6 +50,7 @@ AiPanel::AiPanel(Studio *studio, QWidget *parent)
 
     v->addWidget(sectionLabel(tr("Provider")));
     m_provider = new ProviderCombo(studio->providers(), ai::ProviderKind::Image, content);
+    m_provider->setUse(ProviderCombo::Use::Changes); // every action here changes the image
     v->addWidget(m_provider);
     m_capsWarning = new QLabel(content);
     m_capsWarning->setProperty("role", QStringLiteral("muted"));

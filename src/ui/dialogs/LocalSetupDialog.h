@@ -60,8 +60,11 @@ public:
 
     explicit LocalSetup(Studio *studio, QObject *parent = nullptr);
 
-    // Probes the hardware (unless it is given) and looks up releases of missing programs.
-    QFuture<void> prepare(const std::optional<runtime::HardwareInfo> &hardware = std::nullopt);
+    Studio *studio() const { return m_studio; }
+    // Probes the hardware (unless it is given) and looks up releases of the missing programs among
+    // `programs` ("llama.cpp", "sd.cpp"; empty = both). hardwareReady() comes once the hardware is
+    // known, runtimesChanged() after each lookup, and the future finishes after the last.
+    QFuture<void> prepare(const std::optional<runtime::HardwareInfo> &hardware = std::nullopt, const QStringList &programs = {});
     std::optional<runtime::HardwareInfo> hardware() const { return m_hw; }
     QList<runtime::StarterSet> sets() const { return m_sets; }
     void setSets(const QList<runtime::StarterSet> &sets) { m_sets = sets; } // tests
@@ -69,16 +72,23 @@ public:
     RuntimeStep runtimeStep(const QString &kind) const { return m_runtimeSteps.value(kind); }
     QList<FileStep> fileSteps(const Options &o) const;
     qint64 downloadSize(const Options &o) const;
+    // The sd.cpp server that already runs this model file, if any, and whether it works as it is:
+    // the model in `option`'s slot ("diffusion_model" or "model") and nothing checkSdProfile finds.
+    // One that does not work is corrected from the plan when the setup runs.
+    QString serverWithModel(const QString &model, const QString &option, bool *works = nullptr) const;
 
     // Queues the installs and downloads, then configures servers and providers.
     void run(const Options &o);
     bool isRunning() const { return m_running; }
+    const Options &options() const { return m_options; } // of the last run
     QList<QPointer<Job>> jobs() const { return m_jobs; }
     // Results after finished(true).
     QString languageServer() const { return m_llamaProfile; }
     QString imageServer() const { return m_sdProfile; }
 
 signals:
+    void hardwareReady();
+    void runtimesChanged();
     void jobsChanged();
     void finished(bool ok, const QString &message);
 
@@ -86,8 +96,9 @@ private:
     static QStringList kindsFor(const Options &o);
     void checkDone();
     void configure();
-    // The image server of a preset plan (Options::model); its name when it was created.
-    QString configureModel(runtime::VramTier tier);
+    // The image server of a preset plan (Options::model): its name in `created` when it was
+    // created, in `corrected` when an existing one was corrected.
+    void configureModel(runtime::VramTier tier, QStringList *created, QStringList *corrected);
 
     Studio *m_studio;
     std::optional<runtime::HardwareInfo> m_hw;

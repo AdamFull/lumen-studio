@@ -368,6 +368,10 @@ SettingsDialog::SettingsDialog(Studio *studio, QWidget *parent)
     resize(1020, 700);
     auto *v = new QVBoxLayout(this);
     m_tabs = new QTabWidget(this);
+    // Every tab stays in sight: where the labels are too long (another language, more plugins)
+    // they are shortened instead of scrolling off behind two small arrows.
+    m_tabs->setUsesScrollButtons(false);
+    m_tabs->setElideMode(Qt::ElideRight);
     // Core tabs and the tabs of plugins that are on, by order (ext::SettingsTabSpec).
     struct Tab
     {
@@ -386,9 +390,8 @@ SettingsDialog::SettingsDialog(Studio *studio, QWidget *parent)
          },
          QStringLiteral("sparkles"), tr("AI")},
         {10, QStringLiteral("providers"), [this] { return buildProvidersTab(); }, QStringLiteral("server"), tr("Providers")},
-        // "&&": a single "&" would turn the next letter into a mnemonic and disappear.
-        {20, QStringLiteral("roles"), [this] { return buildRolesTab(); }, QStringLiteral("chat"),
-         tr("Models & roles").replace(QLatin1Char('&'), QStringLiteral("&&"))},
+        // Which provider and model does each task; short, so that every tab fits the tab bar.
+        {20, QStringLiteral("roles"), [this] { return buildRolesTab(); }, QStringLiteral("chat"), tr("Roles")},
         {30, QStringLiteral("servers"), [this, studio] { return new LocalServersPage(studio, this); }, QStringLiteral("server"), tr("Local servers")},
         {40, QStringLiteral("models"), [this, studio] { return new ModelsPage(studio, this); }, QStringLiteral("layers"), tr("Models")},
         {60, QStringLiteral("general"), [this] { return buildGeneralTab(); }, QStringLiteral("settings"), tr("General")},
@@ -727,7 +730,7 @@ OnboardingDialog::OnboardingDialog(Studio *studio, QWidget *parent)
     : QDialog(parent)
     , m_studio(studio)
 {
-    setWindowTitle(tr("Welcome to Lumen Studio"));
+    setWindowTitle(tr("Find servers on this computer"));
     resize(620, 520);
     auto *v = new QVBoxLayout(this);
     v->setContentsMargins(24, 20, 24, 20);
@@ -735,7 +738,7 @@ OnboardingDialog::OnboardingDialog(Studio *studio, QWidget *parent)
     auto *logo = new QLabel(this);
     logo->setPixmap(Icons::pixmap(QStringLiteral("logo"), 44, Theme::palette().accent));
     v->addWidget(logo);
-    auto *title = new QLabel(tr("Connect your AI back-ends"), this);
+    auto *title = new QLabel(tr("Servers on this computer"), this);
     Theme::setRole(title, QStringLiteral("title"));
     v->addWidget(title);
     v->addWidget(mutedLabel(tr("Lumen Studio works with local servers (Stable Diffusion WebUI / Forge, ComfyUI, llama.cpp, Ollama, LM Studio) "
@@ -753,7 +756,7 @@ OnboardingDialog::OnboardingDialog(Studio *studio, QWidget *parent)
     auto *cloud = new QPushButton(Icons::get(QStringLiteral("cloud")), tr("Add cloud provider..."), this);
     auto *local = new QPushButton(Icons::get(QStringLiteral("sparkles")), tr("Set up local AI…"), this);
     local->setToolTip(tr("Download free models and run them on this computer"));
-    auto *done = new QPushButton(tr("Continue"), this);
+    auto *done = new QPushButton(tr("Close"), this);
     Theme::setRole(done, QStringLiteral("primary"));
     buttons->addWidget(again);
     buttons->addWidget(cloud);

@@ -66,6 +66,9 @@ public:
     LlmProvider *llmProvider(const QString &id) const;
 
     Provider *addProvider(const QString &typeId, const QString &name, const QVariantMap &settings);
+    // A provider that is not added, saved or listed, owned by `parent`: for checking settings (a
+    // key someone typed) before they replace anything. Null for an unknown type.
+    Provider *createUnsaved(const QString &typeId, const QVariantMap &settings, QObject *parent);
     void updateProvider(const QString &id, const QString &name, const QVariantMap &settings);
     void removeProvider(const QString &id);
     bool isEnabled(const QString &id) const { return !m_disabled.contains(id); }
