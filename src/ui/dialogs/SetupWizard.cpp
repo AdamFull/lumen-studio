@@ -634,6 +634,7 @@ void SetupWizard::refreshPlan()
     }
 
     bool blocked = !m_plan.ok();
+    bool lookingUp = false;
     auto add = [this](const QString &what, qint64 size, const QString &from, const QString &licence, bool here) {
         auto *item = new QTreeWidgetItem(m_planTree, {what, size > 0 ? runtime::formatBytes(size) : QString(), from, licence});
         item->setTextAlignment(1, Qt::AlignRight | Qt::AlignVCenter);
@@ -649,6 +650,11 @@ void SetupWizard::refreshPlan()
         const QString name = spec ? spec->name : kind;
         if (!s.existingId.isEmpty()) {
             add(tr("%1 (the program)").arg(name), 0, tr("Installed"), spec ? spec->license : QString(), true);
+        } else if (s.error.isEmpty() && s.plan.ok() && s.plan.tag.isEmpty()) {
+            // GitHub has not answered yet: the release, and so its size, is not known (the row and
+            // the total fill in when it answers).
+            lookingUp = true;
+            add(tr("%1 (the program)").arg(name), 0, tr("Looking up…"), spec ? spec->license : QString(), false);
         } else if (s.plan.ok()) {
             add(s.plan.tag.isEmpty() ? tr("%1 (the program)").arg(name) : tr("%1 %2 (the program)").arg(name, s.plan.tag),
                 m_studio->runtimes()->pendingDownload(s.plan), tr("Download from GitHub"),
@@ -695,7 +701,8 @@ void SetupWizard::refreshPlan()
     if (!m_plan.ok()) {
         lines << QStringLiteral("<span style='color:%1'>%2</span>").arg(Theme::palette().danger.name(), m_plan.error.toHtmlEscaped());
     } else if (download > 0) {
-        QString line = tr("To download: <b>%1</b>, %2.").arg(runtime::formatBytes(download), downloadTime(download));
+        QString line = lookingUp ? tr("To download: <b>%1</b> and the program, %2.").arg(runtime::formatBytes(download), downloadTime(download))
+                                 : tr("To download: <b>%1</b>, %2.").arg(runtime::formatBytes(download), downloadTime(download));
         if (storage.isValid())
             line += QLatin1Char(' ') + tr("Free on %1: %2.").arg(QDir::toNativeSeparators(storage.rootPath()), runtime::formatBytes(storage.bytesAvailable()));
         lines << line;

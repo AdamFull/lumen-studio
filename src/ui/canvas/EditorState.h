@@ -30,6 +30,11 @@ public:
     bool sampleMerged() const { return m_sampleMerged; }
     bool showSelectionOverlay() const { return m_overlay; }
     bool showPoseOverlay() const { return m_poseOverlay; }
+    // The selection tools: how a new shape combines with the selection (Shift and Alt choose for
+    // one drag) and how soft its edge is, in pixels.
+    enum class SelectionMode { Replace, Add, Subtract, Intersect };
+    SelectionMode selectionMode() const { return m_selectionMode; }
+    int selectionFeather() const { return m_feather; }
 
     void setBrushSize(double v);
     void setBrushHardness(double v);
@@ -43,6 +48,8 @@ public:
     void setSampleMerged(bool v);
     void setShowSelectionOverlay(bool v);
     void setShowPoseOverlay(bool v);
+    void setSelectionMode(SelectionMode mode);
+    void setSelectionFeather(int pixels);
 
 signals:
     void changed();
@@ -64,6 +71,8 @@ private:
     bool m_sampleMerged = true;
     bool m_overlay = true;
     bool m_poseOverlay = true;
+    SelectionMode m_selectionMode = SelectionMode::Replace; // for this session, as in other editors
+    int m_feather = 0;
 };
 
 } // namespace lumen::ui

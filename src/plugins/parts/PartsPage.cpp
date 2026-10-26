@@ -673,7 +673,7 @@ QWidget *PartsPage::buildGeneratePanel()
     m_strategy->addItem(tr("Model layers (see-through)"), ai::completionStrategyName(ai::CompletionStrategy::Decomposition));
     m_strategy->addItem(tr("Cut out only (no AI)"), ai::completionStrategyName(ai::CompletionStrategy::CutOnly));
     m_strategy->addItem(tr("Transparent (LayerDiffuse, ComfyUI)"), ai::completionStrategyName(ai::CompletionStrategy::LayerDiffuse));
-    m_strategy->setItemData(0, tr("Paints the parts of each part hidden behind others with an image provider."), Qt::ToolTipRole);
+    m_strategy->setItemData(0, tr("Paints the parts of each part hidden behind others with the image engine."), Qt::ToolTipRole);
     m_strategy->setItemData(1, tr("Uses the complete layers returned by a see-through segmentation."), Qt::ToolTipRole);
     m_strategy->setItemData(2, tr("Keeps only the visible pixels; instant."), Qt::ToolTipRole);
     m_strategy->setItemData(3, tr("Generates the hidden areas with real transparency (ComfyUI-layerdiffuse nodes and an SDXL checkpoint)."),
@@ -1297,7 +1297,7 @@ void PartsPage::removeBackground()
         return;
     ai::ImageProvider *provider = m_studio->generation()->providerForUtility(ai::Utility::RemoveBackground);
     if (!provider) {
-        m_studio->notify(tr("No configured provider can remove backgrounds (SD WebUI with rembg, Stability...)."), QStringLiteral("warning"));
+        m_studio->notify(m_studio->generation()->utilityUnavailable(ai::Utility::RemoveBackground), QStringLiteral("warning"));
         return;
     }
     Job *job = m_studio->generation()->submitUtility(provider->instanceId(), ai::Utility::RemoveBackground, m_set->source(), {},

@@ -323,6 +323,15 @@ ModelsPage::ModelsPage(Studio *studio, QWidget *parent)
     showDetails();
 }
 
+std::optional<runtime::VramTier> ModelsPage::vramTier() const
+{
+    // The preset's settings for this computer's GPU, as the server dialog and the setup wizard
+    // apply them; none while the GPU is not known yet (or there is none).
+    if (!m_hardware || m_hardware->maxVram() == 0)
+        return std::nullopt;
+    return runtime::vramTierFor(m_hardware->maxVram());
+}
+
 void ModelsPage::showFolder()
 {
     m_folder->setFullText(QDir::toNativeSeparators(m_studio->models()->defaultFolder()));
@@ -758,7 +767,7 @@ void ModelsPage::useWithServer(const ModelEntry &e)
                     }
                 }
                 // The preset puts it in its slot with its components (ModelPresets.h).
-                applyModelOptions(&changed.options, runtime::modelServerOptions(m_studio->models(), e.path));
+                applyModelOptions(&changed.options, runtime::modelServerOptions(m_studio->models(), e.path, vramTier()));
                 warnMissingCompanions(e);
                 // What still does not fit (a ControlNet of another family) is named now, not at the start.
                 const QList<runtime::ProfileProblem> problems = runtime::checkSdProfile(m_studio->models(), changed);
@@ -781,7 +790,7 @@ void ModelsPage::useWithServer(const ModelEntry &e)
             p.options.insert(key, QDir::toNativeSeparators(e.path));
             p.options.insert(QStringLiteral("mmproj"), QDir::toNativeSeparators(runtime::findProjector(e.path)));
         } else {
-            applyModelOptions(&p.options, runtime::modelServerOptions(m_studio->models(), e.path));
+            applyModelOptions(&p.options, runtime::modelServerOptions(m_studio->models(), e.path, vramTier()));
             warnMissingCompanions(e);
         }
         ServerProfileDialog dlg(m_studio, p, true, this);

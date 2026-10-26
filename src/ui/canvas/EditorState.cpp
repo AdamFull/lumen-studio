@@ -27,6 +27,7 @@ EditorState::EditorState(QObject *parent)
     m_maskHardness = s.value(key("maskHardness"), m_maskHardness).toDouble();
     m_tolerance = s.value(key("tolerance"), m_tolerance).toInt();
     m_sampleMerged = s.value(key("sampleMerged"), m_sampleMerged).toBool();
+    m_feather = s.value(key("selectionFeather"), m_feather).toInt();
     // The switch of the floating generative toolbar, which the prompt bar replaced.
     Settings::instance().remove(key("contextBar"));
 }
@@ -46,6 +47,7 @@ void EditorState::persist()
     s.setValue(key("maskHardness"), m_maskHardness);
     s.setValue(key("tolerance"), m_tolerance);
     s.setValue(key("sampleMerged"), m_sampleMerged);
+    s.setValue(key("selectionFeather"), m_feather);
     emit changed();
 }
 
@@ -93,9 +95,18 @@ LUMEN_SETTER(setMaskBrushSize, m_maskSize)
 LUMEN_SETTER(setMaskHardness, m_maskHardness)
 LUMEN_SETTER(setFillTolerance, m_tolerance)
 LUMEN_SETTER(setSampleMerged, m_sampleMerged)
+LUMEN_SETTER(setSelectionFeather, m_feather)
 LUMEN_SETTER(setShowSelectionOverlay, m_overlay)
 LUMEN_SETTER(setShowPoseOverlay, m_poseOverlay)
 
 #undef LUMEN_SETTER
+
+void EditorState::setSelectionMode(SelectionMode mode)
+{
+    if (mode == m_selectionMode)
+        return;
+    m_selectionMode = mode;
+    emit changed();
+}
 
 } // namespace lumen::ui

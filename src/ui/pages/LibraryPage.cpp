@@ -580,11 +580,9 @@ LibraryPage::LibraryPage(Studio *studio, QWidget *parent)
 void LibraryPage::runBatchUtility(ai::Utility utility, const QJsonObject &params, const QString &title)
 {
     ai::GenerationService *gen = m_studio->generation();
-    if (!gen->providerForUtility(utility)) {
-        m_studio->notify(tr("No configured provider can run \"%1\". Add SD WebUI (rembg extension), ComfyUI, Stability AI or fal.ai "
-                            "in Settings → Providers.")
-                             .arg(title),
-                         QStringLiteral("warning"));
+    // What would help, in the same words as the editor's AI menu.
+    if (const QString why = gen->utilityUnavailable(utility); !why.isEmpty()) {
+        m_studio->notify(why, QStringLiteral("warning"));
         return;
     }
     const QStringList ids = selectedIds();

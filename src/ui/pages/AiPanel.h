@@ -73,6 +73,9 @@ public:
     Mode mode() const { return m_mode; }
     // Runs one of the panel's actions with the panel's settings (the AI menu and the panel's button).
     void run(Mode mode);
+    // The utility an action runs (Upscale, Remove background, Detect pose), which not every image
+    // engine has; none for the others.
+    static std::optional<ai::Utility> utilityOf(Mode mode);
     // The AI menu's Upscale 2× / 3× / 4×.
     void upscale(double factor);
     // Submits a prompt run on the panel's document, with the project's character unless the run or

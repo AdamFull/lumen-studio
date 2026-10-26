@@ -20,6 +20,7 @@ namespace lumen::ui {
 class AiOptions;
 class CanvasView;
 class ColorSwatch;
+class ElidedLabel;
 class DocumentFiles;
 class EditorState;
 class FiltersPanel;
@@ -73,7 +74,13 @@ public:
     void newDocumentDialog();
     void saveToLibrary();
     void copyMerged();
+    // The active layer's selected pixels (the whole layer with nothing selected) to the clipboard;
+    // Cut also clears them from the layer (it needs a selection, as in other editors).
+    void copySelection(bool cut);
     void pasteAsLayer();
+    // The Image menu: the size of the picture (scaled) or of its canvas (cut or extended).
+    void imageSizeDialog();
+    void canvasSizeDialog();
     // The clipboard's picture as a new document.
     void pasteAsNewDocument();
     void importAsLayer();
@@ -121,7 +128,7 @@ private:
     QTabWidget *m_side;
     QLabel *m_zoomLabel;
     QLabel *m_infoLabel;
-    QLabel *m_hintLabel;
+    ElidedLabel *m_hintLabel;
     ColorSwatch *m_fg;
     ColorSwatch *m_bg;
     QPointer<doc::Document> m_doc;

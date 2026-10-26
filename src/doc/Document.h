@@ -98,6 +98,10 @@ public:
     // Crop (rect inside bounds) or extend (rect larger than bounds, negative origin allowed).
     void resizeCanvas(const QRect &newRect, const QString &undoText);
     void scaleImage(const QSize &newSize);
+    // Turns the whole picture (every layer and the selection) by 90, 180 or 270 degrees clockwise,
+    // or mirrors it; one undo step each.
+    void rotateImage(int degrees);
+    void flipImage(Qt::Orientation orientation);
 
     // ---- direct mutation API (used by commands and tools; no undo) --------------------------
     void insertLayerRaw(int index, const LayerPtr &layer);

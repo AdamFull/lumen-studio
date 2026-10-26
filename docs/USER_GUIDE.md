@@ -132,7 +132,8 @@ While no picture is open, the window shows how to begin:
   appear in a strip just above it.
 * **The status bar** shows the project, the image engine the prompt bar uses now (click it for
   Settings → AI; without an engine it reads "No image engine – Set up AI"), the local servers (start,
-  stop, restart, the server's log), **Safe for work** and the jobs (click for the Queue).
+  stop, restart, the server's log), **Safe for work: on** or **off** (click to switch it) and the jobs
+  (click for the Queue).
 
 ### Menus
 
@@ -140,16 +141,27 @@ While no picture is open, the window shows how to begin:
   clipboard, Browse project images… (`Alt+6`); Save, Save as…, Export a copy…, Close document (§9);
   Save to project, Save a copy to project images (§10); New project…, Open project…, Recent
   projects; Quit (`Ctrl+Q`).
-* **Edit**: Undo, Redo; Copy merged, Paste as layer, Import image as layer…; **Settings…**
-  (`Ctrl+,`).
+* **Edit**: Undo, Redo; **Cut** (`Ctrl+X`) and **Copy** (`Ctrl+C`) of the active layer's selected
+  pixels (Copy without a selection takes the whole layer), **Copy merged** (`Ctrl+Shift+C`, every
+  visible layer), **Paste as layer** (`Ctrl+V`), Import image as layer…; **Settings…** (`Ctrl+,`).
 * **Select**: Select all, Deselect, Invert selection, Delete selected pixels.
+* **Image**: **Image size…** (`Ctrl+Alt+I`: the whole picture scaled, its proportions kept unless
+  you untick it), **Canvas size…** (`Ctrl+Alt+C`: the canvas cut or extended; choose where the
+  picture stays: in the middle, at a side or in a corner), **Rotate 90° clockwise**, **Rotate 90°
+  counter-clockwise**, **Rotate 180°**, **Flip horizontally**, **Flip vertically**. Each is one step
+  in the history.
 * **View**: zoom in and out, Fit to window, Actual pixels (100 %); **Filters** (the Filters tab),
-  **Job queue**; the panels of plugins; Toggle light/dark theme.
+  **Job queue**; the panels of plugins; **Theme** (Automatic, Dark, Light, High contrast, as in
+  Settings → General; it changes at the next start).
 * **AI**: what is not a description of a change: **Upscale** (2×, 3×, 4×), **Remove background**,
-  **Expand canvas…**, **Variation**, and **All AI options…** (§5).
+  **Expand canvas…**, **Variation**, and **All AI options…** (§5). Upscale and Remove background
+  need an image engine that can do them; with none, they are greyed out and their tooltip says what
+  would help (§5).
 * **Tools**: **New filter…** and **Filter editor…** (§8), the tools of plugins that are on, and
   **Plugins…**.
-* **Help**: **Set up AI…**, **Open models folder**, **Open log folder**, **About Lumen Studio**.
+* **Help**: **Set up AI…**, **User guide** (`F1`: this guide, built into Lumen), **Keyboard
+  shortcuts** (Settings → Shortcuts), **Open models folder**, **Open log folder**, **About Lumen
+  Studio**.
 
 The editor's commands in the menus are the same actions as their keys, so a key you change in
 Settings → Shortcuts shows there too. Commands that are not about the picture in front (New, Open,
@@ -163,7 +175,10 @@ A selection says where a change goes. A picture opens with the **Rectangle selec
 because selecting is where changing an area with words starts.
 
 * **Rectangle**, **Ellipse** and **Lasso selection** (`M`, `Shift+M`, `L`): drag on the picture.
-  Shift adds to the selection, Alt takes away, Shift+Alt keeps only the overlap; a click deselects.
+  The bar above the canvas chooses what a drag does: **New** replaces the selection, **Add** adds to
+  it, **Subtract** takes away, **Intersect** keeps only the overlap. For one drag, Shift adds, Alt
+  takes away and Shift+Alt keeps the overlap. **Feather** gives a new selection a soft edge, in
+  pixels; a change from the prompt bar fades out over it. A click deselects.
 * **Selection brush** (`Q`): paint over what should change, for shapes that are hard to draw.
   Alt or the right mouse button takes paint away. *Tint the selection* in the tool's options shows
   what is painted.
@@ -255,6 +270,11 @@ description of a change:
 * **Expand canvas**: choose the sides and how far; the engine paints the new area.
 * **Upscale** 2×, 3× or 4×: a larger, sharper copy as a new document.
 * **Remove background**: the subject cut out onto a transparent layer.
+
+Not every image engine can do the last two. When none of yours can, the AI menu greys them out and
+the AI tab says what would help: for upscaling, an upscaler folder for your local server (Settings →
+Local servers) or fal.ai or Stability AI; for background removal, fal.ai or Stability AI (Settings →
+Providers). Setting up AI again does not help: the local models it offers do neither.
 
 ### Edits on your own computer
 
@@ -400,7 +420,8 @@ Filters are `.lumenfilter` files in `Documents\Lumen\Filters`; a file put there 
 Lumen saves pictures the way other image editors do.
 
 * **Open**: **File → Open image…** (`Ctrl+O`), **File → Open recent**, the start screen, or drag files
-  onto the window. PNG, JPEG, WebP, BMP, TIFF and Photoshop files (with their layers and groups) open.
+  onto the window. PNG, JPEG, WebP, BMP, GIF (its first frame), TIFF and Photoshop files (with their
+  layers and groups) open; a GIF saves to another format, since Lumen does not write GIF.
   A picture that is open already is shown instead of opened twice.
 * **Save** (`Ctrl+S`) writes the picture back to its file, in the file's own format and quality (a
   JPEG stays a JPEG).
@@ -410,8 +431,8 @@ Lumen saves pictures the way other image editors do.
   adjustment layers), Lumen asks first, in plain words: **Save over**, **Save as…** or **Cancel**.
   **Don't ask again for this picture** stops the question for that picture. If another program
   changed the file in the meantime, Save always asks.
-* **Save as…** (`Ctrl+Shift+S`) chooses a new file: PNG, JPEG, WebP and TIFF where your copy of Qt
-  can write them, BMP, or a layered Photoshop file (PSD). From then on the picture saves to that file
+* **Save as…** (`Ctrl+Shift+S`) chooses a new file: PNG, JPEG, BMP or a layered Photoshop file
+  (PSD), and WebP and TIFF when the dialog lists them. From then on the picture saves to that file
   and its tab takes the file's name. A new picture (from a prompt, a blank canvas, the clipboard) asks
   for a file the first time you save.
 * **Export a copy…** (`Ctrl+Shift+E`) writes a copy in any of those formats; the picture keeps saving
@@ -421,7 +442,9 @@ Lumen saves pictures the way other image editors do.
 * A photo in wide colours (Display P3 from a phone, Adobe RGB) is shown and saved in standard
   colours (sRGB); only colours more vivid than sRGB become a little duller.
 * **Close document** (`Ctrl+W`, or ✕ on the tab) and **Quit** ask **Save**, **Don't save** or
-  **Cancel** for pictures with unsaved changes (one question for all when you quit).
+  **Cancel** for pictures with unsaved changes (one question for all when you quit). **Don't save**
+  leaves the file as it was; the changed picture stays in the project, and the start screen lists it
+  under *Recent in this project*.
 
 Besides the picture's file, the project keeps every document with its layers (§10), so nothing is
 lost when you close Lumen without saving the file.
@@ -544,11 +567,11 @@ the idle time you set. A server whose settings cannot work says why when it star
   everything it needs. **Look up on Civitai** finds its page and trigger words (it sends the file's
   checksum to civitai.com, so only when you click). Files in pickle formats (.ckpt, .pt, .pth, .bin)
   are marked; prefer .safetensors.
-* **Download…** searches Hugging Face and Civitai. Files go into the models folder, sorted by kind,
-  and are checked against the site's checksum. Files a model cannot work without (a VAE, a text
-  encoder) come along. **Accounts…** stores the access tokens some downloads need (in the Credential
-  Manager); Civitai leaves out adult content unless you tick *Adult content*. Check a model's licence
-  before you use what you make with it.
+* **Download…** searches Hugging Face and Civitai, starting with image models. Files go into the
+  models folder, sorted by kind, and are checked against the site's checksum. Files a model cannot
+  work without (a VAE, a text encoder) come along. **Accounts…** stores the access tokens some
+  downloads need (in the Credential Manager); Civitai leaves out adult content unless you tick *Adult
+  content*. Check a model's licence before you use what you make with it.
 
 **Model presets.** Lumen knows these families and what each needs: FLUX.2 [klein] 4B and 9B (and
 their base models), FLUX.1 [dev], [schnell] and Kontext [dev], Qwen-Image and Qwen-Image-Edit, Anima,
@@ -613,7 +636,9 @@ Every shortcut can be changed in Settings → Shortcuts. The defaults:
 | Select all / deselect / invert | `Ctrl+A` / `Ctrl+D` / `Ctrl+Shift+I` |
 | Delete selected pixels | `Del` |
 | New layer / duplicate / merge down | `Ctrl+Shift+N` / `Ctrl+J` / `Ctrl+E` |
-| Paste as layer / copy merged | `Ctrl+V` / `Ctrl+Shift+C` |
+| Cut / copy / paste as layer / copy merged | `Ctrl+X` / `Ctrl+C` / `Ctrl+V` / `Ctrl+Shift+C` |
+| Image size / canvas size | `Ctrl+Alt+I` / `Ctrl+Alt+C` |
+| User guide | `F1` |
 | Fit / 100 % / zoom in / zoom out | `Ctrl+0` / `Ctrl+1` / `Ctrl+=` / `Ctrl+-` |
 | Swap colours | `X` |
 | New blank canvas / open image / close document | `Ctrl+N` / `Ctrl+O` / `Ctrl+W` |

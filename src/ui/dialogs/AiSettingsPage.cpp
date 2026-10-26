@@ -48,7 +48,7 @@ AiSettingsPage::AiSettingsPage(Studio *studio, QWidget *parent)
     setup->setObjectName(QStringLiteral("aiSetUp"));
     connect(setup, &QPushButton::clicked, this, &AiSettingsPage::openWizard);
     setupRow->addWidget(setup);
-    setupRow->addWidget(mutedLabel(tr("Every setting of each engine is on the Providers, Local servers and Models tabs."), content), 1);
+    setupRow->addWidget(mutedLabel(tr("Every setting of each engine is on the Providers, Local servers and Models pages."), content), 1);
     v->addLayout(setupRow);
     v->addStretch();
     auto *outer = new QVBoxLayout(this);
@@ -144,7 +144,7 @@ QString AiSettingsPage::statusOf(ai::Provider *p, bool *good)
     *good = false;
     const QString id = p->instanceId();
     if (!m_studio->providers()->isEnabled(id))
-        return tr("Turned off (Providers tab)");
+        return tr("Turned off (Providers page)");
     const QString server = p->text(QStringLiteral("managed_server"));
     if (!server.isEmpty() && m_studio->servers()->profile(server)) {
         runtime::ServerSupervisor *servers = m_studio->servers();
@@ -242,7 +242,7 @@ void AiSettingsPage::refresh()
     m_language.box->setVisible(!needing.isEmpty());
     if (!needing.isEmpty()) {
         if (m_languageUsers)
-            m_languageUsers->setText(tr("Used by %1 (plugins). The editor itself works without one.").arg(needing.join(QStringLiteral(", "))));
+            m_languageUsers->setText(tr("Plugins that use it: %1. The editor itself works without one.").arg(needing.join(QStringLiteral(", "))));
         QString model;
         ai::LlmProvider *llm = registry->llmFor(ai::LlmRole::Assistant, &model);
         fill(m_language, llm, tr("No language model"), false);

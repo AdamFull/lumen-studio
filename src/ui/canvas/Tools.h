@@ -84,11 +84,13 @@ public:
     QString name() const override;
     QString iconName() const override;
     QString shortcut() const override;
-    QString hint() const override { return tr("Shift adds, Alt subtracts, Shift+Alt intersects. Click to deselect."); }
+    QString hint() const override { return tr("For one drag: Shift adds, Alt subtracts, Shift+Alt intersects. Click to deselect."); }
     void press(CanvasView *view, const ToolEvent &ev) override;
     void move(CanvasView *view, const ToolEvent &ev) override;
     void release(CanvasView *view, const ToolEvent &ev) override;
     void paintOverlay(CanvasView *view, QPainter &p) override;
+    // New, Add, Subtract and Intersect, and the feather, as in other editors' selection tools.
+    QWidget *createOptions(QWidget *parent) override;
 
 private:
     QPainterPath shapePath() const;

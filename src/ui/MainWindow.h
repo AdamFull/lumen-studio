@@ -23,6 +23,7 @@ class NewFromPromptDialog;
 class PageWindow;
 class SetupWizard;
 class Toasts;
+class UserGuideDialog;
 
 // The main window is the editor: tools on the left, the canvas with document tabs and the prompt bar
 // in the centre, Layers, History and Filters (and the AI panel when asked for) on the right, and the
@@ -55,6 +56,8 @@ public:
     QDialog *browseProjectImages();
     QDialog *projectImagesDialog() const; // null until first opened
     void openSettings(const QString &tab = QString());
+    // Help → User guide: the guide built into the program, in a window of its own (one at a time).
+    UserGuideDialog *showUserGuide(const QString &document = QStringLiteral("USER_GUIDE.md"), const QString &section = QString());
     // Set up AI: the setup wizard (ui::openSetupWizard), from the first start, Help → Set up AI…, the
     // start screen's card, the prompt bar, the status bar and New from prompt while there is no
     // image engine.
@@ -120,6 +123,15 @@ private:
     QAction *m_queueAction = nullptr;
     QToolButton *m_jobsButton = nullptr;
     QList<QAction *> m_documentActions; // the AI menu's and the editor's, which need a document
+    // The AI menu's actions that need an engine that can do them, with their own tooltip.
+    struct UtilityAction
+    {
+        QAction *action;
+        ai::Utility utility;
+        QString tip;
+    };
+    QList<UtilityAction> m_utilityActions;
+    QPointer<UserGuideDialog> m_guide;
     QToolButton *m_engineButton = nullptr;
     ElidedLabel *m_projectLabel = nullptr;
     QPointer<NewFromPromptDialog> m_newFromPrompt;

@@ -650,7 +650,10 @@ void TestFiles::saveAsFormats()
     QCOMPARE(Shortcuts::instance().keys(QStringLiteral("app.quit")), QList<QKeySequence>{QKeySequence(QStringLiteral("Ctrl+Q"))});
     QCOMPARE(f.window->findChild<QAction *>(QStringLiteral("app-export-image"))->text(), QStringLiteral("Export a copy…"));
 
-    // A GIF opens, but Lumen cannot write it: Save asks for another file.
+    // A GIF opens (File → Open image… offers it, and any file), but Lumen cannot write it: Save asks
+    // for another file.
+    QVERIFY(Studio::openFileFilter().section(QStringLiteral(";;"), 0, 0).contains(QStringLiteral("*.gif")));
+    QVERIFY(Studio::openFileFilter().endsWith(QStringLiteral("(*)")));
     const QString gif = f.path(QStringLiteral("tiny.gif"));
     QFile g(gif);
     QVERIFY(g.open(QIODevice::WriteOnly));

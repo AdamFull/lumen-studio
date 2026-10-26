@@ -3717,6 +3717,14 @@ void TestRuntime::modelTypes()
                                  QStringLiteral("FLUX.1 (single file)"), QStringLiteral("FLUX.2 [klein] 4B"), QStringLiteral("FLUX.2 [klein] 9B"),
                                  QStringLiteral("Qwen-Image / Qwen-Image-Edit"), QStringLiteral("SDXL (also Illustrious, NoobAI, Pony)"),
                                  QStringLiteral("Stable Diffusion 1.5")}));
+    // Every text of the preset files that people read is listed for translation.
+    const QStringList listed = lumen::runtime::presetTexts();
+    for (const ModelPreset &p : lumen::runtime::modelPresets()) {
+        QVERIFY2(listed.contains(p.typeName), qPrintable(p.typeName));
+        QVERIFY2(p.note.isEmpty() || listed.contains(p.note), qPrintable(p.note));
+        for (const auto &slot : p.components)
+            QVERIFY2(listed.contains(slot.label), qPrintable(slot.label));
+    }
     // Every preset has a type, and the presets of one type need the same files and take the same
     // add-ons.
     for (const ModelPreset &p : lumen::runtime::modelPresets()) {

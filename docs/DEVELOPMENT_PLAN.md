@@ -1957,12 +1957,15 @@ Survey of the code, the app log and user testing (October 2026):
     prompt, LoRAs, which ControlNet and IP-Adapter families fit;
   * sampling defaults: CFG, distilled guidance, image CFG, steps, sampler, scheduler, native
     resolution, prompt dialect;
-  * VRAM tiers (8, 12, 16, 24 GB): weight type (`--type`), `--offload-to-cpu`, `--clip-on-cpu`,
-    VAE tiling, and which quantised file to download.
+  * VRAM tiers (built as three: up to 8 GB, up to 12 GB, more): weight type (`--type`),
+    `--offload-to-cpu`, `--clip-on-cpu`. Not built: a 16 and a 24 GB tier, VAE tiling per tier (it
+    is on for every sd.cpp engine) and a quantised file to download per tier (each preset has one
+    download; see the acceptance fixes in §17.8).
 * First presets: FLUX.2 klein 4B (generate and edit; recommended for 8 GB), FLUX.1 Kontext dev
   (edit), FLUX.1 dev and schnell, Qwen-Image-Edit, SDXL, Illustrious / NoobAI, Pony, SD 1.5,
   Anima. Each file names its source, licence and the sd.cpp docs page it follows.
-* **Choosing a model** (setup wizard, Settings → Models, or dropping a file into the folder): the
+* **Choosing a model** (setup wizard, Settings → Models, or the server dialog's model field; a file
+  dropped into the folder is listed at the next scan and chosen from Settings → Models): the
   family is detected, the preset fills every slot from the library or offers to download what is
   missing (one button, size shown), puts a standalone diffusion model in the `--diffusion-model`
   slot, and applies the sampling defaults and the VRAM tier of the detected GPU. Add-ons
@@ -2063,6 +2066,17 @@ Survey of the code, the app log and user testing (October 2026):
     `sizeForAspect` is a core helper.
   * The pose canvas and the pose dialog stay in the core (the director's shot cards use them); the
     Poses plugin has the page.
+  * Not yet (acceptance review, October 2026): `Extension` has only `pages()`, `panels()`,
+    `settingsTabs()` and `needsLanguageModel()`. The hooks for menu actions, prompt-bar and canvas
+    actions, filter node types, provider types, project data records and request decorators do not
+    exist, so the character library, the cast, `CharacterChip`, `CharacterLoraDialog` and
+    `ai::Director` are still in the core (above), and a new image never gets the active character
+    from the core's New from prompt or prompt bar while the plugin is off. The order to build it:
+    request decorators (a plugin changes a `GenerationSpec` before it is submitted: the character's
+    LoRA and references), prompt-bar actions and menu actions; then `Director::sizeForAspect` as a
+    core helper, and the character code moved into `lumen_plugin_characters`, so the core neither
+    reads nor writes character data while the plugin is off. Since the acceptance fixes the core no
+    longer makes an empty `characters` folder at start.
 
 #### 17.8 Implementation steps
 - [x] Park M16: the open step-5 work (Generate page and *Re-run* with a cast) is in
@@ -3535,6 +3549,81 @@ Survey of the code, the app log and user testing (October 2026):
     (model types such as "FLUX.1 (dev, schnell, Kontext; separate files)", the default server
     name); the audit has no Qt translation, so dialog buttons such as *Cancel* show in English there
     (the app loads `qt_de.qm`).
+- [x] Acceptance fixes (October 2026): what two acceptance reviews, the docs check and the German
+  translation found, verified one by one.
+  * German layout audit: it failed in two places although the translation step had reported none
+    (the Create window's composer was 17 px too wide: its purpose list took the width of its longest
+    German item, now `AdjustToMinimumContentsLengthWithIcon`; the AI node's *Colours* choice cut "Wie
+    die KI sie erzeugt hat", now "Wie von der KI"). The prompt bar's hint for an engine without edits
+    was shortened in German (it was elided at 1280 × 720); `tst_layout` now checks that this hint is
+    shown whole. A translated audit also sets the language's numbers and loads Qt's own translation
+    (`qt_de.qm`), and the setup wizard's test-image texts in the audit are the wizard's translated
+    ones.
+  * Remove background and Upscale: most engines the wizard sets up can do neither (sd.cpp only
+    upscales with an upscaler folder; Gemini neither). `GenerationService::utilityUnavailable` says
+    in plain words what would help (an upscaler folder in Settings → Local servers, fal.ai or
+    Stability AI; not "Set up AI", which would give another engine that cannot either). The AI menu
+    greys the actions out with that as their tooltip, the AI tab shows it and disables its button,
+    and the AI filter steps, Browse project images and the Parts page use the same words. A job whose
+    engine went away says so instead of "No configured provider supports …".
+  * The editor's menus: **Edit** has *Cut* (`Ctrl+X`, needs a selection) and *Copy* (`Ctrl+C`) of the
+    active layer's selected pixels (soft edges become transparency), *Copy merged* and the editor's
+    own *Paste as layer* with its `Ctrl+V`. A new **Image** menu: *Image size…* (`Ctrl+Alt+I`,
+    `Document::scaleImage`, which had no way in), *Canvas size…* (`Ctrl+Alt+C`, nine positions for
+    the picture), *Rotate 90°* both ways, *Rotate 180°*, *Flip horizontally* and *vertically*
+    (`Document::rotateImage` / `flipImage`, pixel-exact, one undo step, the selection turned too;
+    `ui/dialogs/ImageSizeDialog`). **View → Theme** offers Settings → General's four choices with a
+    translated sentence (the old toggle put the untranslated "light" / "dark" into one and overwrote
+    *Automatic* and *High contrast*); like Settings it applies at the next start, since icons already
+    drawn would not follow. **Help** has *User guide* (`F1`: `docs/USER_GUIDE.md` and `PLUGINS.md`
+    built in as `:/docs`, shown by `ui/dialogs/UserGuideDialog` with working contents links) and
+    *Keyboard shortcuts* (Settings → Shortcuts).
+  * The selection tools have options like other editors': *New*, *Add*, *Subtract*, *Intersect*
+    (`EditorState::selectionMode`, for the session; Shift and Alt still choose for one drag) and
+    *Feather* in pixels (kept; the shape's mask is blurred). The tool hint under the canvas is an
+    `ElidedLabel`. The prompt bar's *Select an area* now says "Drag on the picture around what should
+    change." (the rectangle tool is usually chosen already, so the click showed nothing).
+  * Texts: Settings → AI says "pages" (not "tabs"); the plugins' "No image provider is configured."
+    and "Add an image provider in Settings → Providers first." are the core's "There is no image
+    engine. Set one up with Help → Set up AI…"; the language-model row reads "Plugins that use it:
+    %1." (the German was ungrammatical); the status bar's button reads *Safe for work: on* / *off*;
+    the close question says where the changes go (the start screen's *Recent in this project*);
+    Settings → Models → *Download…* opens on image models (language models last, they are only for
+    plugins); *Open image…* offers GIF and *All files*.
+  * Model presets: the notes are in plain words (no CFG or "negative prompt"; *Leave out* is what the
+    UI calls it), and the type names, notes and component labels are translated
+    (`runtime::presetTexts()` lists them for lupdate; `tst_runtime modelTypes` fails on a preset text
+    the list lacks). `formatBytes` uses the locale's numbers ("11,8 GB" in German).
+  * Settings → Models' *Use in <server>* and *New server with this model…* apply the detected GPU's
+    VRAM tier, as the server dialog and the wizard do (step 4's Not yet).
+  * The wizard's program row says *Looking up…* until GitHub answers (it showed *Download from
+    GitHub* with no size, and the total left the program out); the total then says "and the program".
+  * The AI tab's action buttons use one font size, the smallest any name needs (German
+    *Hochskalieren* was drawn smaller than the others). A checked radio button keeps the size of an
+    unchecked one (its 4 px border made a 23 px square).
+  * Tests: `tst_setup firstStartToSelectionEdit` (acceptance 1 in one go: the first start opens Set
+    up AI, *Run on this computer* finds klein in a ComfyUI folder and makes a server and a test image,
+    then an opened picture, a rectangle dragged on the canvas and words with Enter send a
+    `ref_images` edit to that server, and *Keep* adds one layer with nothing outside the area);
+    `tst_canvas editorMenus` (Cut, Copy, Paste keys and behaviour, the Image menu, the Theme menu,
+    the user guide and its links, Remove background and Upscale off with what helps, then on with
+    Stability AI), `imageSizeDialogs`, `selectionOptions` (the four modes by dragging, the feather);
+    `tst_doc rotateAndFlip`, `characterLibrary` (no folder until the first character); `tst_files
+    saveAsFormats` (GIF in the open filter); the hub's default category; the layout audit with the
+    image size, canvas size and user guide dialogs. The strict layout audit passes in English and
+    German at 100 % and 150 %.
+  * Rejected or left: the start screen stays (§17.2's decision; the user's "a canvas, like in any
+    image editing software" is met once a picture is open, and the start screen's actions are what
+    an empty canvas would offer); the zoom stays in the editor's bottom row (step 7); merging the
+    start screen's two recent lists and a real *Discard* (the project keeps every document by design,
+    step 15); the live check (no GPU runs in this step).
+  * Not yet: the extension hooks of §17.7 (its Not yet); a model file dropped into the models folder
+    is not offered for a server (§17.3); a 16 and 24 GB VRAM tier and per-tier downloads (§17.3); the
+    filters folder cannot be moved and does not follow the models folder (step 11); the start-up
+    path of the one-time model move is untested (step 5); the German user guide and plugin guide (the
+    built-in guide is English); the Filters panel's button row and the AI tab's form do not count
+    wrapped rows or a wide label column in their minimum sizes, so a longer translation could clip
+    them again (German passes with shortened labels).
 - [ ] Short live check (RTX 4060 8 GB, FLUX.2 klein 4B through sd.cpp): one selection edit, one
   whole-image colorize, one new image. Everything before this step uses mock servers.
   * Done early for the selection edit (October 2026, `tst_live kleinEditServer`): the user's
@@ -3550,7 +3639,12 @@ Survey of the code, the app log and user testing (October 2026):
     difference around the ball fell from 5.5 to 4.1 per channel, the ball unchanged
     (`tst_masks edgeColorsRemoveDrift`). Left: light the model adds next to the new object, and a
     new shadow fading out at the selection's edge.
-  * Still to check: a whole-image colorize and a new image, with the new shell.
+  * Still to check: a whole-image colorize and a new image, with the new shell. Also once, briefly:
+    a server start on the Large tier with ComfyUI's mixed fp8 klein file at `weight_type=file`
+    (if it fails, the flux2 preset's vram block sets `q8_0` for it), and FLUX.1 on the 8 GB tier's
+    `q4_K`. Acceptance 2 and 3 are shown against mock servers only (`tst_runtime presetProfiles`,
+    `animaCompanions`, `tst_canvas presetServerDialog`, `wholeImageKeepsDetail`,
+    `promptBarSelectionEdit`).
 
 Acceptance:
 1. A new user installs Lumen, chooses *Run on this computer*, and edits a selected area with a

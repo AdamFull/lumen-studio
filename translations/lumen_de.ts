@@ -84,7 +84,7 @@
         <translation>20–32 abwechslungsreiche Bilder eines Charakters, um seine LoRA zu trainieren.</translation>
     </message>
     <message>
-        <location filename="../src/ai/GenerationService.cpp" line="+398"/>
+        <location filename="../src/ai/GenerationService.cpp" line="+421"/>
         <source>The selection is empty - paint a mask or make a selection first.</source>
         <translation>Die Auswahl ist leer – malen Sie zuerst eine Maske oder erstellen Sie eine Auswahl.</translation>
     </message>
@@ -743,7 +743,7 @@
         <translation>Physikeinstellung %1 benötigt mindestens zwei Eckpunkte.</translation>
     </message>
     <message>
-        <location filename="../src/plugins/characters/CreatePage.cpp" line="+724"/>
+        <location filename="../src/plugins/characters/CreatePage.cpp" line="+728"/>
         <source>**Character sheet:** %1 — %2</source>
         <translation>**Charakterblatt:** %1 — %2</translation>
     </message>
@@ -1060,8 +1060,8 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     <message>
         <location line="+49"/>
         <location line="+59"/>
-        <source>No image provider is configured.</source>
-        <translation>Es ist kein Bildanbieter konfiguriert.</translation>
+        <source>There is no image engine. Set one up with Help → Set up AI…</source>
+        <translation>Es gibt keine Bild-Engine. Richten Sie eine unter Hilfe → KI einrichten… ein.</translation>
     </message>
     <message>
         <location line="+13"/>
@@ -1742,13 +1742,13 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+15"/>
-        <location line="+297"/>
+        <location line="+294"/>
         <location line="+60"/>
         <source>AI steps cannot run here: Lumen&apos;s image engines are not available.</source>
         <translation>KI-Schritte können hier nicht laufen: Die Bild-Engines von Lumen sind nicht verfügbar.</translation>
     </message>
     <message>
-        <location line="-351"/>
+        <location line="-348"/>
         <source>The image engine chosen for this step is no longer set up. Choose another one for it in the filter editor, or “The one in use”.</source>
         <translation>Die für diesen Schritt gewählte Bild-Engine ist nicht mehr eingerichtet. Wählen Sie im Filtereditor eine andere dafür aus oder „Die verwendete“.</translation>
     </message>
@@ -1763,17 +1763,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>„%1“ kann keine Hintergründe entfernen. Wählen Sie für diesen Schritt eine andere Engine oder „Die verwendete“.</translation>
     </message>
     <message>
-        <location line="+12"/>
-        <source>None of your image engines has an upscaler. A stable-diffusion.cpp server needs an upscale model in its settings; ComfyUI, Stable Diffusion WebUI, fal.ai and Stability AI have one.</source>
-        <translation>Keine Ihrer Bild-Engines hat einen Hochskalierer. Ein stable-diffusion.cpp-Server braucht in seinen Einstellungen ein Hochskalierungsmodell; ComfyUI, Stable Diffusion WebUI, fal.ai und Stability AI haben einen.</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>None of your image engines can remove a background. Stable Diffusion WebUI (with its background removal extension), fal.ai and Stability AI can.</source>
-        <translation>Keine Ihrer Bild-Engines kann einen Hintergrund entfernen. Stable Diffusion WebUI (mit seiner Erweiterung zum Entfernen von Hintergründen), fal.ai und Stability AI können das.</translation>
-    </message>
-    <message>
-        <location line="+18"/>
+        <location line="+29"/>
         <source>“%1” cannot change a picture from a description. In Settings → AI, choose an engine for changes with an edit model: FLUX.2 klein, Kontext or Qwen-Image-Edit, or OpenAI, Gemini or fal.ai.</source>
         <translation>„%1“ kann ein Bild nicht nach einer Beschreibung ändern. Wählen Sie unter Einstellungen → KI eine Engine für Änderungen mit einem Bearbeitungsmodell: FLUX.2 klein, Kontext oder Qwen-Image-Edit, oder OpenAI, Gemini oder fal.ai.</translation>
     </message>
@@ -1866,12 +1856,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     <message>
         <location line="+1"/>
         <source>As the AI made them</source>
-        <translation>Wie die KI sie erzeugt hat</translation>
+        <translation>Wie von der KI</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>With an area connected: “Match” removes the colour drift a model adds around an edit. Choose “As the AI made them” for changes of colour on purpose, such as colorizing.</source>
-        <translation>Mit verbundenem Bereich: „Anpassen“ entfernt die Farbabweichung, die ein Modell rund um eine Bearbeitung hinzufügt. Wählen Sie „Wie die KI sie erzeugt hat“ für gewollte Farbänderungen, etwa beim Einfärben.</translation>
+        <translation>Mit verbundenem Bereich: „Anpassen“ entfernt die Farbabweichung, die ein Modell rund um eine Bearbeitung hinzufügt. Wählen Sie „Wie von der KI“ für gewollte Farbänderungen, etwa beim Einfärben.</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -2105,17 +2095,43 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Der Generierungsdienst ist nicht mehr verfügbar</translation>
     </message>
     <message>
-        <location line="-181"/>
+        <location line="-204"/>
         <source>The image engine was removed while it was working.</source>
         <translation>Die Bild-Engine wurde entfernt, während sie arbeitete.</translation>
     </message>
     <message>
-        <location line="+228"/>
+        <location line="+144"/>
+        <location line="+107"/>
         <source>There is no image engine. Set one up with Help → Set up AI…</source>
         <translation>Es gibt keine Bild-Engine. Richten Sie eine unter Hilfe → KI einrichten… ein.</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="-104"/>
+        <source>None of your image engines can upscale. Give your local server an upscaler folder (Settings → Local servers), or add fal.ai or Stability AI (Settings → Providers).</source>
+        <translation>Keine Ihrer Bild-Engines kann hochskalieren. Geben Sie Ihrem lokalen Server einen Ordner für Hochskalierer (Einstellungen → Lokale Server), oder fügen Sie fal.ai oder Stability AI hinzu (Einstellungen → Anbieter).</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>None of your image engines can remove a background. fal.ai and Stability AI can (Settings → Providers).</source>
+        <translation>Keine Ihrer Bild-Engines kann einen Hintergrund entfernen. fal.ai und Stability AI können es (Einstellungen → Anbieter).</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>None of your image engines can find poses. ComfyUI and Stable Diffusion WebUI can (Settings → Providers).</source>
+        <translation>Keine Ihrer Bild-Engines kann Posen erkennen. ComfyUI und Stable Diffusion WebUI können es (Einstellungen → Anbieter).</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>None of your image engines can describe a picture. Stable Diffusion WebUI can (Settings → Providers).</source>
+        <translation>Keine Ihrer Bild-Engines kann ein Bild beschreiben. Stable Diffusion WebUI kann es (Einstellungen → Anbieter).</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>None of your image engines can split a picture into parts. Google Gemini and a Lumen part server can (Settings → Providers).</source>
+        <translation>Keine Ihrer Bild-Engines kann ein Bild in Teile zerlegen. Google Gemini und ein Lumen-Teile-Server können es (Einstellungen → Anbieter).</translation>
+    </message>
+    <message>
+        <location line="+111"/>
         <source>Preparing...</source>
         <translation>Wird vorbereitet...</translation>
     </message>
@@ -2150,9 +2166,9 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Es ist kein Projekt geöffnet.</translation>
     </message>
     <message>
-        <location line="+15"/>
-        <source>No configured provider supports %1.</source>
-        <translation>Kein konfigurierter Anbieter unterstützt %1.</translation>
+        <location line="+16"/>
+        <source>The image engine for this was removed.</source>
+        <translation>Die Bild-Engine dafür wurde entfernt.</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -3102,7 +3118,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::doc::Document</name>
     <message>
-        <location filename="../src/doc/Document.cpp" line="+98"/>
+        <location filename="../src/doc/Document.cpp" line="+99"/>
         <source>Add layer</source>
         <translation>Ebene hinzufügen</translation>
     </message>
@@ -3165,6 +3181,31 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <location line="+18"/>
         <source>Scale image</source>
         <translation>Bild skalieren</translation>
+    </message>
+    <message>
+        <location line="+37"/>
+        <source>Rotate 90° clockwise</source>
+        <translation>Um 90° im Uhrzeigersinn drehen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Rotate 90° counter-clockwise</source>
+        <translation>Um 90° gegen den Uhrzeigersinn drehen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Rotate 180°</source>
+        <translation>Um 180° drehen</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Flip horizontally</source>
+        <translation>Horizontal spiegeln</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Flip vertically</source>
+        <translation>Vertikal spiegeln</translation>
     </message>
 </context>
 <context>
@@ -4693,7 +4734,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::runtime::Hardware</name>
     <message>
-        <location filename="../src/runtime/Hardware.cpp" line="+68"/>
+        <location filename="../src/runtime/Hardware.cpp" line="+71"/>
         <source>No GPU found</source>
         <translation>Keine GPU gefunden</translation>
     </message>
@@ -5015,7 +5056,127 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::runtime::ModelPresets</name>
     <message>
-        <location filename="../src/runtime/ModelPresets.cpp" line="+78"/>
+        <location filename="../src/runtime/ModelPresets.cpp" line="+31"/>
+        <source>Anima</source>
+        <translation>Anima</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>FLUX.1 (dev, schnell, Kontext; separate files)</source>
+        <translation>FLUX.1 (dev, schnell, Kontext; getrennte Dateien)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>FLUX.1 (single file)</source>
+        <translation>FLUX.1 (eine Datei)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>FLUX.2 [klein] 4B</source>
+        <translation>FLUX.2 [klein] 4B</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>FLUX.2 [klein] 9B</source>
+        <translation>FLUX.2 [klein] 9B</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Qwen-Image / Qwen-Image-Edit</source>
+        <translation>Qwen-Image / Qwen-Image-Edit</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>SDXL (also Illustrious, NoobAI, Pony)</source>
+        <translation>SDXL (auch Illustrious, NoobAI, Pony)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Stable Diffusion 1.5</source>
+        <translation>Stable Diffusion 1.5</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Changes a picture as you describe it.</source>
+        <translation>Ändert ein Bild so, wie Sie es beschreiben.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Makes new pictures. Words under “Leave out” are not used.</source>
+        <translation>Erstellt neue Bilder. Wörter unter „Weglassen“ werden nicht verwendet.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Fast (4 steps). Words under “Leave out” are not used.</source>
+        <translation>Schnell (4 Schritte). Wörter unter „Weglassen“ werden nicht verwendet.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>One file with the text encoders and the VAE inside. Words under “Leave out” are not used.</source>
+        <translation>Eine Datei mit den Text-Encodern und dem VAE darin. Wörter unter „Weglassen“ werden nicht verwendet.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The slower base model (20 steps); it uses the words under “Leave out”.</source>
+        <translation>Das langsamere Basismodell (20 Schritte); es verwendet die Wörter unter „Weglassen“.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Makes and changes pictures, also from reference images; fast (4 steps). Words under “Leave out” are not used.</source>
+        <translation>Erstellt und ändert Bilder, auch nach Referenzbildern; schnell (4 Schritte). Wörter unter „Weglassen“ werden nicht verwendet.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>A large model (20B): realistic with 16 GB of graphics memory or more.</source>
+        <translation>Ein großes Modell (20B): sinnvoll ab 16 GB Grafikspeicher.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>CLIP-L text encoder</source>
+        <translation>CLIP-L-Text-Encoder</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>FLUX.1 VAE</source>
+        <translation>FLUX.1-VAE</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>FLUX.2 VAE</source>
+        <translation>FLUX.2-VAE</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Qwen-Image VAE</source>
+        <translation>Qwen-Image-VAE</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Qwen2.5-VL 7B text encoder</source>
+        <translation>Qwen2.5-VL-7B-Text-Encoder</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Qwen3 0.6B text encoder</source>
+        <translation>Qwen3-0.6B-Text-Encoder</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Qwen3 4B text encoder</source>
+        <translation>Qwen3-4B-Text-Encoder</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Qwen3 8B text encoder</source>
+        <translation>Qwen3-8B-Text-Encoder</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>T5-XXL text encoder</source>
+        <translation>T5-XXL-Text-Encoder</translation>
+    </message>
+    <message>
+        <location line="+61"/>
         <source>text encoder</source>
         <translation>Text-Encoder</translation>
     </message>
@@ -5035,7 +5196,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>%1-VAE</translation>
     </message>
     <message>
-        <location line="+371"/>
+        <location line="+379"/>
         <source>VAE (optional)</source>
         <translation>VAE (optional)</translation>
     </message>
@@ -6279,7 +6440,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::AiPanel</name>
     <message>
-        <location filename="../src/ui/pages/AiPanel.cpp" line="+80"/>
+        <location filename="../src/ui/pages/AiPanel.cpp" line="+90"/>
         <source>Action</source>
         <translation>Aktion</translation>
     </message>
@@ -6300,24 +6461,24 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+319"/>
+        <location line="+326"/>
         <source>Upscale</source>
         <translation>Hochskalieren</translation>
     </message>
     <message>
-        <location line="-318"/>
+        <location line="-325"/>
         <source>Cut out the subject onto a transparent layer.</source>
         <translation>Das Motiv auf eine transparente Ebene freistellen.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+319"/>
-        <location line="+308"/>
+        <location line="+326"/>
+        <location line="+315"/>
         <source>Detect pose</source>
         <translation>Pose erkennen</translation>
     </message>
     <message>
-        <location line="-574"/>
+        <location line="-581"/>
         <source>Left</source>
         <translation>Links</translation>
     </message>
@@ -6373,21 +6534,21 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Für diese Aktion wird %1 verwendet.</translation>
     </message>
     <message>
-        <location line="-304"/>
-        <location line="+319"/>
-        <location line="+291"/>
+        <location line="-311"/>
+        <location line="+326"/>
+        <location line="+298"/>
         <location line="+4"/>
         <source>Remove background</source>
         <translation>Hintergrund entfernen</translation>
     </message>
     <message>
-        <location line="-293"/>
-        <location line="+242"/>
+        <location line="-300"/>
+        <location line="+249"/>
         <source>Expand canvas</source>
         <translation>Arbeitsfläche erweitern</translation>
     </message>
     <message>
-        <location line="-191"/>
+        <location line="-198"/>
         <source>AI result: %1</source>
         <translation>KI-Ergebnis: %1</translation>
     </message>
@@ -6402,7 +6563,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>%1 Varianten wurden als Ebenen hinzugefügt – schalten Sie ihre Sichtbarkeit um, um sie zu vergleichen.</translation>
     </message>
     <message>
-        <location line="-424"/>
+        <location line="-431"/>
         <location line="+3"/>
         <source>Engine for changes</source>
         <translation>Engine für Änderungen</translation>
@@ -6428,7 +6589,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Die Pose der Personen im Bild finden.</translation>
     </message>
     <message>
-        <location line="+45"/>
+        <location line="+52"/>
         <source>How much may change</source>
         <translation>Wie stark ändern</translation>
     </message>
@@ -6542,12 +6703,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Es verwendet die Worte in der Prompt-Leiste unter der Arbeitsfläche, falls vorhanden.</translation>
     </message>
     <message>
-        <location line="+14"/>
-        <source>No image engine you have set up can do this (Help → Set up AI…).</source>
-        <translation>Keine Bild-Engine, die Sie eingerichtet haben, kann das (Hilfe → KI einrichten…).</translation>
-    </message>
-    <message>
-        <location line="+2"/>
+        <location line="+16"/>
         <source>%1 only makes new images; it cannot make a variation of this one.</source>
         <translation>%1 erstellt nur neue Bilder; es kann keine Variation dieses Bildes erstellen.</translation>
     </message>
@@ -6558,7 +6714,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Richten Sie zuerst eine Bild-Engine ein: Hilfe → KI einrichten…</translation>
     </message>
     <message>
-        <location line="+20"/>
+        <location line="+27"/>
         <source>AI variation</source>
         <translation>KI-Variation</translation>
     </message>
@@ -6651,12 +6807,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>KI einrichten…</translation>
     </message>
     <message>
-        <location line="+4"/>
-        <source>Every setting of each engine is on the Providers, Local servers and Models tabs.</source>
-        <translation>Alle Einstellungen jeder Engine finden Sie auf den Registerkarten Anbieter, Lokale Server und Modelle.</translation>
-    </message>
-    <message>
-        <location line="+65"/>
+        <location line="+69"/>
         <location line="+111"/>
         <source>Change…</source>
         <translation>Ändern…</translation>
@@ -6667,9 +6818,14 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>das auf dem Server geladene</translation>
     </message>
     <message>
-        <location line="+8"/>
-        <source>Turned off (Providers tab)</source>
-        <translation>Ausgeschaltet (Registerkarte Anbieter)</translation>
+        <location line="-88"/>
+        <source>Every setting of each engine is on the Providers, Local servers and Models pages.</source>
+        <translation>Alle Einstellungen jeder Engine finden Sie auf den Seiten Anbieter, Lokale Server und Modelle.</translation>
+    </message>
+    <message>
+        <location line="+96"/>
+        <source>Turned off (Providers page)</source>
+        <translation>Ausgeschaltet (Seite Anbieter)</translation>
     </message>
     <message>
         <location line="+7"/>
@@ -6745,8 +6901,8 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+8"/>
-        <source>Used by %1 (plugins). The editor itself works without one.</source>
-        <translation>Wird von %1 (Plugins) verwendet. Der Editor selbst funktioniert ohne.</translation>
+        <source>Plugins that use it: %1. The editor itself works without one.</source>
+        <translation>Plugins, die es nutzen: %1. Der Editor selbst funktioniert ohne.</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -6945,7 +7101,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::BrushTool</name>
     <message>
-        <location filename="../src/ui/canvas/Tools.cpp" line="+153"/>
+        <location filename="../src/ui/canvas/Tools.cpp" line="+155"/>
         <source>Add a layer first.</source>
         <translation>Fügen Sie zuerst eine Ebene hinzu.</translation>
     </message>
@@ -7592,7 +7748,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::CreatePage</name>
     <message>
-        <location filename="../src/plugins/characters/CreatePage.cpp" line="-806"/>
+        <location filename="../src/plugins/characters/CreatePage.cpp" line="-810"/>
         <source>Director</source>
         <translation>Regie</translation>
     </message>
@@ -7603,12 +7759,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+292"/>
+        <location line="+296"/>
         <source>New session</source>
         <translation>Neue Sitzung</translation>
     </message>
     <message>
-        <location line="-268"/>
+        <location line="-272"/>
         <source>Describe what you need, e.g. &quot;3 images of my character for a Live2D avatar: neutral front A-pose, eyes closed and mouth open variants&quot;. Attach reference images above. Enter sends, Shift+Enter = new line.</source>
         <translation>Beschreiben Sie, was Sie benötigen, z. B. „3 Bilder meines Charakters für einen Live2D-Avatar: neutrale A-Pose von vorn, Varianten mit geschlossenen Augen und offenem Mund“. Hängen Sie oben Referenzbilder an. Eingabe sendet, Umschalt+Eingabe = neue Zeile.</translation>
     </message>
@@ -7618,7 +7774,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Wofür die Bilder gedacht sind – bestimmt Posen, Bildausschnitt und Hintergründe</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+7"/>
         <source>Auto</source>
         <translation>Auto</translation>
     </message>
@@ -7911,11 +8067,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+19"/>
-        <source>Add an image provider in Settings → Providers first.</source>
-        <translation>Fügen Sie zuerst unter Einstellungen → Anbieter einen Bildanbieter hinzu.</translation>
+        <location line="+353"/>
+        <source>There is no image engine. Set one up with Help → Set up AI…</source>
+        <translation>Es gibt keine Bild-Engine. Richten Sie eine unter Hilfe → KI einrichten… ein.</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="-337"/>
         <source>Preparing…</source>
         <translation>Wird vorbereitet…</translation>
     </message>
@@ -7984,12 +8141,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Es gibt noch keinen Einstellungsplan; planen Sie zuerst die Einstellungen.</translation>
     </message>
     <message>
-        <location line="+4"/>
-        <source>No image provider is configured.</source>
-        <translation>Es ist kein Bildanbieter konfiguriert.</translation>
-    </message>
-    <message>
-        <location line="+9"/>
+        <location line="+13"/>
         <source>None of the requested shots exist.</source>
         <translation>Keine der angeforderten Einstellungen existiert.</translation>
     </message>
@@ -8096,7 +8248,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::CropTool</name>
     <message>
-        <location filename="../src/ui/canvas/Tools.cpp" line="+473"/>
+        <location filename="../src/ui/canvas/Tools.cpp" line="+526"/>
         <source>Resize canvas</source>
         <translation>Arbeitsfläche anpassen</translation>
     </message>
@@ -8131,7 +8283,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Über das Bild hinausziehen, um die Arbeitsfläche zu erweitern (für Outpainting).</translation>
     </message>
     <message>
-        <location filename="../src/ui/canvas/Tools.h" line="+137"/>
+        <location filename="../src/ui/canvas/Tools.h" line="+139"/>
         <source>Crop / canvas size</source>
         <translation>Freistellen / Arbeitsflächengröße</translation>
     </message>
@@ -8420,17 +8572,17 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Bild schließen</translation>
     </message>
     <message>
-        <location line="+3"/>
-        <source>If you don&apos;t save, the file stays as it was. Your project keeps the changes.</source>
-        <translation>Wenn Sie nicht speichern, bleibt die Datei, wie sie war. Ihr Projekt behält die Änderungen.</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>If you don&apos;t save, the files stay as they were. Your project keeps the changes.</source>
-        <translation>Wenn Sie nicht speichern, bleiben die Dateien, wie sie waren. Ihr Projekt behält die Änderungen.</translation>
-    </message>
-    <message>
         <location line="+4"/>
+        <source>If you don&apos;t save, the file stays as it was. Lumen keeps the changed picture in this project: the start screen lists it under Recent in this project.</source>
+        <translation>Wenn Sie nicht speichern, bleibt die Datei, wie sie war. Lumen behält das geänderte Bild in diesem Projekt: Der Startbildschirm zeigt es unter „Zuletzt in diesem Projekt“.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>If you don&apos;t save, the files stay as they were. Lumen keeps the changed pictures in this project: the start screen lists them under Recent in this project.</source>
+        <translation>Wenn Sie nicht speichern, bleiben die Dateien, wie sie waren. Lumen behält die geänderten Bilder in diesem Projekt: Der Startbildschirm zeigt sie unter „Zuletzt in diesem Projekt“.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
         <source>Don&apos;t save</source>
         <translation>Nicht speichern</translation>
     </message>
@@ -8508,7 +8660,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::EditorPage</name>
     <message>
-        <location filename="../src/ui/pages/EditorPage.cpp" line="+107"/>
+        <location filename="../src/ui/pages/EditorPage.cpp" line="+108"/>
         <source>Undo (Ctrl+Z)</source>
         <translation>Rückgängig (Strg+Z)</translation>
     </message>
@@ -8564,34 +8716,39 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="-9"/>
-        <location line="+161"/>
+        <location line="+173"/>
         <source>Layers</source>
         <translation>Ebenen</translation>
     </message>
     <message>
-        <location line="-285"/>
+        <location line="-297"/>
         <source>New blank canvas (Ctrl+N)</source>
         <translation>Neue leere Arbeitsfläche (Strg+N)</translation>
     </message>
     <message>
         <location line="+125"/>
-        <location line="+160"/>
+        <location line="+172"/>
         <source>History</source>
         <translation>Protokoll</translation>
     </message>
     <message>
-        <location line="-158"/>
-        <location line="+158"/>
+        <location line="-170"/>
+        <location line="+170"/>
         <source>Filters</source>
         <translation>Filter</translation>
     </message>
     <message>
-        <location line="-151"/>
+        <location line="-163"/>
         <source>Close the AI tab</source>
         <translation>Registerkarte „KI“ schließen</translation>
     </message>
     <message>
-        <location line="+91"/>
+        <location line="+36"/>
+        <source>Drag on the picture around what should change.</source>
+        <translation>Ziehen Sie auf dem Bild einen Rahmen um das, was sich ändern soll.</translation>
+    </message>
+    <message>
+        <location line="+57"/>
         <source>Editor</source>
         <translation>Editor</translation>
     </message>
@@ -8652,8 +8809,53 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
+        <source>Cut</source>
+        <translation>Ausschneiden</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Copy</source>
+        <translation>Kopieren</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Paste as layer</source>
         <translation>Als Ebene einfügen</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Image size…</source>
+        <translation>Bildgröße…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Canvas size…</source>
+        <translation>Arbeitsflächengröße…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Rotate 90° clockwise</source>
+        <translation>Um 90° im Uhrzeigersinn drehen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Rotate 90° counter-clockwise</source>
+        <translation>Um 90° gegen den Uhrzeigersinn drehen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Rotate 180°</source>
+        <translation>Um 180° drehen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Flip horizontally</source>
+        <translation>Horizontal spiegeln</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Flip vertically</source>
+        <translation>Vertikal spiegeln</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -8787,8 +8989,29 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location filename="../src/ui/pages/EditorPage.cpp" line="+13"/>
+        <location line="+27"/>
         <source>Copied %1 × %2 px</source>
         <translation>%1 × %2 px kopiert</translation>
+    </message>
+    <message>
+        <location line="-15"/>
+        <source>Select an area to cut first.</source>
+        <translation>Wählen Sie zuerst einen Bereich zum Ausschneiden aus.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>The active layer is locked.</source>
+        <translation>Die aktive Ebene ist gesperrt.</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Cut %1 × %2 px</source>
+        <translation>%1 × %2 px ausgeschnitten</translation>
+    </message>
+    <message>
+        <location line="+20"/>
+        <source>Canvas size</source>
+        <translation>Arbeitsflächengröße</translation>
     </message>
     <message>
         <location line="+9"/>
@@ -9346,7 +9569,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::HubAccountsDialog</name>
     <message>
-        <location filename="../src/ui/dialogs/ModelHubDialog.cpp" line="+697"/>
+        <location filename="../src/ui/dialogs/ModelHubDialog.cpp" line="+699"/>
         <source>Model hub accounts</source>
         <translation>Konten für Modell-Hubs</translation>
     </message>
@@ -9400,6 +9623,97 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <location line="+15"/>
         <source>Cannot save the token: %1</source>
         <translation>Das Token kann nicht gespeichert werden: %1</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::ui::ImageSizeDialog</name>
+    <message>
+        <location filename="../src/ui/dialogs/ImageSizeDialog.cpp" line="+30"/>
+        <source>Image size</source>
+        <translation>Bildgröße</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Canvas size</source>
+        <translation>Arbeitsflächengröße</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Scales the whole picture, every layer. Now %1 × %2 px.</source>
+        <translation>Skaliert das ganze Bild mit allen Ebenen. Jetzt %1 × %2 px.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Cuts or extends the canvas; the picture keeps its size. Now %1 × %2 px.</source>
+        <translation>Beschneidet oder erweitert die Arbeitsfläche; das Bild behält seine Größe. Jetzt %1 × %2 px.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <location line="+8"/>
+        <source>Width</source>
+        <translation>Breite</translation>
+    </message>
+    <message>
+        <location line="-7"/>
+        <location line="+8"/>
+        <source>Height</source>
+        <translation>Höhe</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Keep the proportions</source>
+        <translation>Seitenverhältnis beibehalten</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <location line="+5"/>
+        <source>Picture</source>
+        <translation>Bild</translation>
+    </message>
+    <message>
+        <location line="-4"/>
+        <source>In the middle</source>
+        <translation>In der Mitte</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Top left</source>
+        <translation>Oben links</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Top</source>
+        <translation>Oben</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Top right</source>
+        <translation>Oben rechts</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Left</source>
+        <translation>Links</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Right</source>
+        <translation>Rechts</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Bottom left</source>
+        <translation>Unten links</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Bottom</source>
+        <translation>Unten</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Bottom right</source>
+        <translation>Unten rechts</translation>
     </message>
 </context>
 <context>
@@ -9786,12 +10100,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     <message>
         <location line="-153"/>
         <location line="+155"/>
-        <location line="+181"/>
+        <location line="+179"/>
         <source>Delete</source>
         <translation>Löschen</translation>
     </message>
     <message>
-        <location line="-270"/>
+        <location line="-268"/>
         <source>Import images</source>
         <translation>Bilder importieren</translation>
     </message>
@@ -9831,12 +10145,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Bild kopieren</translation>
     </message>
     <message>
-        <location line="+28"/>
-        <source>No configured provider can run &quot;%1&quot;. Add SD WebUI (rembg extension), ComfyUI, Stability AI or fal.ai in Settings → Providers.</source>
-        <translation>Kein konfigurierter Anbieter kann „%1“ ausführen. Fügen Sie unter Einstellungen → Anbieter SD WebUI (rembg-Erweiterung), ComfyUI, Stability AI oder fal.ai hinzu.</translation>
-    </message>
-    <message>
-        <location line="-232"/>
+        <location line="-204"/>
         <source>&lt;h3&gt;No images yet&lt;/h3&gt;&lt;p&gt;Generated images, edits, references and imports of this project appear here.&lt;br&gt;Drag images in, use Import, or make one with File → New from prompt.&lt;/p&gt;</source>
         <translation>&lt;h3&gt;Noch keine Bilder&lt;/h3&gt;&lt;p&gt;Generierte Bilder, Bearbeitungen, Referenzen und Importe dieses Projekts erscheinen hier.&lt;br&gt;Ziehen Sie Bilder hierher, verwenden Sie Importieren oder erstellen Sie eines mit Datei → Neu aus Prompt.&lt;/p&gt;</translation>
     </message>
@@ -9871,7 +10180,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Zu den Referenzen in der KI-Registerkarte des Editors hinzugefügt.</translation>
     </message>
     <message numerus="yes">
-        <location line="+104"/>
+        <location line="+102"/>
         <source>Queued %n job(s). The results appear in the project images.</source>
         <translation>
             <numerusform>%n Auftrag in die Warteschlange gestellt. Die Ergebnisse erscheinen in den Projektbildern.</numerusform>
@@ -11437,7 +11746,7 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         <translation>Einen Charakter für Live2D in Teile zerlegen</translation>
     </message>
     <message>
-        <location filename="../src/ui/MainWindow.cpp" line="+304"/>
+        <location filename="../src/ui/MainWindow.cpp" line="+307"/>
         <source>General</source>
         <translation>Allgemein</translation>
     </message>
@@ -11478,33 +11787,28 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
     </message>
     <message>
         <location line="+9"/>
-        <location line="+713"/>
+        <location line="+789"/>
         <source>(none)</source>
         <translation>(keine)</translation>
     </message>
     <message>
-        <location line="-709"/>
-        <location line="+665"/>
+        <location line="-785"/>
+        <location line="+741"/>
         <source>Quit</source>
         <translation>Beenden</translation>
     </message>
     <message>
-        <location line="-663"/>
+        <location line="-739"/>
         <source>&amp;Edit</source>
         <translation>&amp;Bearbeiten</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+18"/>
         <source>Copy merged</source>
         <translation>Auf eine Ebene reduziert kopieren</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Paste as layer</source>
-        <translation>Als Ebene einfügen</translation>
-    </message>
-    <message>
-        <location line="+19"/>
+        <location line="+31"/>
         <source>&amp;View</source>
         <translation>&amp;Ansicht</translation>
     </message>
@@ -11514,27 +11818,17 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         <translation>Auftragswarteschlange</translation>
     </message>
     <message>
-        <location line="+21"/>
-        <source>Toggle light/dark theme</source>
-        <translation>Helles/dunkles Design umschalten</translation>
-    </message>
-    <message>
-        <location line="+3"/>
+        <location line="+23"/>
         <source>Theme</source>
         <translation>Design</translation>
     </message>
     <message>
-        <location line="+0"/>
-        <source>The %1 theme will be applied the next time Lumen Studio starts.</source>
-        <translation>Das Design %1 wird beim nächsten Start von Lumen Studio angewendet.</translation>
-    </message>
-    <message>
-        <location line="+82"/>
+        <location line="+115"/>
         <source>&amp;Help</source>
         <translation>&amp;Hilfe</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+22"/>
         <source>Open log folder</source>
         <translation>Protokollordner öffnen</translation>
     </message>
@@ -11555,13 +11849,13 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         <translation>&lt;h3&gt;Lumen Studio %1&lt;/h3&gt;&lt;p&gt;KI-gestützte Bildgenerierung und -bearbeitung.&lt;/p&gt;&lt;p&gt;Erstellt mit Qt %2.&lt;/p&gt;</translation>
     </message>
     <message>
-        <location line="-279"/>
-        <location line="+404"/>
+        <location line="-335"/>
+        <location line="+480"/>
         <source>Jobs</source>
         <translation>Aufträge</translation>
     </message>
     <message>
-        <location line="-619"/>
+        <location line="-696"/>
         <source>Project images — Lumen Studio</source>
         <translation>Projektbilder — Lumen Studio</translation>
     </message>
@@ -11572,12 +11866,21 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
     </message>
     <message>
         <location line="+16"/>
-        <location line="+1"/>
         <source>Safe for work</source>
         <translation>Jugendfrei</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+7"/>
+        <source>Safe for work: on</source>
+        <translation>Jugendfrei: an</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Safe for work: off</source>
+        <translation>Jugendfrei: aus</translation>
+    </message>
+    <message>
+        <location line="+20"/>
         <source>Show running and finished jobs (Ctrl+Shift+Q)</source>
         <translation>Laufende und abgeschlossene Aufträge anzeigen (Strg+Umschalt+Q)</translation>
     </message>
@@ -11692,7 +11995,7 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         <translation>Projekt öffnen…</translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location line="+40"/>
         <source>Import image as layer…</source>
         <translation>Bild als Ebene importieren…</translation>
     </message>
@@ -11707,7 +12010,12 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         <translation>Au&amp;swahl</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+8"/>
+        <source>&amp;Image</source>
+        <translation>B&amp;ild</translation>
+    </message>
+    <message>
+        <location line="+17"/>
         <source>Filters</source>
         <translation>Filter</translation>
     </message>
@@ -11717,22 +12025,47 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         <translation>Das Filter-Bedienfeld anzeigen: Schwarzweiß, altes Foto, mit KI einfärben und Ihre eigenen Filter</translation>
     </message>
     <message>
-        <location line="+32"/>
+        <location line="+30"/>
+        <source>Automatic</source>
+        <translation>Automatisch</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Dark</source>
+        <translation>Dunkel</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Light</source>
+        <translation>Hell</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>High contrast</source>
+        <translation>Hoher Kontrast</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>The theme changes the next time Lumen Studio starts.</source>
+        <translation>Das Design ändert sich beim nächsten Start von Lumen Studio.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
         <source>&amp;AI</source>
         <translation>&amp;KI</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+13"/>
         <source>Upscale</source>
         <translation>Hochskalieren</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+4"/>
         <source>A larger copy of the image, %1 times as wide, as a new document</source>
         <translation>Eine größere Kopie des Bildes, %1-mal so breit, als neues Dokument</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+4"/>
         <source>Remove background</source>
         <translation>Hintergrund entfernen</translation>
     </message>
@@ -11742,7 +12075,7 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         <translation>Das Motiv auf eine transparente Ebene freistellen</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+3"/>
         <source>Expand canvas…</source>
         <translation>Arbeitsfläche erweitern…</translation>
     </message>
@@ -11772,7 +12105,7 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         <translation>Die Pose der Personen im Bild finden; sie wird zur Steuerpose des Dokuments</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+5"/>
         <source>All AI options…</source>
         <translation>Alle KI-Optionen…</translation>
     </message>
@@ -11822,7 +12155,7 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         <translation>Charaktererstellung, Posen und Live2D-Teile sind Plugins: Schalten Sie sie unter Einstellungen → Plugins ein</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+8"/>
         <source>Set up AI…</source>
         <translation>KI einrichten…</translation>
     </message>
@@ -11832,12 +12165,32 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         <translation>Eine Bild-Engine einrichten: auf diesem Computer, ein Online-Dienst oder ein bereits laufender Server</translation>
     </message>
     <message>
+        <location line="+2"/>
+        <source>User guide</source>
+        <translation>Benutzerhandbuch</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>How to select, describe a change, make new images, use filters and set up AI</source>
+        <translation>Wie Sie auswählen, eine Änderung beschreiben, neue Bilder erstellen, Filter verwenden und KI einrichten</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Keyboard shortcuts</source>
+        <translation>Tastenkürzel</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Every command&apos;s keys, which you can change (Settings → Shortcuts)</source>
+        <translation>Die Tasten aller Befehle, die Sie ändern können (Einstellungen → Tastenkürzel)</translation>
+    </message>
+    <message>
         <location line="+3"/>
         <source>Open models folder</source>
         <translation>Modellordner öffnen</translation>
     </message>
     <message>
-        <location line="+142"/>
+        <location line="+162"/>
         <source>Clear finished</source>
         <translation>Abgeschlossene entfernen</translation>
     </message>
@@ -12040,7 +12393,7 @@ Die Modelle der früheren Version liegen in %2 (%n Dateien, %3). In den neuen Or
 <context>
     <name>lumen::ui::MaskBrushTool</name>
     <message>
-        <location filename="../src/ui/canvas/Tools.cpp" line="-279"/>
+        <location filename="../src/ui/canvas/Tools.cpp" line="-332"/>
         <source>Erase from selection</source>
         <translation>Aus der Auswahl radieren</translation>
     </message>
@@ -12065,7 +12418,7 @@ Die Modelle der früheren Version liegen in %2 (%n Dateien, %3). In den neuen Or
         <translation>Auswahl einfärben</translation>
     </message>
     <message>
-        <location filename="../src/ui/canvas/Tools.h" line="-140"/>
+        <location filename="../src/ui/canvas/Tools.h" line="-142"/>
         <source>Selection brush</source>
         <translation>Auswahlpinsel</translation>
     </message>
@@ -12078,12 +12431,12 @@ Die Modelle der früheren Version liegen in %2 (%n Dateien, %3). In den neuen Or
 <context>
     <name>lumen::ui::ModelHubDialog</name>
     <message>
-        <location filename="../src/ui/dialogs/ModelHubDialog.cpp" line="-621"/>
+        <location filename="../src/ui/dialogs/ModelHubDialog.cpp" line="-623"/>
         <source>Download models</source>
         <translation>Modelle herunterladen</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+12"/>
         <source>Search models…</source>
         <translation>Modelle suchen…</translation>
     </message>
@@ -12183,12 +12536,12 @@ Die Modelle der früheren Version liegen in %2 (%n Dateien, %3). In den neuen Or
         <translation>Auch den Vision-Projektor herunterladen (%1), damit das Modell Bilder sehen kann</translation>
     </message>
     <message>
-        <location line="+47"/>
+        <location line="+53"/>
         <source>Language and vision (GGUF)</source>
         <translation>Sprache und Bildverständnis (GGUF)</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-6"/>
         <source>Image models</source>
         <translation>Bildmodelle</translation>
     </message>
@@ -12208,7 +12561,7 @@ Die Modelle der früheren Version liegen in %2 (%n Dateien, %3). In den neuen Or
         <translation>Hochskalierer</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+3"/>
         <source>Everything</source>
         <translation>Alles</translation>
     </message>
@@ -12519,7 +12872,7 @@ Trotzdem herunterladen?</translation>
         <translation>Modelle auf Hugging Face und Civitai finden und herunterladen</translation>
     </message>
     <message>
-        <location line="+57"/>
+        <location line="+66"/>
         <source>%1
 Downloads and trained LoRAs go here, in sub-folders named like ComfyUI&apos;s (checkpoints, loras, vae…), so ComfyUI can use the same folder.</source>
         <translation>%1
@@ -12810,12 +13163,12 @@ Downloads und trainierte LoRAs kommen hierher, in Unterordner mit Namen wie bei 
 <context>
     <name>lumen::ui::MoveTool</name>
     <message>
-        <location filename="../src/ui/canvas/Tools.cpp" line="+251"/>
+        <location filename="../src/ui/canvas/Tools.cpp" line="+304"/>
         <source>The active layer is locked.</source>
         <translation>Die aktive Ebene ist gesperrt.</translation>
     </message>
     <message>
-        <location filename="../src/ui/canvas/Tools.h" line="+79"/>
+        <location filename="../src/ui/canvas/Tools.h" line="+81"/>
         <location filename="../src/ui/canvas/Tools.cpp" line="+41"/>
         <source>Move layer</source>
         <translation>Ebene verschieben</translation>
@@ -14351,12 +14704,7 @@ Klicken Sie, um den Knoten auszuwählen.</translation>
         <translation>Transparent (LayerDiffuse, ComfyUI)</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Paints the parts of each part hidden behind others with an image provider.</source>
-        <translation>Malt die hinter anderen Teilen verdeckten Bereiche jedes Teils mit einem Bildanbieter.</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>Uses the complete layers returned by a see-through segmentation.</source>
         <translation>Verwendet die vollständigen Ebenen, die eine see-through-Segmentierung liefert.</translation>
     </message>
@@ -14419,7 +14767,12 @@ or drag one from Browse project images</source>
 oder eines aus den Projektbildern ziehen</translation>
     </message>
     <message>
-        <location line="-623"/>
+        <location line="-648"/>
+        <source>Paints the parts of each part hidden behind others with the image engine.</source>
+        <translation>Malt die hinter anderen Teilen verdeckten Bereiche jedes Teils mit der Bild-Engine.</translation>
+    </message>
+    <message>
+        <location line="+25"/>
         <source>Selected</source>
         <translation>Ausgewählte</translation>
     </message>
@@ -14661,12 +15014,7 @@ oder eines aus den Projektbildern ziehen</translation>
         <translation>Figur</translation>
     </message>
     <message>
-        <location line="+19"/>
-        <source>No configured provider can remove backgrounds (SD WebUI with rembg, Stability...).</source>
-        <translation>Kein konfigurierter Anbieter kann Hintergründe entfernen (SD WebUI mit rembg, Stability...).</translation>
-    </message>
-    <message>
-        <location line="+30"/>
+        <location line="+49"/>
         <source>%1 × %2 px</source>
         <translation>%1 × %2 px</translation>
     </message>
@@ -15453,12 +15801,12 @@ oder eines aus den Projektbildern ziehen</translation>
     <message>
         <location line="+3"/>
         <source>This engine cannot change the whole picture from words: make a variation, or select an area to change.</source>
-        <translation>Diese Engine kann nicht das ganze Bild nach Worten ändern: Erstellen Sie eine Variation oder wählen Sie einen Bereich aus.</translation>
+        <translation>Diese Engine ändert nicht das ganze Bild: Variation erstellen oder Bereich auswählen.</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>This engine cannot change the whole picture from words: select an area to change.</source>
-        <translation>Diese Engine kann nicht das ganze Bild nach Worten ändern: Wählen Sie einen Bereich aus.</translation>
+        <translation>Diese Engine ändert nicht das ganze Bild: Wählen Sie einen Bereich aus.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -15801,7 +16149,7 @@ oder eines aus den Projektbildern ziehen</translation>
 <context>
     <name>lumen::ui::SelectionTool</name>
     <message>
-        <location filename="../src/ui/canvas/Tools.cpp" line="-282"/>
+        <location filename="../src/ui/canvas/Tools.cpp" line="-335"/>
         <source>Rectangle selection</source>
         <translation>Rechteckauswahl</translation>
     </message>
@@ -15816,9 +16164,59 @@ oder eines aus den Projektbildern ziehen</translation>
         <translation>Lassoauswahl</translation>
     </message>
     <message>
-        <location filename="../src/ui/canvas/Tools.h" line="-53"/>
-        <source>Shift adds, Alt subtracts, Shift+Alt intersects. Click to deselect.</source>
-        <translation>Umschalt fügt hinzu, Alt zieht ab, Umschalt+Alt bildet die Schnittmenge. Klicken hebt die Auswahl auf.</translation>
+        <location line="+112"/>
+        <source>New</source>
+        <translation>Neu</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>A new selection replaces the one there is</source>
+        <translation>Eine neue Auswahl ersetzt die bisherige</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Add</source>
+        <translation>Hinzufügen</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Adds to the selection (Shift for one drag)</source>
+        <translation>Erweitert die Auswahl (Umschalt für einen Zug)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Subtract</source>
+        <translation>Abziehen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Takes away from the selection (Alt for one drag)</source>
+        <translation>Nimmt von der Auswahl weg (Alt für einen Zug)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Intersect</source>
+        <translation>Schnittmenge</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Keeps only where the selection and the new shape overlap (Shift+Alt for one drag)</source>
+        <translation>Behält nur, wo sich Auswahl und neue Form überlappen (Umschalt+Alt für einen Zug)</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>Feather</source>
+        <translation>Weiche Kante</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>How soft the edge of a new selection is; the AI blends its change in over it</source>
+        <translation>Wie weich der Rand einer neuen Auswahl ist; die KI blendet ihre Änderung darüber ein</translation>
+    </message>
+    <message>
+        <location filename="../src/ui/canvas/Tools.h" line="-55"/>
+        <source>For one drag: Shift adds, Alt subtracts, Shift+Alt intersects. Click to deselect.</source>
+        <translation>Für einen Zug: Umschalt fügt hinzu, Alt zieht ab, Umschalt+Alt bildet die Schnittmenge. Klicken hebt die Auswahl auf.</translation>
     </message>
 </context>
 <context>
@@ -16530,12 +16928,12 @@ oder eines aus den Projektbildern ziehen</translation>
     </message>
     <message>
         <location line="+52"/>
-        <location line="+944"/>
+        <location line="+951"/>
         <source>Back</source>
         <translation>Zurück</translation>
     </message>
     <message>
-        <location line="-928"/>
+        <location line="-935"/>
         <source>Lumen changes and creates images from what you describe. For that it needs an image engine: choose where it runs. You can change this later in Settings → AI.</source>
         <translation>Lumen ändert und erstellt Bilder nach Ihrer Beschreibung. Dafür braucht es eine Bild-Engine: Wählen Sie, wo sie läuft. Sie können das später unter Einstellungen → KI ändern.</translation>
     </message>
@@ -16558,12 +16956,12 @@ oder eines aus den Projektbildern ziehen</translation>
     <message>
         <location line="+1"/>
         <location line="+45"/>
-        <location line="+482"/>
+        <location line="+489"/>
         <source>Use an online service</source>
         <translation>Einen Online-Dienst verwenden</translation>
     </message>
     <message>
-        <location line="-526"/>
+        <location line="-533"/>
         <source>fal.ai, OpenAI or Google Gemini. You need an account there and paste its key; the service charges a few cents per image. Ready in two minutes, nothing to download.</source>
         <translation>fal.ai, OpenAI oder Google Gemini. Sie brauchen dort ein Konto und fügen dessen Schlüssel ein; der Dienst berechnet einige Cent pro Bild. In zwei Minuten bereit, nichts herunterzuladen.</translation>
     </message>
@@ -16574,12 +16972,12 @@ oder eines aus den Projektbildern ziehen</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+673"/>
+        <location line="+680"/>
         <source>Connect a server that is already running</source>
         <translation>Einen bereits laufenden Server verbinden</translation>
     </message>
     <message>
-        <location line="-672"/>
+        <location line="-679"/>
         <source>ComfyUI, Forge / Stable Diffusion WebUI or stable-diffusion.cpp&apos;s sd-server, on this computer or another one. Lumen uses the models it has; nothing is downloaded.</source>
         <translation>ComfyUI, Forge / Stable Diffusion WebUI oder sd-server von stable-diffusion.cpp, auf diesem oder einem anderen Computer. Lumen verwendet die Modelle, die er hat; es wird nichts heruntergeladen.</translation>
     </message>
@@ -16595,13 +16993,13 @@ oder eines aus den Projektbildern ziehen</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+681"/>
+        <location line="+688"/>
         <location line="+31"/>
         <source>Looking for servers…</source>
         <translation>Server werden gesucht…</translation>
     </message>
     <message>
-        <location line="-708"/>
+        <location line="-715"/>
         <source>Not now? Help → Set up AI… opens this again.</source>
         <translation>Nicht jetzt? Hilfe → KI einrichten… öffnet dies erneut.</translation>
     </message>
@@ -16677,12 +17075,12 @@ oder eines aus den Projektbildern ziehen</translation>
     </message>
     <message>
         <location line="+10"/>
-        <location line="+322"/>
+        <location line="+329"/>
         <source>Set up</source>
         <translation>Einrichten</translation>
     </message>
     <message>
-        <location line="-309"/>
+        <location line="-316"/>
         <source>Setting up…</source>
         <translation>Wird eingerichtet…</translation>
     </message>
@@ -16781,19 +17179,20 @@ oder eines aus den Projektbildern ziehen</translation>
         <translation>%1, bereits auf diesem Computer. Es teilt sich die Grafikkarte mit dem Bildmodell, daher werden Bilder langsamer; der Editor funktioniert ohne.</translation>
     </message>
     <message>
-        <location line="+20"/>
+        <location line="+21"/>
+        <location line="+5"/>
         <location line="+2"/>
         <location line="+4"/>
         <source>%1 (the program)</source>
         <translation>%1 (das Programm)</translation>
     </message>
     <message>
-        <location line="-6"/>
+        <location line="-11"/>
         <source>Installed</source>
         <translation>Installiert</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+7"/>
         <source>%1 %2 (the program)</source>
         <translation>%1 %2 (das Programm)</translation>
     </message>
@@ -16803,7 +17202,8 @@ oder eines aus den Projektbildern ziehen</translation>
         <translation>Von GitHub herunterladen</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="-3"/>
+        <location line="+6"/>
         <source>Looking up…</source>
         <translation>Wird nachgeschlagen…</translation>
     </message>
@@ -16836,6 +17236,11 @@ oder eines aus den Projektbildern ziehen</translation>
     </message>
     <message>
         <location line="+22"/>
+        <source>To download: &lt;b&gt;%1&lt;/b&gt; and the program, %2.</source>
+        <translation>Herunterzuladen: &lt;b&gt;%1&lt;/b&gt; und das Programm, %2.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>To download: &lt;b&gt;%1&lt;/b&gt;, %2.</source>
         <translation>Herunterzuladen: &lt;b&gt;%1&lt;/b&gt;, %2.</translation>
     </message>
@@ -17459,14 +17864,14 @@ Geändert %2</translation>
     </message>
     <message>
         <location line="+10"/>
-        <location line="+138"/>
+        <location line="+139"/>
         <source>Image</source>
         <translation>Bild</translation>
     </message>
     <message>
         <location line="-129"/>
-        <source>Images (*.png *.jpg *.jpeg *.webp *.bmp *.tif *.tiff *.psd);;Layered Photoshop (*.psd)</source>
-        <translation>Bilder (*.png *.jpg *.jpeg *.webp *.bmp *.tif *.tiff *.psd);;Photoshop mit Ebenen (*.psd)</translation>
+        <source>Images (*.png *.jpg *.jpeg *.webp *.bmp *.gif *.tif *.tiff *.psd);;Layered Photoshop (*.psd);;All files (*)</source>
+        <translation>Bilder (*.png *.jpg *.jpeg *.webp *.bmp *.gif *.tif *.tiff *.psd);;Photoshop mit Ebenen (*.psd);;Alle Dateien (*)</translation>
     </message>
     <message>
         <location line="+36"/>
@@ -17617,6 +18022,14 @@ Geändert %2</translation>
         <location filename="../src/ui/canvas/TransformTool.h" line="+35"/>
         <source>Free transform</source>
         <translation>Frei transformieren</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::ui::UserGuideDialog</name>
+    <message>
+        <location filename="../src/ui/dialogs/UserGuideDialog.cpp" line="+20"/>
+        <source>User guide</source>
+        <translation>Benutzerhandbuch</translation>
     </message>
 </context>
 <context>

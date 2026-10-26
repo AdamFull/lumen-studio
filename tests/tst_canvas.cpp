@@ -59,7 +59,9 @@
 #include "doc/CharacterLibrary.h"
 #include "doc/LoraDataset.h"
 #include "ui/dialogs/LocalSetupDialog.h"
+#include "ui/dialogs/ImageSizeDialog.h"
 #include "ui/dialogs/ModelHubDialog.h"
+#include "ui/dialogs/UserGuideDialog.h"
 #include "runtime/ModelLibrary.h"
 #include "ui/dialogs/ModelsPage.h"
 #include "ui/dialogs/SettingsDialog.h"
@@ -99,6 +101,8 @@
 #include <QMenu>
 #include <QMessageBox>
 #include <QSpinBox>
+#include <QTextBlock>
+#include <QTextBrowser>
 #include <QScopeGuard>
 #include <QSlider>
 #include <QTcpServer>
@@ -205,6 +209,8 @@ private slots:
     void promptBarEngine();
     void wholeImageKeepsDetail();
     void editorMenus();
+    void imageSizeDialogs();
+    void selectionOptions();
     void newFromPromptEngines();
     void recentAndDetails();
     void engineRouting();
@@ -3005,6 +3011,10 @@ void TestCanvas::hubCompanionFiles()
     ModelHubDialog hub(&studio);
     hub.resize(1100, 700);
     hub.show();
+    // It opens on image models (language models are only for plugins), also on Hugging Face.
+    auto *category = hub.findChild<QComboBox *>(QStringLiteral("hubCategory"));
+    QVERIFY(category);
+    QCOMPARE(category->currentData().toString(), QStringLiteral("checkpoint"));
     hub.setSource(runtime::HubSource::Civitai);
     hub.setSearchText(QStringLiteral("harem"));
     hub.search();
@@ -3887,7 +3897,7 @@ void TestCanvas::presetServerDialog()
                                      QStringLiteral("upscalers_dir")}));
     QCOMPARE(d.field(QStringLiteral("llm"))->accessibleName(), QStringLiteral("Text encoder (Qwen3 4B)"));
     QCOMPARE(d.field(QStringLiteral("vae"))->accessibleName(), QStringLiteral("VAE (FLUX.2)"));
-    QVERIFY2(d.status(QStringLiteral("diffusion_model")).startsWith(QStringLiteral("✓ FLUX.2 [klein] 4B: Generates and edits")),
+    QVERIFY2(d.status(QStringLiteral("diffusion_model")).startsWith(QStringLiteral("✓ FLUX.2 [klein] 4B: Makes and changes pictures")),
              qPrintable(d.status(QStringLiteral("diffusion_model"))));
     QCOMPARE(d.status(QStringLiteral("vae")), QStringLiteral("✓ Found"));
     QCOMPARE(d.status(QStringLiteral("llm")), QStringLiteral("✓ Found"));
@@ -5027,8 +5037,11 @@ void TestCanvas::aiMenuAndPanel()
         QVERIFY2(!action(name)->isEnabled(), qPrintable(name));
     }
     f.studio.openImageAsDocument(detailedPhoto(QSize(640, 480)), QStringLiteral("Photo"));
+    // Upscale and Remove background also need an engine that can do them, which this sd.cpp server
+    // (no upscaler) is not (editorMenus has the rest).
+    const QStringList utilities{QStringLiteral("ai-upscale-2"), QStringLiteral("ai-upscale-4"), QStringLiteral("ai-remove-background")};
     for (const QString &name : names)
-        QVERIFY2(action(name)->isEnabled(), qPrintable(name));
+        QVERIFY2(action(name)->isEnabled() != utilities.contains(name), qPrintable(name));
 
     QVERIFY(!editor->isAiPanelShown());
     action(QStringLiteral("ai-all-options"))->trigger();
@@ -5398,6 +5411,216 @@ void TestCanvas::editorMenus()
     for (QAction *a : menu(QStringLiteral("&File"))->actions())
         save = save || (a->text() == QLatin1String("Save to project") && a->toolTip().contains(QStringLiteral("File → Save")));
     QVERIFY(save);
+
+    // Edit: Cut, Copy and Paste with their usual keys (the editor's own actions), and Copy merged.
+    QCOMPARE(texts(edit).mid(2, 4), (QStringList{QStringLiteral("Cut"), QStringLiteral("Copy"), QStringLiteral("Copy merged"),
+                                                 QStringLiteral("Paste as layer")}));
+    QAction *cut = window.findChild<QAction *>(QStringLiteral("editor-cut"));
+    QAction *copy = window.findChild<QAction *>(QStringLiteral("editor-copy"));
+    QAction *paste = window.findChild<QAction *>(QStringLiteral("editor-paste-layer"));
+    QVERIFY(cut && copy && paste);
+    QCOMPARE(cut->shortcut(), QKeySequence(QStringLiteral("Ctrl+X")));
+    QCOMPARE(copy->shortcut(), QKeySequence(QStringLiteral("Ctrl+C")));
+    QCOMPARE(paste->shortcut(), QKeySequence(QStringLiteral("Ctrl+V")));
+    // Copy takes the active layer's selected pixels; Cut also clears them, as one step.
+    const QUuid layer = doc->addLayer(QStringLiteral("Red"), [] {
+        QImage red(64, 48, QImage::Format_ARGB32_Premultiplied);
+        red.fill(Qt::red);
+        return red;
+    }());
+    QImage area = img::createMask(doc->size());
+    QPainter(&area).fillRect(QRect(10, 10, 20, 8), Qt::white);
+    doc->applySelection(area, QStringLiteral("Select"));
+    copy->trigger();
+    QImage copied = QApplication::clipboard()->image();
+    QCOMPARE(copied.size(), QSize(20, 8));
+    QCOMPARE(copied.pixelColor(5, 5), QColor(Qt::red));
+    const int steps = doc->undoStack()->index();
+    cut->trigger();
+    QCOMPARE(doc->undoStack()->index(), steps + 1);
+    QCOMPARE(qAlpha(doc->findLayer(layer)->image.pixel(15, 12)), 0);
+    QCOMPARE(doc->findLayer(layer)->image.pixelColor(5, 5), QColor(Qt::red));
+    doc->undoStack()->undo();
+    QCOMPARE(doc->findLayer(layer)->image.pixelColor(15, 12), QColor(Qt::red));
+    // Cut needs a selection; Copy without one takes the whole layer.
+    doc->clearSelection();
+    cut->trigger();
+    QCOMPARE(doc->findLayer(layer)->image.pixelColor(15, 12), QColor(Qt::red));
+    copy->trigger();
+    QCOMPARE(QApplication::clipboard()->image().size(), doc->size());
+
+    // Image: the size of the picture and of its canvas, turning and mirroring it.
+    QMenu *imageMenu = menu(QStringLiteral("&Image"));
+    QVERIFY(imageMenu);
+    QCOMPARE(texts(imageMenu), (QStringList{QStringLiteral("Image size…"), QStringLiteral("Canvas size…"), QStringLiteral("Rotate 90° clockwise"),
+                                            QStringLiteral("Rotate 90° counter-clockwise"), QStringLiteral("Rotate 180°"),
+                                            QStringLiteral("Flip horizontally"), QStringLiteral("Flip vertically")}));
+    QCOMPARE(window.findChild<QAction *>(QStringLiteral("editor-image-size"))->shortcut(), QKeySequence(QStringLiteral("Ctrl+Alt+I")));
+    window.findChild<QAction *>(QStringLiteral("editor-rotate-cw"))->trigger();
+    QCOMPARE(doc->size(), QSize(48, 64));
+    doc->undoStack()->undo();
+    QCOMPARE(doc->size(), QSize(64, 48));
+
+    // View → Theme: the choices of Settings → General (Automatic and High contrast too), from the
+    // next start, with a translated sentence.
+    QMenu *themes = window.findChild<QMenu *>(QStringLiteral("themeMenu"));
+    QVERIFY(themes);
+    QCOMPARE(texts(themes), (QStringList{QStringLiteral("Automatic"), QStringLiteral("Dark"), QStringLiteral("Light"), QStringLiteral("High contrast")}));
+    const QString theme = Settings::instance().theme();
+    auto restoreTheme = qScopeGuard([theme] { Settings::instance().setValue(QStringLiteral("ui/theme"), theme); });
+    window.findChild<QAction *>(QStringLiteral("theme-high-contrast"))->trigger();
+    QCOMPARE(Settings::instance().theme(), QStringLiteral("high-contrast"));
+    emit themes->aboutToShow();
+    QVERIFY(window.findChild<QAction *>(QStringLiteral("theme-high-contrast"))->isChecked());
+    QVERIFY(!window.findChild<QAction *>(QStringLiteral("theme-dark"))->isChecked());
+
+    // Help: the user guide, built in, whose contents links go to their sections, and the keys.
+    QAction *guideAction = window.findChild<QAction *>(QStringLiteral("userGuide"));
+    QVERIFY(guideAction && window.findChild<QAction *>(QStringLiteral("keyboardShortcuts")));
+    QCOMPARE(guideAction->shortcut(), QKeySequence(QKeySequence::HelpContents));
+    guideAction->trigger();
+    auto *guide = window.findChild<UserGuideDialog *>();
+    QVERIFY(guide && guide->isVisible());
+    QCOMPARE(guide->document(), QStringLiteral("USER_GUIDE.md"));
+    QVERIFY(guide->browser()->toPlainText().contains(QStringLiteral("Selecting an area")));
+    emit guide->browser()->anchorClicked(QUrl(QStringLiteral("#5-describing-a-change")));
+    QCOMPARE(guide->browser()->textCursor().block().text(), QStringLiteral("5. Describing a change"));
+    emit guide->browser()->anchorClicked(QUrl(QStringLiteral("PLUGINS.md")));
+    QCOMPARE(guide->document(), QStringLiteral("PLUGINS.md"));
+    guideAction->trigger();
+    QCOMPARE(window.findChildren<UserGuideDialog *>().size(), 1); // the same window, back at the guide
+    QCOMPARE(guide->document(), QStringLiteral("USER_GUIDE.md"));
+    guide->close();
+
+    // AI: Remove background and Upscale need an engine that can do them. With one that cannot, they
+    // are off and say what would help (not "Set up AI", which would not); the AI tab says so too.
+    for (ai::Provider *p : studio.providers()->providers())
+        studio.providers()->removeProvider(p->instanceId());
+    auto removeEngines = qScopeGuard([&studio] {
+        for (ai::Provider *p : studio.providers()->providers())
+            studio.providers()->removeProvider(p->instanceId());
+    });
+    ai::Provider *local = studio.providers()->addProvider(QStringLiteral("sdcpp"), QStringLiteral("Local"),
+                                                          {{QStringLiteral("url"), QStringLiteral("http://127.0.0.1:9")}});
+    QVERIFY(local);
+    studio.providers()->setDefaultImageProvider(local->instanceId());
+    QAction *removeBackground = window.findChild<QAction *>(QStringLiteral("ai-remove-background"));
+    QAction *upscale2 = window.findChild<QAction *>(QStringLiteral("ai-upscale-2"));
+    QVERIFY(removeBackground && upscale2);
+    QVERIFY(!removeBackground->isEnabled());
+    QVERIFY2(removeBackground->toolTip().startsWith(QStringLiteral("None of your image engines can remove a background. fal.ai")),
+             qPrintable(removeBackground->toolTip()));
+    QVERIFY(!upscale2->isEnabled());
+    QVERIFY(upscale2->toolTip().contains(QStringLiteral("upscaler folder (Settings → Local servers)")));
+    window.editor()->showAiPanel(AiPanel::Mode::RemoveBackground);
+    auto *warning = window.editor()->aiPanel()->findChild<QLabel *>(QStringLiteral("aiCapsWarning"));
+    auto *runButton = window.editor()->aiPanel()->findChild<QPushButton *>(QStringLiteral("aiRun"));
+    QVERIFY(warning && runButton);
+    QTRY_COMPARE(warning->text(), removeBackground->toolTip());
+    QVERIFY(!runButton->isEnabled());
+    // An engine that can: on again, with their own tooltips, and the AI tab names it.
+    ai::Provider *stability = studio.providers()->addProvider(QStringLiteral("stability"), QStringLiteral("Stability"),
+                                                              {{QStringLiteral("url"), QStringLiteral("http://127.0.0.1:1/v2beta")}});
+    QVERIFY(stability);
+    QVERIFY(removeBackground->isEnabled());
+    QCOMPARE(removeBackground->toolTip(), QStringLiteral("Cut out the subject onto a transparent layer"));
+    QVERIFY(upscale2->isEnabled());
+    QTRY_VERIFY(runButton->isEnabled());
+    QVERIFY(warning->text().startsWith(QStringLiteral("Will use")));
+    // No document: off as before.
+    studio.closeDocument(doc);
+    QVERIFY(!removeBackground->isEnabled());
+}
+
+// Image → Image size… and Canvas size…: the proportions kept, and the picture where it is put.
+void TestCanvas::imageSizeDialogs()
+{
+    ImageSizeDialog image(ImageSizeDialog::Kind::Image, QSize(4000, 3000));
+    auto spins = image.findChildren<QSpinBox *>();
+    QCOMPARE(spins.size(), 2);
+    spins[0]->setValue(2000);
+    QCOMPARE(image.newSize(), QSize(2000, 1500));
+    spins[1]->setValue(300);
+    QCOMPARE(image.newSize(), QSize(400, 300));
+    image.findChild<QCheckBox *>()->setChecked(false);
+    spins[0]->setValue(1000);
+    QCOMPARE(image.newSize(), QSize(1000, 300));
+
+    ImageSizeDialog canvas(ImageSizeDialog::Kind::Canvas, QSize(100, 80));
+    canvas.setNewSize(QSize(140, 100));
+    QCOMPARE(canvas.canvasRect(), QRect(-20, -10, 140, 100)); // in the middle
+    canvas.setAnchor(-1, -1);
+    QCOMPARE(canvas.canvasRect(), QRect(0, 0, 140, 100));
+    canvas.setAnchor(1, 1);
+    QCOMPARE(canvas.canvasRect(), QRect(-40, -20, 140, 100));
+    canvas.setNewSize(QSize(60, 80)); // smaller: cut, from the right side here
+    canvas.setAnchor(-1, 0);
+    QCOMPARE(canvas.canvasRect(), QRect(0, 0, 60, 80));
+    doc::Document doc(QSize(100, 80));
+    doc.resizeCanvas(canvas.canvasRect(), QStringLiteral("Canvas size"));
+    QCOMPARE(doc.size(), QSize(60, 80));
+}
+
+// The selection tools' options: New, Add, Subtract and Intersect without holding a key, and a soft
+// edge.
+void TestCanvas::selectionOptions()
+{
+    Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
+    Studio studio;
+    MainWindow window(&studio);
+    window.resize(1280, 720);
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    doc::Document *doc = studio.newDocument(QSize(200, 100), QStringLiteral("Select"));
+    EditorPage *editor = window.editor();
+    CanvasView *canvas = editor->canvas();
+    QCOMPARE(canvas->tool()->id(), QStringLiteral("select-rect"));
+    auto *add = editor->findChild<QToolButton *>(QStringLiteral("selectionAdd"));
+    auto *fresh = editor->findChild<QToolButton *>(QStringLiteral("selectionNew"));
+    auto *intersect = editor->findChild<QToolButton *>(QStringLiteral("selectionIntersect"));
+    QVERIFY(add && fresh && intersect && add->isVisible());
+    QVERIFY(fresh->isChecked());
+    QTRY_VERIFY(canvas->isFitted());
+    auto drag = [&](const QRect &r) {
+        QWidget *surface = canvas->focusProxy();
+        const QPoint from = canvas->mapFromDoc(QPointF(r.topLeft())).toPoint();
+        const QPoint to = canvas->mapFromDoc(QPointF(r.bottomRight() + QPoint(1, 1))).toPoint();
+        QTest::mousePress(surface, Qt::LeftButton, Qt::NoModifier, from);
+        QTest::mouseMove(surface, (from + to) / 2);
+        QTest::mouseMove(surface, to);
+        QTest::mouseRelease(surface, Qt::LeftButton, Qt::NoModifier, to);
+    };
+    drag(QRect(10, 10, 40, 40));
+    QVERIFY(doc->hasSelection());
+    const QRect first = img::maskBounds(doc->selection(), 128);
+    QVERIFY2(qAbs(first.left() - 10) <= 2 && qAbs(first.width() - 40) <= 3, qPrintable(QStringLiteral("%1 %2").arg(first.left()).arg(first.width())));
+    // Add, without Shift: both areas.
+    add->click();
+    drag(QRect(120, 10, 40, 40));
+    QVERIFY(doc->selection().pixelColor(30, 30).red() > 200 && doc->selection().pixelColor(140, 30).red() > 200);
+    // Intersect: only the overlap stays.
+    intersect->click();
+    drag(QRect(30, 0, 100, 100));
+    QVERIFY(doc->selection().pixelColor(15, 30).red() < 50);
+    QVERIFY(doc->selection().pixelColor(40, 30).red() > 200);
+    QVERIFY(doc->selection().pixelColor(140, 30).red() < 50);
+    // New again, with a soft edge: the mask fades out around the shape.
+    fresh->click();
+    auto *feather = editor->findChild<SliderField *>(QStringLiteral("selectionFeather"));
+    QVERIFY(feather);
+    const int keepFeather = editor->editorState()->selectionFeather();
+    auto restore = qScopeGuard([&] { editor->editorState()->setSelectionFeather(keepFeather); });
+    feather->findChild<QDoubleSpinBox *>()->setValue(8); // as typed
+    QCOMPARE(editor->editorState()->selectionFeather(), 8);
+    drag(QRect(60, 30, 80, 40));
+    const int edge = qGray(doc->selection().pixel(60, 50));
+    QVERIFY2(edge > 20 && edge < 235, qPrintable(QString::number(edge)));
+    QVERIFY(qGray(doc->selection().pixel(100, 50)) > 240);
+    QVERIFY(qGray(doc->selection().pixel(10, 50)) < 10);
+    // The buttons follow the mode, the modes the buttons.
+    editor->editorState()->setSelectionMode(EditorState::SelectionMode::Subtract);
+    QVERIFY(editor->findChild<QToolButton *>(QStringLiteral("selectionSubtract"))->isChecked());
+    editor->editorState()->setSelectionMode(EditorState::SelectionMode::Replace);
 }
 
 // New from prompt: without an engine the way to one is in the dialog; an engine that makes one image

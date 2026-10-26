@@ -264,7 +264,7 @@ QCheckBox::indicator, QRadioButton::indicator { width: 15px; height: 15px; borde
 QCheckBox::indicator { border-radius: 4px; }
 QRadioButton::indicator { border-radius: 8px; }
 QCheckBox::indicator:checked { background: @accent; border-color: @accent; image: url(@check); }
-QRadioButton::indicator:checked { background: @accent; border: 4px solid @input; outline: 1px solid @accent; }
+QRadioButton::indicator:checked { border-color: @accent; background: qradialgradient(cx: 0.5, cy: 0.5, radius: 0.5, fx: 0.5, fy: 0.5, stop: 0 @accent, stop: 0.5 @accent, stop: 0.62 @input, stop: 1 @input); }
 
 QSlider::groove:horizontal { height: 4px; background: @border; border-radius: 2px; }
 QSlider::sub-page:horizontal { background: @accent; border-radius: 2px; }

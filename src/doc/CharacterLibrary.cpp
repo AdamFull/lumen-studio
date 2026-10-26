@@ -47,7 +47,8 @@ CharacterLibrary::CharacterLibrary(const QString &directory, QObject *parent)
     : QObject(parent)
     , m_dir(directory)
 {
-    QDir().mkpath(m_dir);
+    // Made with the first character (save), so a start with the Characters plugin off leaves no
+    // folder of it behind.
 }
 
 QString CharacterLibrary::defaultDirectory()

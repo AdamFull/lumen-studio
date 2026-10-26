@@ -96,11 +96,8 @@ Engine engineFor(Step step, const QString &chosen)
             return {p, {}};
         if (registry->imageProviders().isEmpty())
             return {nullptr, noEngine()};
-        return {nullptr, step == Step::Upscale
-                             ? Text::tr("None of your image engines has an upscaler. A stable-diffusion.cpp server needs an upscale "
-                                        "model in its settings; ComfyUI, Stable Diffusion WebUI, fal.ai and Stability AI have one.")
-                             : Text::tr("None of your image engines can remove a background. Stable Diffusion WebUI (with its "
-                                        "background removal extension), fal.ai and Stability AI can.")};
+        // The same words as the editor's AI menu and tab.
+        return {nullptr, service->utilityUnavailable(utility)};
     }
     case Step::Edit:
     case Step::Inpaint: {

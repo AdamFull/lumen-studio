@@ -26,7 +26,7 @@
       "id": "qwen-image-edit",
       "name": "Qwen-Image-Edit",
       "type": "qwen-image",
-      "note": "A 20B model: realistic with 16 GB of GPU memory or more.",
+      "note": "A large model (20B): realistic with 16 GB of graphics memory or more.",
       "docs": "https://github.com/leejet/stable-diffusion.cpp/blob/f89d9b13d730eabeede7314ce49dacd18d3c90c2/docs/qwen_image_edit.md",
       "match": {"family": "Qwen-Image", "kinds": ["diffusion_model"], "name_any": ["edit"]},
       "slots": [
@@ -40,7 +40,7 @@
       "id": "qwen-image",
       "name": "Qwen-Image",
       "type": "qwen-image",
-      "note": "A 20B model: realistic with 16 GB of GPU memory or more.",
+      "note": "A large model (20B): realistic with 16 GB of graphics memory or more.",
       "match": {"family": "Qwen-Image", "kinds": ["diffusion_model"]},
       "slots": [
         {"option": "vae", "kind": "vae", "family": "Qwen-Image / Wan", "label": "Qwen-Image VAE", "file": "qwen-image-vae"},

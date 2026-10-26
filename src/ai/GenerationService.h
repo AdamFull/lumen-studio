@@ -109,6 +109,9 @@ public:
 
     // Image provider able to run a utility (preferred provider first, then any other).
     ImageProvider *providerForUtility(Utility utility, const QString &preferredId = QString()) const;
+    // Why no image engine can run a utility, in plain words with what would help (not "Set up AI",
+    // which gives an engine that cannot either); empty when one can.
+    QString utilityUnavailable(Utility utility) const;
     // The provider submit() runs a spec on: its own, else the edit engine for changes to an
     // existing image (a region, image-to-image, inpainting, instruction edits) and the default one
     // for new images.

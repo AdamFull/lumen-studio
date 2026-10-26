@@ -198,6 +198,29 @@ ImageProvider *GenerationService::providerForUtility(Utility utility, const QStr
     return nullptr;
 }
 
+QString GenerationService::utilityUnavailable(Utility utility) const
+{
+    if (providerForUtility(utility))
+        return {};
+    if (m_registry->imageProviders().isEmpty())
+        return tr("There is no image engine. Set one up with Help → Set up AI…");
+    switch (utility) {
+    case Utility::Upscale:
+        return tr("None of your image engines can upscale. Give your local server an upscaler folder (Settings → Local "
+                  "servers), or add fal.ai or Stability AI (Settings → Providers).");
+    case Utility::RemoveBackground:
+        return tr("None of your image engines can remove a background. fal.ai and Stability AI can (Settings → Providers).");
+    case Utility::DetectPose:
+        return tr("None of your image engines can find poses. ComfyUI and Stable Diffusion WebUI can (Settings → Providers).");
+    case Utility::Caption:
+        return tr("None of your image engines can describe a picture. Stable Diffusion WebUI can (Settings → Providers).");
+    case Utility::SegmentParts:
+        return tr("None of your image engines can split a picture into parts. Google Gemini and a Lumen part server can "
+                  "(Settings → Providers).");
+    }
+    return {};
+}
+
 QString GenerationService::safeNegativeTerms()
 {
     return QStringLiteral("nsfw, nude, nudity, explicit, cleavage, underwear, lingerie");
@@ -513,7 +536,8 @@ Job *GenerationService::submitUtilityImpl(const QString &providerId, Utility uti
     const QString group = provider ? provider->instanceId() : QStringLiteral("none");
     Job *job = m_queue->submit(title, group, [self, guard, utility, image, params, title, saveAsset, sourceAssetId](Job *job) {
         if (!guard) {
-            job->fail(tr("No configured provider supports %1.").arg(utilityName(utility)));
+            const QString why = self ? self->utilityUnavailable(utility) : QString();
+            job->fail(why.isEmpty() ? tr("The image engine for this was removed.") : why);
             return;
         }
         auto run = [self, guard, utility, params, title, saveAsset, sourceAssetId, job](const QImage &input) {

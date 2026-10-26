@@ -42,7 +42,7 @@
       "id": "flux2-klein-base-4b",
       "name": "FLUX.2 [klein] base 4B",
       "type": "flux2-klein-4b",
-      "note": "The undistilled base model: 20 steps at CFG 4, with a negative prompt.",
+      "note": "The slower base model (20 steps); it uses the words under “Leave out”.",
       "match": {"family": "FLUX.2", "variant": "Klein 4B", "kinds": ["diffusion_model", "checkpoint"], "name_any": ["base"]},
       "slots": [
         {"option": "vae", "kind": "vae", "family": "FLUX.2", "label": "FLUX.2 VAE", "file": "flux2-vae"},
@@ -55,7 +55,7 @@
       "id": "flux2-klein-4b",
       "name": "FLUX.2 [klein] 4B",
       "type": "flux2-klein-4b",
-      "note": "Generates and edits with reference images in 4 steps at CFG 1 (no negative prompt).",
+      "note": "Makes and changes pictures, also from reference images; fast (4 steps). Words under “Leave out” are not used.",
       "match": {"family": "FLUX.2", "variant": "Klein 4B", "kinds": ["diffusion_model", "checkpoint"]},
       "download": "flux2-klein-4b-q8",
       "slots": [
@@ -69,7 +69,7 @@
       "id": "flux2-klein-base-9b",
       "name": "FLUX.2 [klein] base 9B",
       "type": "flux2-klein-9b",
-      "note": "The undistilled base model: 20 steps at CFG 4, with a negative prompt.",
+      "note": "The slower base model (20 steps); it uses the words under “Leave out”.",
       "match": {"family": "FLUX.2", "variant": "Klein 9B", "kinds": ["diffusion_model", "checkpoint"], "name_any": ["base"]},
       "slots": [
         {"option": "vae", "kind": "vae", "family": "FLUX.2", "label": "FLUX.2 VAE", "file": "flux2-vae"},
@@ -82,7 +82,7 @@
       "id": "flux2-klein-9b",
       "name": "FLUX.2 [klein] 9B",
       "type": "flux2-klein-9b",
-      "note": "Generates and edits with reference images in 4 steps at CFG 1 (no negative prompt).",
+      "note": "Makes and changes pictures, also from reference images; fast (4 steps). Words under “Leave out” are not used.",
       "match": {"family": "FLUX.2", "variant": "Klein 9B", "kinds": ["diffusion_model", "checkpoint"]},
       "slots": [
         {"option": "vae", "kind": "vae", "family": "FLUX.2", "label": "FLUX.2 VAE", "file": "flux2-vae"},

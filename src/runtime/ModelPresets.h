@@ -110,6 +110,9 @@ struct ModelPreset
 
 // The bundled presets, in matching order (the first that matches a file is its preset).
 const QList<ModelPreset> &modelPresets();
+// The preset files' texts that people read (type names, notes, the components' labels), in English:
+// listed for translation, and translated as the files are read.
+QStringList presetTexts();
 // Parses one family file; on a problem returns nothing and names it in `error`.
 QList<ModelPreset> parseModelPresets(const QByteArray &json, const QString &familyFile, QString *error = nullptr);
 const ModelPreset *presetFor(const ModelInfo &info, const QString &path);

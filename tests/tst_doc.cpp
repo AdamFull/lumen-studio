@@ -24,6 +24,7 @@ class TestDoc : public QObject
 private slots:
     void psdImportExport();
     void characterLibrary();
+    void rotateAndFlip();
     void loraDataset();
     void projectImportsPsd();
     void addRemoveLayerUndo();
@@ -353,11 +354,64 @@ void TestDoc::projectImportsPsd()
     QCOMPARE(image.result().pixelColor(5, 5), QColor(Qt::green));
 }
 
+// Image → Rotate and Flip: every layer and the selection, pixel for pixel, one undo step each.
+void TestDoc::rotateAndFlip()
+{
+    Document doc(QSize(4, 2));
+    QImage pixels(4, 2, QImage::Format_ARGB32_Premultiplied);
+    for (int y = 0; y < 2; ++y)
+        for (int x = 0; x < 4; ++x)
+            pixels.setPixel(x, y, qRgb(x * 60, y * 120, 7));
+    const QUuid layer = doc.addLayer(QStringLiteral("Pixels"), pixels);
+    QImage mask = img::createMask(doc.size());
+    mask.setPixel(3, 0, 255); // the top right pixel, a value of a grey image
+    doc.applySelection(mask, QStringLiteral("Select"));
+    const int steps = doc.undoStack()->count();
+    auto at = [&](int x, int y) { return doc.findLayer(layer)->image.pixel(x, y); };
+
+    doc.rotateImage(90);
+    QCOMPARE(doc.size(), QSize(2, 4));
+    QCOMPARE(doc.undoStack()->count(), steps + 1);
+    // Clockwise: the top left goes to the top right, the top right to the bottom right.
+    QCOMPARE(at(1, 0), pixels.pixel(0, 0));
+    QCOMPARE(at(1, 3), pixels.pixel(3, 0));
+    QCOMPARE(at(0, 0), pixels.pixel(0, 1));
+    QCOMPARE(img::maskBounds(doc.selection()), QRect(1, 3, 1, 1));
+    doc.undoStack()->undo();
+    QCOMPARE(doc.size(), QSize(4, 2));
+    QCOMPARE(doc.findLayer(layer)->image.convertToFormat(pixels.format()), pixels);
+
+    doc.rotateImage(270);
+    QCOMPARE(doc.size(), QSize(2, 4));
+    QCOMPARE(at(0, 3), pixels.pixel(0, 0)); // counter-clockwise: the top left to the bottom left
+    doc.undoStack()->undo();
+    doc.rotateImage(180);
+    QCOMPARE(doc.size(), QSize(4, 2));
+    QCOMPARE(at(3, 1), pixels.pixel(0, 0));
+    doc.undoStack()->undo();
+
+    doc.flipImage(Qt::Horizontal);
+    QCOMPARE(at(3, 0), pixels.pixel(0, 0));
+    QCOMPARE(at(0, 1), pixels.pixel(3, 1));
+    QCOMPARE(img::maskBounds(doc.selection()), QRect(0, 0, 1, 1));
+    doc.undoStack()->undo();
+    doc.flipImage(Qt::Vertical);
+    QCOMPARE(at(0, 1), pixels.pixel(0, 0));
+    QCOMPARE(img::maskBounds(doc.selection()), QRect(3, 1, 1, 1));
+    QCOMPARE(doc.undoStack()->undoText(), QStringLiteral("Flip vertically"));
+    // Anything else than a quarter turn does nothing.
+    const int before = doc.undoStack()->count();
+    doc.rotateImage(45);
+    QCOMPARE(doc.undoStack()->count(), before);
+}
+
 void TestDoc::characterLibrary()
 {
     QTemporaryDir dir;
     CharacterLibrary library(dir.filePath(QStringLiteral("characters")));
     QVERIFY(library.entries().isEmpty());
+    // No folder until the first character: a start with the Characters plugin off leaves none.
+    QVERIFY(!QFileInfo::exists(dir.filePath(QStringLiteral("characters"))));
     QSignalSpy changed(&library, &CharacterLibrary::changed);
     const QJsonObject sheet{{QStringLiteral("name"), QStringLiteral("Mira")}, {QStringLiteral("hair"), QStringLiteral("red")}};
     auto saved = library.save(QStringLiteral("Mira"), sheet, {solid(QSize(64, 80), Qt::red), QImage(), solid(QSize(32, 32), Qt::blue)},

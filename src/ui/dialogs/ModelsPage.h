@@ -2,6 +2,7 @@
 
 #include "runtime/Hardware.h"
 #include "runtime/ModelLibrary.h"
+#include "runtime/ServerProfile.h"
 
 #include <QWidget>
 
@@ -49,6 +50,7 @@ private:
     void warnMissingCompanions(const runtime::ModelEntry &e);
 
     Studio *m_studio;
+    std::optional<runtime::VramTier> vramTier() const;
     std::optional<runtime::HardwareInfo> m_hardware;
     QLineEdit *m_search;
     QComboBox *m_kind;

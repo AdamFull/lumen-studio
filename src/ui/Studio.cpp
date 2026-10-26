@@ -616,7 +616,8 @@ doc::Document *Studio::openImageAsDocument(const QImage &image, const QString &n
 
 QString Studio::openFileFilter()
 {
-    return tr("Images (*.png *.jpg *.jpeg *.webp *.bmp *.tif *.tiff *.psd);;Layered Photoshop (*.psd)");
+    // GIF opens (its first frame); saving one goes to Save as…, since Lumen does not write GIF.
+    return tr("Images (*.png *.jpg *.jpeg *.webp *.bmp *.gif *.tif *.tiff *.psd);;Layered Photoshop (*.psd);;All files (*)");
 }
 
 doc::Document *Studio::documentForFile(const QString &path) const

@@ -37,6 +37,16 @@
 
 namespace lumen::ui {
 
+std::optional<ai::Utility> AiPanel::utilityOf(Mode mode)
+{
+    switch (mode) {
+    case Mode::Upscale: return ai::Utility::Upscale;
+    case Mode::RemoveBackground: return ai::Utility::RemoveBackground;
+    case Mode::DetectPose: return ai::Utility::DetectPose;
+    default: return std::nullopt;
+    }
+}
+
 AiPanel::AiPanel(Studio *studio, AiOptions *options, QWidget *parent)
     : QWidget(parent)
     , m_studio(studio)
@@ -61,6 +71,7 @@ AiPanel::AiPanel(Studio *studio, AiOptions *options, QWidget *parent)
     m_provider->setAccessibleName(tr("Engine for changes"));
     v->addWidget(m_provider);
     m_capsWarning = new QLabel(content);
+    m_capsWarning->setObjectName(QStringLiteral("aiCapsWarning"));
     m_capsWarning->setProperty("role", QStringLiteral("muted"));
     m_capsWarning->setWordWrap(true);
     v->addWidget(m_capsWarning);
@@ -89,14 +100,21 @@ AiPanel::AiPanel(Studio *studio, AiOptions *options, QWidget *parent)
         {Mode::RemoveBackground, QStringLiteral("scissors"), tr("Remove background"), tr("Cut out the subject onto a transparent layer.")},
         {Mode::DetectPose, QStringLiteral("person"), tr("Detect pose"), tr("Find the pose of the people in the image.")},
     };
+    // At 1280 × 720 a button is about 95 px wide and its padding takes 30: a longer name takes two
+    // lines or a smaller font (the German "Hochskalieren" was cut at 72). One font size for all of
+    // them, the smallest any name needs, so the row does not look uneven.
+    double pointSize = 8.5;
+    for (const auto &[mode, icon, label, tip] : modes) {
+        double fitted = 8.5;
+        fitLabel(label, 64, &fitted);
+        pointSize = std::min(pointSize, fitted);
+    }
     int i = 0;
     for (const auto &[mode, icon, label, tip] : modes) {
         auto *b = new QToolButton(content);
         b->setIcon(Icons::get(icon));
-        double pointSize = 8.5;
-        // At 1280 × 720 a button is about 95 px wide and its padding takes 30: a longer name takes two
-        // lines or a smaller font (the German "Hochskalieren" was cut at 72).
-        const QString text = fitLabel(label, 64, &pointSize);
+        double fitted = pointSize;
+        const QString text = fitLabel(label, 64, &fitted);
         b->setText(text);
         b->setAccessibleName(label);
         b->setToolTip(tip);
@@ -172,6 +190,7 @@ AiPanel::AiPanel(Studio *studio, AiOptions *options, QWidget *parent)
     v->addWidget(m_upscaleBox);
 
     m_run = new QPushButton(Icons::get(QStringLiteral("sparkles")), tr("Make a variation"), content);
+    m_run->setObjectName(QStringLiteral("aiRun"));
     Theme::setRole(m_run, QStringLiteral("primary"));
     m_run->setMinimumHeight(36);
     v->addWidget(m_run);
@@ -384,14 +403,14 @@ void AiPanel::updateUi()
     ai::ImageProvider *provider = m_options->provider(m_studio->providers(), true);
     const ai::ImageCapabilities caps = provider ? provider->capabilities() : ai::ImageCapabilities();
     QString warning;
+    bool runnable = true;
     if (provider) {
-        if ((m_mode == Mode::Upscale && !provider->supportsUtility(ai::Utility::Upscale))
-            || (m_mode == Mode::RemoveBackground && !provider->supportsUtility(ai::Utility::RemoveBackground))
-            || (m_mode == Mode::DetectPose && !provider->supportsUtility(ai::Utility::DetectPose))) {
-            ai::ImageProvider *other = m_studio->generation()->providerForUtility(
-                m_mode == Mode::Upscale ? ai::Utility::Upscale : m_mode == Mode::RemoveBackground ? ai::Utility::RemoveBackground : ai::Utility::DetectPose);
-            warning = other ? tr("Will use %1 for this action.").arg(imageEngineName(other))
-                            : tr("No image engine you have set up can do this (Help → Set up AI…).");
+        if (const std::optional<ai::Utility> utility = utilityOf(m_mode); utility && !provider->supportsUtility(*utility)) {
+            // Another engine may do it; else what would help (Set up AI would only give another
+            // engine that cannot either).
+            ai::ImageProvider *other = m_studio->generation()->providerForUtility(*utility);
+            warning = other ? tr("Will use %1 for this action.").arg(imageEngineName(other)) : m_studio->generation()->utilityUnavailable(*utility);
+            runnable = other != nullptr;
         } else if (m_mode == Mode::Variation && !caps.imageToImage && !caps.inpaint && !caps.edit) {
             warning = tr("%1 only makes new images; it cannot make a variation of this one.").arg(imageEngineName(provider));
         }
@@ -403,7 +422,7 @@ void AiPanel::updateUi()
     m_negativeBox->setVisible(takesNegative(provider));
     m_usePose->setVisible(caps.poseControl && m_doc && m_doc->controlPose());
     m_steps->setEnabled(!provider || caps.steps);
-    m_run->setEnabled(m_doc != nullptr);
+    m_run->setEnabled(m_doc != nullptr && runnable);
     const QString runText = m_mode == Mode::Upscale ? tr("Upscale")
                           : m_mode == Mode::RemoveBackground ? tr("Remove background")
                           : m_mode == Mode::DetectPose ? tr("Detect pose")
@@ -610,6 +629,13 @@ void AiPanel::run(Mode mode)
     if (!provider) {
         m_studio->notify(tr("Set up an image engine first: Help → Set up AI…"), QStringLiteral("warning"));
         return;
+    }
+    // The AI menu's Upscale and Remove background are disabled then; from elsewhere it says why.
+    if (const std::optional<ai::Utility> utility = utilityOf(mode)) {
+        if (const QString why = m_studio->generation()->utilityUnavailable(*utility); !why.isEmpty()) {
+            m_studio->notify(why, QStringLiteral("warning"));
+            return;
+        }
     }
     QPointer<doc::Document> doc = m_doc;
     const QString providerId = provider->instanceId();

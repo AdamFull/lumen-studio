@@ -3,6 +3,7 @@
 #include "core/Async.h"
 
 #include <QCoreApplication>
+#include <QLocale>
 #include <QProcess>
 #include <QRegularExpression>
 #include <QThread>
@@ -45,14 +46,16 @@ const GpuInfo *HardwareInfo::primaryGpu() const
 
 QString formatBytes(qint64 bytes)
 {
+    // In the language's own numbers ("11,8 GB" in German), as the rest of the text around them.
+    const QLocale locale;
     const double b = double(bytes);
     if (b >= 1024.0 * 1024 * 1024)
-        return QStringLiteral("%1 GB").arg(b / (1024.0 * 1024 * 1024), 0, 'f', 1);
+        return QStringLiteral("%1 GB").arg(locale.toString(b / (1024.0 * 1024 * 1024), 'f', 1));
     if (b >= 1024.0 * 1024)
-        return QStringLiteral("%1 MB").arg(b / (1024.0 * 1024), 0, 'f', 0);
+        return QStringLiteral("%1 MB").arg(locale.toString(b / (1024.0 * 1024), 'f', 0));
     if (b >= 1024.0)
-        return QStringLiteral("%1 KB").arg(b / 1024.0, 0, 'f', 0);
-    return QStringLiteral("%1 B").arg(bytes);
+        return QStringLiteral("%1 KB").arg(locale.toString(b / 1024.0, 'f', 0));
+    return QStringLiteral("%1 B").arg(locale.toString(bytes));
 }
 
 QString HardwareInfo::summary() const

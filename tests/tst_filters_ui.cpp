@@ -1443,7 +1443,7 @@ void TestFiltersUi::aiNodesSayWhatTheyNeed()
     QTRY_VERIFY(availability->text().contains(QStringLiteral("“SDXL” cannot change a picture from a description")));
     QVERIFY(edit->unavailableReason({}).contains(QStringLiteral("cannot change a picture from a description")));
     QVERIFY(registry.find(fn::Inpaint)->unavailableReason({}).isEmpty());
-    QVERIFY(registry.find(fn::Upscale)->unavailableReason({}).contains(QStringLiteral("has an upscaler")));
+    QVERIFY(registry.find(fn::Upscale)->unavailableReason({}).contains(QStringLiteral("can upscale. Give your local server an upscaler folder")));
     QVERIFY(registry.find(fn::RemoveBackground)->unavailableReason({}).contains(QStringLiteral("can remove a background")));
     // An engine chosen in the node that is gone.
     QVERIFY(edit->unavailableReason({{fn::EngineParam, QStringLiteral("sdcpp-gone")}}).contains(QStringLiteral("no longer set up")));

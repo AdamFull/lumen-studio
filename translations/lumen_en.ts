@@ -150,7 +150,7 @@
 <context>
     <name>lumen::ui::CreatePage</name>
     <message numerus="yes">
-        <location filename="../src/plugins/characters/CreatePage.cpp" line="+515" />
+        <location filename="../src/plugins/characters/CreatePage.cpp" line="+519" />
         <source>%n reference(s). The character sheet is created automatically when you send a message, or press Analyze.</source>
         <translation><numerusform>%n reference. The character sheet is created automatically when you send a message, or press Analyze.</numerusform><numerusform>%n references. The character sheet is created automatically when you send a message, or press Analyze.</numerusform></translation>
     </message>
@@ -214,7 +214,7 @@
         <translation><numerusform> (%n image)</numerusform><numerusform> (%n images)</numerusform></translation>
     </message>
     <message numerus="yes">
-        <location line="+49" />
+        <location line="+47" />
         <source>Queued %n job(s). The results appear in the project images.</source>
         <translation><numerusform>Queued %n job. The results appear in the project images.</numerusform><numerusform>Queued %n jobs. The results appear in the project images.</numerusform></translation>
     </message>
@@ -293,7 +293,7 @@
 <context>
     <name>lumen::ui::MainWindow</name>
     <message numerus="yes">
-        <location filename="../src/ui/MainWindow.cpp" line="+1000" />
+        <location filename="../src/ui/MainWindow.cpp" line="+1079" />
         <source>%n cloud GPU(s) of earlier trainings are still rented on RunPod.</source>
         <translation><numerusform>%n cloud GPU of an earlier training is still rented on RunPod.</numerusform><numerusform>%n cloud GPUs of earlier trainings are still rented on RunPod.</numerusform></translation>
     </message>
@@ -317,7 +317,7 @@ The models of the earlier version are in %2 (%n files, %3). Move them to the new
 <context>
     <name>lumen::ui::ModelHubDialog</name>
     <message numerus="yes">
-        <location filename="../src/ui/dialogs/ModelHubDialog.cpp" line="+379" />
+        <location filename="../src/ui/dialogs/ModelHubDialog.cpp" line="+381" />
         <source>%n model(s)</source>
         <translation><numerusform>%n model</numerusform><numerusform>%n models</numerusform></translation>
     </message>
@@ -325,7 +325,7 @@ The models of the earlier version are in %2 (%n files, %3). Move them to the new
 <context>
     <name>lumen::ui::ModelsPage</name>
     <message numerus="yes">
-        <location filename="../src/ui/dialogs/ModelsPage.cpp" line="+411" />
+        <location filename="../src/ui/dialogs/ModelsPage.cpp" line="+420" />
         <source>%n model(s) shown, %1</source>
         <translation><numerusform>%n model shown, %1</numerusform><numerusform>%n models shown, %1</numerusform></translation>
     </message>
@@ -440,7 +440,7 @@ The models of the earlier version are in %2 (%n files, %3). Move them to the new
         <translation><numerusform>%n model file found in %1.</numerusform><numerusform>%n model files found in %1.</numerusform></translation>
     </message>
     <message numerus="yes">
-        <location line="+283" />
+        <location line="+290" />
         <source>%n step(s)</source>
         <translation><numerusform>%n step</numerusform><numerusform>%n steps</numerusform></translation>
     </message>

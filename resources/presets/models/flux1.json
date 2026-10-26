@@ -34,7 +34,7 @@
       "id": "flux1-kontext-dev",
       "name": "FLUX.1 Kontext [dev]",
       "type": "flux1",
-      "note": "Edits an image from an instruction, at CFG 1.",
+      "note": "Changes a picture as you describe it.",
       "docs": "https://github.com/leejet/stable-diffusion.cpp/blob/f89d9b13d730eabeede7314ce49dacd18d3c90c2/docs/kontext.md",
       "match": {"family": "FLUX", "variant": "Dev", "kinds": ["diffusion_model"], "name_any": ["kontext"]},
       "slots": [
@@ -50,7 +50,7 @@
       "id": "flux1-dev",
       "name": "FLUX.1 [dev]",
       "type": "flux1",
-      "note": "Guidance-distilled: CFG 1 with distilled guidance 3.5 (no negative prompt).",
+      "note": "Makes new pictures. Words under “Leave out” are not used.",
       "match": {"family": "FLUX", "variant": "Dev", "kinds": ["diffusion_model"]},
       "slots": [
         {"option": "vae", "kind": "vae", "family": "FLUX / SD 3", "label": "FLUX.1 VAE", "file": "flux1-vae"},
@@ -65,7 +65,7 @@
       "id": "flux1-schnell",
       "name": "FLUX.1 [schnell]",
       "type": "flux1",
-      "note": "4 steps at CFG 1 (no negative prompt).",
+      "note": "Fast (4 steps). Words under “Leave out” are not used.",
       "match": {"family": "FLUX", "variant": "Schnell", "kinds": ["diffusion_model"]},
       "slots": [
         {"option": "vae", "kind": "vae", "family": "FLUX / SD 3", "label": "FLUX.1 VAE", "file": "flux1-vae"},
@@ -79,7 +79,7 @@
     {
       "id": "flux1-checkpoint",
       "name": "FLUX.1 (single file)",
-      "note": "A checkpoint with the text encoders and the VAE inside: CFG 1 (no negative prompt).",
+      "note": "One file with the text encoders and the VAE inside. Words under “Leave out” are not used.",
       "match": {"family": "FLUX", "kinds": ["checkpoint"]},
       "optional_vae": "FLUX / SD 3",
       "can": {"generate": true, "edit": false, "inpaint": true, "negative_prompt": false, "loras": true, "control_net": [], "ip_adapter": []},

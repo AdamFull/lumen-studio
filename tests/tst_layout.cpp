@@ -33,6 +33,7 @@
 #include "ui/Theme.h"
 #include "ui/canvas/CanvasView.h"
 #include "ui/canvas/EditorState.h"
+#include "ui/dialogs/ImageSizeDialog.h"
 #include "ui/dialogs/LocalServersPage.h"
 #include "ui/dialogs/LocalSetupDialog.h"
 #include "ui/dialogs/ModelHubDialog.h"
@@ -41,6 +42,7 @@
 #include "ui/dialogs/PoseEditDialog.h"
 #include "ui/dialogs/SettingsDialog.h"
 #include "ui/dialogs/SetupWizard.h"
+#include "ui/dialogs/UserGuideDialog.h"
 #include "ui/filters/FilterCatalog.h"
 #include "ui/filters/FiltersPanel.h"
 #include "ui/filters/NodeEditorWindow.h"
@@ -67,7 +69,9 @@
 #include <QJsonObject>
 #include <QLabel>
 #include <QLayout>
+#include <QLibraryInfo>
 #include <QListWidget>
+#include <QLocale>
 #include <QPainter>
 #include <QPushButton>
 #include <QRadioButton>
@@ -537,6 +541,14 @@ void TestLayout::initTestCase()
         auto *translator = new QTranslator(qApp);
         QVERIFY2(translator->load(qm), qPrintable(QStringLiteral("Cannot load the translation %1").arg(qm)));
         QCoreApplication::installTranslator(translator);
+        // Its language's numbers and Qt's own words (Cancel, Close), as main.cpp has them.
+        const QLocale locale(translator->language());
+        QLocale::setDefault(locale);
+        auto *qtTranslator = new QTranslator(qApp);
+        const QString qtDir = QLibraryInfo::path(QLibraryInfo::TranslationsPath);
+        if (qtTranslator->load(locale, QStringLiteral("qt"), QStringLiteral("_"), qtDir)
+            || qtTranslator->load(locale, QStringLiteral("qtbase"), QStringLiteral("_"), qtDir))
+            QCoreApplication::installTranslator(qtTranslator);
     }
     plugins::registerBuiltInPlugins();
     // The fonts and theme of the real app (main.cpp), so text widths match.
@@ -659,6 +671,11 @@ void TestLayout::mainWindow()
             QTRY_COMPARE(generate->text(), PromptBar::tr("Make a variation"));
             QTRY_VERIFY(bar->findChild<QPushButton *>(QStringLiteral("promptSelectArea"))->isVisible());
             auditWindow(QStringLiteral("Editor with an engine without edits"));
+            // The hint says what to do instead: whole, not shortened (the audit lets an ElidedLabel
+            // shorten its text; this one must not, also in a translation).
+            auto *hint = bar->findChild<ElidedLabel *>(QStringLiteral("promptHint"));
+            QVERIFY(hint);
+            QVERIFY2(hint->text() == hint->fullText(), qPrintable(QStringLiteral("%1: the prompt bar's hint is cut: %2").arg(res, hint->text())));
             QImage mask = img::createMask(doc->size());
             {
                 QPainter p(&mask);
@@ -948,6 +965,16 @@ void TestLayout::dialogs()
         m_auditor.auditDialog(&d, QStringLiteral("New blank canvas dialog"));
     }
     {
+        ImageSizeDialog image(ImageSizeDialog::Kind::Image, QSize(4032, 3024));
+        m_auditor.auditDialog(&image, QStringLiteral("Image size dialog"));
+        ImageSizeDialog canvas(ImageSizeDialog::Kind::Canvas, QSize(4032, 3024));
+        m_auditor.auditDialog(&canvas, QStringLiteral("Canvas size dialog"));
+    }
+    {
+        UserGuideDialog guide;
+        m_auditor.auditDialog(&guide, QStringLiteral("User guide"));
+    }
+    {
         // With everything it can show: a pose ("New image with this pose") and the more options, with
         // the negative prompt of an engine that takes one, whose name is long (the engine list shows
         // it whole).
@@ -1004,9 +1031,10 @@ void TestLayout::dialogs()
         ai::Provider *engine = studio.providers()->addProvider(QStringLiteral("sdcpp"), QStringLiteral("stable-diffusion.cpp"),
                                                                {{QStringLiteral("url"), silentUrl}});
         auto removeEngine = qScopeGuard([&] { studio.providers()->removeProvider(engine->instanceId()); });
-        d.runTestImage(engine->instanceId(), QStringLiteral("FLUX.2 [klein] 4B is set up"),
-                       QStringLiteral("Lumen starts the image engine and makes a test image. The first start loads the model, which takes a "
-                                      "minute or two."));
+        // The wizard's own texts, so a translated audit shows them translated.
+        d.runTestImage(engine->instanceId(), SetupWizard::tr("%1 is set up").arg(QStringLiteral("FLUX.2 [klein] 4B")),
+                       SetupWizard::tr("Lumen starts the image engine and makes a test image. The first start loads the model, which "
+                                       "takes a minute or two."));
         m_auditor.auditDialog(&d, QStringLiteral("Setup wizard - test image"));
 
         runtime::InstalledRuntime rt;

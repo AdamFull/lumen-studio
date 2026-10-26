@@ -342,7 +342,7 @@ ai::ToolSet assistantTools(Studio *studio)
                       return fail(QStringLiteral("closed"));
                   ai::ImageProvider *provider = s->providers()->defaultImageProvider();
                   if (!provider)
-                      return fail(QObject::tr("No image provider is configured."));
+                      return fail(QObject::tr("There is no image engine. Set one up with Help → Set up AI…"));
                   const ai::ImageCapabilities caps = provider->capabilities();
                   const QStringList refIds = json::toStringList(args.value(QStringLiteral("reference_asset_ids")).toArray());
                   auto submit = [s, provider, caps, args](QList<QImage> refs) -> QFuture<ToolResult> {
@@ -401,7 +401,7 @@ ai::ToolSet assistantTools(Studio *studio)
                   // A change to an image: the engine for changes of Settings → AI.
                   ai::ImageProvider *provider = s->providers()->imageProviderFor(true);
                   if (!provider)
-                      return fail(QObject::tr("No image provider is configured."));
+                      return fail(QObject::tr("There is no image engine. Set one up with Help → Set up AI…"));
                   const QString assetId = args.value(QStringLiteral("asset_id")).toString();
                   return withAssetImage(s, assetId, [s, provider, args, assetId](QImage image) {
                       const ai::ImageCapabilities caps = provider->capabilities();

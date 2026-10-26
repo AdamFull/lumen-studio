@@ -5,6 +5,7 @@
 #include "ui/canvas/EditorState.h"
 #include "ui/widgets/Controls.h"
 
+#include <QButtonGroup>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QHBoxLayout>
@@ -12,6 +13,7 @@
 #include <QLabel>
 #include <QPainter>
 #include <QPushButton>
+#include <QToolButton>
 
 #include <cmath>
 
@@ -494,9 +496,25 @@ void SelectionTool::release(CanvasView *view, const ToolEvent &ev)
     doc::Document *doc = view->document();
     const bool add = m_mods & Qt::ShiftModifier;
     const bool sub = m_mods & Qt::AltModifier;
+    // The keys choose for this drag; without them the mode of the options bar.
+    img::MaskOp op = img::MaskOp::Replace;
+    if (add && sub)
+        op = img::MaskOp::Intersect;
+    else if (add)
+        op = img::MaskOp::Union;
+    else if (sub)
+        op = img::MaskOp::Subtract;
+    else {
+        switch (state()->selectionMode()) {
+        case EditorState::SelectionMode::Replace: op = img::MaskOp::Replace; break;
+        case EditorState::SelectionMode::Add: op = img::MaskOp::Union; break;
+        case EditorState::SelectionMode::Subtract: op = img::MaskOp::Subtract; break;
+        case EditorState::SelectionMode::Intersect: op = img::MaskOp::Intersect; break;
+        }
+    }
     const bool tiny = m_shape == Shape::Lasso ? m_lasso.size() < 3 : QRectF(m_start, m_current).normalized().width() * view->zoom() < 3;
     if (tiny) {
-        if (!add && !sub)
+        if (op == img::MaskOp::Replace)
             doc->clearSelection();
         emit overlayChanged();
         return;
@@ -509,17 +527,54 @@ void SelectionTool::release(CanvasView *view, const ToolEvent &ev)
         p.setBrush(Qt::white);
         p.drawPath(shapePath());
     }
-    img::MaskOp op = img::MaskOp::Replace;
-    if (add && sub)
-        op = img::MaskOp::Intersect;
-    else if (add)
-        op = img::MaskOp::Union;
-    else if (sub)
-        op = img::MaskOp::Subtract;
+    if (const int feather = state()->selectionFeather(); feather > 0)
+        shape = img::blurMask(shape, feather);
     const QImage current = doc->hasSelection() ? doc->selection() : img::createMask(doc->size());
     doc->applySelection(img::combineMasks(current, shape, op), name());
     m_lasso.clear();
     emit overlayChanged();
+}
+
+QWidget *SelectionTool::createOptions(QWidget *parent)
+{
+    QWidget *row = optionsRow(parent);
+    EditorState *s = state();
+    auto *modes = new QButtonGroup(row);
+    auto *modeRow = new QWidget(row);
+    auto *ml = new QHBoxLayout(modeRow);
+    ml->setContentsMargins(0, 0, 0, 0);
+    ml->setSpacing(2);
+    const QList<std::tuple<EditorState::SelectionMode, QString, QString, QString>> choices = {
+        {EditorState::SelectionMode::Replace, QStringLiteral("selectionNew"), tr("New"), tr("A new selection replaces the one there is")},
+        {EditorState::SelectionMode::Add, QStringLiteral("selectionAdd"), tr("Add"), tr("Adds to the selection (Shift for one drag)")},
+        {EditorState::SelectionMode::Subtract, QStringLiteral("selectionSubtract"), tr("Subtract"),
+         tr("Takes away from the selection (Alt for one drag)")},
+        {EditorState::SelectionMode::Intersect, QStringLiteral("selectionIntersect"), tr("Intersect"),
+         tr("Keeps only where the selection and the new shape overlap (Shift+Alt for one drag)")},
+    };
+    for (const auto &[mode, name, text, tip] : choices) {
+        auto *b = new QToolButton(modeRow);
+        b->setObjectName(name);
+        b->setText(text);
+        b->setToolTip(tip);
+        b->setCheckable(true);
+        b->setChecked(s->selectionMode() == mode);
+        b->setProperty("role", QStringLiteral("chip"));
+        modes->addButton(b, int(mode));
+        ml->addWidget(b);
+    }
+    QObject::connect(modes, &QButtonGroup::idClicked, row, [s](int id) { s->setSelectionMode(EditorState::SelectionMode(id)); });
+    QObject::connect(s, &EditorState::changed, modes, [s, modes] {
+        if (QAbstractButton *b = modes->button(int(s->selectionMode())); b && !b->isChecked())
+            b->setChecked(true);
+    });
+    row->layout()->addWidget(modeRow);
+    SliderField *feather = addSlider(row, tr("Feather"), 0, 100, s->selectionFeather(), 0, QStringLiteral(" px"),
+                                     [s](double v) { s->setSelectionFeather(int(std::lround(v))); }, 240);
+    feather->setObjectName(QStringLiteral("selectionFeather"));
+    feather->setToolTip(tr("How soft the edge of a new selection is; the AI blends its change in over it"));
+    static_cast<QHBoxLayout *>(row->layout())->addStretch();
+    return row;
 }
 
 void SelectionTool::paintOverlay(CanvasView *view, QPainter &p)

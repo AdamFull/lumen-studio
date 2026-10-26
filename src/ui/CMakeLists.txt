@@ -30,6 +30,8 @@ add_library(lumen_ui STATIC
     pages/StartScreen.h pages/StartScreen.cpp
     dialogs/NewFromPromptDialog.h dialogs/NewFromPromptDialog.cpp
     dialogs/NewCanvasDialog.h dialogs/NewCanvasDialog.cpp
+    dialogs/ImageSizeDialog.h dialogs/ImageSizeDialog.cpp
+    dialogs/UserGuideDialog.h dialogs/UserGuideDialog.cpp
     dialogs/SettingsDialog.h dialogs/SettingsDialog.cpp
     dialogs/ShortcutsPage.h dialogs/ShortcutsPage.cpp
     dialogs/LocalServersPage.h dialogs/LocalServersPage.cpp
@@ -73,4 +75,11 @@ qt_add_resources(lumen_ui builtin_filters
     PREFIX "/filters/builtin"
     BASE "${PROJECT_SOURCE_DIR}/resources/filters"
     FILES ${LUMEN_BUILTIN_FILTERS}
+)
+
+# Help → User guide shows the guides built into the program, as :/docs/*.md.
+qt_add_resources(lumen_ui user_guide
+    PREFIX "/docs"
+    BASE "${PROJECT_SOURCE_DIR}/docs"
+    FILES "${PROJECT_SOURCE_DIR}/docs/USER_GUIDE.md" "${PROJECT_SOURCE_DIR}/docs/PLUGINS.md"
 )

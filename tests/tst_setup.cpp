@@ -21,6 +21,8 @@
 #include "runtime/Supervisor.h"
 #include "ui/MainWindow.h"
 #include "ui/Studio.h"
+#include "ui/canvas/CanvasView.h"
+#include "ui/canvas/Tool.h"
 #include "ui/dialogs/AiSettingsPage.h"
 #include "ui/dialogs/LocalServersPage.h"
 #include "ui/dialogs/LocalSetupDialog.h"
@@ -32,7 +34,9 @@
 #include "ui/pages/AiPanel.h"
 #include "ui/pages/EditorPage.h"
 #include "ui/pages/PromptBar.h"
+#include "ui/pages/PromptPlan.h"
 #include "ui/pages/StartScreen.h"
+#include "ui/pages/VariantStrip.h"
 #include "ui/widgets/Controls.h"
 #include "ui/widgets/ProviderCombo.h"
 
@@ -47,6 +51,8 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenu>
+#include <QPainter>
+#include <QPlainTextEdit>
 #include <QPushButton>
 #include <QRadioButton>
 #include <QStandardPaths>
@@ -211,6 +217,7 @@ private slots:
     void settingsAi();
     void pluginOffers();
     void entryPoints();
+    void firstStartToSelectionEdit();
 
 private:
     // Leaves the test data folder as it found it: no providers, servers, adopted programs, added
@@ -1352,6 +1359,141 @@ void TestSetup::entryPoints()
     local->click();
     QTRY_VERIFY(openWizard());
     QCOMPARE(openWizard()->currentPage(), SetupWizard::Page::Local);
+}
+
+// Acceptance 1 of §17.8 in one go, as a new user meets it: the first start opens Set up AI; "Run
+// on this computer" finds FLUX.2 klein in a ComfyUI folder, makes its server and a test image; then,
+// without Settings, a picture is opened, a rectangle dragged on it and words typed with Enter in the
+// prompt bar: the edit of that area goes to the server the wizard made, and Keep adds one result as
+// one new layer, masked to the area.
+void TestSetup::firstStartToSelectionEdit()
+{
+    QTemporaryDir dir;
+    const QString models = QDir::cleanPath(dir.filePath(QStringLiteral("ComfyUI/models")));
+    write(models + QStringLiteral("/diffusion_models/flux-2-klein-4b.safetensors"), flux2Klein());
+    write(models + QStringLiteral("/vae/flux2-vae.safetensors"), flux2Vae());
+    write(models + QStringLiteral("/text_encoders/qwen_3_4b.safetensors"), qwen3(2560));
+    // The mock sd-server: every request kept, as many results as asked for, at the size asked for.
+    MockHttpServer sd;
+    auto payloads = std::make_shared<QList<QJsonObject>>();
+    sd.route("GET", QStringLiteral("/sdcpp/v1/capabilities"), [](const MockRequest &) {
+        return MockResponse::json({{QStringLiteral("model"), QJsonObject{{QStringLiteral("name"), QStringLiteral("flux-2-klein-4b")}}}});
+    });
+    sd.route("POST", QStringLiteral("/sdcpp/v1/img_gen"), [payloads](const MockRequest &req) {
+        payloads->append(req.json());
+        return MockResponse::json({{QStringLiteral("id"), QStringLiteral("job_%1").arg(payloads->size())}}, 202);
+    });
+    for (int n = 1; n <= 8; ++n) {
+        sd.route("GET", QStringLiteral("/sdcpp/v1/jobs/job_%1").arg(n), [payloads, n](const MockRequest &) {
+            const QJsonObject payload = payloads->value(n - 1);
+            const QSize size(payload.value(QStringLiteral("width")).toInt(512), payload.value(QStringLiteral("height")).toInt(512));
+            QJsonArray images;
+            for (int i = 0; i < std::max(1, payload.value(QStringLiteral("batch_count")).toInt(1)); ++i)
+                images << QJsonObject{{QStringLiteral("index"), i}, {QStringLiteral("b64_json"), pngB64(QColor(40 + 60 * i, 90, 200), size)}};
+            return MockResponse::json(
+                {{QStringLiteral("status"), QStringLiteral("completed")}, {QStringLiteral("result"), QJsonObject{{QStringLiteral("images"), images}}}});
+        });
+    }
+    MockHttpServer hf; // nothing is downloaded
+
+    Studio studio;
+    reset(studio);
+    studio.providers()->serverProbes.clear();
+    SetupWizard::testSearchFolders = QStringList{models};
+    auto guard = qScopeGuard([&] {
+        SetupWizard::testSearchFolders = QStringList();
+        if (SetupWizard *w = openWizard())
+            w->close();
+        Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
+        reset(studio);
+    });
+    QVERIFY(!adoptFakeServer(studio, dir.path()).isEmpty());
+    studio.hub()->setBaseUrls(hf.baseUrl().toString(), hf.baseUrl().toString());
+
+    // The first start: no engine, so Set up AI opens.
+    Settings::instance().setValue(QStringLiteral("app/onboarded"), false);
+    MainWindow window(&studio);
+    window.resize(1280, 720);
+    window.show();
+    QTRY_VERIFY_WITH_TIMEOUT(openWizard(), 5000);
+    SetupWizard *wizard = openWizard();
+    QCOMPARE(wizard->currentPage(), SetupWizard::Page::Choose);
+    runtime::ModelPreset klein = *runtime::presetById(QStringLiteral("flux2-klein-4b"));
+    klein.serverOptions.insert(QStringLiteral("extra_args"), QStringLiteral("--fake-ready-ms 0 --fake-proxy %1").arg(sd.port()));
+    wizard->presets = {klein, *runtime::presetById(QStringLiteral("sdxl"))};
+
+    // "Run on this computer": the files found, one click sets it up and makes a test image.
+    QSignalSpy planned(wizard, &SetupWizard::localPlanReady);
+    named<QPushButton>(wizard, QStringLiteral("choose-%1").arg(int(SetupWizard::Page::Local)))->click();
+    QTRY_VERIFY_WITH_TIMEOUT(planned.size() == 1, 20000);
+    auto *start = named<QPushButton>(wizard, QStringLiteral("setupStart"));
+    QVERIFY(start->isEnabled());
+    QSignalSpy tested(wizard, &SetupWizard::testImageFinished);
+    start->click();
+    QTRY_VERIFY_WITH_TIMEOUT(tested.size() == 1, 40000);
+    QVERIFY2(tested.first().at(0).toBool(), qPrintable(named<QLabel>(wizard, QStringLiteral("resultText"))->text()));
+    QCOMPARE(payloads->size(), 1); // the test image
+    QCOMPARE(hf.requests.size(), 0);
+    wizard->close();
+    QTRY_VERIFY(!openWizard());
+
+    // A picture opened as File → Open image… does.
+    QImage photo(640, 480, QImage::Format_RGB32);
+    photo.fill(QColor(120, 120, 120));
+    QPainter(&photo).fillRect(QRect(200, 150, 160, 120), QColor(200, 40, 40));
+    const QString file = dir.filePath(QStringLiteral("photo.png"));
+    QVERIFY(photo.save(file));
+    studio.openFile(file);
+    QTRY_VERIFY(studio.activeDocument());
+    doc::Document *doc = studio.activeDocument();
+    EditorPage *editor = window.editor();
+    QTRY_VERIFY(!editor->showsStartScreen());
+    CanvasView *canvas = editor->canvas();
+    QCOMPARE(canvas->tool()->id(), QStringLiteral("select-rect"));
+    QTRY_VERIFY(canvas->isFitted());
+
+    // A rectangle dragged around the red box.
+    QWidget *surface = canvas->focusProxy();
+    const QPoint from = canvas->mapFromDoc(QPointF(180, 130)).toPoint();
+    const QPoint to = canvas->mapFromDoc(QPointF(380, 290)).toPoint();
+    QTest::mousePress(surface, Qt::LeftButton, Qt::NoModifier, from);
+    QTest::mouseMove(surface, (from + to) / 2);
+    QTest::mouseMove(surface, to);
+    QTest::mouseRelease(surface, Qt::LeftButton, Qt::NoModifier, to);
+    QVERIFY(doc->hasSelection());
+    const QRect area = doc->selectionBounds();
+    QVERIFY2(area.contains(QRect(200, 150, 160, 120)), qPrintable(QStringLiteral("%1,%2 %3x%4").arg(area.x()).arg(area.y()).arg(area.width()).arg(area.height())));
+
+    // Words and Enter in the prompt bar: an edit of the area on the wizard's engine.
+    PromptBar *bar = editor->promptBar();
+    auto *words = bar->findChild<QPlainTextEdit *>(QStringLiteral("promptText"));
+    QVERIFY(words);
+    QTRY_VERIFY(bar->plan().action == PromptAction::EditArea);
+    words->setFocus();
+    QTest::keyClicks(words, QStringLiteral("make the box blue"));
+    const int layers = doc->layerCount();
+    QTest::keyClick(words, Qt::Key_Return);
+    VariantStrip *strip = editor->variantStrip();
+    QTRY_VERIFY_WITH_TIMEOUT(strip->count() >= 1, 20000);
+    QCOMPARE(payloads->size(), 2);
+    const QJsonObject sent = payloads->last();
+    QCOMPARE(sent.value(QStringLiteral("prompt")).toString(), QStringLiteral("make the box blue"));
+    QCOMPARE(sent.value(QStringLiteral("ref_images")).toArray().size(), 1);
+    QVERIFY(!sent.contains(QStringLiteral("mask_image")));
+
+    // Keep: one new layer, nothing of it outside the area (the words keep the keyboard, as the user
+    // was typing; Keep is the strip's button).
+    named<QPushButton>(strip, QStringLiteral("variantKeep"))->click();
+    QCOMPARE(doc->layerCount(), layers + 1);
+    const QImage kept = doc->layers().last()->image;
+    QCOMPARE(qAlpha(kept.pixel(20, 20)), 0);
+    QCOMPARE(qAlpha(kept.pixel(620, 460)), 0);
+    QVERIFY(qAlpha(kept.pixel(280, 210)) > 0);
+    // Settings never opened.
+    for (QWidget *w : QApplication::topLevelWidgets())
+        QVERIFY(!qobject_cast<SettingsDialog *>(w) || !w->isVisible());
+    for (const runtime::ServerProfile &p : studio.servers()->profiles())
+        studio.servers()->stop(p.id);
 }
 
 QTEST_MAIN(TestSetup)

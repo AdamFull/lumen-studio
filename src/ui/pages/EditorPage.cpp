@@ -12,6 +12,7 @@
 #include "ui/canvas/EditorState.h"
 #include "ui/canvas/Tools.h"
 #include "ui/canvas/TransformTool.h"
+#include "ui/dialogs/ImageSizeDialog.h"
 #include "ui/dialogs/NewCanvasDialog.h"
 #include "ui/filters/FiltersPanel.h"
 #include "ui/pages/AiOptions.h"
@@ -189,8 +190,10 @@ EditorPage::EditorPage(Studio *studio, QWidget *parent)
     sh->setContentsMargins(10, 3, 10, 3);
     m_infoLabel = mutedLabel(QString(), status);
     m_infoLabel->setWordWrap(false);
-    m_hintLabel = mutedLabel(QString(), status);
-    m_hintLabel->setWordWrap(false);
+    // The tool's hint, shortened when the row is narrow (a translation, a small window): its whole
+    // text is in the tooltip, and the tool's options say the same.
+    m_hintLabel = new ElidedLabel(QString(), status);
+    m_hintLabel->setProperty("role", QStringLiteral("muted"));
     auto *zoomOut = iconButton(QStringLiteral("zoom-out"), tr("Zoom out (Ctrl+-)"), status);
     auto *zoomIn = iconButton(QStringLiteral("zoom-in"), tr("Zoom in (Ctrl+=)"), status);
     auto *fit = iconButton(QStringLiteral("fit"), tr("Fit to window (Ctrl+0)"), status);
@@ -260,6 +263,8 @@ EditorPage::EditorPage(Studio *studio, QWidget *parent)
     connect(m_bar, &PromptBar::selectAreaRequested, this, [this] {
         selectTool(QStringLiteral("select-rect"));
         m_canvas->setFocus();
+        // The rectangle selection is usually chosen already: say what to do, so the click shows.
+        m_studio->notify(tr("Drag on the picture around what should change."));
     });
     // Arrow keys, Enter and Esc go to the results once they are there, unless the user is typing (the
     // next words in the prompt field, local runs take a while; a layer's name, a number) or uses the
@@ -331,7 +336,17 @@ EditorPage::EditorPage(Studio *studio, QWidget *parent)
     shortcut(QStringLiteral("zoom-in"), tr("Zoom in"), {QStringLiteral("Ctrl+="), QStringLiteral("Ctrl++")}, [this] { m_canvas->zoomIn(); });
     shortcut(QStringLiteral("zoom-out"), tr("Zoom out"), {QStringLiteral("Ctrl+-")}, [this] { m_canvas->zoomOut(); });
     shortcut(QStringLiteral("swap-colors"), tr("Swap colours"), {QStringLiteral("X")}, [this] { m_state->swapColors(); });
+    shortcut(QStringLiteral("cut"), tr("Cut"), {QStringLiteral("Ctrl+X")}, [this] { copySelection(true); });
+    shortcut(QStringLiteral("copy"), tr("Copy"), {QStringLiteral("Ctrl+C")}, [this] { copySelection(false); });
     shortcut(QStringLiteral("paste-layer"), tr("Paste as layer"), {QStringLiteral("Ctrl+V")}, [this] { pasteAsLayer(); });
+    // The whole picture, as in other editors' Image menu (Photoshop's keys for the sizes).
+    shortcut(QStringLiteral("image-size"), tr("Image size…"), {QStringLiteral("Ctrl+Alt+I")}, [this] { imageSizeDialog(); });
+    shortcut(QStringLiteral("canvas-size"), tr("Canvas size…"), {QStringLiteral("Ctrl+Alt+C")}, [this] { canvasSizeDialog(); });
+    shortcut(QStringLiteral("rotate-cw"), tr("Rotate 90° clockwise"), {}, [this] { if (m_doc) m_doc->rotateImage(90); });
+    shortcut(QStringLiteral("rotate-ccw"), tr("Rotate 90° counter-clockwise"), {}, [this] { if (m_doc) m_doc->rotateImage(270); });
+    shortcut(QStringLiteral("rotate-180"), tr("Rotate 180°"), {}, [this] { if (m_doc) m_doc->rotateImage(180); });
+    shortcut(QStringLiteral("flip-horizontal"), tr("Flip horizontally"), {}, [this] { if (m_doc) m_doc->flipImage(Qt::Horizontal); });
+    shortcut(QStringLiteral("flip-vertical"), tr("Flip vertically"), {}, [this] { if (m_doc) m_doc->flipImage(Qt::Vertical); });
     shortcut(QStringLiteral("new-layer"), tr("New layer"), {QStringLiteral("Ctrl+Shift+N")},
              [this] { if (m_doc) m_doc->addLayer(tr("Layer %1").arg(m_doc->layerCount() + 1)); });
     shortcut(QStringLiteral("duplicate-layer"), tr("Duplicate layer"), {QStringLiteral("Ctrl+J")},
@@ -455,7 +470,7 @@ void EditorPage::selectTool(const QString &id)
         else
             h->addStretch();
         m_optionsHost->addWidget(m_options);
-        m_hintLabel->setText(tool->hint());
+        m_hintLabel->setFullText(tool->hint());
         return;
     }
 }
@@ -581,6 +596,53 @@ void EditorPage::copyMerged()
         return;
     QApplication::clipboard()->setImage(m_doc->flattened(r));
     m_studio->notify(tr("Copied %1 × %2 px").arg(r.width()).arg(r.height()));
+}
+
+void EditorPage::copySelection(bool cut)
+{
+    if (!m_doc)
+        return;
+    const doc::LayerPtr layer = m_doc->activeLayer();
+    if (!layer)
+        return;
+    const bool selected = m_doc->hasSelection() && !m_doc->selectionBounds().isEmpty();
+    if (cut && !selected) {
+        m_studio->notify(tr("Select an area to cut first."));
+        return;
+    }
+    if (cut && layer->props.locked) {
+        m_studio->notify(tr("The active layer is locked."), QStringLiteral("warning"));
+        return;
+    }
+    const QRect r = selected ? m_doc->selectionBounds() : m_doc->bounds();
+    // Only what is selected: soft edges keep their softness as transparency.
+    QImage pixels = img::normalized(layer->image.copy(r));
+    if (selected)
+        pixels = img::applyMaskToAlpha(pixels, m_doc->selection().copy(r));
+    QApplication::clipboard()->setImage(pixels);
+    if (cut)
+        deleteSelectionPixels();
+    m_studio->notify(cut ? tr("Cut %1 × %2 px").arg(r.width()).arg(r.height()) : tr("Copied %1 × %2 px").arg(r.width()).arg(r.height()));
+}
+
+void EditorPage::imageSizeDialog()
+{
+    if (!m_doc)
+        return;
+    QPointer<doc::Document> doc = m_doc;
+    ImageSizeDialog dlg(ImageSizeDialog::Kind::Image, doc->size(), this);
+    if (dlg.exec() == QDialog::Accepted && doc && dlg.newSize() != doc->size())
+        doc->scaleImage(dlg.newSize());
+}
+
+void EditorPage::canvasSizeDialog()
+{
+    if (!m_doc)
+        return;
+    QPointer<doc::Document> doc = m_doc;
+    ImageSizeDialog dlg(ImageSizeDialog::Kind::Canvas, doc->size(), this);
+    if (dlg.exec() == QDialog::Accepted && doc && dlg.newSize() != doc->size())
+        doc->resizeCanvas(dlg.canvasRect(), tr("Canvas size"));
 }
 
 void EditorPage::pasteAsLayer()

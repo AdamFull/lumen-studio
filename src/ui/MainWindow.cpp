@@ -14,6 +14,7 @@
 #include "ui/dialogs/NewFromPromptDialog.h"
 #include "ui/dialogs/SettingsDialog.h"
 #include "ui/dialogs/SetupWizard.h"
+#include "ui/dialogs/UserGuideDialog.h"
 #include "ui/filters/FiltersPanel.h"
 #include "ui/filters/NodeEditorWindow.h"
 #include "ui/widgets/ServerStatus.h"
@@ -28,6 +29,7 @@
 #include "ui/widgets/ProviderCombo.h"
 #include "ui/widgets/Toasts.h"
 
+#include <QActionGroup>
 #include <QApplication>
 #include <QCloseEvent>
 #include <QDesktopServices>
@@ -268,13 +270,14 @@ void MainWindow::buildStatusBar()
     safe->setCheckable(true);
     safe->setAutoRaise(true);
     safe->setIcon(Icons::get(QStringLiteral("shield")));
-    safe->setText(tr("Safe for work"));
     safe->setAccessibleName(tr("Safe for work"));
     safe->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
     auto syncSafe = [safe] {
         const bool on = Settings::instance().value(QStringLiteral("generation/safeContent"), false).toBool();
         QSignalBlocker block(safe);
         safe->setChecked(on);
+        // The state in its words: the name alone read like a setting that is on.
+        safe->setText(on ? tr("Safe for work: on") : tr("Safe for work: off"));
         safe->setToolTip(on ? tr("Safe for work is on: nudity and explicit content are kept out of generated images. Click to turn it off.")
                             : tr("Safe for work is off. Click to keep nudity and explicit content out of generated images."));
     };
@@ -415,11 +418,14 @@ void MainWindow::buildMenus()
     editorAction(edit, QStringLiteral("undo"), QStringLiteral("undo"));
     editorAction(edit, QStringLiteral("redo"), QStringLiteral("redo"));
     edit->addSeparator();
-    bind(edit->addAction(Icons::get(QStringLiteral("copy")), tr("Copy merged"), QKeySequence(QStringLiteral("Ctrl+Shift+C")), this, [this] { m_editor->copyMerged(); }), QStringLiteral("copy-merged"));
-    bind(edit->addAction(tr("Paste as layer"), this, [this] {
-        showPage(pages::Editor);
-        m_editor->pasteAsLayer();
-    }), QStringLiteral("paste-layer-menu"));
+    // Cut, Copy and Paste with their usual keys: the active layer's selected pixels.
+    editorAction(edit, QStringLiteral("cut"), QStringLiteral("scissors"));
+    editorAction(edit, QStringLiteral("copy"), QStringLiteral("copy"));
+    QAction *copyMerged = edit->addAction(tr("Copy merged"), QKeySequence(QStringLiteral("Ctrl+Shift+C")), this, [this] { m_editor->copyMerged(); });
+    copyMerged->setObjectName(QStringLiteral("copyMerged"));
+    bind(copyMerged, QStringLiteral("copy-merged"));
+    m_documentActions << copyMerged;
+    editorAction(edit, QStringLiteral("paste-layer"));
     bind(edit->addAction(tr("Import image as layer…"), this, [this] {
         showPage(pages::Editor);
         m_editor->importAsLayer();
@@ -434,6 +440,17 @@ void MainWindow::buildMenus()
     editorAction(select, QStringLiteral("invert-selection"));
     select->addSeparator();
     editorAction(select, QStringLiteral("delete-pixels"), QStringLiteral("trash"));
+
+    // The whole picture: its size, its canvas, turning and mirroring it.
+    QMenu *image = menuBar()->addMenu(tr("&Image"));
+    editorAction(image, QStringLiteral("image-size"));
+    editorAction(image, QStringLiteral("canvas-size"));
+    image->addSeparator();
+    editorAction(image, QStringLiteral("rotate-cw"));
+    editorAction(image, QStringLiteral("rotate-ccw"));
+    editorAction(image, QStringLiteral("rotate-180"));
+    editorAction(image, QStringLiteral("flip-horizontal"));
+    editorAction(image, QStringLiteral("flip-vertical"));
 
     QMenu *view = menuBar()->addMenu(tr("&View"));
     editorAction(view, QStringLiteral("zoom-in"), QStringLiteral("zoom-in"));
@@ -469,10 +486,31 @@ void MainWindow::buildMenus()
         m_panels[index].action = a;
     }
     view->addSeparator();
-    view->addAction(Icons::get(Theme::instance().isDark() ? QStringLiteral("sun") : QStringLiteral("moon")), tr("Toggle light/dark theme"), this, [this] {
-        const QString next = Theme::instance().isDark() ? QStringLiteral("light") : QStringLiteral("dark");
-        Settings::instance().setValue(QStringLiteral("ui/theme"), next);
-        QMessageBox::information(this, tr("Theme"), tr("The %1 theme will be applied the next time Lumen Studio starts.").arg(next));
+    // The same choices as Settings → General, and like there from the next start: the icons and
+    // colours already drawn would not follow.
+    QMenu *themes = view->addMenu(Icons::get(Theme::instance().isDark() ? QStringLiteral("moon") : QStringLiteral("sun")), tr("Theme"));
+    themes->setObjectName(QStringLiteral("themeMenu"));
+    auto *themeGroup = new QActionGroup(themes);
+    const QList<std::pair<QString, QString>> themeChoices = {{QStringLiteral("auto"), tr("Automatic")},
+                                                             {QStringLiteral("dark"), tr("Dark")},
+                                                             {QStringLiteral("light"), tr("Light")},
+                                                             {QStringLiteral("high-contrast"), tr("High contrast")}};
+    for (const auto &[id, label] : themeChoices) {
+        QAction *a = themes->addAction(label);
+        a->setObjectName(QStringLiteral("theme-%1").arg(id));
+        a->setCheckable(true);
+        a->setData(id);
+        themeGroup->addAction(a);
+        connect(a, &QAction::triggered, this, [this, id] {
+            if (Settings::instance().theme() == id)
+                return;
+            Settings::instance().setValue(QStringLiteral("ui/theme"), id);
+            m_studio->notify(tr("The theme changes the next time Lumen Studio starts."));
+        });
+    }
+    connect(themes, &QMenu::aboutToShow, this, [themes] {
+        for (QAction *a : themes->actions())
+            a->setChecked(a->data().toString() == Settings::instance().theme());
     });
 
     // What is not "describe a change" (that is the prompt bar's): the AI panel's actions.
@@ -486,14 +524,21 @@ void MainWindow::buildMenus()
         m_documentActions << a;
         return a;
     };
+    // Not every image engine can upscale or remove a background: those actions are off then, and
+    // their tooltip says what would help (updateDocumentActions).
+    aiMenu->setToolTipsVisible(true);
     QMenu *upscale = aiMenu->addMenu(Icons::get(QStringLiteral("upscale")), tr("Upscale"));
+    upscale->setToolTipsVisible(true);
     for (const double factor : {2.0, 3.0, 4.0}) {
-        aiAction(upscale, QStringLiteral("ai-upscale-%1").arg(int(factor)), QStringLiteral("upscale"), QStringLiteral("%1×").arg(int(factor)),
-                 tr("A larger copy of the image, %1 times as wide, as a new document").arg(int(factor)),
-                 [this, factor] { m_editor->aiPanel()->upscale(factor); });
+        QAction *a = aiAction(upscale, QStringLiteral("ai-upscale-%1").arg(int(factor)), QStringLiteral("upscale"), QStringLiteral("%1×").arg(int(factor)),
+                              tr("A larger copy of the image, %1 times as wide, as a new document").arg(int(factor)),
+                              [this, factor] { m_editor->aiPanel()->upscale(factor); });
+        m_utilityActions << UtilityAction{a, ai::Utility::Upscale, a->toolTip()};
     }
-    aiAction(aiMenu, QStringLiteral("ai-remove-background"), QStringLiteral("scissors"), tr("Remove background"),
-             tr("Cut out the subject onto a transparent layer"), [this] { m_editor->aiPanel()->run(AiPanel::Mode::RemoveBackground); });
+    QAction *removeBackground = aiAction(aiMenu, QStringLiteral("ai-remove-background"), QStringLiteral("scissors"), tr("Remove background"),
+                                         tr("Cut out the subject onto a transparent layer"),
+                                         [this] { m_editor->aiPanel()->run(AiPanel::Mode::RemoveBackground); });
+    m_utilityActions << UtilityAction{removeBackground, ai::Utility::RemoveBackground, removeBackground->toolTip()};
     aiAction(aiMenu, QStringLiteral("ai-expand"), QStringLiteral("outpaint"), tr("Expand canvas…"),
              tr("Make the canvas larger and let the image engine paint the new area"),
              [this] { m_editor->showAiPanel(AiPanel::Mode::Expand); });
@@ -501,10 +546,12 @@ void MainWindow::buildMenus()
              tr("Re-imagine the image (or the selection), keeping its layout; the words in the prompt bar guide it"),
              [this] { m_editor->aiPanel()->run(AiPanel::Mode::Variation); });
     // Poses are the Poses plugin's: without it nothing shows or edits a detected pose.
-    if (m_studio->hasPage(QStringLiteral("poses")))
-        aiAction(aiMenu, QStringLiteral("ai-detect-pose"), QStringLiteral("person"), tr("Detect pose"),
-                 tr("Find the people's pose in the image; it becomes the document's control pose"),
-                 [this] { m_editor->aiPanel()->run(AiPanel::Mode::DetectPose); });
+    if (m_studio->hasPage(QStringLiteral("poses"))) {
+        QAction *detect = aiAction(aiMenu, QStringLiteral("ai-detect-pose"), QStringLiteral("person"), tr("Detect pose"),
+                                   tr("Find the people's pose in the image; it becomes the document's control pose"),
+                                   [this] { m_editor->aiPanel()->run(AiPanel::Mode::DetectPose); });
+        m_utilityActions << UtilityAction{detect, ai::Utility::DetectPose, detect->toolTip()};
+    }
     aiMenu->addSeparator();
     QAction *allOptions = aiMenu->addAction(Icons::get(QStringLiteral("adjust")), tr("All AI options…"), this, [this] { m_editor->showAiPanel(); });
     allOptions->setObjectName(QStringLiteral("ai-all-options"));
@@ -552,6 +599,8 @@ void MainWindow::buildMenus()
     plugins->setToolTip(tr("Character creation, poses and Live2D parts are plugins: switch them on in Settings → Plugins"));
     plugins->setStatusTip(plugins->toolTip());
     connect(m_studio, &Studio::documentsChanged, this, &MainWindow::updateDocumentActions);
+    connect(m_studio->providers(), &ai::ProviderRegistry::providersChanged, this, &MainWindow::updateDocumentActions);
+    connect(m_studio->providers(), &ai::ProviderRegistry::rolesChanged, this, &MainWindow::updateDocumentActions);
     updateDocumentActions();
 
     QMenu *help = menuBar()->addMenu(tr("&Help"));
@@ -559,6 +608,16 @@ void MainWindow::buildMenus()
     setup->setObjectName(QStringLiteral("setUpAi"));
     setup->setToolTip(tr("Get an image engine: on this computer, an online service or a server that is already running"));
     setup->setStatusTip(setup->toolTip());
+    QAction *guide = help->addAction(Icons::get(QStringLiteral("info")), tr("User guide"), QKeySequence(QKeySequence::HelpContents), this,
+                                     [this] { showUserGuide(); });
+    guide->setObjectName(QStringLiteral("userGuide"));
+    guide->setToolTip(tr("How to select, describe a change, make new images, use filters and set up AI"));
+    guide->setStatusTip(guide->toolTip());
+    bind(guide, QStringLiteral("user-guide"), true);
+    QAction *keys = help->addAction(Icons::get(QStringLiteral("text")), tr("Keyboard shortcuts"), this, [this] { openSettings(QStringLiteral("shortcuts")); });
+    keys->setObjectName(QStringLiteral("keyboardShortcuts"));
+    keys->setToolTip(tr("Every command's keys, which you can change (Settings → Shortcuts)"));
+    keys->setStatusTip(keys->toolTip());
     help->addSeparator();
     QAction *models = help->addAction(Icons::get(QStringLiteral("folder")), tr("Open models folder"), this, [this] {
         const QString folder = m_studio->models()->defaultFolder();
@@ -582,6 +641,26 @@ void MainWindow::updateDocumentActions()
     const bool open = !m_studio->documents().isEmpty();
     for (QAction *a : std::as_const(m_documentActions))
         a->setEnabled(open);
+    // The AI menu's actions that need an engine that can do them: off, with what would help.
+    for (const UtilityAction &u : std::as_const(m_utilityActions)) {
+        const QString why = m_studio->generation()->utilityUnavailable(u.utility);
+        u.action->setEnabled(open && why.isEmpty());
+        u.action->setToolTip(why.isEmpty() ? u.tip : why);
+        u.action->setStatusTip(u.action->toolTip());
+    }
+}
+
+UserGuideDialog *MainWindow::showUserGuide(const QString &document, const QString &section)
+{
+    if (!m_guide) {
+        m_guide = new UserGuideDialog(this);
+        m_guide->setAttribute(Qt::WA_DeleteOnClose);
+    }
+    m_guide->showDocument(document, section);
+    m_guide->show();
+    m_guide->raise();
+    m_guide->activateWindow();
+    return m_guide;
 }
 
 void MainWindow::showPage(const QString &id)

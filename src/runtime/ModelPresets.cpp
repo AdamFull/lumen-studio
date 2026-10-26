@@ -23,6 +23,47 @@ class Text
     Q_DECLARE_TR_FUNCTIONS(lumen::runtime::ModelPresets)
 };
 
+// The texts of the preset files that people read: the model types' names, the notes and the
+// components' labels. The presets are data, so lupdate finds their texts here; tst_runtime
+// presetTexts fails when a preset file has one this list lacks.
+const char *const kPresetTexts[] = {
+    // Model types.
+    QT_TRANSLATE_NOOP("lumen::runtime::ModelPresets", "Anima"),
+    QT_TRANSLATE_NOOP("lumen::runtime::ModelPresets", "FLUX.1 (dev, schnell, Kontext; separate files)"),
+    QT_TRANSLATE_NOOP("lumen::runtime::ModelPresets", "FLUX.1 (single file)"),
+    QT_TRANSLATE_NOOP("lumen::runtime::ModelPresets", "FLUX.2 [klein] 4B"),
+    QT_TRANSLATE_NOOP("lumen::runtime::ModelPresets", "FLUX.2 [klein] 9B"),
+    QT_TRANSLATE_NOOP("lumen::runtime::ModelPresets", "Qwen-Image / Qwen-Image-Edit"),
+    QT_TRANSLATE_NOOP("lumen::runtime::ModelPresets", "SDXL (also Illustrious, NoobAI, Pony)"),
+    QT_TRANSLATE_NOOP("lumen::runtime::ModelPresets", "Stable Diffusion 1.5"),
+    // Notes.
+    QT_TRANSLATE_NOOP("lumen::runtime::ModelPresets", "Changes a picture as you describe it."),
+    QT_TRANSLATE_NOOP("lumen::runtime::ModelPresets", "Makes new pictures. Words under “Leave out” are not used."),
+    QT_TRANSLATE_NOOP("lumen::runtime::ModelPresets", "Fast (4 steps). Words under “Leave out” are not used."),
+    QT_TRANSLATE_NOOP("lumen::runtime::ModelPresets",
+                      "One file with the text encoders and the VAE inside. Words under “Leave out” are not used."),
+    QT_TRANSLATE_NOOP("lumen::runtime::ModelPresets", "The slower base model (20 steps); it uses the words under “Leave out”."),
+    QT_TRANSLATE_NOOP("lumen::runtime::ModelPresets",
+                      "Makes and changes pictures, also from reference images; fast (4 steps). Words under “Leave out” are not used."),
+    QT_TRANSLATE_NOOP("lumen::runtime::ModelPresets", "A large model (20B): realistic with 16 GB of graphics memory or more."),
+    // The components.
+    QT_TRANSLATE_NOOP("lumen::runtime::ModelPresets", "CLIP-L text encoder"),
+    QT_TRANSLATE_NOOP("lumen::runtime::ModelPresets", "FLUX.1 VAE"),
+    QT_TRANSLATE_NOOP("lumen::runtime::ModelPresets", "FLUX.2 VAE"),
+    QT_TRANSLATE_NOOP("lumen::runtime::ModelPresets", "Qwen-Image VAE"),
+    QT_TRANSLATE_NOOP("lumen::runtime::ModelPresets", "Qwen2.5-VL 7B text encoder"),
+    QT_TRANSLATE_NOOP("lumen::runtime::ModelPresets", "Qwen3 0.6B text encoder"),
+    QT_TRANSLATE_NOOP("lumen::runtime::ModelPresets", "Qwen3 4B text encoder"),
+    QT_TRANSLATE_NOOP("lumen::runtime::ModelPresets", "Qwen3 8B text encoder"),
+    QT_TRANSLATE_NOOP("lumen::runtime::ModelPresets", "T5-XXL text encoder"),
+};
+
+// A preset file's text in the user's language (as it is when it is not in the list).
+QString presetText(const QString &text)
+{
+    return text.isEmpty() ? text : Text::tr(text.toUtf8().constData());
+}
+
 QStringList lowerStrings(const QJsonValue &v)
 {
     QStringList out;
@@ -150,7 +191,7 @@ QList<ModelPreset> parseModelPresets(const QByteArray &json, const QString &fami
     for (auto it = typeObjects.begin(); it != typeObjects.end(); ++it) {
         if (it.value().toString().isEmpty())
             return fail(QStringLiteral("type %1 needs a name").arg(it.key()));
-        types.insert(it.key(), it.value().toString());
+        types.insert(it.key(), presetText(it.value().toString()));
     }
 
     QHash<QString, PresetFile> files;
@@ -177,14 +218,14 @@ QList<ModelPreset> parseModelPresets(const QByteArray &json, const QString &fami
         p.id = o.value(QStringLiteral("id")).toString();
         p.name = o.value(QStringLiteral("name")).toString();
         p.familyFile = familyFile;
-        p.note = o.value(QStringLiteral("note")).toString();
+        p.note = presetText(o.value(QStringLiteral("note")).toString());
         p.docs = o.contains(QStringLiteral("docs")) ? QUrl(o.value(QStringLiteral("docs")).toString()) : familyDocs;
         if (p.id.isEmpty() || p.name.isEmpty())
             return fail(QStringLiteral("a preset needs an id and a name"));
         p.type = o.value(QStringLiteral("type")).toString();
         if (p.type.isEmpty()) {
             p.type = p.id;
-            p.typeName = p.name;
+            p.typeName = presetText(p.name);
         } else if (!types.contains(p.type)) {
             return fail(QStringLiteral("preset %1: unknown type %2 (name it under \"types\")").arg(p.id, p.type));
         } else {
@@ -209,7 +250,7 @@ QList<ModelPreset> parseModelPresets(const QByteArray &json, const QString &fami
             s.kind = modelKindFromKey(so.value(QStringLiteral("kind")).toString());
             s.family = so.value(QStringLiteral("family")).toString();
             s.variant = so.value(QStringLiteral("variant")).toString();
-            s.label = so.value(QStringLiteral("label")).toString();
+            s.label = presetText(so.value(QStringLiteral("label")).toString());
             s.required = so.value(QStringLiteral("required")).toBool(true);
             const QString fileId = so.value(QStringLiteral("file")).toString();
             if (!files.contains(fileId))
@@ -261,6 +302,14 @@ QList<ModelPreset> parseModelPresets(const QByteArray &json, const QString &fami
     }
     if (error)
         error->clear();
+    return out;
+}
+
+QStringList presetTexts()
+{
+    QStringList out;
+    for (const char *text : kPresetTexts)
+        out << QString::fromUtf8(text);
     return out;
 }
 

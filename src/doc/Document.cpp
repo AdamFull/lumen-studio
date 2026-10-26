@@ -7,6 +7,7 @@
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QPainter>
+#include <QTransform>
 
 namespace lumen::doc {
 
@@ -274,6 +275,61 @@ void Document::scaleImage(const QSize &newSize)
     if (!m_selection.isNull())
         after.selection = img::scaled(m_selection, newSize, true);
     m_undo.push(new ContentCommand(this, before, after, tr("Scale image")));
+}
+
+namespace {
+
+// Pixel-exact: a turn by a multiple of 90 degrees or a mirror maps every pixel onto one pixel.
+QImage turned(const QImage &image, int degrees, std::optional<Qt::Orientation> flip)
+{
+    if (image.isNull())
+        return image;
+    QTransform t;
+    if (flip)
+        t.scale(*flip == Qt::Horizontal ? -1 : 1, *flip == Qt::Vertical ? -1 : 1);
+    else
+        t.rotate(degrees);
+    return image.transformed(t, Qt::FastTransformation);
+}
+
+} // namespace
+
+void Document::rotateImage(int degrees)
+{
+    degrees = ((degrees % 360) + 360) % 360;
+    if (degrees != 90 && degrees != 180 && degrees != 270)
+        return;
+    ContentCommand::State before = ContentCommand::capture(this);
+    ContentCommand::State after;
+    after.size = degrees == 180 ? m_size : m_size.transposed();
+    after.active = m_active;
+    for (const LayerPtr &l : m_layers) {
+        auto c = std::make_shared<Layer>(*l);
+        c->image = turned(l->image, degrees, std::nullopt);
+        after.layers.append(c);
+    }
+    if (!m_selection.isNull())
+        after.selection = turned(m_selection, degrees, std::nullopt);
+    m_undo.push(new ContentCommand(this, before, after,
+                                   degrees == 90    ? tr("Rotate 90° clockwise")
+                                   : degrees == 270 ? tr("Rotate 90° counter-clockwise")
+                                                    : tr("Rotate 180°")));
+}
+
+void Document::flipImage(Qt::Orientation orientation)
+{
+    ContentCommand::State before = ContentCommand::capture(this);
+    ContentCommand::State after;
+    after.size = m_size;
+    after.active = m_active;
+    for (const LayerPtr &l : m_layers) {
+        auto c = std::make_shared<Layer>(*l);
+        c->image = turned(l->image, 0, orientation);
+        after.layers.append(c);
+    }
+    if (!m_selection.isNull())
+        after.selection = turned(m_selection, 0, orientation);
+    m_undo.push(new ContentCommand(this, before, after, orientation == Qt::Horizontal ? tr("Flip horizontally") : tr("Flip vertically")));
 }
 
 // ---- raw mutation -----------------------------------------------------------------------------

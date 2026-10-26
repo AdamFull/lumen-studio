@@ -139,6 +139,7 @@ ModelHubDialog::ModelHubDialog(Studio *studio, QWidget *parent)
     m_source->addItem(runtime::hubSourceName(HubSource::HuggingFace), int(HubSource::HuggingFace));
     m_source->addItem(runtime::hubSourceName(HubSource::Civitai), int(HubSource::Civitai));
     m_category = new QComboBox(this);
+    m_category->setObjectName(QStringLiteral("hubCategory"));
     m_search = new QLineEdit(this);
     m_search->setPlaceholderText(tr("Search models…"));
     m_search->setClearButtonEnabled(true);
@@ -324,13 +325,14 @@ void ModelHubDialog::updateSourceControls()
     const QString current = m_category->currentData().toString();
     QSignalBlocker block(m_category);
     m_category->clear();
-    if (source() == HubSource::HuggingFace)
-        m_category->addItem(tr("Language and vision (GGUF)"), QStringLiteral("llm"));
+    // Image models first: the editor's; language models are only for plugins.
     m_category->addItem(tr("Image models"), QStringLiteral("checkpoint"));
     m_category->addItem(tr("LoRAs"), QStringLiteral("lora"));
     m_category->addItem(tr("ControlNets"), QStringLiteral("controlnet"));
     if (source() == HubSource::Civitai)
         m_category->addItem(tr("Upscalers"), QStringLiteral("upscaler"));
+    if (source() == HubSource::HuggingFace)
+        m_category->addItem(tr("Language and vision (GGUF)"), QStringLiteral("llm"));
     m_category->addItem(tr("Everything"), QString());
     m_category->setCurrentIndex(first ? 0 : std::max(0, m_category->findData(current)));
     m_nsfw->setVisible(source() == HubSource::Civitai);

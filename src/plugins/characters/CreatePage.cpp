@@ -106,6 +106,10 @@ CreatePage::CreatePage(Studio *studio, QWidget *parent)
     for (const ai::PurposeProfile &p : ai::purposeProfiles())
         m_purpose->addItem(p.name, p.id);
     m_purpose->setToolTip(tr("What the images are for — shapes poses, framing and backgrounds"));
+    // As wide as the chosen purpose needs, not the longest one: with the count and Send it fills a
+    // row of the chat column, whose minimum width it would set otherwise (German was 17 px over).
+    m_purpose->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    m_purpose->setMinimumContentsLength(11);
     m_count = new QSpinBox(composer);
     m_count->setRange(0, ai::Director::kMaxDatasetShots);
     m_count->setSpecialValueText(tr("Auto"));
@@ -837,7 +841,7 @@ void CreatePage::generateShot(const QString &shotId, int attempt, const QJsonObj
     ai::ImageProvider *provider = m_provider->imageProvider();
     if (!shot || !provider) {
         if (!provider)
-            m_studio->notify(tr("Add an image provider in Settings → Providers first."), QStringLiteral("warning"));
+            m_studio->notify(tr("There is no image engine. Set one up with Help → Set up AI…"), QStringLiteral("warning"));
         return;
     }
     const ai::ImageCapabilities caps = provider->capabilities();
@@ -1190,7 +1194,7 @@ void CreatePage::generateShots(const QStringList &shotIds, std::function<void(QS
         return;
     }
     if (!m_provider->imageProvider()) {
-        done({}, tr("No image provider is configured."));
+        done({}, tr("There is no image engine. Set one up with Help → Set up AI…"));
         return;
     }
     QStringList ids;

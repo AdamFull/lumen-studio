@@ -57,8 +57,11 @@ QMessageBox *unsavedChangesBox(const QStringList &fileNames, bool quitting, QWid
     auto *box = new QMessageBox(QMessageBox::Warning, quitting ? DocumentFiles::tr("Quit") : DocumentFiles::tr("Close the picture"),
                                 text, QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel, parent);
     box->setObjectName(QStringLiteral("unsavedChangesQuestion"));
-    QString more = n == 1 ? DocumentFiles::tr("If you don't save, the file stays as it was. Your project keeps the changes.")
-                          : DocumentFiles::tr("If you don't save, the files stay as they were. Your project keeps the changes.");
+    // Where the changes go: Lumen keeps every picture in the project, so "Don't save" loses nothing.
+    QString more = n == 1 ? DocumentFiles::tr("If you don't save, the file stays as it was. Lumen keeps the changed picture in this "
+                                              "project: the start screen lists it under Recent in this project.")
+                          : DocumentFiles::tr("If you don't save, the files stay as they were. Lumen keeps the changed pictures in "
+                                              "this project: the start screen lists them under Recent in this project.");
     if (n > 1)
         more = fileNames.join(QLatin1Char('\n')) + QStringLiteral("\n\n") + more;
     box->setInformativeText(more);
