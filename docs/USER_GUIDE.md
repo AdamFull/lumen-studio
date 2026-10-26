@@ -298,6 +298,8 @@ fit (hover one for its name).
 
 * **Open image…** (`Ctrl+O`), **Paste from clipboard** (the copied picture as a new document),
   **New from prompt…** and **New blank canvas…** (`Ctrl+N`);
+* **Recent files**: the pictures you opened from disk or saved as (the same as **File → Open
+  recent**), with small previews; a file that is not there any more is left out;
 * the project's recent documents (marked *Layers*: they keep their layers) and images, without the
   results of a run that were not kept; click one to open it; **Browse project images…** shows all
   of them;
@@ -328,8 +330,10 @@ up AI", and a click opens Set up AI); the local servers, **Safe for
 work** and the jobs (click for the Queue, which says when nothing is running). The Queue and the
 panels of plugins lie over the right of the editor, above the prompt bar, so they never hide it.
 
-**Menus.** *File*: new, open, paste, browse, **Save to project** (`Ctrl+S`: the open documents
-with their layers, in the project; **Export image…** writes a picture file), export and projects.
+**Menus.** *File*: new, open, **Open recent** (a file that is gone is greyed; **Clear the list**),
+paste, browse; **Save** (`Ctrl+S`), **Save as…** (`Ctrl+Shift+S`), **Export a copy…**
+(`Ctrl+Shift+E`) and **Close document** (`Ctrl+W`) for the picture's file (§5); **Save to project**
+and **Save a copy to project images**; projects; **Quit** (`Ctrl+Q`).
 *Edit*: **Undo** and **Redo**, copy and paste, importing an image as a layer, **Settings…**
 (`Ctrl+,`). *Select*: **Select all**, **Deselect**, **Invert selection**, **Delete selected
 pixels**. *View*: zoom in and out, fit to the window, actual pixels, **Filters** (the Filters tab,
@@ -340,6 +344,12 @@ a change: **Upscale** (2×, 3×, 4×), **Remove background**, **Expand canvas…
 and **Plugins…**. *Help*: **Set up AI…** (§2), the models and log folders, *About*. The editor's
 commands in the menus are the same as their keys: a key changed in Settings → Shortcuts shows there
 too.
+
+**Other windows.** The keys of the commands that are not about the picture in the editor (New,
+Open, New from prompt, Browse project images, Open project, Settings, the Queue, the assistant, the
+tools of plugins, Quit) work the same while one of Lumen's other windows is in front: a plugin's
+tool, the filter editor or Browse project images. A window's own keys stay its own: in the filter
+editor `Ctrl+S` saves the filter and `Ctrl+Z` undoes its last step.
 
 ### Plugins
 
@@ -539,14 +549,40 @@ provider settings.
 
 ## 5. The editor
 
-Open images with **File → Open image…** (`Ctrl+O`), **File → Paste from clipboard**, the start
-screen, or drag them onto the window. PSD files open with their layers; **File → Export image…**
-(`Ctrl+Shift+E`) writes PNG, JPEG, WebP or a layered PSD, and **File → Save a copy to project
-images** (`Ctrl+Shift+S`) keeps the flattened picture with the project's images. **File → Save to
-project** (`Ctrl+S`) saves the documents with their layers in the project (this also happens on its
-own); it does not write over the file you opened, export it for that. Closing the last document
-shows the start screen again. A document opens with the rectangle selection, the start of changing
-an area with words.
+Open images with **File → Open image…** (`Ctrl+O`), **File → Open recent**, **File → Paste from
+clipboard**, the start screen, or drag them onto the window. PSD files open with their layers. A
+picture that is open already is shown rather than opened twice. Closing the last document shows the
+start screen again. A document opens with the rectangle selection, the start of changing an area
+with words.
+
+**Saving.** A picture opened from a file remembers that file, as in other editors:
+
+* **File → Save** (`Ctrl+S`) writes the picture back to its file, in the file's own format: a JPEG
+  stays a JPEG, at the quality it had. Its tab shows `*` after the name while the picture has
+  changes that are not in the file; undoing back to what was saved takes the `*` away.
+* The first time you save over a picture in a way that changes the file (the layers merged into one,
+  transparent parts that become white, the small loss of quality of a JPEG, or what Lumen cannot
+  keep of the file, such as 16 bits per colour or Photoshop layer masks), Lumen asks first, in plain
+  words: **Save over**, **Save as…** or **Cancel**. **Don't ask again for this picture** stops the
+  question for it, also next time.
+* A new picture (from a prompt, a blank canvas, the clipboard) has no file yet: **Save** asks for
+  one, as **File → Save as…** (`Ctrl+Shift+S`) does. Save as writes PNG, JPEG, WebP and TIFF (where
+  your copy of Qt can write them) or a layered Photoshop file (PSD), and from then on the picture
+  saves to that file and its tab takes the file's name. A format Lumen cannot write (GIF) goes to
+  Save as too.
+* **File → Export a copy…** (`Ctrl+Shift+E`) writes a copy in any of those formats; the picture
+  keeps saving to its own file.
+* A picture is written to a temporary file first, which replaces the old one only once it is
+  complete: if saving fails, the file stays as it was.
+* Closing a picture (**File → Close document**, `Ctrl+W`, or the ✕ on its tab) or quitting while it
+  has changes not saved to its file asks **Save**, **Don't save** or **Cancel** (one question for
+  all of them when you quit). Pictures without a file close as before.
+* The project keeps every document with its layers either way (§9). Opening a file again whose
+  document the project keeps, unchanged since it was saved to the file or read from it, gives you
+  that document back with its layers; a file that another program changed opens as it is now.
+* **File → Save to project** saves the open documents with their layers in the project now (it also
+  happens on its own), and **File → Save a copy to project images** adds the merged picture to the
+  project's images.
 
 ### Tools
 
@@ -580,6 +616,8 @@ place uses moves to the new action (the page tells you which one lost it); *Rese
 | Swap colours | `X` |
 | Generate from the prompt bar | `Enter` in its words, `Ctrl+Enter` anywhere in the editor |
 | Results: compare / keep / drop | `←` `→` / `Enter` / `Esc` |
+| Save / save as / export a copy | `Ctrl+S` / `Ctrl+Shift+S` / `Ctrl+Shift+E` |
+| Open image / new blank canvas / close document | `Ctrl+O` / `Ctrl+N` / `Ctrl+W` |
 
 ### Filters
 
@@ -599,9 +637,11 @@ a small preview.
   layer under the results. The preview comes back when you discard them, or for the picture with the
   result once you keep one.
 * **Apply** (always at the bottom of the panel, with the line that says what will change) runs the
-  filter on the active layer at full resolution. With a selection only the selected area changes,
-  without one the whole layer. **Result on**: *A new layer* (the default: the result goes on a new
-  layer above, named after the filter, and the original stays underneath) or *This layer*. One
+  filter at full resolution on the active layer, or on the whole picture (every visible layer, as
+  you see it) for a filter that reads it, such as the built-in ones with AI. With a selection only
+  the selected area changes, without one the whole layer or picture. **Result on**: *A new layer*
+  (the default: the result goes on a new layer above, named after the filter, and the original stays
+  underneath; for a filter of the whole picture, above all the layers) or *This layer*. One
   **Undo** takes it back. While it works, a bar shows the step that runs, and **Cancel** stops it
   without changing anything. You can keep working meanwhile: what you paint on the layer outside
   the area the filter changes stays.
@@ -615,7 +655,8 @@ cancel it (or press **Cancel** in the panel). To run a step again, apply the fil
 has no **Retry** for it. When no engine can do a step, the panel says so in red before anything
 runs, and where to change that: Help → Set up AI… without an engine, Settings → AI's engine for
 changes when your model cannot change a picture from a description. If you remove an engine while a
-step of it runs, the step stops and says so.
+step of it runs, the step stops and says so. The built-in filters with AI read the whole picture, as
+the AI menu does, and put their result on a new layer above all the others.
 
 * **Colorize with AI** gives a black-and-white photo natural colours and keeps everything else as
   it is. With a selection only the selected area is coloured: the area around it is sent to the
@@ -624,8 +665,8 @@ step of it runs, the step stops and says so.
   Its **Instruction** can be changed in the panel ("colour the dress red").
 * **Clean up background** tidies the background (clutter, stray objects, spots) and keeps the main
   subject. Select the background to change only that.
-* **Remove background** cuts out the main subject. On a new layer, the original layer is hidden
-  under the cut-out (still there, unchanged), so the transparency shows. It needs an engine that
+* **Remove background** cuts out the main subject. On a new layer, the layers are hidden under the
+  cut-out (still there, unchanged), so the transparency shows. It needs an engine that
   removes backgrounds: Stable Diffusion WebUI with its background removal extension, fal.ai or
   Stability AI.
 * **Upscale ×2** makes the whole picture twice as large with an AI upscaler (every layer, in one
@@ -638,8 +679,10 @@ step of it runs, the step stops and says so.
 
 **New filter…** (in the panel or the **Tools** menu) opens the filter editor, a window of its own;
 **Tools → Filter editor…** (with a document open) shows the Filters tab and opens the filter chosen
-there. A filter is a chain of nodes from **Input** (the active layer, with the selection as a mask)
-to **Output** (the result; connect a mask to its *Where to apply* to limit where it goes).
+there. A filter is a chain of nodes from **Input** to **Output** (the result; connect a mask to its
+*Where to apply* to limit where it goes). The Input gives the selection as a mask and, as its
+**Reads** setting says, the *Active layer* or the *Whole picture* (every visible layer merged); a
+filter of the whole picture puts its result above all the layers.
 
 * **Add node** (`Shift+A`, or right-click on an empty place) lists the nodes by kind; type to
   search and press `Enter` to add the first one found.
@@ -801,7 +844,8 @@ Modified documents are saved into the project a few seconds after your last chan
 seconds, and when the project closes. The documents that were open come back when the project
 opens again, also after a crash. In that case Lumen tells you, and a crash report (`crash-*.txt`
 with a `.dmp` minidump) is in the log folder. Closed documents are on the start screen and in the
-**Documents** view of Browse project images.
+**Documents** view of Browse project images. A document opened from a file remembers that file in
+the project, and whether it has changes that are not in it (File → Save, §5).
 **File → Open project…** (`Ctrl+Shift+O`) switches projects; the last one opens on start.
 
 ## 10. Command line

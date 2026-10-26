@@ -2014,8 +2014,8 @@ Survey of the code, the app log and user testing (October 2026):
   ports, edit parameters, live preview of the selected node. A graph can *publish* parameters;
   published ones appear as sliders when the filter is used.
 * **In the editor**: the *Filters* panel lists saved graphs and a few built-in ones (e.g.
-  *Colorize with AI*, *Clean up background*); applying runs on the active layer through the
-  selection, as one undo step, onto a new layer by default.
+  *Colorize with AI*, *Clean up background*); applying runs on the active layer (or, when the Input
+  reads it, the whole picture) through the selection, as one undo step, onto a new layer by default.
 
 #### 17.7 Plugins
 
@@ -2396,7 +2396,8 @@ Survey of the code, the app log and user testing (October 2026):
     `tst_live characterEverywhere` builds its new-image requests without the page.
   * Not yet: characters in new images (the Characters plugin's request decorators); the German
     translation of the new texts; the main window's menu shortcuts do not work while a plugin window
-    is active, and open plugin windows are not reopened at the next start.
+    is active (since the files step they do), and open plugin windows are not reopened at the next
+    start.
 - [x] Prompt bar (§17.2): selection, whole-image and blank-canvas modes, *Remove*, variants strip,
   results as masked layers. Test with the mock server: a selection edit leaves every pixel
   outside the feathered mask unchanged.
@@ -2558,8 +2559,8 @@ Survey of the code, the app log and user testing (October 2026):
   * Not yet: prompt-bar actions of plugins (§17.7); a result is previewed whole (no before/after
     view); Remove's instruction for edit models names "the object in the middle", since the model
     does not see the selection; the start screen lists the project's images, not files opened from
-    disk, and a picture is saved only by Export (no *Save over original*); the German translation of
-    the new texts.
+    disk, and a picture is saved only by Export (no *Save over original*) (both since the files
+    step); the German translation of the new texts.
 - [x] Setup wizard and Settings → AI (§17.5).
   * `ui/dialogs/SetupWizard` replaces the first-run `OnboardingDialog` (which stays as Providers →
     *Detect local*, now titled *Find servers on this computer*). One entry point,
@@ -2907,12 +2908,12 @@ Survey of the code, the app log and user testing (October 2026):
     1280 × 720 and the panel at 300 × 540 (the side panel's minimum width, its height in a
     1280 × 720 window; first audited at 300 × 600, where *Apply* was below the fold of the real
     tab), no findings (the audit's 7 findings stay as they were).
-  * Not yet: the *Input* node reads the active layer only (§17.6 asks for "layer or document": a
-    filter of the whole picture, all layers, is not there yet); the filters folder cannot be moved;
-    slider values are not remembered between sessions; the preview's resolution does not follow the
-    zoom; the node editor has no copy and paste and does not link a new node to the selected one; a
-    result of another size is stretched to the layer (a crop does not crop the document); the German
-    translation of the new texts.
+  * Not yet: the filters folder cannot be moved; slider values are not remembered between sessions;
+    the preview's resolution does not follow the zoom; the node editor has no copy and paste and does
+    not link a new node to the selected one; a result of another size is stretched to the layer (a
+    crop does not crop the document); the German translation of the new texts. The *Input* node read
+    only the active layer, where §17.6 asks for "layer or document"; since the files step its *Reads*
+    is *Active layer* or *Whole picture*.
 - [x] AI nodes.
   * `ai/FilterNodes` (in `lumen_ai`, which now links `lumen_filters`; a configure check in
     `src/filters/CMakeLists.txt` fails when a filters source includes an AI, document, runtime or UI
@@ -3189,6 +3190,102 @@ Survey of the code, the app log and user testing (October 2026):
     Settings → AI's); the filter's preview is computed again after the results go, not kept
     meanwhile; the German translation of the new texts.
 - [ ] Fix the layout checklist (§17.9); screenshots after; then the audit runs strict in CI.
+- [x] Files like an image editor, and the remaining editor gaps (from the "Not yet" notes of steps 7,
+  8 and 11 and the merge reviews).
+  * A document remembers the image file it was opened from (`doc::FileLink` in `Document`: path,
+    format, the JPEG quality the file had, what the file has that the document does not keep,
+    "don't ask again", the file's size and time when it was read or written), kept in the project
+    with the document (its state's `file`, with whether it has changes that are not in the file;
+    `DocumentInfo` reads it with SQLite's `json_extract`, without the rest of the state, and a
+    SQLite without JSON functions only loses that). `Studio::openFile` sets it: the format from the
+    file's content, the JPEG quality from its luminance table (`doc::estimateJpegQuality`, the libjpeg
+    quality whose table fits, exact for files Qt wrote), "16 bits per colour" for a deep PNG or TIFF,
+    the approximations of a PSD (`PsdImport::warnings`). Whether the document is modified for its
+    file is the undo history's clean state (`QUndoStack::setClean` at a read or write, so undoing back
+    to it clears it) or, for a document read back from the project, the stored flag; its tab shows
+    `*` after the name and the file in its tooltip.
+  * `ui/DocumentFiles` (owned by the editor page): *File → Save* (`Ctrl+S`, `app.save`) writes the
+    picture back in the file's format, at its quality; the first time per document (and session) that
+    this changes the picture in the file (`doc::saveEffects`: the layers merged, transparency lost,
+    a lossy format; plus the file's own losses) it asks "Save over photo.jpg?" with the reasons in
+    plain words, *Save over* / *Save as…* / *Cancel* and *Don't ask again for this picture* (kept in
+    the link). A document without a file, or with one Lumen cannot write (GIF), goes to *Save as…*
+    (`Ctrl+Shift+S`, `app.save-as`): PNG, JPEG, WebP and TIFF where Qt can write them (this Qt has
+    no WebP or TIFF writer), layered PSD (`psd` writer), BMP; the document then saves there and takes
+    the file's name. *Export image…* is *Export a copy…* (same id and key): the same formats, the
+    document's file unchanged. Writing goes through `QSaveFile` (`doc::writeImageFile`), so a failed
+    save leaves the file as it was; a change made while it writes stays marked. *Save to project*
+    (`app.save-all`) lost `Ctrl+S` and *Save a copy to project images* (`app.save-to-library`) lost
+    `Ctrl+Shift+S`; their ids stay, so customised keys still work.
+  * Closing a document (*File → Close document*, the tab's ✕) with changes not saved to its file
+    asks Save / Don't save / Cancel; quitting asks once for all of them, and closes the ones not
+    saved so the next start does not bring them back (the project keeps them, as every document; the
+    quit now also writes which documents are open). Documents without a file close as before.
+  * *File → Open recent* (`Settings::recentFiles`, 12, opened files and *Save as…*): file names (with
+    the folder when two are alike), a missing one greyed with "not there any more", *Clear the list*.
+    The start screen's *Recent files* row shows those that are there with thumbnails read in the
+    background at the tile's size (a PSD's merged picture), rebuilt when the list changes or Lumen
+    comes to the front; a project document that is just one of those files, unchanged, is not listed
+    twice. `Studio::openFile` shows a file that is open already; a file the project keeps as a
+    document, unchanged in it and on disk (the stored size and time), opens that document with its
+    layers; a missing one says so and leaves the list.
+  * The main window's keys in its other windows: `Shortcuts::addAppWide` marks the commands that
+    are not about the editor's picture (New, Open, New from prompt, Paste, Browse project images,
+    New and Open project, Quit, Settings, the Queue, plugin panels and tools, New filter); the windows
+    of plugin pages, Browse project images and the filter editor call `shareAppWide(this)`, which adds
+    proxy actions with the commands' keys (customised ones too, kept in step), minus the keys of the
+    window's own actions and buttons, so the filter editor's `Ctrl+S`, `Ctrl+Z` and the Parts page's
+    undo stay theirs and nothing is ambiguous (one command per name: a main window made again
+    replaces the one before). Save, Close document and the editor's own commands are not shared: in
+    another window they would act on a picture that is not in front. *Quit* has `Ctrl+Q`
+    (`QKeySequence::Quit` has no key on Windows), and *Open image…* starts in the folder of the last
+    file opened or saved.
+  * Closing a document cancels its prompt-bar run: `Studio::documentClosing` (new; `closeDocument`
+    also returns the future of its last save), `VariantStrip::forget` cancels the run's jobs and drops
+    its results; a run still being prepared has its jobs cancelled as they come (`track` of a closed
+    document), and a job of a closed document retried from the Queue does not come back. The next
+    document's run and results are untouched.
+  * Filters: the *Input* node's *Reads* is *Active layer* (default) or *Whole picture* (every visible
+    layer merged: `EvalInputs::picture`, `EvalContext::picture`, part of the Input's cache key;
+    `Graph::readsWholePicture`). `FilterRunner::wholePicture` keeps the merged picture while the
+    layers stay the same, so the AI steps' keys stay too (the filter editor gets the same image from
+    the panel, so its *Run* still serves *Apply*). A filter of the whole picture puts its result on a
+    new layer above all the others (*Result on: A new layer*) or into the active layer (*This
+    layer*), as one undo step; a cut-out hides every visible layer under it; a picture changed while
+    it applied is put together again. The preview shows the same; the panel's line says what it
+    reads and where the result goes. The built-in AI filters (*Colorize with AI*, *Clean up
+    background*, *Remove background*, *Upscale ×2*) read the whole picture, as the AI menu does; the
+    classic ones keep the active layer, as in other editors.
+  * English plural form of the quit question in `translations/lumen_en.ts`.
+  * Tests: `tst_files` (new, 9 functions): `imageFormats` (the formats, effects, JPEG qualities 30–100
+    told back, a failed write leaves the file), `saveOverOriginal` (the link, the tab's mark, Save
+    without a question, undo and redo across the saved state, Cancel and Save over with two layers,
+    asked once, the question's box, the link and the mark through the project), `saveOverJpeg`
+    (quality 70 kept, "don't ask again" in a later session, transparency said), `saveAsFormats` (a new
+    picture's Save asks; every writable format, PSD with its layers; the name; the dialog's
+    suffix; Export a copy; the shortcut ids; a GIF goes to Save as), `closeAndQuitAsk` (no question
+    unchanged; the tab's ✕, Cancel, Don't save, Save; a picture without a file; quitting with two:
+    Cancel stays, Save writes both and quits), `recentFiles` (order, shown not opened twice, the menu
+    with a missing file greyed, the start screen's tiles and thumbnails, the project's document with
+    its layers, a file changed elsewhere, a file deleted under the start screen, Clear the list),
+    `shortcutsInOtherWindows` (the Queue and New from prompt from the Poses window, a customised key;
+    the filter editor: the Queue's key, its own `Ctrl+Z` also when the Queue is given `Ctrl+Z`, its
+    `Ctrl+S` saves the filter and not the picture), `closingStopsItsRun` (A's queued job cancelled
+    and never sent, B's run and results kept; closed while prepared), `wholePictureInput` (the
+    setting, the built-in filters, layer and whole picture, the new layer on top, one undo step, a
+    selection, the preview, into the layer, a cut-out hiding both layers). `shortcutsInOtherWindows`
+    and `closingStopsItsRun` were checked to fail without their fixes. Updated: `tst_canvas
+    editorMenus` (the File menu), `tst_filters_ui upscaleWithSelection` (the panel's line).
+    `tst_layout fileQuestions` (new): the save-over question with every reason and a long name, the
+    close and quit questions, the start screen with recent files at 1280 × 720; no findings (the
+    audit stays at 4, §17.9 item 8). The whole suite passes (Qt's totals over the 21 binaries: 390
+    passed, 28 skipped: the live checks and one runtime test).
+  * Not yet: the file's metadata (EXIF, colour profile) is not written back; a picture deeper than 8
+    bits per colour is saved at 8 (said before saving over); WebP files are taken as lossy (their
+    quality is not read back); a file changed on disk by another program while it is open is not
+    noticed; *File → Save* in another window (a plugin's) does nothing; open plugin windows are not
+    reopened at the next start; switching projects closes documents without asking (they stay in that
+    project's session, with their marks); the German translation of the new texts.
 - [ ] User guide and README rewritten around the editor; plugins documented separately.
 - [ ] Short live check (RTX 4060 8 GB, FLUX.2 klein 4B through sd.cpp): one selection edit, one
   whole-image colorize, one new image. Everything before this step uses mock servers.
