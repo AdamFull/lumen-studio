@@ -11,10 +11,12 @@
 #include <QKeyEvent>
 #include <QPainter>
 #include <QPainterPath>
+#include <QScreen>
 #include <QScrollArea>
 #include <QScrollBar>
 #include <QSlider>
 #include <QTextBlock>
+#include <QTextLayout>
 
 #include <climits>
 #include <cmath>
@@ -152,6 +154,21 @@ void AutoTextEdit::adjustHeight()
     int lines = 0;
     for (QTextBlock b = document()->begin(); b.isValid(); b = b.next())
         lines += std::max(1, b.layout() ? b.layout()->lineCount() : 1);
+    // An empty field shows its whole hint (a long one was cut at the bottom).
+    if (document()->isEmpty() && !placeholderText().isEmpty() && viewport()->width() > 0) {
+        QTextLayout hint(placeholderText(), font());
+        QTextOption option;
+        option.setWrapMode(QTextOption::WordWrap);
+        hint.setTextOption(option);
+        hint.beginLayout();
+        int hintLines = 0;
+        for (QTextLine line = hint.createLine(); line.isValid(); line = hint.createLine()) {
+            line.setLineWidth(viewport()->width() - 2 * document()->documentMargin());
+            ++hintLines;
+        }
+        hint.endLayout();
+        lines = std::max(lines, hintLines);
+    }
     lines = std::clamp(lines, m_minLines, m_maxLines);
     // The frame and the style sheet's padding around the text, measured once the field is laid out
     // (a border of 1 and a padding of 6 px before), the document's margin above and below the text,
@@ -320,6 +337,24 @@ QScrollArea *verticalScroll(QWidget *content, QWidget *parent)
     area->viewport()->setAutoFillBackground(false);
     content->setAutoFillBackground(false);
     return area;
+}
+
+QSize availableWindowSize(const QWidget *window)
+{
+    const QScreen *screen = window->screen() ? window->screen() : QGuiApplication::primaryScreen();
+    if (!screen)
+        return QSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
+    // Room for a title bar and borders (Windows: 31 and 8 px), or the frame of a window that is shown
+    // when it is larger.
+    QSize frame(16, 40);
+    if (window->isVisible())
+        frame = frame.expandedTo(window->frameGeometry().size() - window->size());
+    return screen->availableGeometry().size() - frame;
+}
+
+void resizeWithinScreen(QWidget *window, const QSize &preferred)
+{
+    window->resize(preferred.boundedTo(availableWindowSize(window)).expandedTo(window->minimumSize()));
 }
 
 } // namespace lumen::ui

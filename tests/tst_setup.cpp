@@ -1056,7 +1056,7 @@ void TestSetup::settingsAi()
         auto *tabs = dlg.findChild<QTabWidget *>();
         QCOMPARE(tabs->currentIndex(), 0); // the first tab
         QCOMPARE(tabs->tabText(0), QStringLiteral("AI"));
-        QVERIFY(qobject_cast<AiSettingsPage *>(tabs->currentWidget()));
+        QVERIFY(tabs->currentWidget()->findChild<AiSettingsPage *>()); // in the page's scroll area
         QCOMPARE(named<ElidedLabel>(&dlg, QStringLiteral("aiImageEngine"))->fullText(), QStringLiteral("No image engine yet"));
         QCOMPARE(named<QLabel>(&dlg, QStringLiteral("aiImageStatus"))->text(), QStringLiteral("Not set up"));
         QCOMPARE(named<QPushButton>(&dlg, QStringLiteral("aiImageChange"))->text(), QStringLiteral("Set up…"));

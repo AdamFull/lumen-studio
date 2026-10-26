@@ -119,6 +119,12 @@ AiPanel::AiPanel(Studio *studio, AiOptions *options, QWidget *parent)
     }
     for (int c = 0; c < 3; ++c)
         grid->setColumnStretch(c, 1);
+    // One height for every action, also when one name takes two lines (the rows were uneven).
+    int buttonHeight = 0;
+    for (QAbstractButton *b : m_modes->buttons())
+        buttonHeight = std::max(buttonHeight, b->minimumHeight());
+    for (QAbstractButton *b : m_modes->buttons())
+        b->setMinimumHeight(buttonHeight);
     v->addLayout(grid);
     m_modeHint = mutedLabel(QString(), content);
     v->addWidget(m_modeHint);

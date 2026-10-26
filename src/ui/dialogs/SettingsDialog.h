@@ -63,7 +63,8 @@ private:
     void addProvider(const QString &typeId);
 
     Studio *m_studio;
-    QTabWidget *m_tabs;
+    QListWidget *m_sections; // the pages, on the left
+    QTabWidget *m_tabs;      // their stack (its tab bar hidden)
     QStringList m_tabIds; // showTab ids, in tab order
     QListWidget *m_list;
     QVBoxLayout *m_formHost;

@@ -80,6 +80,12 @@ NewFromPromptDialog::NewFromPromptDialog(Studio *studio, QWidget *parent)
         m_aspects->addButton(chip, i);
         flow->addWidget(chip);
     }
+    // One width for every shape, so the row is even ("1:1" was narrower than "16:9").
+    int chipWidth = 0;
+    for (QAbstractButton *chip : m_aspects->buttons())
+        chipWidth = std::max(chipWidth, chip->sizeHint().width());
+    for (QAbstractButton *chip : m_aspects->buttons())
+        chip->setMinimumWidth(chipWidth);
     const int aspect = std::clamp(Settings::instance().value(kAspectKey, 0).toInt(), 0, int(kAspects.size()) - 1);
     m_aspects->button(aspect)->setChecked(true);
     v->addWidget(chips);

@@ -905,3 +905,15 @@ and filters folders are then `<that folder>\models` and `<that folder>\filters`.
   usually name the cause: a model file that is not found, CUDA out of memory (lower *GPU layers* or
   the context size), or a port already in use.
 * **Logs**: **Help → Open log folder**. Include the latest log when reporting a problem.
+
+## 14. For developers: tests
+
+`scripts/run-tests.sh build/dev` runs every test program (set `LUMEN_DATA_DIR` to a folder of your
+own first, so the tests never touch your settings). Tests use mock servers and synthetic images;
+nothing runs on the GPU or downloads models.
+
+The layout audit (`tst_layout`, and `tst_layout_150` at a 150 % scale factor) opens the main window,
+its panels, every plugin window and every dialog at 1280 × 720, 1536 × 864 and 1920 × 1080, and
+fails on any control that is cut, squeezed, clipped or overlapping, and on a dialog that does not fit
+a 1280 × 680 screen. `LUMEN_LAYOUT_REPORT=1` only reports the findings; with `LUMEN_SCREENSHOT_DIR`
+set it saves `layout/layout-report.md` (`layout-150/` at 150 %) and a PNG of every state.

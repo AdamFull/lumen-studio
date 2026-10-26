@@ -27,7 +27,8 @@ PoseEditDialog::PoseEditDialog(Studio *studio, const pose::Pose &pose, const std
     , m_context(context)
 {
     setWindowTitle(tr("Edit pose"));
-    resize(760, 860);
+    // Tall for a standing figure, but within the screen (1080p at 150 %): the canvas takes what is left.
+    resizeWithinScreen(this, QSize(760, 860));
     auto *v = new QVBoxLayout(this);
     if (!context.isEmpty())
         v->addWidget(mutedLabel(context, this));

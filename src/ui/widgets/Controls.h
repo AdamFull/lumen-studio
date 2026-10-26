@@ -66,6 +66,7 @@ public:
     explicit AutoTextEdit(QWidget *parent = nullptr, int minLines = 2, int maxLines = 10);
     QString text() const { return toPlainText(); }
     void setSubmitOnEnter(bool enter) { m_enterSubmits = enter; }
+    int maxLines() const { return m_maxLines; }
 
 signals:
     void submitted();
@@ -114,5 +115,11 @@ QFrame *separator(Qt::Orientation orientation, QWidget *parent = nullptr);
 // Puts a side panel's content into a frameless scroll area that scrolls vertically only, so a tall
 // panel does not set the window's minimum height. The area is as wide as the content needs.
 QScrollArea *verticalScroll(QWidget *content, QWidget *parent = nullptr);
+// The largest size a window's own area (inside its title bar and frame) may take on the screen it
+// is on: the screen's available area (without the taskbar) less the window frame.
+QSize availableWindowSize(const QWidget *window);
+// Resizes a window to `preferred`, but never beyond availableWindowSize(), so on a small screen or
+// at a large scale factor a dialog opens whole and its content scrolls inside instead.
+void resizeWithinScreen(QWidget *window, const QSize &preferred);
 
 } // namespace lumen::ui

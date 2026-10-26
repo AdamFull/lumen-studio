@@ -845,7 +845,8 @@ ServerProfileDialog::ServerProfileDialog(Studio *studio, const runtime::ServerPr
     , m_isNew(isNew)
 {
     setWindowTitle(isNew ? tr("New server") : tr("Server settings"));
-    resize(640, 720);
+    // Within the screen (1080p at 150 % leaves 1280 × 680): the fields scroll, the buttons stay.
+    resizeWithinScreen(this, QSize(640, 720));
     auto *outer = new QVBoxLayout(this);
     auto *scroll = new QScrollArea(this);
     scroll->setWidgetResizable(true);

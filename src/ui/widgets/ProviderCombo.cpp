@@ -37,6 +37,11 @@ ProviderCombo::ProviderCombo(ai::ProviderRegistry *registry, ai::ProviderKind ki
     , m_kind(kind)
 {
     setMinimumWidth(160);
+    // As wide as the longest engine name where there is room, also for one set up after the list
+    // was first shown (§17.9 item 6: a fixed width cut "No provider configured"); where there is
+    // not, a long name is shortened (whole in the tooltip) instead of widening the panel around it.
+    setSizeAdjustPolicy(QComboBox::AdjustToContents);
+    setMinimumContentsLength(12);
     setAccessibleName(kind == ai::ProviderKind::Image ? tr("Image engine") : tr("Language model"));
     reload();
     connect(registry, &ai::ProviderRegistry::providersChanged, this, &ProviderCombo::reload);
@@ -48,7 +53,10 @@ ProviderCombo::ProviderCombo(ai::ProviderRegistry *registry, ai::ProviderKind ki
         if (idx >= 0 && idx != currentIndex())
             setCurrentIndex(idx);
     });
-    connect(this, &QComboBox::currentIndexChanged, this, [this] { emit providerChanged(providerId()); });
+    connect(this, &QComboBox::currentIndexChanged, this, [this] {
+        setToolTip(currentText());
+        emit providerChanged(providerId());
+    });
     // Only a choice of the user's pins a provider: the list also changes when engines come and go.
     connect(this, &QComboBox::activated, this, [this] {
         m_follows = m_kind != ai::ProviderKind::Image || providerId() == settingsChoice();
@@ -101,6 +109,7 @@ void ProviderCombo::reload()
     }
     const int idx = findData(preferred);
     setCurrentIndex(idx >= 0 ? idx : 0);
+    setToolTip(currentText());
     block.unblock();
     if (providerId() != current)
         emit providerChanged(providerId());

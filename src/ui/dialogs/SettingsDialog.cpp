@@ -40,6 +40,7 @@
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QScrollBar>
 #include <QSpinBox>
 #include <QTabWidget>
 #include <QThread>
@@ -49,6 +50,66 @@
 namespace lumen::ui {
 
 using F = ai::SettingField::Type;
+
+namespace {
+
+// A Settings page that fills the room it gets and scrolls only when even its minimum height does
+// not fit, so the dialog fits any screen with its Close button in sight. (A resizable QScrollArea
+// gives a page with wrapped text its preferred height, so pages scrolled with room to spare.)
+class PageScroll : public QScrollArea
+{
+public:
+    PageScroll(QWidget *page, QWidget *parent)
+        : QScrollArea(parent)
+    {
+        setFrameShape(QFrame::NoFrame);
+        setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        setWidget(page);
+        page->installEventFilter(this);
+    }
+    QSize sizeHint() const override { return widget()->sizeHint(); }
+    QSize minimumSizeHint() const override
+    {
+        return QSize(widget()->minimumSizeHint().width() + verticalScrollBar()->sizeHint().width(), 60);
+    }
+
+protected:
+    void resizeEvent(QResizeEvent *e) override
+    {
+        QScrollArea::resizeEvent(e);
+        fit();
+    }
+    bool eventFilter(QObject *watched, QEvent *e) override
+    {
+        // The page's content changed: fit it again once its layout has settled.
+        if (watched == widget() && e->type() == QEvent::LayoutRequest)
+            QMetaObject::invokeMethod(this, [this] { fit(); }, Qt::QueuedConnection);
+        return QScrollArea::eventFilter(watched, e);
+    }
+
+private:
+    int minimumHeight(int width) const
+    {
+        QWidget *page = widget();
+        const int h = page->minimumSizeHint().height();
+        return page->layout() && page->layout()->hasHeightForWidth() ? std::max(h, page->layout()->totalMinimumHeightForWidth(width)) : h;
+    }
+    void fit()
+    {
+        const QSize room = maximumViewportSize();
+        int width = std::max(room.width(), widget()->minimumSizeHint().width());
+        int height = minimumHeight(width);
+        if (height > room.height()) {
+            width = std::max(room.width() - verticalScrollBar()->sizeHint().width(), widget()->minimumSizeHint().width());
+            height = minimumHeight(width);
+        }
+        const QSize size(width, std::max(room.height(), height));
+        if (widget()->size() != size)
+            widget()->resize(size);
+    }
+};
+
+} // namespace
 
 // ---- ProviderForm ---------------------------------------------------------------------------------------
 
@@ -378,13 +439,22 @@ SettingsDialog::SettingsDialog(Studio *studio, QWidget *parent)
     , m_studio(studio)
 {
     setWindowTitle(tr("Settings"));
-    resize(1020, 700);
     auto *v = new QVBoxLayout(this);
+    auto *body = new QHBoxLayout;
+    body->setSpacing(12);
+    // The pages are listed on the left, one per line with its whole name, so every plugin's page
+    // has room (a tab bar ran out of width with every plugin on). The tab widget is only the stack
+    // of pages; its own tab bar is hidden.
+    m_sections = new QListWidget(this);
+    m_sections->setObjectName(QStringLiteral("settingsPages"));
+    m_sections->setAccessibleName(tr("Settings pages"));
+    m_sections->setIconSize(QSize(18, 18));
+    m_sections->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_sections->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_sections->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
     m_tabs = new QTabWidget(this);
-    // Every tab stays in sight: where the labels are too long (another language, more plugins)
-    // they are shortened instead of scrolling off behind two small arrows.
-    m_tabs->setUsesScrollButtons(false);
-    m_tabs->setElideMode(Qt::ElideRight);
+    m_tabs->tabBar()->hide();
+    m_tabs->setDocumentMode(true);
     // Core tabs and the tabs of plugins that are on, by order (ext::SettingsTabSpec).
     struct Tab
     {
@@ -420,15 +490,36 @@ SettingsDialog::SettingsDialog(Studio *studio, QWidget *parent)
     std::stable_sort(tabs.begin(), tabs.end(), [](const Tab &a, const Tab &b) { return a.order < b.order; });
     for (const Tab &tab : tabs)
         addTab(tab.id, tab.create(), tab.icon, tab.label);
-    v->addWidget(m_tabs, 1);
+    // As wide as the longest name (in any language), never shortened.
+    m_sections->setFixedWidth(m_sections->sizeHintForColumn(0) + 2 * m_sections->frameWidth() + 8);
+    body->addWidget(m_sections);
+    body->addWidget(m_tabs, 1);
+    v->addLayout(body, 1);
+    connect(m_sections, &QListWidget::currentRowChanged, m_tabs, [this](int row) {
+        if (row >= 0)
+            m_tabs->setCurrentIndex(row);
+    });
+    connect(m_tabs, &QTabWidget::currentChanged, m_sections, [this](int index) {
+        if (m_sections->currentRow() != index)
+            m_sections->setCurrentRow(index);
+    });
+    m_sections->setCurrentRow(m_tabs->currentIndex());
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, this);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::accept);
     v->addWidget(buttons);
+    // On a small screen (1080p at 150 %) the dialog takes what there is and its pages scroll.
+    resizeWithinScreen(this, QSize(1060, 640));
 }
 
 void SettingsDialog::addTab(const QString &id, QWidget *page, const QString &icon, const QString &label)
 {
-    m_tabs->addTab(page, Icons::get(icon), label);
+    // A page taller than the room it gets scrolls instead of setting the dialog's minimum.
+    auto *scroll = new PageScroll(page, m_tabs);
+    scroll->setObjectName(QStringLiteral("settingsPage-%1").arg(id));
+    m_tabs->addTab(scroll, Icons::get(icon), label);
+    auto *item = new QListWidgetItem(Icons::get(icon), label, m_sections);
+    // The icon, the whole name and the item's padding.
+    item->setSizeHint(QSize(m_sections->iconSize().width() + m_sections->fontMetrics().horizontalAdvance(label) + 32, 34));
     m_tabIds << id;
 }
 
@@ -486,6 +577,7 @@ QWidget *SettingsDialog::buildProvidersTab()
     h->setContentsMargins(0, 8, 0, 0);
     auto *left = new QVBoxLayout;
     m_list = new QListWidget(w);
+    m_list->setObjectName(QStringLiteral("providerList"));
     m_list->setFixedWidth(270);
     m_list->setIconSize(QSize(18, 18));
     left->addWidget(m_list, 1);

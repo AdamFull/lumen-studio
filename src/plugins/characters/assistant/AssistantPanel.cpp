@@ -6,6 +6,7 @@
 #include "ui/Theme.h"
 #include "plugins/characters/assistant/AssistantTools.h"
 #include "ui/widgets/Controls.h"
+#include "ui/widgets/FlowLayout.h"
 #include "ui/widgets/ThumbnailCache.h"
 
 #include <QHBoxLayout>
@@ -35,6 +36,60 @@ QString argumentSummary(const QJsonObject &args)
     }
     return parts.join(QStringLiteral(" · "));
 }
+
+// A suggestion whose words wrap to the panel's width: a long one ran past the panel's edge.
+class SuggestionButton : public QPushButton
+{
+public:
+    SuggestionButton(const QString &text, QWidget *parent)
+        : QPushButton(text, parent)
+        , m_full(text)
+    {
+        setAccessibleName(text);
+        setStyleSheet(QStringLiteral("QPushButton { text-align: left; padding: 8px 10px; }"));
+        QSizePolicy policy(QSizePolicy::Preferred, QSizePolicy::Preferred);
+        policy.setHeightForWidth(true);
+        setSizePolicy(policy);
+    }
+    QSize minimumSizeHint() const override { return QSize(kMinimumWidth, QPushButton::minimumSizeHint().height()); }
+    int heightForWidth(int width) const override
+    {
+        const int lines = int(wrapped(width).count(u'\n')) + 1;
+        return QPushButton::minimumSizeHint().height() + (lines - 1) * fontMetrics().lineSpacing();
+    }
+
+protected:
+    void resizeEvent(QResizeEvent *e) override
+    {
+        QPushButton::resizeEvent(e);
+        const QString text = wrapped(width());
+        if (text != this->text())
+            setText(text);
+    }
+
+private:
+    static constexpr int kMinimumWidth = 120;
+    // The words broken into lines that fit inside the padding.
+    QString wrapped(int width) const
+    {
+        const int room = std::max(kMinimumWidth, width) - 28;
+        QStringList lines;
+        QString line;
+        for (const QString &word : m_full.split(u' ')) {
+            const QString longer = line.isEmpty() ? word : line + u' ' + word;
+            if (!line.isEmpty() && fontMetrics().horizontalAdvance(longer) > room) {
+                lines << line;
+                line = word;
+            } else {
+                line = longer;
+            }
+        }
+        lines << line;
+        return lines.join(u'\n');
+    }
+
+    QString m_full;
+};
 
 QString toolLabel(const QString &name)
 {
@@ -85,6 +140,8 @@ AssistantPanel::AssistantPanel(Studio *studio, QWidget *parent)
     m_scroll = new QScrollArea(this);
     m_scroll->setWidgetResizable(true);
     m_scroll->setFrameShape(QFrame::NoFrame);
+    // The chat wraps to the panel's width; it scrolls up and down only.
+    m_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     auto *content = new QWidget(m_scroll);
     m_messages = new QVBoxLayout(content);
     m_messages->setContentsMargins(0, 0, 6, 0);
@@ -98,8 +155,7 @@ AssistantPanel::AssistantPanel(Studio *studio, QWidget *parent)
                                    tr("Generate a portrait of a fox knight in silver armour, 2:3"),
                                    tr("Remove the background of the newest image"),
                                    tr("Make the latest image look like a rainy night")}) {
-        auto *b = new QPushButton(example, m_suggestions);
-        b->setStyleSheet(QStringLiteral("QPushButton { text-align: left; padding: 8px 10px; }"));
+        auto *b = new SuggestionButton(example, m_suggestions);
         connect(b, &QPushButton::clicked, this, [this, example] { send(example); });
         sv->addWidget(b);
     }
@@ -233,10 +289,10 @@ void AssistantPanel::finishToolChip(const QString &callId, const ai::ToolResult 
         title->setWordWrap(true);
     }
     if (!result.assetIds.isEmpty()) {
+        // The results wrap onto rows of the panel's width.
         auto *row = new QWidget(chip);
-        auto *h = new QHBoxLayout(row);
+        auto *h = new FlowLayout(row);
         h->setContentsMargins(0, 2, 0, 0);
-        h->setSpacing(6);
         for (const QString &id : result.assetIds.mid(0, 8)) {
             auto *b = new QToolButton(row);
             b->setFixedSize(72, 72);
@@ -253,7 +309,6 @@ void AssistantPanel::finishToolChip(const QString &callId, const ai::ToolResult 
             connect(b, &QToolButton::clicked, this, [this, id] { m_studio->openAssetInEditor(id); });
             h->addWidget(b);
         }
-        h->addStretch();
         chip->layout()->addWidget(row);
     }
     scrollToEnd();

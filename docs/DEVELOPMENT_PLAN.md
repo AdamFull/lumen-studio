@@ -2061,7 +2061,8 @@ Survey of the code, the app log and user testing (October 2026):
   offscreen 1920×1080 screen with the system fonts (`QT_QPA_FONTDIR`). Dialogs are checked against
   a 1280×680 screen. Findings: window below its minimum size, widgets squeezed below their minimum,
   cut text (labels, buttons, the current item of combo boxes), widgets clipped by a parent,
-  overlapping siblings. Report-only; `LUMEN_LAYOUT_STRICT=1` fails on any finding. With
+  overlapping siblings. Report-only; `LUMEN_LAYOUT_STRICT=1` fails on any finding (since step 13
+  strict by default, `LUMEN_LAYOUT_REPORT=1` only reports). With
   `LUMEN_SCREENSHOT_DIR` it writes `layout/layout-report.md` and a PNG per state (the before set).
   Results in §17.9.
 - [x] Extension interface and registry; move Create, Poses, Parts, LoRA training and Assistant
@@ -3189,7 +3190,47 @@ Survey of the code, the app log and user testing (October 2026):
   * Not yet: the filter editor does not know the editor's engine choice (its *The one in use* is
     Settings → AI's); the filter's preview is computed again after the results go, not kept
     meanwhile; the German translation of the new texts.
-- [ ] Fix the layout checklist (§17.9); screenshots after; then the audit runs strict in CI.
+- [x] Fix the layout checklist (§17.9); screenshots after; then the audit runs strict in CI.
+  * Dialogs within the screen (§17.9 item 8): `resizeWithinScreen` / `availableWindowSize`
+    (`ui/widgets/Controls`) size a window to what it asks for, never beyond the available area of
+    its screen less the frame, so on 1080p at 150 % (1280 × 680 without the taskbar) a dialog opens
+    whole and scrolls inside, its buttons in sight. Settings lists its pages on the left, one per
+    line with the whole name (the tab bar had no room to spare with every plugin on); each page
+    scrolls only when even its minimum height does not fit (`PageScroll`: a resizable scroll area gave
+    pages with wrapped text their preferred height, so they scrolled with room to spare); it opens at
+    1060 × 640 at most. The server profile dialogs ask for 640 × 720 within the screen, the pose edit
+    dialog for 760 × 860, whose canvas takes what there is.
+  * What the screenshots showed (items 6 and 9 and new ones): `ProviderCombo` grows to the longest
+    engine name where there is room and keeps the whole name in its tooltip; an empty `AutoTextEdit`
+    is as tall as its whole placeholder (New from prompt's and the AI tab's *Leave out* showed one line
+    of a two-line hint); New from prompt's aspect chips have one width; the AI tab's action buttons one
+    height (*Remove background* takes two lines); the assistant's suggestions wrap to the panel's width
+    and its results' thumbnails wrap onto rows (`FlowLayout`), and its chat scrolls up and down only
+    (a long suggestion ran past the panel's edge).
+  * 150 % (acceptance 6): `tst_layout_150` is the same audit built with `LUMEN_LAYOUT_SCALE=1.5`. Its
+    offscreen screen is 1920 × 1080 at 144 dpi (`logicalDpi` in the platform's screens file), which
+    Qt's high-DPI scaling turns into a 1280 × 720 screen of device-independent pixels at a device
+    pixel ratio of 1.5, as Windows does at 150 %; the test checks the ratio, so it cannot audit 100 %
+    again unnoticed. The factor is fixed when the application starts, so it is a second program
+    rather than a pass of the first (chosen over `QT_SCALE_FACTOR`, a factor on top of what the
+    platform reports: the screens file states the screen as Windows reports it at 150 %, and Qt
+    derives the factor from its dpi). It audits the main window at 1280 × 720 and every dialog
+    against 1280 × 680; screenshots go to `layout-150/`.
+  * Strict: there is no CI service, so the suite is the gate. Each test function of `tst_layout` and
+    `tst_layout_150` fails on its own findings (`cleanup`), listing them; `LUMEN_LAYOUT_REPORT=1`
+    only reports, for building a checklist. A dialog is a finding when it opens larger than its
+    screen (at 150 %, than 1280 × 680) or cannot be made as small as 1280 × 680; a text field that
+    grows with its text is one when it shows a scroll bar before its last line. New states: the AI
+    tab scrolled to its options with *Leave out*, New from prompt with a long engine name, the server
+    profile dialogs as people meet them (FLUX.2 [klein] 4B with its VAE in the library and its text
+    encoder missing; *Advanced* open), Settings with its page list (every name whole, none behind a
+    scroll bar).
+  * Tests: `tst_setup settingsAi` (the page in its scroll area), `tst_canvas localServersWiring` (the
+    provider list by name); `tst_layout` and `tst_layout_150` strict and without findings at 1280 ×
+    720, 1536 × 864, 1920 × 1080 and 150 %. Checked to fail: the pose dialog at 760 × 860
+    (`tst_layout_150`).
+  * Not yet: §17.5's "per-field server options move under *Advanced*" (step 9's Not yet) in the
+    server profile dialog; the German translation of the new texts.
 - [x] Files like an image editor, and the remaining editor gaps (from the "Not yet" notes of steps 7,
   8 and 11 and the merge reviews).
   * A document remembers the image file it was opened from (`doc::FileLink` in `Document`: path,
@@ -3426,6 +3467,32 @@ the chosen filter's settings (one row of buttons, three fifths for the settings)
 strip's line was cut at 1280 × 720. Settings is audited with every plugin on again (their tabs had
 gone from the check when plugins became off by default; the bar has no room to spare then), and
 the wizard's local page also with a plugin that needs a language model. Findings stay at 4 (item 8).
+
+**Checklist done** (October 2026, step 13 of §17.8): no findings at 1280 × 720, 1536 × 864, 1920 ×
+1080 and at 150 %, and the audit is strict (a finding fails the suite; `LUMEN_LAYOUT_REPORT=1` only
+reports). What each item became:
+
+1. Main window minimum: fixed with the new shell (strict in `mainWindowFitsSmallScreen`).
+2. Poses page: fixed (`FlowLayout` toolbars); the page is the Poses plugin's window.
+3. `SliderField` at a fixed width: fixed where it appeared (Poses and Parts).
+4. Library page: replaced by *Browse project images*, which fits.
+5. Create page toolbar: fixed (`FlowLayout`); the page is the Characters plugin's window.
+6. `ProviderCombo`: grows to the longest engine name where there is room, the whole name in its
+   tooltip; audited with a long engine name in New from prompt.
+7. Parts step hint: fixed (`ElidedLabel`); the page is the Parts plugin's window.
+8. Tall dialogs: every dialog is sized within the screen's available area and scrolls inside with its
+   buttons in sight (`resizeWithinScreen`). Settings lists its pages on the left with their whole
+   names, so every plugin's page has room, and each page scrolls only when its minimum does not fit;
+   the server profile dialogs and the pose edit dialog ask for their sizes within the screen, and the
+   pose dialog's canvas takes what there is.
+9. One-line text fields with a scroll bar: fixed with the prompt bar, and an empty field is as tall as
+   its whole hint (*Leave out* in New from prompt and the AI tab); the status bar's margin: fixed with
+   the new shell; New from prompt's aspect chips have one width.
+
+Found in the screenshots on the way: the AI tab's action buttons had uneven heights; the assistant's
+long suggestions ran past the panel's edge and its result thumbnails did not wrap. At 150 % (`tst_layout_150`, a 1920 × 1080
+screen at 144 dpi, which Qt shows as 1280 × 720 at a device pixel ratio of 1.5) the main window, its
+panels and every dialog pass the same checks.
 
 ---
 

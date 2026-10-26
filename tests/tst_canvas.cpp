@@ -963,7 +963,7 @@ void TestCanvas::localServersWiring()
         }
         // The list opens on the first provider; select ours if needed.
         if (!serverCombo || serverCombo->currentData().toString() != profile.id) {
-            auto *list = dlg.findChild<QListWidget *>();
+            auto *list = dlg.findChild<QListWidget *>(QStringLiteral("providerList"));
             for (int i = 0; list && i < list->count(); ++i) {
                 if (list->item(i)->data(Qt::UserRole).toString() == provider->instanceId())
                     list->setCurrentRow(i);

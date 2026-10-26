@@ -1,9 +1,16 @@
 // Layout audit: opens the main window (the start screen and the editor), every plugin page's window,
 // the panels and the dialogs at common window sizes and reports controls that are cut off, squeezed
-// below their minimum size, overlap a sibling, or stick out of their parent.
+// below their minimum size, overlap a sibling, stick out of their parent, or text fields that scroll
+// although their text fits, and dialogs that open larger than the screen or cannot fit a small one.
 //
-// Report-only by default (the M17 checklist is built from it); LUMEN_LAYOUT_STRICT=1 fails on any
-// finding. With LUMEN_SCREENSHOT_DIR, every state is saved as a PNG next to layout-report.md.
+// Strict: a test function fails on any finding of its own (the test suite is the gate; there is no CI
+// service). LUMEN_LAYOUT_REPORT=1 only reports, for building a checklist. With LUMEN_SCREENSHOT_DIR,
+// every state is saved as a PNG next to layout-report.md (in layout/, at 150 % in layout-150/).
+//
+// tst_layout_150 is the same audit at a 150 % scale factor (CMake builds it from this file with
+// LUMEN_LAYOUT_SCALE=1.5): a 1920×1080 screen at 144 dpi, which Qt shows as a 1280×720 screen of
+// device-independent pixels at a device pixel ratio of 1.5, as Windows does at 150 %. The scale
+// factor must be set before the application starts, so it is a second program.
 
 #include "core/JobQueue.h"
 #include "core/Settings.h"
@@ -14,9 +21,11 @@
 #include "pose/Skeleton.h"
 #include "runtime/Download.h"
 #include "runtime/ModelHub.h"
+#include "runtime/ModelLibrary.h"
 #include "runtime/ModelPresets.h"
 #include "runtime/RuntimeStore.h"
 #include "runtime/ServerProfile.h"
+#include "runtime/Supervisor.h"
 #include "ui/Accessibility.h"
 #include "ui/DocumentFiles.h"
 #include "ui/MainWindow.h"
@@ -41,6 +50,7 @@
 #include "ui/pages/PromptBar.h"
 #include "ui/pages/StartScreen.h"
 #include "ui/pages/VariantStrip.h"
+#include "ui/widgets/Controls.h"
 
 #include <QAbstractButton>
 #include <QAbstractScrollArea>
@@ -50,15 +60,22 @@
 #include <QComboBox>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QFontDatabase>
+#include <QGroupBox>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QLabel>
 #include <QLayout>
+#include <QListWidget>
 #include <QPainter>
 #include <QPushButton>
 #include <QRadioButton>
 #include <QRegularExpression>
 #include <QScopeGuard>
 #include <QScreen>
+#include <QScrollArea>
 #include <QScrollBar>
 #include <QSplitter>
 #include <QStandardPaths>
@@ -66,6 +83,7 @@
 #include <QTabWidget>
 #include <QTcpServer>
 #include <QTemporaryDir>
+#include <QTextBlock>
 #include <QTextDocumentFragment>
 #include <QToolButton>
 #include <QVBoxLayout>
@@ -76,10 +94,37 @@ using namespace lumen::ui;
 
 namespace {
 
-// Logical sizes: 1920×1080 at 150 % and 125 %, and at 100 %.
-const QList<QSize> kWindowSizes = {QSize(1280, 720), QSize(1536, 864), QSize(1920, 1080)};
+#ifndef LUMEN_LAYOUT_SCALE
+#define LUMEN_LAYOUT_SCALE 1.0
+#endif
+
+// The scale factor of the audit's screen: 1, or 1.5 in tst_layout_150.
+double layoutScale()
+{
+    return LUMEN_LAYOUT_SCALE;
+}
+
+bool scaled()
+{
+    return layoutScale() > 1.0;
+}
+
+// Logical sizes: 1920×1080 at 150 % and 125 %, and at 100 %. At 150 % the screen is 1280×720.
+QList<QSize> windowSizes()
+{
+    if (scaled())
+        return {QSize(1280, 720)};
+    return {QSize(1280, 720), QSize(1536, 864), QSize(1920, 1080)};
+}
+
 // The smallest screen a dialog must fit on (1920×1080 at 150 %, minus the taskbar).
 const QSize kSmallScreen(1280, 680);
+
+// Where the screenshots and the report go, under LUMEN_SCREENSHOT_DIR.
+QString shotFolder()
+{
+    return scaled() ? QStringLiteral("layout-150") : QStringLiteral("layout");
+}
 
 struct Finding
 {
@@ -215,6 +260,14 @@ public:
                     textWidth = std::max(textWidth, b->fontMetrics().horizontalAdvance(line));
                 if (textShown && (b->sizeHint().width() > b->width() + 2 || textWidth > b->width()))
                     add(QStringLiteral("text cut"), w, QStringLiteral("needs %1 px width, has %2").arg(b->sizeHint().width()).arg(b->width()));
+            } else if (const auto *t = qobject_cast<const AutoTextEdit *>(w)) {
+                // A field that grows with its text shows a scroll bar only beyond its last line.
+                int lines = 0;
+                for (QTextBlock b = t->document()->begin(); b.isValid(); b = b.next())
+                    lines += std::max(1, b.layout() ? b.layout()->lineCount() : 1);
+                if (lines <= t->maxLines() && t->verticalScrollBar()->isVisibleTo(root))
+                    add(QStringLiteral("text cut"), w,
+                        QStringLiteral("%1 line(s) of %2 scroll in %3 px").arg(lines).arg(t->maxLines()).arg(t->viewport()->height()));
             } else if (const auto *c = qobject_cast<QComboBox *>(w); c && !c->isEditable() && !c->currentText().isEmpty()) {
                 // The current item: its text plus the icon, frame and drop-down arrow.
                 QStyleOptionComboBox opt;
@@ -265,18 +318,27 @@ public:
         }
     }
 
-    // A dialog: reports when its natural size does not fit a small screen, then audits it at the size
-    // it would get there.
+    // A dialog: reports when it opens larger than its screen (at 150 %, than a small screen with its
+    // taskbar) or cannot be made small enough for a small screen, then audits it at the size it gets
+    // there.
     void auditDialog(QWidget *dialog, const QString &surface)
     {
         dialog->show();
         QVERIFY(QTest::qWaitForWindowExposed(dialog));
         QTest::qWait(20);
+        QSize screen = dialog->screen()->availableGeometry().size();
+        if (scaled())
+            screen = screen.boundedTo(kSmallScreen);
         const QSize natural = dialog->size().expandedTo(dialog->minimumSizeHint());
-        if (natural.width() > kSmallScreen.width() || natural.height() > kSmallScreen.height())
+        if (natural.width() > screen.width() || natural.height() > screen.height())
             m_findings << Finding{surface, QStringLiteral("larger than screen"), QLatin1String(dialog->metaObject()->className()),
-                                  QStringLiteral("%1×%2 does not fit a %3×%4 screen")
-                                      .arg(natural.width()).arg(natural.height()).arg(kSmallScreen.width()).arg(kSmallScreen.height())};
+                                  QStringLiteral("opens at %1×%2 on a %3×%4 screen")
+                                      .arg(natural.width()).arg(natural.height()).arg(screen.width()).arg(screen.height())};
+        const QSize minimum = dialog->minimumSizeHint().expandedTo(dialog->minimumSize());
+        if (minimum.width() > kSmallScreen.width() || minimum.height() > kSmallScreen.height())
+            m_findings << Finding{surface, QStringLiteral("larger than screen"), QLatin1String(dialog->metaObject()->className()),
+                                  QStringLiteral("needs at least %1×%2, more than a %3×%4 screen")
+                                      .arg(minimum.width()).arg(minimum.height()).arg(kSmallScreen.width()).arg(kSmallScreen.height())};
         dialog->resize(dialog->size().boundedTo(kSmallScreen));
         settle();
         audit(dialog, surface);
@@ -336,6 +398,31 @@ QImage sampleImage()
     return im;
 }
 
+// A model file that is only a safetensors header with these tensor shapes (what the library reads
+// to tell what a file is), padded past the library's 1 MB minimum.
+QString writeModelFile(const QTemporaryDir &dir, const QString &relative, const QList<QPair<QString, QList<int>>> &tensors)
+{
+    QJsonObject header;
+    for (const auto &[name, shape] : tensors) {
+        QJsonArray dims;
+        for (int d : shape)
+            dims.append(d);
+        header.insert(name, QJsonObject{{QStringLiteral("dtype"), QStringLiteral("BF16")}, {QStringLiteral("shape"), dims},
+                                        {QStringLiteral("data_offsets"), QJsonArray{0, 0}}});
+    }
+    const QByteArray json = QJsonDocument(header).toJson(QJsonDocument::Compact);
+    QByteArray data;
+    for (int i = 0; i < 8; ++i)
+        data.append(char((quint64(json.size()) >> (8 * i)) & 0xFF));
+    data += json + QByteArray(2 * 1024 * 1024, '\0');
+    const QString path = QDir::cleanPath(dir.filePath(relative));
+    QDir().mkpath(QFileInfo(path).absolutePath());
+    QFile f(path);
+    if (f.open(QIODevice::WriteOnly))
+        f.write(data);
+    return path;
+}
+
 QAction *actionNamed(QWidget *window, const QString &name)
 {
     return window->findChild<QAction *>(name);
@@ -362,12 +449,10 @@ struct AllPlugins
 // model without instruction edits, so the prompt bar offers a variation), removed again afterwards.
 struct ImageEngine
 {
-    explicit ImageEngine(Studio *studio)
+    explicit ImageEngine(Studio *studio, const QString &name = QStringLiteral("Local image server"))
         : m_studio(studio)
     {
-        m_id = studio->providers()
-                   ->addProvider(QStringLiteral("sdcpp"), QStringLiteral("Local image server"), {{QStringLiteral("url"), QStringLiteral("http://127.0.0.1:9")}})
-                   ->instanceId();
+        m_id = studio->providers()->addProvider(QStringLiteral("sdcpp"), name, {{QStringLiteral("url"), QStringLiteral("http://127.0.0.1:9")}})->instanceId();
     }
     ~ImageEngine() { m_studio->providers()->removeProvider(m_id); }
 
@@ -426,6 +511,8 @@ class TestLayout : public QObject
 private slots:
     void initTestCase();
     void cleanupTestCase();
+    void init();
+    void cleanup();
     void mainWindow();
     void mainWindowFitsSmallScreen();
     void settingsDialog();
@@ -435,6 +522,7 @@ private slots:
 
 private:
     Auditor m_auditor;
+    qsizetype m_findingsBefore = 0; // the findings of the test functions before this one
 };
 
 void TestLayout::initTestCase()
@@ -454,12 +542,34 @@ void TestLayout::initTestCase()
     Theme::instance().apply(*qApp, QStringLiteral("dark"));
     qInfo("screen %dx%d, font %s", QGuiApplication::primaryScreen()->geometry().width(),
           QGuiApplication::primaryScreen()->geometry().height(), qPrintable(QApplication::font().family()));
+    qInfo("scale factor %.2f: device pixel ratio %.2f, %dx%d device-independent pixels", layoutScale(),
+          QGuiApplication::primaryScreen()->devicePixelRatio(), QGuiApplication::primaryScreen()->geometry().width(),
+          QGuiApplication::primaryScreen()->geometry().height());
+    // The screen tst_layout_150 asks for, or the audit at 150 % would audit 100 % again.
+    QCOMPARE(QGuiApplication::primaryScreen()->devicePixelRatio(), layoutScale());
     const QString shots = qEnvironmentVariable("LUMEN_SCREENSHOT_DIR");
     if (!shots.isEmpty()) {
-        const QString dir = QDir(shots).filePath(QStringLiteral("layout"));
+        const QString dir = QDir(shots).filePath(shotFolder());
         QDir().mkpath(dir);
         m_auditor.setShotDir(dir);
     }
+}
+
+void TestLayout::init()
+{
+    m_findingsBefore = m_auditor.findings().size();
+}
+
+// Strict: a test function fails on its own findings (LUMEN_LAYOUT_REPORT=1 only reports them).
+void TestLayout::cleanup()
+{
+    if (qEnvironmentVariableIntValue("LUMEN_LAYOUT_REPORT"))
+        return;
+    const QList<Finding> found = m_auditor.findings().mid(m_findingsBefore);
+    QString text;
+    for (const Finding &f : found)
+        text += QStringLiteral("\n%1: %2 %3 (%4)").arg(f.surface, f.kind, f.widget, f.detail);
+    QVERIFY2(found.isEmpty(), qPrintable(QStringLiteral("%1 layout finding(s):%2").arg(found.size()).arg(text)));
 }
 
 void TestLayout::cleanupTestCase()
@@ -467,17 +577,16 @@ void TestLayout::cleanupTestCase()
     const QString report = m_auditor.report();
     const QString shots = qEnvironmentVariable("LUMEN_SCREENSHOT_DIR");
     if (!shots.isEmpty()) {
-        QFile f(QDir(shots).filePath(QStringLiteral("layout/layout-report.md")));
+        QFile f(QDir(QDir(shots).filePath(shotFolder())).filePath(QStringLiteral("layout-report.md")));
         if (f.open(QIODevice::WriteOnly | QIODevice::Truncate))
             f.write(report.toUtf8());
     }
     QMap<QString, int> byKind;
     for (const Finding &f : m_auditor.findings())
         ++byKind[f.kind];
+    qInfo("%d finding(s)", int(m_auditor.findings().size()));
     for (auto it = byKind.cbegin(); it != byKind.cend(); ++it)
         qInfo("%s: %d", qPrintable(it.key()), it.value());
-    if (qEnvironmentVariableIntValue("LUMEN_LAYOUT_STRICT"))
-        QVERIFY2(m_auditor.findings().isEmpty(), qPrintable(report));
 }
 
 // The main window (the start screen, the editor with a document, its results, the AI panel and the
@@ -507,7 +616,7 @@ void TestLayout::mainWindow()
     MainWindow window(&studio);
     window.show();
     QVERIFY(QTest::qWaitForWindowExposed(&window));
-    for (const QSize &size : kWindowSizes) {
+    for (const QSize &size : windowSizes()) {
         window.resize(size);
         const QString res = QStringLiteral("%1x%2").arg(size.width()).arg(size.height());
         auto auditWindow = [&](const QString &what) {
@@ -572,6 +681,13 @@ void TestLayout::mainWindow()
                                         .arg(res)
                                         .arg(sidePanel(window)->width())));
             auditWindow(QStringLiteral("Editor with the AI panel"));
+            // Its options further down, with the negative prompt ("Leave out") of an engine that
+            // takes one.
+            auto *aiScroll = window.editor()->aiPanel()->findChild<QScrollArea *>();
+            QVERIFY(aiScroll);
+            aiScroll->verticalScrollBar()->setValue(aiScroll->verticalScrollBar()->maximum());
+            auditWindow(QStringLiteral("Editor with the AI panel's options"));
+            aiScroll->verticalScrollBar()->setValue(0);
             window.editor()->hideAiPanel();
             window.editor()->variantStrip()->discard();
             doc->clearSelection();
@@ -702,19 +818,28 @@ void TestLayout::mainWindowFitsSmallScreen()
 
 void TestLayout::settingsDialog()
 {
-    // With the plugins on, as the comment below says: their tabs (Roles, Cloud training) too.
+    // With the plugins on, as the comment below says: their pages (Roles, Cloud training) too.
     AllPlugins plugins;
     Studio studio;
     SettingsDialog dialog(&studio);
     m_auditor.auditDialog(&dialog, QStringLiteral("Settings"));
     auto *tabs = dialog.findChild<QTabWidget *>();
     QVERIFY(tabs);
-    // Not report-only: every tab label fits the tab bar whole (no tab behind scroll arrows, none
-    // shortened), with the plugins' tabs too.
-    QVERIFY2(tabs->tabBar()->sizeHint().width() <= tabs->width(),
-             qPrintable(QStringLiteral("the tabs need %1 px, the bar has %2").arg(tabs->tabBar()->sizeHint().width()).arg(tabs->width())));
+    // The pages are a list on the left: every name whole and none behind a scroll bar on a small
+    // screen, with the plugins' pages too.
+    auto *pages = dialog.findChild<QListWidget *>(QStringLiteral("settingsPages"));
+    QVERIFY(pages && pages->isVisible() && !tabs->tabBar()->isVisible());
+    QCOMPARE(pages->count(), tabs->count());
+    QVERIFY(!pages->verticalScrollBar()->isVisible());
+    for (int i = 0; i < pages->count(); ++i) {
+        const QRect item = pages->visualItemRect(pages->item(i));
+        const int text = pages->fontMetrics().horizontalAdvance(pages->item(i)->text()) + pages->iconSize().width();
+        QVERIFY2(pages->viewport()->rect().contains(item) && text < item.width(),
+                 qPrintable(QStringLiteral("%1: %2 px of text in a %3 px item").arg(pages->item(i)->text()).arg(text).arg(item.width())));
+    }
     for (int i = 0; i < tabs->count(); ++i) {
-        tabs->setCurrentIndex(i);
+        pages->setCurrentRow(i);
+        QCOMPARE(tabs->currentIndex(), i);
         Auditor::settle();
         const QString surface = QStringLiteral("Settings - %1").arg(tabs->tabText(i).remove(QLatin1Char('&')));
         m_auditor.audit(&dialog, surface);
@@ -745,15 +870,42 @@ void TestLayout::dialogs()
         InstallRuntimeDialog d(&studio, std::nullopt);
         m_auditor.auditDialog(&d, QStringLiteral("Install runtime dialog"));
     }
-    for (const auto &[runtime, name] : {std::pair{QStringLiteral("sd.cpp/test"), QStringLiteral("sd.cpp")},
-                                        std::pair{QStringLiteral("llama.cpp/test"), QStringLiteral("llama.cpp")}}) {
-        runtime::ServerProfile profile;
-        profile.id = QStringLiteral("audit");
-        profile.name = name;
-        profile.runtimeId = runtime;
-        profile.port = 7861;
-        ServerProfileDialog d(&studio, profile, true);
-        m_auditor.auditDialog(&d, QStringLiteral("Server profile dialog (%1)").arg(name));
+    {
+        // The server profile dialogs as a person meets them: a program of each kind (adopted, never
+        // started), and for sd.cpp FLUX.2 [klein] 4B with its VAE in the library and its text encoder
+        // missing; then with Advanced unfolded.
+        QTemporaryDir files;
+        const QString klein = writeModelFile(files, QStringLiteral("diffusion_models/flux-2-klein-4b-fp8.safetensors"),
+                                             {{QStringLiteral("img_in.weight"), {3072, 128}},
+                                              {QStringLiteral("txt_in.weight"), {3072, 7680}},
+                                              {QStringLiteral("double_stream_modulation_img.lin.weight"), {18432, 3072}},
+                                              {QStringLiteral("double_blocks.0.img_attn.qkv.weight"), {9216, 3072}}});
+        const QString vae = writeModelFile(files, QStringLiteral("vae/flux2-vae.safetensors"),
+                                           {{QStringLiteral("encoder.down_blocks.0.resnets.0.conv1.weight"), {128, 128, 3, 3}},
+                                            {QStringLiteral("decoder.conv_in.weight"), {512, 32, 3, 3}},
+                                            {QStringLiteral("decoder.up_blocks.0.resnets.0.conv1.weight"), {512, 512, 3, 3}}});
+        QVERIFY(studio.models()->addRoot(files.path()));
+        auto removeRoot = qScopeGuard([&] { studio.models()->removeRoot(files.path()); });
+        QTRY_VERIFY_WITH_TIMEOUT(studio.models()->entry(klein) && studio.models()->entry(vae) && !studio.models()->isScanning(), 20000);
+        for (const QString &kind : {QStringLiteral("sd.cpp"), QStringLiteral("llama.cpp")}) {
+            runtime::InstalledRuntime rt;
+            rt.id = QStringLiteral("adopted/layout-%1").arg(kind);
+            rt.kind = kind;
+            rt.directory = files.path();
+            rt.executable = files.filePath(kind == QLatin1String("sd.cpp") ? QStringLiteral("sd-server.exe") : QStringLiteral("llama-server.exe"));
+            studio.runtimes()->addInstalled(rt);
+            auto removeRuntime = qScopeGuard([&] { studio.runtimes()->remove(rt.id); });
+            runtime::ServerProfile profile = studio.servers()->createProfile(rt.id, kind == QLatin1String("sd.cpp") ? QStringLiteral("Images")
+                                                                                                                  : QStringLiteral("Language"));
+            if (kind == QLatin1String("sd.cpp"))
+                profile.options = runtime::modelServerOptions(studio.models(), klein, runtime::VramTier::Small);
+            ServerProfileDialog d(&studio, profile, true);
+            m_auditor.auditDialog(&d, QStringLiteral("Server profile dialog (%1)").arg(kind));
+            auto *advanced = d.findChild<QGroupBox *>();
+            QVERIFY(advanced && !advanced->isChecked());
+            advanced->setChecked(true);
+            m_auditor.auditDialog(&d, QStringLiteral("Server profile dialog (%1) with Advanced").arg(kind));
+        }
     }
     {
         pose::Pose pose;
@@ -769,7 +921,10 @@ void TestLayout::dialogs()
         m_auditor.auditDialog(&d, QStringLiteral("New blank canvas dialog"));
     }
     {
-        // With everything it can show: a pose ("New image with this pose") and the more options.
+        // With everything it can show: a pose ("New image with this pose") and the more options, with
+        // the negative prompt of an engine that takes one, whose name is long (the engine list shows
+        // it whole).
+        ImageEngine engine(&studio, QStringLiteral("stable-diffusion.cpp on the studio computer upstairs"));
         NewFromPromptDialog d(&studio);
         d.setPrompt(QStringLiteral("A lighthouse on a cliff at sunset"), QStringLiteral("text, watermark"));
         pose::Pose pose = pose::findBuiltInPreset(QStringLiteral("standing"))->toPose(QSize(832, 1216));
@@ -902,7 +1057,7 @@ void TestLayout::filterTools()
         NodeEditorWindow editor(catalog);
         editor.setAttribute(Qt::WA_DeleteOnClose, false);
         editor.setGraph(*catalog->load(s.path));
-        editor.resize(kWindowSizes.first());
+        editor.resize(windowSizes().first());
         editor.show();
         QVERIFY(QTest::qWaitForWindowExposed(&editor));
         editor.frameAll();
@@ -996,13 +1151,17 @@ void TestLayout::fileQuestions()
 int main(int argc, char **argv)
 {
     // A 1920×1080 screen at 96 dpi, so dialogs size themselves as on a real monitor (the offscreen
-    // platform's default screen is 800×800). The path is relative: platform arguments are split at
-    // ':', which an absolute Windows path contains.
-    const QString config = QStringLiteral("tst_layout_screens.json");
+    // platform's default screen is 800×800). At 150 % it has 144 dpi: Qt divides its pixels by the
+    // scale factor it takes from the dpi (as on Windows), so windows see a 1280×720 screen and paint
+    // at a device pixel ratio of 1.5. The path is relative: platform arguments are split at ':',
+    // which an absolute Windows path contains.
+    const QString config = scaled() ? QStringLiteral("tst_layout_150_screens.json") : QStringLiteral("tst_layout_screens.json");
     QFile f(config);
     if (f.open(QIODevice::WriteOnly | QIODevice::Truncate))
-        f.write(R"({"screens": [{"name": "Audit", "x": 0, "y": 0, "width": 1920, "height": 1080,
-                    "logicalDpi": 96, "logicalBaseDpi": 96, "dpr": 1}]})");
+        f.write(QStringLiteral(R"({"screens": [{"name": "Audit", "x": 0, "y": 0, "width": 1920, "height": 1080,
+                                   "logicalDpi": %1, "logicalBaseDpi": 96, "dpr": 1}]})")
+                    .arg(qRound(96 * layoutScale()))
+                    .toUtf8());
     f.close();
     qputenv("QT_QPA_PLATFORM", "offscreen:configfile=" + config.toLocal8Bit());
     // The offscreen platform renders with FreeType from a font folder; use the system fonts so text
