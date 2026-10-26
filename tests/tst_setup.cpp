@@ -7,6 +7,7 @@
 #include "ai/ModelDefaults.h"
 #include "ai/ProviderCatalog.h"
 #include "core/ImageOps.h"
+#include "core/Job.h"
 #include "core/JobQueue.h"
 #include "core/Settings.h"
 #include "net/HttpClient.h"
@@ -914,6 +915,12 @@ void TestSetup::settingsAi()
     ai::GenerationSpec region;
     region.region = ai::RegionInput{};
     QCOMPARE(studio.generation()->providerFor(region), other);
+    // A submitted edit without a provider goes there (it fails: nothing answers there).
+    edit.request.prompt = QStringLiteral("colorize it");
+    edit.saveAssets = false;
+    Job *job = studio.generation()->submit(edit);
+    QCOMPARE(job->metadata().value(QStringLiteral("provider")).toString(), QStringLiteral("Other sd-server"));
+    QTRY_VERIFY_WITH_TIMEOUT(job->isFinished(), 10000);
     // An engine Lumen does not run is checked once: this one does not answer.
     QTRY_VERIFY_WITH_TIMEOUT(named<QLabel>(&dlg, QStringLiteral("aiEditStatus"))->text().startsWith(QLatin1String("Not reachable")), 10000);
     // The choice is kept with the providers, and goes when the engine is removed.

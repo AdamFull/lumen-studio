@@ -264,7 +264,8 @@ QString GenerationService::groupFor(const QString &providerId) const
 
 void GenerationService::execute(Job *job, const GenerationSpec &specIn, OutputHandler onOutput)
 {
-    ImageProvider *provider = providerFor(specIn);
+    // The default provider without one: the job's queue group (groupFor) was chosen the same way.
+    ImageProvider *provider = specIn.providerId.isEmpty() ? m_registry->defaultImageProvider() : m_registry->imageProvider(specIn.providerId);
     if (!provider) {
         job->fail(tr("No image provider is configured. Add one in Settings → Providers."));
         return;

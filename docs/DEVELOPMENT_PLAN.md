@@ -2299,8 +2299,9 @@ Survey of the code, the app log and user testing (October 2026):
     else one connection check while the page is open) and *Change…* (the configured engines,
     *Set up a new engine…*; for the language model the Models & roles and Local servers tabs).
     The engine for changes is new: `ProviderRegistry::editImageProvider` (saved as `defaultEdit`,
-    cleared with its provider) and `GenerationService::providerFor`, which sends requests without a
-    provider that change an existing image (a region, image-to-image, inpainting, edits) to it.
+    cleared with its provider); `GenerationService::submit` sends requests without a provider that
+    change an existing image (a region, image-to-image, inpainting, edits) to it (`providerFor`;
+    `execute` keeps the default provider, the queue group of its callers).
   * Tests (`tst_setup`, 9 functions): `recommendation` (8 GB with an Intel GPU listed first, 12 and
     24 GB, AMD, 7.5 and 6 GB, Intel Arc, an integrated Radeon, none), `pinnedDownloads` (both main
     files pinned, the empty-library plan with sizes, URLs and destinations, a test server's
