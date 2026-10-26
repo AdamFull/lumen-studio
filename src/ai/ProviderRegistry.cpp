@@ -207,6 +207,8 @@ void ProviderRegistry::removeProvider(const QString &id)
         const auto images = imageProviders();
         m_defaultImage = images.isEmpty() ? QString() : images.first()->instanceId();
     }
+    if (m_defaultEdit == id)
+        m_defaultEdit.clear();
     for (auto it = m_roles.begin(); it != m_roles.end(); ++it) {
         if (it->providerId == id)
             it->providerId.clear();
@@ -257,6 +259,25 @@ void ProviderRegistry::setDefaultImageProvider(const QString &id)
     m_defaultImage = id;
     save();
     emit rolesChanged();
+}
+
+ImageProvider *ProviderRegistry::editImageProvider() const
+{
+    if (ImageProvider *p = imageProvider(m_defaultEdit); p && isEnabled(m_defaultEdit))
+        return p;
+    return defaultImageProvider();
+}
+
+void ProviderRegistry::setEditImageProvider(const QString &id)
+{
+    m_defaultEdit = id;
+    save();
+    emit rolesChanged();
+}
+
+ImageProvider *ProviderRegistry::imageProviderFor(bool changesImage) const
+{
+    return changesImage ? editImageProvider() : defaultImageProvider();
 }
 
 RoleBinding ProviderRegistry::role(LlmRole role) const
@@ -314,6 +335,7 @@ void ProviderRegistry::load()
             m_disabled.insert(id);
     }
     m_defaultImage = root.value(QStringLiteral("defaultImage")).toString();
+    m_defaultEdit = root.value(QStringLiteral("defaultEdit")).toString();
     const QJsonObject roles = root.value(QStringLiteral("roles")).toObject();
     for (auto it = roles.begin(); it != roles.end(); ++it) {
         const QJsonObject b = it.value().toObject();
@@ -344,6 +366,7 @@ void ProviderRegistry::save() const
     const QJsonObject root{{QStringLiteral("version"), 1},
                            {QStringLiteral("instances"), instances},
                            {QStringLiteral("defaultImage"), m_defaultImage},
+                           {QStringLiteral("defaultEdit"), m_defaultEdit},
                            {QStringLiteral("roles"), roles}};
     QSaveFile f(configPath());
     if (!f.open(QIODevice::WriteOnly)) {
@@ -354,47 +377,73 @@ void ProviderRegistry::save() const
     f.commit();
 }
 
-QFuture<QList<DetectedServer>> ProviderRegistry::detectLocalServers()
+QList<ServerProbe> ProviderRegistry::defaultServerProbes()
 {
-    struct Probe
-    {
-        QString typeId, name, base, path;
-    };
-    const QList<Probe> probes = {
+    return {
         {QStringLiteral("sdwebui"), QStringLiteral("Stable Diffusion WebUI"), QStringLiteral("http://127.0.0.1:7860"), QStringLiteral("/sdapi/v1/sd-models")},
         {QStringLiteral("sdwebui"), QStringLiteral("Stable Diffusion WebUI (Forge)"), QStringLiteral("http://127.0.0.1:7861"), QStringLiteral("/sdapi/v1/sd-models")},
         {QStringLiteral("comfyui"), QStringLiteral("ComfyUI"), QStringLiteral("http://127.0.0.1:8188"), QStringLiteral("/system_stats")},
         {QStringLiteral("comfyui"), QStringLiteral("ComfyUI Desktop"), QStringLiteral("http://127.0.0.1:8000"), QStringLiteral("/system_stats")},
+        // sd-server: its own default port, and the one Lumen's servers start from.
+        {QStringLiteral("sdcpp"), QStringLiteral("stable-diffusion.cpp (sd-server)"), QStringLiteral("http://127.0.0.1:1234"), QStringLiteral("/sdcpp/v1/capabilities")},
+        {QStringLiteral("sdcpp"), QStringLiteral("stable-diffusion.cpp (sd-server)"), QStringLiteral("http://127.0.0.1:7861"), QStringLiteral("/sdcpp/v1/capabilities")},
         {QStringLiteral("llamacpp"), QStringLiteral("llama.cpp server"), QStringLiteral("http://127.0.0.1:8080"), QStringLiteral("/v1/models")},
         {QStringLiteral("ollama"), QStringLiteral("Ollama"), QStringLiteral("http://127.0.0.1:11434"), QStringLiteral("/api/tags")},
         {QStringLiteral("lmstudio"), QStringLiteral("LM Studio"), QStringLiteral("http://127.0.0.1:1234"), QStringLiteral("/v1/models")},
         {QStringLiteral("koboldcpp"), QStringLiteral("KoboldCpp"), QStringLiteral("http://127.0.0.1:5001"), QStringLiteral("/v1/models")},
         {QStringLiteral("partserver"), QStringLiteral("Lumen Part Server"), QStringLiteral("http://127.0.0.1:7870"), QStringLiteral("/v1/info")},
     };
+}
+
+QFuture<QList<DetectedServer>> ProviderRegistry::detectLocalServers()
+{
+    return probe(serverProbes);
+}
+
+QFuture<QList<DetectedServer>> ProviderRegistry::probeAddress(const QUrl &address)
+{
+    const QString base = address.adjusted(QUrl::StripTrailingSlash | QUrl::RemoveQuery | QUrl::RemoveFragment).toString();
+    return probe({{QStringLiteral("sdcpp"), QStringLiteral("stable-diffusion.cpp (sd-server)"), base, QStringLiteral("/sdcpp/v1/capabilities")},
+                  {QStringLiteral("comfyui"), QStringLiteral("ComfyUI"), base, QStringLiteral("/system_stats")},
+                  {QStringLiteral("sdwebui"), QStringLiteral("Stable Diffusion WebUI / Forge"), base, QStringLiteral("/sdapi/v1/sd-models")}});
+}
+
+QFuture<QList<DetectedServer>> ProviderRegistry::probe(const QList<ServerProbe> &probes)
+{
     struct State
     {
         QPromise<QList<DetectedServer>> promise;
-        QList<DetectedServer> found;
+        QList<std::optional<DetectedServer>> found; // by probe, so the result keeps the probes' order
         int remaining = 0;
     };
     auto state = std::make_shared<State>();
-    state->remaining = int(probes.size());
+    state->remaining = int(probes.size()) + 1; // held until every call is made
+    state->found.resize(probes.size());
     state->promise.start();
     QFuture<QList<DetectedServer>> future = state->promise.future();
+    auto done = [state] {
+        if (--state->remaining > 0)
+            return;
+        QList<DetectedServer> out;
+        for (const std::optional<DetectedServer> &s : std::as_const(state->found)) {
+            if (s)
+                out << *s;
+        }
+        state->promise.addResult(out);
+        state->promise.finish();
+    };
     net::CallOptions opts;
     opts.timeoutMs = 2500;
     opts.maxRetries = 0;
     opts.quiet = true;
-    for (const Probe &probe : probes) {
+    for (qsizetype i = 0; i < probes.size(); ++i) {
+        const ServerProbe probe = probes[i];
         if (!type(probe.typeId)) {
-            if (--state->remaining == 0) {
-                state->promise.addResult(state->found);
-                state->promise.finish();
-            }
+            done();
             continue;
         }
         net::HttpCall *call = m_http->get(net::HttpClient::makeRequest(QUrl(probe.base + probe.path)), opts);
-        connect(call, &net::HttpCall::finished, this, [state, call, probe] {
+        connect(call, &net::HttpCall::finished, this, [state, call, probe, i, done] {
             if (call->ok()) {
                 QString detail;
                 const QJsonDocument doc = QJsonDocument::fromJson(call->body());
@@ -402,16 +451,16 @@ QFuture<QList<DetectedServer>> ProviderRegistry::detectLocalServers()
                     detail = QObject::tr("%n model(s)", nullptr, int(doc.array().size()));
                 else if (doc.object().contains(QStringLiteral("data")))
                     detail = QObject::tr("%n model(s)", nullptr, int(doc.object().value(QStringLiteral("data")).toArray().size()));
-                else if (doc.object().contains(QStringLiteral("models")))
+                else if (doc.object().value(QStringLiteral("models")).isArray())
                     detail = QObject::tr("%n model(s)", nullptr, int(doc.object().value(QStringLiteral("models")).toArray().size()));
-                state->found.append(DetectedServer{probe.typeId, probe.name, QUrl(probe.base), detail});
+                else if (doc.object().value(QStringLiteral("model")).isObject()) // sd-server: the one model it runs
+                    detail = doc.object().value(QStringLiteral("model")).toObject().value(QStringLiteral("name")).toString();
+                state->found[i] = DetectedServer{probe.typeId, probe.name, QUrl(probe.base), detail};
             }
-            if (--state->remaining == 0) {
-                state->promise.addResult(state->found);
-                state->promise.finish();
-            }
+            done();
         });
     }
+    done();
     return future;
 }
 

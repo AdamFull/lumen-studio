@@ -385,6 +385,20 @@ QStringList ModelLibrary::suggestedRoots(const RuntimeStore *runtimes, const QSt
     return out;
 }
 
+QList<ModelEntry> ModelLibrary::readFolder(const QString &folder)
+{
+    QList<ModelEntry> out;
+    QDirIterator it(folder, modelFileFilters(), QDir::Files, QDirIterator::Subdirectories | QDirIterator::FollowSymlinks);
+    while (it.hasNext()) {
+        const QString path = QDir::cleanPath(it.next());
+        const QFileInfo fi(path);
+        if (fi.size() < 1024 * 1024)
+            continue; // tokenizer files, configs, … (as the scan)
+        out << inspectEntry(path, fi);
+    }
+    return out;
+}
+
 void ModelLibrary::beginMove()
 {
     m_moving = true;

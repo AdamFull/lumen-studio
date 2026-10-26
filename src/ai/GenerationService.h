@@ -103,6 +103,9 @@ public:
 
     // Image provider able to run a utility (preferred provider first, then any other).
     ImageProvider *providerForUtility(Utility utility, const QString &preferredId = QString()) const;
+    // The provider a spec runs on: its own, else the edit engine for changes to an existing image
+    // (a region, image-to-image, inpainting, instruction edits) and the default one for new images.
+    ImageProvider *providerFor(const GenerationSpec &spec) const;
 
     static GenerationOutput outputOf(const Job *job);
     // Finishes a job the way submit() does: stores the output as assets with the spec's metadata

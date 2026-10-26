@@ -31,6 +31,15 @@ struct DetectedServer
     QString detail;
 };
 
+// An address where a known server may answer: a GET of base + path that succeeds.
+struct ServerProbe
+{
+    QString typeId;
+    QString name;
+    QString base;  // "http://127.0.0.1:8188"
+    QString path;  // "/system_stats"
+};
+
 // Owns all configured provider instances. Non-secret settings are stored in
 // <app data>/providers.json; secrets go to the OS credential store.
 class ProviderRegistry : public QObject
@@ -68,6 +77,13 @@ public:
     // ---- defaults & roles -----------------------------------------------------------------------
     ImageProvider *defaultImageProvider() const;
     void setDefaultImageProvider(const QString &id);
+    // The engine for changes to an existing image (a selection, the whole image, inpainting) when
+    // one other than the default is chosen (Settings → AI); else the default image provider.
+    ImageProvider *editImageProvider() const;
+    QString editImageProviderId() const { return m_defaultEdit; } // "" = the default's
+    void setEditImageProvider(const QString &id);
+    // The engine for a request: edits of an existing image, or new images.
+    ImageProvider *imageProviderFor(bool changesImage) const;
     RoleBinding role(LlmRole role) const;
     void setRole(LlmRole role, const RoleBinding &binding);
     // Resolves a role with fallbacks (role → assistant → first enabled LLM). May return null.
@@ -78,8 +94,14 @@ public:
     void save() const;
     QString configPath() const;
 
-    // Probes default local ports of known servers.
+    // Probes default local ports of known servers (serverProbes), in that order.
     QFuture<QList<DetectedServer>> detectLocalServers();
+    static QList<ServerProbe> defaultServerProbes();
+    // Where detectLocalServers() looks; tests point it at mock servers.
+    QList<ServerProbe> serverProbes = defaultServerProbes();
+    // Which image server answers at an address someone typed: sd-server, ComfyUI or SD WebUI /
+    // Forge (empty when none does).
+    QFuture<QList<DetectedServer>> probeAddress(const QUrl &address);
 
 signals:
     void providersChanged();
@@ -87,6 +109,7 @@ signals:
 
 private:
     Provider *instantiate(const QString &id, const QString &typeId, const QString &name, const QVariantMap &settings);
+    QFuture<QList<DetectedServer>> probe(const QList<ServerProbe> &probes);
     void storeSecrets(const QString &id, const ProviderType &type, QVariantMap &settings) const;
     QVariantMap loadSecrets(const QString &id, const ProviderType &type) const;
 
@@ -97,6 +120,7 @@ private:
     QList<Provider *> m_order;
     QSet<QString> m_disabled;
     QString m_defaultImage;
+    QString m_defaultEdit;
     QHash<QString, RoleBinding> m_roles;
 };
 

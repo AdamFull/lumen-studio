@@ -30,6 +30,8 @@ add_library(lumen_ui STATIC
     dialogs/ModelsPage.h dialogs/ModelsPage.cpp
     dialogs/ModelHubDialog.h dialogs/ModelHubDialog.cpp
     dialogs/LocalSetupDialog.h dialogs/LocalSetupDialog.cpp
+    dialogs/SetupWizard.h dialogs/SetupWizard.cpp
+    dialogs/AiSettingsPage.h dialogs/AiSettingsPage.cpp
     dialogs/CharacterLoraDialog.h dialogs/CharacterLoraDialog.cpp
     dialogs/PoseEditDialog.h dialogs/PoseEditDialog.cpp
     widgets/ThumbnailCache.h widgets/ThumbnailCache.cpp

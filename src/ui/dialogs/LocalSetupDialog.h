@@ -1,5 +1,6 @@
 #pragma once
 
+#include "runtime/AiSetup.h"
 #include "runtime/Catalog.h"
 #include "runtime/Hardware.h"
 #include "runtime/ModelHub.h"
@@ -28,7 +29,8 @@ class Studio;
 // "Set up local AI": installs llama.cpp and stable-diffusion.cpp when they are missing, downloads
 // a starter set of models that suits the GPU (or reuses files already on this computer), then
 // creates the servers and providers and makes them the defaults. Lives on after its dialog closes
-// so that a running setup still finishes.
+// so that a running setup still finishes. The setup wizard (SetupWizard.h) uses it with a model
+// preset's plan instead of the set's image files.
 class LocalSetup : public QObject
 {
     Q_OBJECT
@@ -38,6 +40,10 @@ public:
         QString setId;
         bool language = true;   // llama.cpp with a vision language model
         bool images = true;     // stable-diffusion.cpp with ControlNet, IP-Adapter and an upscaler
+        // The image model from a model preset instead of the set's image files: its files from the
+        // library and found folders (which are added to the library) or downloaded, the server
+        // options from the preset (runtime::planServerOptions).
+        std::optional<runtime::LocalModelPlan> model;
     };
     struct RuntimeStep
     {
@@ -54,8 +60,8 @@ public:
 
     explicit LocalSetup(Studio *studio, QObject *parent = nullptr);
 
-    // Probes the hardware and looks up releases of missing programs.
-    QFuture<void> prepare();
+    // Probes the hardware (unless it is given) and looks up releases of missing programs.
+    QFuture<void> prepare(const std::optional<runtime::HardwareInfo> &hardware = std::nullopt);
     std::optional<runtime::HardwareInfo> hardware() const { return m_hw; }
     QList<runtime::StarterSet> sets() const { return m_sets; }
     void setSets(const QList<runtime::StarterSet> &sets) { m_sets = sets; } // tests
@@ -80,6 +86,8 @@ private:
     static QStringList kindsFor(const Options &o);
     void checkDone();
     void configure();
+    // The image server of a preset plan (Options::model); its name when it was created.
+    QString configureModel(runtime::VramTier tier);
 
     Studio *m_studio;
     std::optional<runtime::HardwareInfo> m_hw;
@@ -91,6 +99,8 @@ private:
     QHash<QString, QPointer<Job>> m_runtimeJobs; // kind → install job
     QHash<QString, QPointer<Job>> m_fileJobs;    // role → download job
     QHash<QString, QString> m_paths;             // role → file
+    QHash<QString, QPointer<Job>> m_modelJobs;   // preset plan: server option → download job
+    QHash<QString, QString> m_modelPaths;        // preset plan: server option → file
     QString m_llamaProfile;
     QString m_sdProfile;
 };

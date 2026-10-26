@@ -1,7 +1,8 @@
 #include "ui/dialogs/SettingsDialog.h"
+#include "ui/dialogs/AiSettingsPage.h"
 #include "ui/dialogs/LocalServersPage.h"
-#include "ui/dialogs/LocalSetupDialog.h"
 #include "ui/dialogs/ModelsPage.h"
+#include "ui/dialogs/SetupWizard.h"
 #include "ui/dialogs/ShortcutsPage.h"
 
 #include "ai/Gate.h"
@@ -377,6 +378,13 @@ SettingsDialog::SettingsDialog(Studio *studio, QWidget *parent)
         QString label;
     };
     QList<Tab> tabs = {
+        {5, QStringLiteral("ai"),
+         [this, studio] {
+             auto *page = new AiSettingsPage(studio, this);
+             connect(page, &AiSettingsPage::tabRequested, this, &SettingsDialog::showTab);
+             return page;
+         },
+         QStringLiteral("sparkles"), tr("AI")},
         {10, QStringLiteral("providers"), [this] { return buildProvidersTab(); }, QStringLiteral("server"), tr("Providers")},
         // "&&": a single "&" would turn the next letter into a mnemonic and disappear.
         {20, QStringLiteral("roles"), [this] { return buildRolesTab(); }, QStringLiteral("chat"),
@@ -754,11 +762,7 @@ OnboardingDialog::OnboardingDialog(Studio *studio, QWidget *parent)
     buttons->addWidget(done);
     v->addLayout(buttons);
     connect(again, &QPushButton::clicked, this, &OnboardingDialog::detect);
-    connect(local, &QPushButton::clicked, this, [this] {
-        LocalSetupDialog dlg(m_studio, this);
-        dlg.exec();
-        detect();
-    });
+    connect(local, &QPushButton::clicked, this, [this] { openSetupWizard(m_studio, this, SetupWizard::Page::Local); });
     connect(done, &QPushButton::clicked, this, &QDialog::accept);
     connect(cloud, &QPushButton::clicked, this, [this] {
         SettingsDialog dlg(m_studio, this);

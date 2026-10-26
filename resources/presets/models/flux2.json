@@ -1,8 +1,16 @@
 {
   "version": 1,
-  "comment": "FLUX.2 [klein]: a diffusion model plus the FLUX.2 VAE and a Qwen3 text encoder (4B for klein 4B, 8B for klein 9B), as stable-diffusion.cpp's docs/flux2.md runs them. Files from the ungated Comfy-Org repositories, pinned to a commit and checked against their SHA-256. The distilled models take 4 steps at CFG 1; the base models 20 steps at CFG 4. FLUX.2 dev (Mistral Small 3.2 24B text encoder) has no preset yet.",
+  "comment": "FLUX.2 [klein]: a diffusion model plus the FLUX.2 VAE and a Qwen3 text encoder (4B for klein 4B, 8B for klein 9B), as stable-diffusion.cpp's docs/flux2.md runs them. Files from the ungated Comfy-Org repositories, pinned to a commit and checked against their SHA-256. The setup wizard downloads klein 4B as the Q8_0 GGUF from leejet's repository, which the docs list (4.3 GB instead of 7.8 GB, the same images at the 8 GB tier's q8_0 weights). The distilled models take 4 steps at CFG 1; the base models 20 steps at CFG 4. FLUX.2 dev (Mistral Small 3.2 24B text encoder) has no preset yet.",
   "docs": "https://github.com/leejet/stable-diffusion.cpp/blob/f89d9b13d730eabeede7314ce49dacd18d3c90c2/docs/flux2.md",
   "files": {
+    "flux2-klein-4b-q8": {
+      "repo": "leejet/FLUX.2-klein-4B-GGUF",
+      "revision": "3b1f5a9dc3abb32238b053aeb3d823c30afdacbd",
+      "path": "flux-2-klein-4b-Q8_0.gguf",
+      "size": 4300629440,
+      "sha256": "0bba6951258ec8f92d51114a8fa13e66828297bfff58a738f52729b3ef66fa28",
+      "license": "apache-2.0"
+    },
     "flux2-vae": {
       "repo": "Comfy-Org/flux2-klein-4B",
       "revision": "533c4cbc3d3b89af1743d9466c434e89810391c0",
@@ -46,6 +54,7 @@
       "name": "FLUX.2 [klein] 4B",
       "note": "Generates and edits with reference images in 4 steps at CFG 1 (no negative prompt).",
       "match": {"family": "FLUX.2", "variant": "Klein 4B", "kinds": ["diffusion_model", "checkpoint"]},
+      "download": "flux2-klein-4b-q8",
       "slots": [
         {"option": "vae", "kind": "vae", "family": "FLUX.2", "label": "FLUX.2 VAE", "file": "flux2-vae"},
         {"option": "llm", "kind": "text_encoder", "family": "LLM", "variant": "Qwen3 4B", "label": "Qwen3 4B text encoder", "file": "qwen3-4b"}

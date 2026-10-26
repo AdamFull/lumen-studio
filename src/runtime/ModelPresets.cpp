@@ -72,9 +72,9 @@ QString describe(const ModelInfo &info)
 
 } // namespace
 
-QUrl PresetFile::url() const
+QUrl PresetFile::url(const QString &huggingFaceBase) const
 {
-    return QUrl(QStringLiteral("https://huggingface.co/%1/resolve/%2/%3").arg(repo, revision, path));
+    return QUrl(QStringLiteral("%1/%2/resolve/%3/%4").arg(huggingFaceBase, repo, revision, path));
 }
 
 QString PresetFile::fileName() const
@@ -191,6 +191,12 @@ QList<ModelPreset> parseModelPresets(const QByteArray &json, const QString &fami
                 return fail(QStringLiteral("preset %1: slot %2 needs an sd.cpp option, a vae / text_encoder kind and a family").arg(p.id, s.option));
             p.components << s;
         }
+        if (o.contains(QStringLiteral("download"))) {
+            const QString fileId = o.value(QStringLiteral("download")).toString();
+            if (!files.contains(fileId))
+                return fail(QStringLiteral("preset %1: unknown download %2").arg(p.id, fileId));
+            p.download = files.value(fileId);
+        }
 
         const QJsonObject can = o.value(QStringLiteral("can")).toObject();
         p.generate = can.value(QStringLiteral("generate")).toBool(true);
@@ -257,6 +263,15 @@ const ModelPreset *presetFor(const ModelInfo &info, const QString &path)
 {
     for (const ModelPreset &p : modelPresets()) {
         if (p.matches(info, path))
+            return &p;
+    }
+    return nullptr;
+}
+
+const ModelPreset *presetById(const QString &id)
+{
+    for (const ModelPreset &p : modelPresets()) {
+        if (p.id == id)
             return &p;
     }
     return nullptr;

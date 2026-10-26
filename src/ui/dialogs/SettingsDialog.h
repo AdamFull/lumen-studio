@@ -70,7 +70,8 @@ private:
     QPointer<QWidget> m_form;
 };
 
-// First-run assistant: detects local servers and helps adding providers.
+// Providers → Detect local: finds local servers on their default ports and adds them as providers.
+// (The first start opens the setup wizard instead, SetupWizard.h.)
 class OnboardingDialog : public QDialog
 {
     Q_OBJECT

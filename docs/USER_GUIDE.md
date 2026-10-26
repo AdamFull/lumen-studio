@@ -17,12 +17,55 @@ Anthropic, Gemini, OpenRouter) plan shots and edit poses.
 API keys are never written to disk by Lumen. They are kept in the Windows Credential Manager, also
 in portable mode.
 
-## 2. First run: providers
+## 2. First run: Set up AI
 
-On the first start, the assistant looks for local servers on their default ports (SD WebUI 7860,
-Forge 7861, ComfyUI 8188 / 8000, llama.cpp 8080, Ollama 11434, LM Studio 1234, KoboldCpp 5001, the
-Lumen part server 7870) and offers to add them. You can open the
-same list later with **Edit → Settings… → Providers** (`Ctrl+,`).
+Lumen needs an *image engine* to make and change images from your words. On the first start the
+**Set up AI** window asks where it should run; **Help → Set up AI…** opens it again later. Each
+choice says what will happen, how long it takes and how much it downloads:
+
+* **Run on this computer** (free, private). Lumen checks your graphics card and suggests one model:
+  *FLUX.2 [klein] 4B* on an NVIDIA or AMD card with 8 GB or more (it makes new images and changes
+  them from a description: "colorize it, keep everything else", "remove the lamp"), or the lighter
+  *RealVisXL 5.0* (SDXL) below 8 GB. Without an NVIDIA or AMD card it suggests an online service,
+  because images would take many minutes. The *Model* box offers the other choice.
+  * First it looks for the files on this computer: in the model library and in the folders of
+    ComfyUI, WebUI, LM Studio and Downloads. When the model and the files it needs (for klein: the
+    FLUX.2 VAE and the Qwen3 4B text encoder) are there, they are used where they are and nothing is
+    downloaded; their folder joins the model library.
+  * Otherwise the list shows what will be downloaded, with sizes and licences: about 11.8 GB for
+    klein (the model as a 4.0 GB GGUF file, its VAE and text encoder), 6.5 GB for RealVisXL, plus the
+    stable-diffusion.cpp program (up to 0.9 GB for the NVIDIA build) when it is not installed. The
+    total says how long that takes at 100 Mbit/s and how much space is free.
+  * **Download and set up** (or **Set up**) installs the program, downloads the files (in the
+    Queue: they continue when you close the window and resume after an interruption, and are
+    checked against their checksums), creates the server and makes it the image engine. Then it
+    starts the server and makes a test image; the first start loads the model, which takes a minute
+    or two. On an 8 GB card a klein image takes about 20–40 seconds after that.
+  * No language model is set up: the editor works without one. While a plugin that needs one is on
+    (Characters), a check box adds one (Qwen3-VL); it is off by default on cards with 8 GB, because
+    it shares the graphics card. **Set with pose control…** opens the SDXL set the Characters
+    plugin uses (pose ControlNet, IP-Adapter, upscaler, language model; see below).
+  * **Open models folder** shows where models are saved.
+* **Use an online service**: fal.ai, OpenAI or Google Gemini. Paste the key (the link shows where to
+  create one); **Connect and make a test image** checks the key, makes the service the image engine
+  and makes one image, which the service charges a few cents for. The key is kept in the Windows
+  Credential Manager.
+* **Connect a server that is already running**: ComfyUI, Forge / Stable Diffusion WebUI (started
+  with `--api`) or stable-diffusion.cpp's sd-server. Lumen looks on the usual ports (ComfyUI 8188
+  and 8000, WebUI 7860, Forge 7861, sd-server 1234 and 7861) and lists what answers; **Use this**
+  makes it the image engine. A server on another computer is connected by its address. ComfyUI gets
+  its first checkpoint (change it under Providers). Then a test image.
+
+**Settings → AI** (the first tab of **Edit → Settings…**, `Ctrl+,`) shows in one list what does the
+work: the *image engine*, the *engine for changes* (usually the image engine; choose another when it
+follows instructions such as "colorize" better) and, while a plugin needs one, the *language
+model*. Each row shows the engine, its model and whether it runs or answers; **Change…** picks
+another engine you have set up or opens **Set up AI**. The other tabs hold every setting for
+advanced use.
+
+Providers can also be added by hand under **Settings → Providers**; **Detect local** there looks
+for local servers on their default ports (also llama.cpp 8080, Ollama 11434, LM Studio 1234,
+KoboldCpp 5001, the Lumen part server 7870) and offers to add them.
 
 * **SD WebUI / Forge**: start it with `--api`. Background removal needs the *rembg* extension; pose
   detection and pose control need *ControlNet*.
@@ -62,8 +105,9 @@ ControlNet. Qwen3-VL-8B handles the assistant, planning, reference analysis and 
 Instead of starting servers yourself, Lumen can install and run them. Open **Settings → Local
 servers**.
 
-**The quick way: Set up local AI.** The button on the Local servers page (and in the welcome
-dialog) does everything at once:
+**The quick way: Set up local AI.** The button on the Local servers page opens **Set up AI** on
+*Run on this computer* (§2). For the Characters plugin, **Set with pose control…** there sets up a
+whole set at once:
 * It suggests a model set for your graphics card: *Compact* below 8 GB, *Standard* for 8 GB, *Large*
   for 12 GB and more. Each set has a vision language model (Qwen3-VL) and an SDXL image model
   (Animagine XL 4.0) with pose ControlNet, IP-Adapter and an upscaler.

@@ -1,8 +1,17 @@
 {
   "version": 1,
-  "comment": "Stable Diffusion 1.5 and SDXL single-file checkpoints (with Illustrious / NoobAI and Pony fine-tunes, told by their file names): everything is inside the file. ControlNets and IP-Adapters must be of the same family. Sampling stays the server's and the prompt style's defaults.",
+  "comment": "Stable Diffusion 1.5 and SDXL single-file checkpoints (with Illustrious / NoobAI and Pony fine-tunes, told by their file names): everything is inside the file. ControlNets and IP-Adapters must be of the same family. Sampling stays the server's and the prompt style's defaults. The setup wizard's lighter choice (GPUs under 8 GB) downloads RealVisXL 5.0, a photographic SDXL fine-tune from an ungated repository (sd.cpp's docs list no GGUF for SDXL).",
   "docs": "https://github.com/leejet/stable-diffusion.cpp/blob/f89d9b13d730eabeede7314ce49dacd18d3c90c2/docs/sd.md",
-  "files": {},
+  "files": {
+    "realvisxl-5": {
+      "repo": "SG161222/RealVisXL_V5.0",
+      "revision": "ac93e0dda1f6d448cae19bbfab8c5e720a5e48bc",
+      "path": "RealVisXL_V5.0_fp16.safetensors",
+      "size": 6938065488,
+      "sha256": "6a35a7855770ae9820a3c931d4964c3817b6d9e3c6f9c4dabb5b3a94e5643b80",
+      "license": "openrail++"
+    }
+  },
   "presets": [
     {
       "id": "illustrious",
@@ -22,6 +31,7 @@
       "id": "sdxl",
       "name": "SDXL",
       "match": {"family": "SDXL", "kinds": ["checkpoint"]},
+      "download": "realvisxl-5",
       "can": {"generate": true, "edit": false, "inpaint": true, "negative_prompt": true, "loras": true, "control_net": ["SDXL"], "ip_adapter": ["SDXL"]},
       "sampling": {"native_resolution": 1024, "dialect": "natural"}
     },

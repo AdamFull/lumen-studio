@@ -19,6 +19,7 @@
 #include "ui/dialogs/ModelHubDialog.h"
 #include "ui/dialogs/PoseEditDialog.h"
 #include "ui/dialogs/SettingsDialog.h"
+#include "ui/dialogs/SetupWizard.h"
 #include "ui/filters/FilterCatalog.h"
 #include "ui/filters/FiltersPanel.h"
 #include "ui/filters/NodeEditorWindow.h"
@@ -502,6 +503,47 @@ void TestLayout::dialogs()
         pose::Pose pose;
         PoseEditDialog d(&studio, pose, std::nullopt, QString());
         m_auditor.auditDialog(&d, QStringLiteral("Pose edit dialog"));
+    }
+    // The setup wizard's pages (§17.5), for an 8 GB GPU with nothing installed: no hardware probe,
+    // no folders read, no ports or GitHub asked.
+    {
+        studio.providers()->serverProbes.clear();
+        studio.runtimes()->feed()->setApiBase(QUrl(QStringLiteral("http://127.0.0.1:9")));
+        SetupWizard d(&studio);
+        runtime::HardwareInfo hw;
+        runtime::GpuInfo gpu;
+        gpu.name = QStringLiteral("NVIDIA GeForce RTX 4060 Laptop GPU");
+        gpu.vendorId = 0x10DE;
+        gpu.dedicatedVram = 8188ull * 1024 * 1024;
+        hw.gpus = {gpu};
+        d.hardwareOverride = hw;
+        d.searchFolders = QStringList();
+        QSignalSpy planned(&d, &SetupWizard::localPlanReady);
+        const QList<std::pair<SetupWizard::Page, QString>> pages = {{SetupWizard::Page::Choose, QStringLiteral("choose")},
+                                                                    {SetupWizard::Page::Local, QStringLiteral("run on this computer")},
+                                                                    {SetupWizard::Page::Online, QStringLiteral("online service")},
+                                                                    {SetupWizard::Page::Server, QStringLiteral("running server")}};
+        for (const auto &[page, name] : pages) {
+            d.showPage(page);
+            if (page == SetupWizard::Page::Local)
+                QTRY_VERIFY_WITH_TIMEOUT(planned.size() == 1, 30000);
+            m_auditor.auditDialog(&d, QStringLiteral("Setup wizard - %1").arg(name));
+        }
+    }
+    // Settings → AI with an engine in each row.
+    {
+        ai::Provider *engine = studio.providers()->addProvider(QStringLiteral("sdcpp"), QStringLiteral("stable-diffusion.cpp on the other computer"),
+                                                               {{QStringLiteral("url"), QStringLiteral("http://127.0.0.1:9")}});
+        auto remove = qScopeGuard([&] { studio.providers()->removeProvider(engine->instanceId()); });
+        SettingsDialog d(&studio);
+        d.showTab(QStringLiteral("ai"));
+        d.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&d));
+        // At the size it gets on a small screen (the dialog's own size is reported above).
+        d.resize(d.size().boundedTo(kSmallScreen));
+        Auditor::settle();
+        m_auditor.audit(&d, QStringLiteral("Settings - AI with an engine"));
+        m_auditor.shoot(&d, QStringLiteral("Settings - AI with an engine"));
     }
 }
 

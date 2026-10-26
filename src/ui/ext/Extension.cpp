@@ -129,4 +129,14 @@ bool Extensions::hasPage(const QString &id) const
     return false;
 }
 
+QStringList Extensions::needingLanguageModel() const
+{
+    QStringList out;
+    for (const Extension *e : active()) {
+        if (e->needsLanguageModel())
+            out << e->name();
+    }
+    return out;
+}
+
 } // namespace lumen::ui::ext

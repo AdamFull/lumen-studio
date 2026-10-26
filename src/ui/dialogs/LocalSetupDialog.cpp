@@ -87,13 +87,13 @@ QStringList LocalSetup::kindsFor(const Options &o)
     return kinds;
 }
 
-QFuture<void> LocalSetup::prepare()
+QFuture<void> LocalSetup::prepare(const std::optional<runtime::HardwareInfo> &hardware)
 {
     auto promise = std::make_shared<QPromise<void>>();
     promise->start();
     QFuture<void> future = promise->future();
     QPointer<LocalSetup> self(this);
-    runtime::probeHardware().then(this, [self, promise](runtime::HardwareInfo hw) {
+    (hardware ? QtFuture::makeReadyValueFuture(*hardware) : runtime::probeHardware()).then(this, [self, promise](runtime::HardwareInfo hw) {
         if (!self) {
             promise->finish();
             return;
@@ -151,7 +151,8 @@ QList<LocalSetup::FileStep> LocalSetup::fileSteps(const Options &o) const
         if (s.id != o.setId)
             continue;
         for (const StarterFile &f : s.files) {
-            if (forLanguage(f) ? !o.language : !o.images)
+            // A preset plan brings its own image files.
+            if (forLanguage(f) ? !o.language : (!o.images || o.model))
                 continue;
             FileStep step;
             step.file = f;
@@ -176,6 +177,8 @@ qint64 LocalSetup::downloadSize(const Options &o) const
         if (f.localPath.isEmpty())
             total += f.file.size;
     }
+    if (o.images && o.model)
+        total += o.model->downloadSize();
     for (const QString &kind : kindsFor(o)) {
         const RuntimeStep s = m_runtimeSteps.value(kind);
         if (s.existingId.isEmpty() && s.plan.ok())
@@ -192,6 +195,13 @@ void LocalSetup::run(const Options &o)
     m_runtimeJobs.clear();
     m_fileJobs.clear();
     m_paths.clear();
+    m_modelJobs.clear();
+    m_modelPaths.clear();
+    if (o.images && o.model && !o.model->ok()) {
+        m_running = false;
+        emit finished(false, o.model->error);
+        return;
+    }
     for (const QString &kind : kindsFor(o)) {
         const RuntimeStep s = m_runtimeSteps.value(kind);
         // Installed meanwhile (an earlier attempt)?
@@ -214,6 +224,22 @@ void LocalSetup::run(const Options &o)
         Job *job = m_studio->hub()->download(runtime::starterDownload(f.file, m_studio->hub()->baseUrl(runtime::HubSource::HuggingFace)));
         m_fileJobs.insert(f.file.role, job);
         m_jobs << job;
+    }
+    if (o.images && o.model) {
+        // Folders whose files the model uses become library folders (scanned in place, never
+        // written), so the server settings find them later too.
+        for (const QString &folder : o.model->foldersToAdd())
+            m_studio->models()->addRoot(folder);
+        for (const runtime::PlannedFile &f : o.model->files) {
+            if (!f.missing()) {
+                m_modelPaths.insert(f.option, f.path);
+            } else if (f.file.isValid()) {
+                Job *job = m_studio->hub()->download(
+                    runtime::plannedDownload(*o.model, f, m_studio->hub()->baseUrl(runtime::HubSource::HuggingFace)));
+                m_modelJobs.insert(f.option, job);
+                m_jobs << job;
+            }
+        }
     }
     for (const QPointer<Job> &job : std::as_const(m_jobs))
         connect(job, &Job::finished, this, &LocalSetup::checkDone);
@@ -284,7 +310,11 @@ void LocalSetup::configure()
             created << p.name;
         }
     }
-    if (m_options.images) {
+    if (m_options.images && m_options.model) {
+        const QString name = configureModel(tier);
+        if (!name.isEmpty())
+            created << name;
+    } else if (m_options.images) {
         const QString model = m_paths.value(QStringLiteral("checkpoint"));
         for (const runtime::ServerProfile &p : servers->profiles()) {
             if (servers->kindOf(p.id) == kSd && QFileInfo(p.options.value(QStringLiteral("model")).toString()) == QFileInfo(model))
@@ -315,6 +345,46 @@ void LocalSetup::configure()
             m_studio->providers()->setDefaultImageProvider(provider->instanceId());
     }
     emit finished(true, created.isEmpty() ? tr("Everything was already set up.") : tr("Added: %1.").arg(created.join(QStringLiteral(", "))));
+}
+
+QString LocalSetup::configureModel(runtime::VramTier tier)
+{
+    for (auto it = m_modelJobs.cbegin(); it != m_modelJobs.cend(); ++it)
+        m_modelPaths.insert(it.key(), it.value()->result().toString());
+    const runtime::LocalModelPlan &plan = *m_options.model;
+    runtime::ServerSupervisor *servers = m_studio->servers();
+    const QString model = m_modelPaths.value(plan.model()->option);
+    QString created;
+    m_sdProfile.clear(); // an earlier run may have set up another model
+    // A server that runs this model already stays as it is.
+    for (const runtime::ServerProfile &p : servers->profiles()) {
+        if (servers->kindOf(p.id) != kSd)
+            continue;
+        for (const QString &key : {QStringLiteral("model"), QStringLiteral("diffusion_model")}) {
+            const QString file = p.options.value(key).toString();
+            if (!file.isEmpty() && QFileInfo(QDir::fromNativeSeparators(file)) == QFileInfo(model))
+                m_sdProfile = p.id;
+        }
+    }
+    if (m_sdProfile.isEmpty()) {
+        auto runtimeId = [this] {
+            if (m_runtimeJobs.contains(kSd))
+                return m_runtimeJobs.value(kSd)->result().toString();
+            const QString existing = m_runtimeSteps.value(kSd).existingId;
+            return existing.isEmpty() ? existingRuntime(m_studio, kSd) : existing;
+        };
+        runtime::ServerProfile p = servers->createProfile(runtimeId(), plan.preset.name);
+        p.options = runtime::planServerOptions(m_studio->models(), plan, m_modelPaths, tier);
+        if (plan.preset.loras)
+            p.options.insert(QStringLiteral("lora_dir"),
+                             QDir::toNativeSeparators(QDir(m_studio->models()->defaultFolder()).filePath(runtime::ModelLibrary::subfolderFor(runtime::ModelKind::Lora))));
+        addServer(m_studio, p, true);
+        m_sdProfile = p.id;
+        created = p.name;
+    }
+    if (ai::Provider *provider = m_studio->providerForServer(m_sdProfile))
+        m_studio->providers()->setDefaultImageProvider(provider->instanceId());
+    return created;
 }
 
 // ---- LocalSetupDialog -------------------------------------------------------------------------------

@@ -15,6 +15,8 @@ public:
     QList<ui::ext::PageSpec> pages() const override;
     QList<ui::ext::PanelSpec> panels() const override;
     QList<ui::ext::SettingsTabSpec> settingsTabs() const override;
+    // The director, the assistant and the dataset captions run on a language model.
+    bool needsLanguageModel() const override { return true; }
 };
 
 } // namespace lumen::plugins

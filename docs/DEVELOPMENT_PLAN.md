@@ -2243,7 +2243,87 @@ Survey of the code, the app log and user testing (October 2026):
 - [ ] Prompt bar (§17.2): selection, whole-image and blank-canvas modes, *Remove*, variants strip,
   results as masked layers. Test with the mock server: a selection edit leaves every pixel
   outside the feathered mask unchanged.
-- [ ] Setup wizard and Settings → AI (§17.5).
+- [x] Setup wizard and Settings → AI (§17.5).
+  * `ui/dialogs/SetupWizard` replaces the first-run `OnboardingDialog` (which stays as Providers →
+    *Detect local*). One entry point, `ui::openSetupWizard(studio, parent, page)`: one wizard at a
+    time, not modal, a child of the modal dialog that is open (Settings would block it otherwise),
+    else of the main window. It opens at the first start (`MainWindow::maybeShowOnboarding`, once,
+    `app/onboarded`), from *Help → Set up AI…*, and on *Run on this computer* from the Local servers
+    page's *Set up local AI…* and the *Detect local* dialog; the start screen's card calls it after
+    the merge. The first page offers the three ways with what they cost in time, size and money, the
+    suggested model and the servers found; each way ends on a result page with a test image
+    (`saveAssets` off; quality "low" where a service charges by quality).
+  * *Run on this computer* (`runtime/AiSetup`):
+    * `recommendLocalModel`: the discrete NVIDIA or AMD GPU with the most memory (`imageGpu`; Intel
+      and integrated GPUs do not count). From 7 GiB (8 GB cards report a little less) FLUX.2 [klein]
+      4B, which makes and edits images; below, an SDXL model; without one, an online service is
+      suggested (SDXL when set up anyway). The other model is the second choice. A language model is
+      on by default only above the 8 GB tier.
+    * The presets' new `download`: the pinned main file, looked up through the Hugging Face API like
+      the components. klein 4B as the Q8_0 GGUF of `leejet/FLUX.2-klein-4B-GGUF` (the repository
+      sd.cpp's `flux2.md` lists; 4.3 GB, apache-2.0), SDXL as RealVisXL 5.0 fp16 (a photographic
+      fine-tune, 6.9 GB, openrail++; the docs list no GGUF for SDXL). Both ungated. `presetById`.
+    * `readFolders` (`ModelLibrary::readFolder`, headers and sidecars like a scan, nothing added)
+      reads `suggestedRoots` (with the servers' model files) once the page opens; `planLocalModel`
+      takes a library or found file the preset matches (a file another preset claims first, such as
+      klein base, is not it), preferring one whose components are there, then the pinned file, then
+      one in the library; each component by `slotStandIn`'s rules over both, preferring the model's
+      folder; the rest from the pinned downloads. `plannedDownload` (sub-folder by kind, the pinned
+      size and SHA-256, a test server's address), `planServerOptions` (the tier's options,
+      `modelServerOptions`, the plan's components, which the library may not have read yet, the
+      preset's VRAM and launch options).
+    * The page: the computer, the model with what it can do and how fast (klein: 20–40 s per image on
+      8 GB, the live check), the plan (the program and each file with its name, size, where from and
+      licence), the total with the time at 100 Mbit/s, the free space and the models folder; *Open
+      models folder* (the "not yet" of the models folder step); *Set with pose control…* opens the
+      old SDXL starter set while a plugin needs a language model. The language model is a check box
+      only then (`Extension::needsLanguageModel`, `Extensions::needingLanguageModel`: Characters).
+    * `LocalSetup` takes the plan (`Options::model`): the found folders become library folders, the
+      missing files Queue downloads, the sd.cpp server comes from `planServerOptions` with the LoRA
+      folder (a server with the same model is reused), its provider becomes the image engine; the
+      runtime install and the language model work as before (`prepare` takes the hardware, for
+      tests). Then the wizard starts the server with a test image. Closed while downloading, the
+      setup still finishes and says so in a toast.
+  * *Use an online service*: fal.ai, OpenAI, Google Gemini; one key field (hidden) with a link to the
+    service's key page; *Connect and make a test image* reuses the service's provider (a new key
+    replaces the old), checks the key with `testConnection`, says in plain words when it is refused,
+    and makes it the image engine.
+  * *Connect a running server*: `ProviderRegistry::serverProbes` (the defaults plus sd-server on
+    1234 and 7861; tests replace them; results now in probe order) lists the image servers that
+    answer, `probeAddress` finds sd-server, ComfyUI or WebUI / Forge at a typed address (without
+    `http://` too). A server added before is reused; ComfyUI gets its first checkpoint when none is
+    set (its built-in graph needs one).
+  * Settings → AI (`ui/dialogs/AiSettingsPage`, the first tab, `showTab("ai")`): the image engine,
+    the engine for changes and, while a plugin needs one, the language model, each with its name,
+    model (the preset's name, else the provider's model setting), status (a managed server's state,
+    else one connection check while the page is open) and *Change…* (the configured engines,
+    *Set up a new engine…*; for the language model the Models & roles and Local servers tabs).
+    The engine for changes is new: `ProviderRegistry::editImageProvider` (saved as `defaultEdit`,
+    cleared with its provider) and `GenerationService::providerFor`, which sends requests without a
+    provider that change an existing image (a region, image-to-image, inpainting, edits) to it.
+  * Tests (`tst_setup`, 9 functions): `recommendation` (8 GB with an Intel GPU listed first, 12 and
+    24 GB, AMD, 7.5 and 6 GB, Intel Arc, an integrated Radeon, none), `pinnedDownloads` (both main
+    files pinned, the empty-library plan with sizes, URLs and destinations, a test server's
+    address), `planFindsFiles` (a ComfyUI folder with klein, klein base, the VAE and both Qwen3s:
+    nothing to download, the folder to add, the server options; the same from the library; only
+    the VAE), `localReusesFiles` (the wizard on that folder: the plan, no request to Hugging Face, the
+    profile, the folder in the library, the provider with the preset's name, no language model, the
+    test image through the fake server and a mock sd-server; a second run reuses the server),
+    `localDownloadsMissing` (sizes and licences, the SDXL choice, three checked downloads from a mock
+    Hugging Face into the models folder, the profile, the test image), `onlineService` (no key, a
+    refused key, then the test image with quality "low" against a mock OpenAI), `runningServer` (a
+    mock ComfyUI found, its checkpoint, not added twice; a typed address without an answer, then a
+    mock sd-server and its test image), `settingsAi` (nothing set up; a managed klein server and its
+    preset name; the engine for changes chosen, used for edits and regions, kept in providers.json,
+    cleared with its provider; an unreachable engine; the language model row with and without the
+    Characters plugin), `entryPoints` (the first start once, *Help → Set up AI…*, one wizard at a
+    time, the Local servers page). `tst_layout`: the wizard's four pages and Settings → AI with an
+    engine, no findings.
+  * Not yet: the AI panel still picks its provider itself (the prompt bar of §17.2 should use
+    `imageProviderFor`); the start screen card (new shell); Qwen3 4B as a GGUF text encoder (unsloth's
+    Q8_0, 4.3 GB instead of 8 GB) is untested with the pinned sd.cpp, so klein's download stays
+    12.7 GB; the per-image times are from the 8 GB live check only (AMD / Vulkan untested); the online
+    services keep their default models; the German translation of the new texts.
 - [x] Filter graph core and classic nodes; golden-image tests per node.
   * `src/filters` (`lumen_filters`, `lumen::filters`): on `lumen_core` (`ImageOps`, `Async`) and Qt
     Gui only, no UI, AI, document or runtime code; `lumen_ui` links it. No UI yet.

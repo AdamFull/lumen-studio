@@ -32,8 +32,10 @@ struct PresetFile
     QString sha256;
     QString license;
 
-    QUrl url() const;
+    // The download address on huggingface.co (or a test server).
+    QUrl url(const QString &huggingFaceBase = QStringLiteral("https://huggingface.co")) const;
     QString fileName() const;
+    bool isValid() const { return !repo.isEmpty(); }
 };
 
 // A component: a server option the model needs a file for.
@@ -66,6 +68,9 @@ struct ModelPreset
     QStringList nameNone;    // and none of these
 
     QList<PresetSlot> components;
+    // The model file to download when the library has none (the setup wizard, §17.5), pinned like
+    // the components; GGUF where sd.cpp's docs list one. Invalid for presets without one.
+    PresetFile download;
 
     // What it can do.
     bool generate = true;
@@ -101,6 +106,7 @@ const QList<ModelPreset> &modelPresets();
 // Parses one family file; on a problem returns nothing and names it in `error`.
 QList<ModelPreset> parseModelPresets(const QByteArray &json, const QString &familyFile, QString *error = nullptr);
 const ModelPreset *presetFor(const ModelInfo &info, const QString &path);
+const ModelPreset *presetById(const QString &id);
 // The pinned file with this SHA-256 in any preset, and the preset (for its licence and source).
 const PresetSlot *presetSlotForSha(const QString &sha256);
 

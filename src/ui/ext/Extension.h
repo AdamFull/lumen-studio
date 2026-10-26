@@ -3,6 +3,7 @@
 #include <QKeySequence>
 #include <QList>
 #include <QString>
+#include <QStringList>
 
 #include <functional>
 #include <memory>
@@ -53,7 +54,7 @@ struct SettingsTabSpec
     QString id;      // SettingsDialog::showTab / MainWindow::openSettings
     QString icon;
     QString label;
-    int order = 100; // the core tabs: providers 10, roles 20, servers 30, models 40, general 60,
+    int order = 100; // the core tabs: ai 5, providers 10, roles 20, servers 30, models 40, general 60,
                      // shortcuts 70, plugins 80
     std::function<QWidget *(Studio *studio, QWidget *parent)> create;
 };
@@ -69,6 +70,9 @@ public:
     virtual QList<PageSpec> pages() const { return {}; }
     virtual QList<PanelSpec> panels() const { return {}; }
     virtual QList<SettingsTabSpec> settingsTabs() const { return {}; }
+    // The plugin's features need a language model (the core editor does not): the setup wizard
+    // offers one and Settings → AI lists it while such a plugin is on.
+    virtual bool needsLanguageModel() const { return false; }
 };
 
 // The registry. Which plugins are on is read once (the first query, or refresh()); switching one
@@ -100,6 +104,8 @@ public:
     QList<PanelSpec> panels() const;
     QList<SettingsTabSpec> settingsTabs() const;
     bool hasPage(const QString &id) const;
+    // Names of the active plugins that need a language model (Extension::needsLanguageModel).
+    QStringList needingLanguageModel() const;
 
 private:
     void ensureSnapshot() const;

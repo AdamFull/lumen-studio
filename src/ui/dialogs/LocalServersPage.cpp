@@ -1,6 +1,6 @@
 #include "ui/dialogs/LocalServersPage.h"
-#include "ui/dialogs/LocalSetupDialog.h"
 #include "ui/dialogs/ModelsPage.h"
+#include "ui/dialogs/SetupWizard.h"
 #include "runtime/ModelHub.h"
 #include "runtime/ModelPresets.h"
 
@@ -228,12 +228,8 @@ LocalServersPage::LocalServersPage(Studio *studio, QWidget *parent)
     setupRow->addWidget(m_hardwareLabel, 1);
     auto *setup = new QPushButton(Icons::get(QStringLiteral("sparkles")), tr("Set up local AI…"), this);
     Theme::setRole(setup, QStringLiteral("primary"));
-    setup->setToolTip(tr("Download the programs and a set of models that suit this computer, and set everything up"));
-    connect(setup, &QPushButton::clicked, this, [this] {
-        auto *dlg = new LocalSetupDialog(m_studio, this);
-        dlg->setAttribute(Qt::WA_DeleteOnClose);
-        dlg->show();
-    });
+    setup->setToolTip(tr("Download the program and a model that suit this computer, or use the ones you have, and set everything up"));
+    connect(setup, &QPushButton::clicked, this, [this] { openSetupWizard(m_studio, this, SetupWizard::Page::Local); });
     setupRow->addWidget(setup);
     v->addLayout(setupRow);
 

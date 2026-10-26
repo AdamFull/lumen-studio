@@ -92,6 +92,9 @@ public:
     // Folders with models that are not roots yet: ComfyUI / WebUI installs, LM Studio, Downloads,
     // and folders of models the servers use.
     QStringList suggestedRoots(const RuntimeStore *runtimes, const QStringList &usedFiles = {}) const;
+    // The model files in a folder that is not a root (yet), read like a scan reads them (headers,
+    // sidecars) but not added. Blocks: call it on a worker thread.
+    static QList<ModelEntry> readFolder(const QString &folder);
 
     void rescan();
     bool isScanning() const { return m_scanning; }

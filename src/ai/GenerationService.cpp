@@ -217,9 +217,17 @@ QString GenerationService::withSafeNegative(const QString &negative)
     return parts.join(QStringLiteral(", "));
 }
 
+ImageProvider *GenerationService::providerFor(const GenerationSpec &spec) const
+{
+    if (!spec.providerId.isEmpty())
+        return m_registry->imageProvider(spec.providerId);
+    // Without a chosen provider, changes to an existing image go to the edit engine (Settings → AI).
+    return m_registry->imageProviderFor(spec.region.has_value() || spec.request.mode != GenMode::TextToImage);
+}
+
 Job *GenerationService::submit(const GenerationSpec &specIn)
 {
-    ImageProvider *provider = specIn.providerId.isEmpty() ? m_registry->defaultImageProvider() : m_registry->imageProvider(specIn.providerId);
+    ImageProvider *provider = providerFor(specIn);
     const QString group = provider ? provider->instanceId() : QStringLiteral("none");
     const QString title = specIn.title.isEmpty() ? specIn.request.prompt.left(60) : specIn.title;
     QPointer<GenerationService> self(this);
@@ -256,7 +264,7 @@ QString GenerationService::groupFor(const QString &providerId) const
 
 void GenerationService::execute(Job *job, const GenerationSpec &specIn, OutputHandler onOutput)
 {
-    ImageProvider *provider = specIn.providerId.isEmpty() ? m_registry->defaultImageProvider() : m_registry->imageProvider(specIn.providerId);
+    ImageProvider *provider = providerFor(specIn);
     if (!provider) {
         job->fail(tr("No image provider is configured. Add one in Settings → Providers."));
         return;

@@ -14,6 +14,7 @@
 #include "ui/canvas/ContextBar.h"
 #include "ui/canvas/EditorState.h"
 #include "ui/dialogs/SettingsDialog.h"
+#include "ui/dialogs/SetupWizard.h"
 #include "ui/widgets/ServerStatus.h"
 #include "ui/pages/EditorPage.h"
 #include "ui/widgets/Controls.h"
@@ -324,6 +325,8 @@ void MainWindow::buildMenus()
     });
 
     QMenu *help = menuBar()->addMenu(tr("&Help"));
+    help->addAction(Icons::get(QStringLiteral("sparkles")), tr("Set up AI…"), this, [this] { openSetupWizard(m_studio, this); })
+        ->setObjectName(QStringLiteral("setUpAi"));
     QAction *models = help->addAction(Icons::get(QStringLiteral("folder")), tr("Open models folder"), this, [this] {
         const QString folder = m_studio->models()->defaultFolder();
         QDir().mkpath(folder);
@@ -535,8 +538,8 @@ void MainWindow::maybeShowOnboarding()
         QTimer::singleShot(400, this, &MainWindow::maybeShowOnboarding);
         return;
     }
-    OnboardingDialog dlg(m_studio, this);
-    dlg.exec();
+    // Asked once: later Help → Set up AI… (and the start screen while no engine works) open it.
+    openSetupWizard(m_studio, this);
     Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
 }
 

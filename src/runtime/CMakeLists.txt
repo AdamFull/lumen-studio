@@ -11,6 +11,7 @@ add_library(lumen_runtime STATIC
     ModelsFolder.h ModelsFolder.cpp
     ModelHub.h ModelHub.cpp
     ModelPresets.h ModelPresets.cpp
+    AiSetup.h AiSetup.cpp
     CloudTraining.h CloudTraining.cpp
     PodAgent.h PodAgent.cpp
     RunPod.h RunPod.cpp
