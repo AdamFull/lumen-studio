@@ -13,3 +13,13 @@ add_library(lumen_filters STATIC
 target_include_directories(lumen_filters PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
 target_link_libraries(lumen_filters PUBLIC lumen_core Qt6::Core Qt6::Gui Qt6::Concurrent)
 lumen_configure_target(lumen_filters)
+
+# The AI nodes live in lumen_ai, which links this library; never the reverse. Fails the configure
+# step when a filters source includes a header of the AI, document, runtime or UI code.
+get_target_property(LUMEN_FILTERS_SOURCES lumen_filters SOURCES)
+foreach(source IN LISTS LUMEN_FILTERS_SOURCES)
+    file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/${source}" layer_includes REGEX "#include \"(ai|doc|runtime|ui|plugins)/")
+    if(layer_includes)
+        message(FATAL_ERROR "src/filters/${source} includes ${layer_includes}; the filters library depends on the core only.")
+    endif()
+endforeach()

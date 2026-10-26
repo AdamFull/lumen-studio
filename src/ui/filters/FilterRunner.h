@@ -28,9 +28,12 @@ class FilterPreviewCache;
 // their progress. One evaluator serves the preview and apply(), so what a preview computed (an AI
 // step after run()) is not computed again when the filter is applied.
 //
-// A result of another size than the layer (a crop, a rotation, a resize) is stretched to the
-// layer. Only the selected area changes; the graph's own mask (the Output's "Where to apply")
-// narrows it further. GUI-thread object.
+// Only the selected area changes; the graph's own mask (the Output's "Where to apply") narrows it
+// further. A result of another size than the layer is stretched to the layer, except one of the
+// same proportions (an upscale, a resize) applied with nothing selected: that scales the whole
+// picture to the result's size, in the same undo step. A result that takes opacity away from the
+// layer (a cut-out, "Remove background") goes onto the new layer whole and the layer is hidden, so
+// the transparency shows. GUI-thread object.
 class FilterRunner : public QObject
 {
     Q_OBJECT
@@ -72,6 +75,9 @@ public:
     bool apply(Target target, QString *why = nullptr);
     bool apply(QString *why = nullptr) { return apply(m_target, why); }
     bool isBusy() const { return m_busy != Busy::No; }
+    // What else the last apply() did, in plain words ("The picture is now 1280 × 960 pixels."); empty
+    // when it only added or changed the layer.
+    QString appliedNote() const { return m_appliedNote; }
     bool isApplying() const { return m_busy == Busy::Applying; }
     // Stops apply() or run(); nothing changes.
     void cancel();
@@ -83,6 +89,9 @@ signals:
     void busyChanged(bool busy);
     // While apply() or run() works: the steps done, the steps in all, the step that runs now.
     void progress(int done, int total, const QString &step);
+    // How far the step that runs now is, when it says (an AI step's job): a fraction in [0, 1]
+    // (negative: not known) and its status in plain words.
+    void stepProgress(double fraction, const QString &status);
     // apply() or run() ended: ok, else what happened in plain words (cancelled, failed).
     void finished(bool ok, const QString &message);
     // apply() changed the document: the new layer, or the layer that changed.
@@ -98,11 +107,13 @@ private:
     void setNeedsRun(bool needsRun);
     void setBusy(Busy busy);
     std::function<void(int, int, const QString &)> progressRelay() const;
+    std::function<void(double, const QString &)> stepProgressRelay() const;
 
     QPointer<doc::Document> m_doc;
     QList<QMetaObject::Connection> m_docConnections;
     std::optional<filters::Graph> m_graph;
     QString m_name;
+    QString m_appliedNote;
     Target m_target = Target::NewLayer;
     bool m_previewEnabled = true;
     bool m_suspended = false; // after apply(), until the filter or a setting changes
@@ -125,15 +136,22 @@ private:
 // What applying a filter result to a layer gives (worker threads; the tests check it directly).
 // `where` is the selection times the graph's mask (null: everywhere); `result` is stretched to
 // the layer. For a new layer the result is masked by `where` (transparent elsewhere); for the
-// layer itself the result is mixed in through `where`, and `rect` covers only what changes.
+// layer itself the result is mixed in through `where`, and `rect` covers only what changes. A
+// result that takes opacity away from the layer within `where` (a cut-out) gives a new layer that
+// holds the whole layer with the result mixed in, and `hidesLayer`: the layer is to be hidden.
 struct FilterComposite
 {
     QRect rect;
     QImage pixels; // rect-sized
+    bool hidesLayer = false;
 };
 FilterComposite composeFilterResult(const QImage &layer, const QImage &result, const QImage &where,
                                     FilterRunner::Target target, bool keepAlpha);
 // The product of two masks stretched to `size`; a null mask counts as everywhere, so two give null.
 QImage combinedMask(const QImage &a, const QImage &b, const QSize &size);
+// Whether a result of size `result` applied to a layer of size `layer` with nothing selected
+// scales the picture: another size with the same proportions (within rounding), as an upscale or a
+// resize gives.
+bool resultScalesPicture(const QSize &layer, const QSize &result);
 
 } // namespace lumen::ui

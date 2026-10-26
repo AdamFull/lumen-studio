@@ -221,12 +221,22 @@ std::function<bool()> EvalContext::cancelCheck() const
     return [run] { return run && run->isCancelled(); };
 }
 
+std::function<void(double, const QString &)> EvalContext::progressReporter() const
+{
+    return m_run ? m_run->progressReporter() : std::function<void(double, const QString &)>();
+}
+
 NodeType::NodeType(NodeTypeInfo info)
     : m_info(std::move(info))
 {
 }
 
 NodeType::~NodeType() = default;
+
+QString NodeType::unavailableReason(const QVariantMap &) const
+{
+    return {};
+}
 
 namespace {
 

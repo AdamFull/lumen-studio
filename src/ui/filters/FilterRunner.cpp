@@ -82,10 +82,42 @@ struct ApplyJob
     QUuid layer;
     QImage image;
     QImage selection;
+    QSize docSize;
     FilterRunner::Target target = FilterRunner::Target::NewLayer;
     bool alphaLocked = false;
     QString name;
 };
+
+struct ApplyOut
+{
+    FilterComposite composite;
+    QSize scaleTo; // valid: the picture is scaled to this size first (an upscale)
+};
+
+bool isEverywhere(const QImage &mask)
+{
+    return mask.isNull() || img::maskIsEmpty(img::invertMask(mask), 1);
+}
+
+// Whether the result takes opacity away from the layer where it applies (a cut-out): enough
+// pixels, not a few at an edge, turn from mostly opaque to mostly transparent.
+bool cutsOut(const QImage &layer, const QImage &result, const QImage &mask)
+{
+    qint64 area = 0, cut = 0;
+    for (int y = 0; y < layer.height(); ++y) {
+        const auto *l = reinterpret_cast<const QRgb *>(layer.constScanLine(y));
+        const auto *r = reinterpret_cast<const QRgb *>(result.constScanLine(y));
+        const uchar *m = mask.isNull() ? nullptr : mask.constScanLine(y);
+        for (int x = 0; x < layer.width(); ++x) {
+            if (m && m[x] < 128)
+                continue;
+            ++area;
+            if (qAlpha(l[x]) - qAlpha(r[x]) >= 128)
+                ++cut;
+        }
+    }
+    return cut > 0 && cut * 500 >= area;
+}
 
 } // namespace
 
@@ -161,6 +193,13 @@ FilterComposite composeFilterResult(const QImage &layer, const QImage &result, c
     const QImage mask = toMask(where, size);
     if (target == FilterRunner::Target::NewLayer) {
         out.rect = QRect(QPoint(0, 0), size);
+        if (cutsOut(img::normalized(layer), stretched, mask)) {
+            // Over the layer, the cut-out would not show: the new layer is the whole layer with the
+            // result mixed in, and the layer is hidden under it (still there, unchanged).
+            out.pixels = mask.isNull() ? stretched : filters::ops::mix(layer, stretched, mask);
+            out.hidesLayer = true;
+            return out;
+        }
         out.pixels = mask.isNull() ? stretched : img::applyMaskToAlpha(stretched, mask);
         return out;
     }
@@ -172,6 +211,15 @@ FilterComposite composeFilterResult(const QImage &layer, const QImage &result, c
         mixed = withAlphaOf(mixed, layer);
     out.pixels = mixed.copy(out.rect);
     return out;
+}
+
+bool resultScalesPicture(const QSize &layer, const QSize &result)
+{
+    if (layer.isEmpty() || result.isEmpty() || layer == result)
+        return false;
+    // The height the result would have at the layer's proportions, give or take rounding.
+    const double height = double(result.width()) * layer.height() / layer.width();
+    return std::abs(height - result.height()) <= 1.0;
 }
 
 namespace {
@@ -206,6 +254,17 @@ std::function<void(int, int, const QString &)> FilterRunner::progressRelay() con
         if (FilterRunner *runner = sink->runner) {
             // Queued to the runner's thread; dropped there if the runner is gone by then.
             QMetaObject::invokeMethod(runner, [runner, done, total, step] { emit runner->progress(done, total, step); },
+                                      Qt::QueuedConnection);
+        }
+    };
+}
+
+std::function<void(double, const QString &)> FilterRunner::stepProgressRelay() const
+{
+    return [sink = m_sink](double fraction, const QString &status) {
+        QMutexLocker lock(&sink->mutex);
+        if (FilterRunner *runner = sink->runner) {
+            QMetaObject::invokeMethod(runner, [runner, fraction, status] { emit runner->stepProgress(fraction, status); },
                                       Qt::QueuedConnection);
         }
     };
@@ -353,8 +412,10 @@ void FilterRunner::startPreview(bool runExpensive)
     filters::EvalOptions options;
     options.scale = job.scale;
     options.runExpensive = runExpensive;
-    if (runExpensive)
+    if (runExpensive) {
         options.progress = progressRelay();
+        options.stepProgress = stepProgressRelay();
+    }
     const bool show = m_previewEnabled;
     std::shared_ptr<FilterPreviewCache> cache = m_scaled;
     m_previewFuture = m_evaluator->evaluate(*m_graph, {active->image, job.selection}, options);
@@ -452,33 +513,66 @@ bool FilterRunner::apply(Target target, QString *why)
     job.layer = layer->id;
     job.image = layer->image;
     job.selection = m_doc->selection();
+    job.docSize = m_doc->size();
     job.target = target;
     job.alphaLocked = layer->props.alphaLocked;
     job.name = m_name.isEmpty() ? tr("Filter") : m_name;
     filters::EvalOptions options;
     options.progress = progressRelay();
+    options.stepProgress = stepProgressRelay();
     QPointer<doc::Document> doc = m_doc;
     m_evaluator->evaluate(*m_graph, {job.image, job.selection}, options)
         .then(async::pool(), [job](const filters::EvalResult &r) {
-            return composeFilterResult(job.image, r.image, combinedMask(job.selection, r.mask, job.image.size()), job.target,
-                                       job.alphaLocked);
+            ApplyOut out;
+            const QImage where = combinedMask(job.selection, r.mask, job.image.size());
+            // An upscale with nothing selected makes the picture larger: every layer is scaled and
+            // the result goes on at its own size, instead of being stretched back to the layer.
+            if (isEverywhere(where) && job.image.size() == job.docSize && resultScalesPicture(job.image.size(), r.image.size())) {
+                out.scaleTo = r.image.size();
+                out.composite = composeFilterResult(img::scaled(img::normalized(job.image), out.scaleTo, true), r.image, {},
+                                                    job.target, job.alphaLocked);
+                return out;
+            }
+            out.composite = composeFilterResult(job.image, r.image, where, job.target, job.alphaLocked);
+            return out;
         })
-        .then(this, [this, alive = m_alive, doc, job](const FilterComposite &out) {
+        .then(this, [this, alive = m_alive, doc, job](const ApplyOut &result) {
             if (!*alive)
                 return;
             setBusy(Busy::No);
-            if (!doc || !doc->findLayer(job.layer)) {
-                emit finished(false, tr("The layer was deleted while the filter ran, so nothing was changed."));
+            if (!doc || !doc->findLayer(job.layer) || doc->size() != job.docSize) {
+                emit finished(false, tr("The picture changed while the filter ran (a layer was deleted or the size changed), "
+                                        "so nothing was changed."));
                 return;
             }
+            const FilterComposite &out = result.composite;
             const QString undoText = tr("Filter: %1").arg(job.name);
+            // Scaling the picture or hiding the layer goes into the filter's one undo step.
+            const bool several = result.scaleTo.isValid() || out.hidesLayer;
+            if (several)
+                doc->undoStack()->beginMacro(undoText);
+            if (result.scaleTo.isValid())
+                doc->scaleImage(result.scaleTo);
             QUuid changed = job.layer;
             if (job.target == Target::NewLayer) {
                 const QJsonObject meta{{QStringLiteral("filter"), job.name}};
                 changed = doc->addLayer(job.name, out.pixels, meta, doc->indexOf(job.layer) + 1, undoText);
+                if (out.hidesLayer) {
+                    doc::LayerProps props = doc->findLayer(job.layer)->props;
+                    props.visible = false;
+                    doc->setLayerProps(job.layer, props, undoText);
+                }
             } else if (!out.rect.isEmpty()) {
                 doc->applyPixels(job.layer, out.rect, out.pixels, undoText);
             }
+            if (several)
+                doc->undoStack()->endMacro();
+            QStringList notes;
+            if (result.scaleTo.isValid())
+                notes << tr("The picture is now %1 × %2 pixels.").arg(result.scaleTo.width()).arg(result.scaleTo.height());
+            if (out.hidesLayer)
+                notes << tr("The original layer is hidden under it, so the cut-out shows.");
+            m_appliedNote = notes.join(QLatin1Char(' '));
             // The active layer may now be the result: previewing again would apply the filter twice.
             m_suspended = true;
             clearPreview();
@@ -522,7 +616,8 @@ QImage composePreview(const PreviewJob &job, const filters::EvalResult &r, Filte
         const QImage where = combinedMask(job.selection, r.mask, size);
         const FilterComposite c = composeFilterResult(scaled, r.image, where, job.target, l.props.alphaLocked);
         if (job.target == FilterRunner::Target::NewLayer) {
-            snapshot.append({scaled, l.props});
+            if (!c.hidesLayer) // a cut-out hides the layer under it
+                snapshot.append({scaled, l.props});
             snapshot.append({c.pixels, doc::LayerProps()});
         } else {
             QImage image = scaled;

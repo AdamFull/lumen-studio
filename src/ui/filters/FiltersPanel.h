@@ -79,6 +79,8 @@ private:
     void rebuildSettings();
     void updateButtons();
     void updateSelectionHint();
+    // Says which steps of the chosen filter cannot run now (an AI step without a capable engine).
+    void updateAvailability();
     void setStatus(const QString &text, bool problem = false);
     void updatePreviewState();
     void updateThumbnail(const QString &path);
@@ -109,6 +111,7 @@ private:
     QCheckBox *m_previewCheck;
     QComboBox *m_target;
     QLabel *m_selectionHint;
+    QLabel *m_availability;
     QPushButton *m_runButton;
     QPushButton *m_applyButton;
     QWidget *m_progressRow;
@@ -116,6 +119,10 @@ private:
     QLabel *m_progressText;
     QPushButton *m_cancelButton;
     QLabel *m_status;
+    // The step that runs now (progress), for the bar and the text while its job reports.
+    int m_stepsDone = 0;
+    int m_stepsTotal = 0;
+    QString m_stepName;
 };
 
 } // namespace lumen::ui

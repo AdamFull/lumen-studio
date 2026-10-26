@@ -9,6 +9,7 @@
 
 class QComboBox;
 class QLineEdit;
+class QPlainTextEdit;
 
 namespace lumen::ui {
 
@@ -60,7 +61,8 @@ private:
 };
 
 // The control for one node setting, chosen by its spec: a slider with a number box, a list of
-// choices, a colour swatch, the curve editor (with the points as text) or a text field. Shared by
+// choices, a colour swatch, the curve editor (with the points as text), a text field, a field of
+// several lines for a prompt, or the list of image engines (an AI step's "Image engine"). Shared by
 // the node editor and the Filters panel (published settings).
 class ParamField : public QWidget
 {
@@ -85,6 +87,8 @@ private:
     ColorSwatch *m_color = nullptr;
     CurveEditor *m_curve = nullptr;
     QLineEdit *m_text = nullptr;
+    QPlainTextEdit *m_prompt = nullptr;
+    bool m_engines = false; // m_combo lists image engines
 };
 
 // The suffix a number box shows after the value of a setting ("px" becomes " px").

@@ -371,6 +371,25 @@ public:
 
     QSize sourceSize() const override { return m_inputs.image.size(); }
 
+    std::function<void(double, const QString &)> progressReporter() override
+    {
+        if (!m_options.stepProgress)
+            return {};
+        // Held by an asynchronous node's job after evaluate() returned: it must not keep the run.
+        std::weak_ptr<Run> weak = weak_from_this();
+        return [weak](double fraction, const QString &status) {
+            const std::shared_ptr<Run> run = weak.lock();
+            if (!run)
+                return;
+            {
+                QMutexLocker lock(&run->m_mutex);
+                if (run->m_done || run->m_cancelled)
+                    return;
+            }
+            run->m_options.stepProgress(fraction, status);
+        };
+    }
+
 private:
     static Lane laneOf(double scale) { return scale < 1.0 ? Preview : Full; }
     double laneScale(Lane lane) const { return lane == Full ? 1.0 : m_options.scale; }

@@ -39,6 +39,10 @@ struct EvalOptions
     // far, the number that will run and the node's name, and once more when the evaluation ends
     // well (done == total, no name). Nodes taken from the cache are not counted. For progress bars.
     std::function<void(int done, int total, const QString &node)> progress;
+    // Called while a node that takes long reports how far it is (an AI step's queue job, see
+    // EvalContext::progressReporter), from any thread: the fraction of that node done in [0, 1]
+    // (negative when not known) and its status in plain words. Between two `progress` calls.
+    std::function<void(double fraction, const QString &status)> stepProgress;
 };
 
 struct EvalResult

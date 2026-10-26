@@ -23,14 +23,17 @@ namespace {
 const QString kBuiltInRoot = QStringLiteral(":/filters/builtin");
 const char *const kBuiltInContext = "lumen::ui::BuiltInFilters";
 
-// The order the built-in filters are listed in (file names without the extension). Files there
-// that are not named here (added later) follow, by name.
+// The order the built-in filters are listed in (file names without the extension): the classic
+// ones, then those with AI steps (the Filters panel gives them a heading of their own). Files
+// there that are not named here (added later) follow, by name.
 const QStringList &builtInOrder()
 {
-    static const QStringList order{QStringLiteral("black-and-white"), QStringLiteral("warm-tones"),
-                                   QStringLiteral("cool-tones"),      QStringLiteral("sharpen"),
-                                   QStringLiteral("soft-focus"),      QStringLiteral("film-grain"),
-                                   QStringLiteral("old-photo")};
+    static const QStringList order{QStringLiteral("black-and-white"),     QStringLiteral("warm-tones"),
+                                   QStringLiteral("cool-tones"),          QStringLiteral("sharpen"),
+                                   QStringLiteral("soft-focus"),          QStringLiteral("film-grain"),
+                                   QStringLiteral("old-photo"),           QStringLiteral("colorize-with-ai"),
+                                   QStringLiteral("clean-up-background"), QStringLiteral("remove-background"),
+                                   QStringLiteral("upscale-2x")};
     return order;
 }
 
@@ -57,6 +60,20 @@ const QStringList &builtInOrder()
     QT_TRANSLATE_NOOP("lumen::ui::BuiltInFilters", "Old photo"),
     QT_TRANSLATE_NOOP("lumen::ui::BuiltInFilters", "Brownish black and white with a little grain, like an old print."),
     QT_TRANSLATE_NOOP("lumen::ui::BuiltInFilters", "Brown tint"),
+    // With AI steps. The instructions sent to the model stay in English, which the models follow
+    // best; only what the panel shows is translated.
+    QT_TRANSLATE_NOOP("lumen::ui::BuiltInFilters", "Colorize with AI"),
+    QT_TRANSLATE_NOOP("lumen::ui::BuiltInFilters", "Gives a black-and-white photo natural colours and keeps everything else as it is. "
+                                                   "With a selection, only the selected area is coloured."),
+    QT_TRANSLATE_NOOP("lumen::ui::BuiltInFilters", "Instruction"),
+    QT_TRANSLATE_NOOP("lumen::ui::BuiltInFilters", "Clean up background"),
+    QT_TRANSLATE_NOOP("lumen::ui::BuiltInFilters", "Tidies the background (clutter, stray objects, spots) and keeps the main subject "
+                                                   "as it is. Select the background to change only that."),
+    QT_TRANSLATE_NOOP("lumen::ui::BuiltInFilters", "Remove background"),
+    QT_TRANSLATE_NOOP("lumen::ui::BuiltInFilters", "Cuts out the main subject: the background becomes transparent."),
+    QT_TRANSLATE_NOOP("lumen::ui::BuiltInFilters", "Upscale ×2"),
+    QT_TRANSLATE_NOOP("lumen::ui::BuiltInFilters", "Makes the picture twice as large with an AI upscaler, which adds detail. With "
+                                                   "nothing selected, the whole picture grows."),
 };
 
 QString translated(const QString &text)

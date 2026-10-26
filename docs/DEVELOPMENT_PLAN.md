@@ -2449,7 +2449,89 @@ Survey of the code, the app log and user testing (October 2026):
     the preview's resolution does not follow the zoom; the node editor has no copy and paste and
     does not link a new node to the selected one; a result of another size is stretched to the layer
     (a crop does not crop the document); the German translation of the new texts.
-- [ ] AI nodes.
+- [x] AI nodes.
+  * `ai/FilterNodes` (in `lumen_ai`, which now links `lumen_filters`; a configure check in
+    `src/filters/CMakeLists.txt` fails when a filters source includes an AI, document, runtime or UI
+    header), the node editor's *AI* category:
+    * *Edit with AI* (`ai-edit`): an instruction edit of the picture at the model's working size or,
+      with its optional *Area* mask connected, of a crop around the area through the region pipeline
+      of §17.4, blended back through the feathered mask. *Colours of an area* matches the crop's
+      colours to the picture around it (the default) or keeps the model's, for colorizing.
+    * *Fill area with AI* (`ai-inpaint`): the area painted anew from a description (the engine's
+      prompt style and default negative prompt), with *How much to change*.
+    * *Upscale with AI* (`ai-upscale`): the engine's upscaler, brought to the factor asked for (an
+      ESRGAN model gives 4×). *Remove background* (`ai-remove-background`): the cut-out and its
+      *Subject* mask. What was transparent stays so (the engine sees the picture on white).
+    * Each has an *Image engine* setting (a provider id; empty for the one in use, the default image
+      provider). An empty area returns the picture unchanged; one that covers everything (no
+      selection) edits the whole picture.
+  * How a step runs: `evaluate()` (on a worker) copies its inputs, queues the start to the GUI thread
+    and returns the future of a promise. On the GUI thread the step picks its engine and submits a
+    `GenerationService` job (`submit` with `saveAssets` off, or `submitUtility`), so it is in the
+    Queue with its progress and can be cancelled there; nothing becomes a project asset. The job's
+    progress goes to `EvalContext::progressReporter`; its result is put together on a worker (the
+    region layer over the picture; a whole-picture edit back at the picture's size) and finishes the
+    promise. A failed job fails the step with its message ("“Edit with AI”: …"), a cancelled one
+    cancels the evaluation, and `onCancel` cancels the job (sd.cpp's is cancelled on the server).
+    Results come through the GUI thread's event loop, so the GUI thread never waits for an
+    evaluation with an AI step.
+  * `ai::registerFilterNodes(service)` adds the four types to `NodeRegistry::global()` once and makes
+    the service the one they run through (the newest that still exists); `Studio`'s constructor calls
+    it before any filter is loaded, so the app's catalog and every window find them.
+  * Plain words before anything runs: `NodeType::unavailableReason(params)` (new; asked on the GUI
+    thread, empty by default) and `Graph::unavailable()` (warnings, kept out of `validate()`, which
+    does not depend on the app's engines): no image engine at all, a chosen engine that is gone, an
+    engine without an edit model ("“SDXL” cannot change a picture from a description. Choose an
+    engine with an edit model …"), none with an upscaler or a background removal (saying which have
+    one). The node editor lists them under *Problems* and outlines the node (its tooltip now lists
+    every problem of the node), again when engines are added or removed; the Filters panel shows them
+    in red under the selection line, again when engines change; running anyway fails with the reason.
+  * Progress: `EvalOptions::stepProgress` (a running node's own progress, from any thread, dropped
+    once the evaluation has ended), `FilterRunner::stepProgress`; the panel's bar moves within the
+    step ("Edit with AI (step 2 of 3): Step 2 / 4"), and the node editor shows the job's status while
+    the AI steps run.
+  * Settings: `ParamField` editor hints `prompt` (a field of four lines, also for a published
+    instruction in the Filters panel) and `image-engine` (*The one in use*, then the image engines;
+    a chosen one that is gone stays listed); the node shows "Image engine: The one in use".
+  * Built-in AI filters, listed after the classic ones under *Built in, with AI*: *Colorize with AI*
+    (the Input's picture and selection into *Edit with AI*, colours as the model made them, the
+    *Instruction* published), *Clean up background* (the same with its own instruction and colour
+    matching), *Remove background*, *Upscale ×2*. Their instructions stay in English, which the models
+    follow best; names, descriptions and the *Instruction* label are translatable.
+  * `FilterRunner`: a result with the layer's proportions at another size, applied with nothing
+    selected and no mask from the graph, scales the whole picture first (`Document::scaleImage`, in
+    the filter's undo step), so *Upscale ×2* makes the picture twice as large instead of being
+    stretched back into the layer. A result that takes opacity away from the layer where it applies
+    (at least 0.2 % of the area turns from opaque to transparent) goes onto the new layer whole, the
+    layer mixed in outside the area, and the layer is hidden in the same undo step, so a cut-out
+    shows; the preview shows it the same way. `appliedNote()` adds either to the panel's message
+    ("The picture is now 480 × 320 pixels.", "The original layer is hidden under it …").
+  * Tests (`tst_filters_ui`, 6 new functions, 22 in all, against one mock server for sd.cpp's native
+    API with the FLUX.2 klein preset on the provider, its upscaler, and the WebUI's background
+    removal): `aiNodesSayWhatTheyNeed` (the four types; no engine: the reason, the failed run with it,
+    the panel's red line and *Run*; an engine without an edit model, without upscaler or background
+    removal, a gone one, an edit model chosen or in use; an empty instruction refused before anything
+    is sent; the node editor's engine list, prompt field, problem, outline and summary);
+    `aiEditFeedsNextNode` (the edit request of the whole picture at the working size, its result into
+    *Invert*, the Queue job and its "Step 2 / 4", nothing sent again from the cache);
+    `aiEditOfSelection` (*Colorize with AI* on a selection through the panel: *Run* previews, the
+    request is the planned crop, *Apply* reuses it as one undo step, no pixel outside the selection
+    changes, the model's colour inside); `aiStepCancel` (the job running on the server is cancelled
+    there, the evaluation ends as cancelled, nothing changes); `aiInpaintGraphOnSelection` (acceptance
+    5: a saved Levels → Mask from image → *Fill area with AI* filter from the panel on a selection, an
+    inpainting request with the crop, its mask and the strength, one undo step, nothing outside the
+    selection changed, the dark part outside the area unchanged); `builtInAiFiltersEndToEnd` (each
+    built-in AI filter through the panel: colorize the whole picture, clean up a selected background,
+    remove the background with the original hidden, upscale to 480 × 320; one undo step each, undone).
+    `builtInFiltersValidate` checks the AI ones preview only after *Run*. `tst_layout filterTools`
+    also audits the node editor with *Edit with AI* selected and the panel with *Colorize with AI*: no
+    findings.
+  * Not yet: the prompt bar (§17.2) does not use these nodes; the AI nodes take no reference images,
+    seed or negative prompt of their own, and run with a new seed each time (a result is reused while
+    the filter's settings stay the same); stable-diffusion.cpp has no background removal, so locally
+    *Remove background* needs Stable Diffusion WebUI; a result of the same proportions scales the
+    other layers too, which is right for an upscale or a resize but not for a 45° rotation of a
+    square picture (its canvas should grow instead); the German translation of the new texts.
 - [ ] Fix the layout checklist (§17.9); screenshots after; then the audit runs strict in CI.
 - [ ] User guide and README rewritten around the editor; plugins documented separately.
 - [ ] Short live check (RTX 4060 8 GB, FLUX.2 klein 4B through sd.cpp): one selection edit, one

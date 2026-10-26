@@ -466,8 +466,8 @@ place uses moves to the new action (the page tells you which one lost it); *Rese
 ### Filters
 
 The **Filters** tab on the right lists the built-in filters (*Black and white*, *Warm tones*,
-*Cool tones*, *Sharpen*, *Soft focus*, *Film grain*, *Old photo*) and, under *Your filters*, the ones
-you made, each with a small preview.
+*Cool tones*, *Sharpen*, *Soft focus*, *Film grain*, *Old photo*), the built-in filters with AI steps
+(marked with a sparkle) and, under *Your filters*, the ones you made, each with a small preview.
 
 * Click a filter to see its settings. With **Preview on the canvas** on, the picture shows the
   filter while you move its sliders, at a lower resolution so it stays quick. Nothing changes yet.
@@ -478,6 +478,26 @@ you made, each with a small preview.
   **Cancel** stops it without changing anything.
 * Filters with AI steps show their preview only after **Run AI steps**, because those take a while;
   **Apply** then uses what the run made.
+
+**Filters with AI.** They use your image engine (Settings → Providers); each AI step is a job in the
+Queue, where you see how far it is and can cancel it (or press **Cancel** in the panel). When no
+engine can do a step, the panel says so in red before anything runs, for example that your model
+cannot change a picture from a description.
+
+* **Colorize with AI** gives a black-and-white photo natural colours and keeps everything else as
+  it is. With a selection only the selected area is coloured: the area around it is sent to the
+  model at its working size and blended back, so every pixel outside the selection stays as it
+  was. It needs a model that edits from a description, such as FLUX.2 [klein] on your computer.
+  Its **Instruction** can be changed in the panel ("colour the dress red").
+* **Clean up background** tidies the background (clutter, stray objects, spots) and keeps the main
+  subject. Select the background to change only that.
+* **Remove background** cuts out the main subject. On a new layer, the original layer is hidden
+  under the cut-out (still there, unchanged), so the transparency shows. It needs an engine that
+  removes backgrounds: Stable Diffusion WebUI with its background removal extension, fal.ai or
+  Stability AI.
+* **Upscale ×2** makes the picture twice as large with an AI upscaler. With nothing selected the
+  whole picture grows (every layer, in one undo step). A stable-diffusion.cpp server needs an
+  upscale model in its settings; ComfyUI, Stable Diffusion WebUI, fal.ai and Stability AI have one.
 
 ### Building your own filters
 
@@ -500,6 +520,14 @@ you made, each with a small preview.
 * `Delete` removes what is selected, the wheel zooms, the middle button (or `Space` and drag) moves
   around, **Show all** (`Home`) brings every node into view. **Undo** and **Redo** (`Ctrl+Z`,
   `Ctrl+Shift+Z`) work inside the editor.
+* The **AI** nodes: **Edit with AI** (changes the picture as you describe it; connect a mask, such
+  as the Input's *Selection*, to its *Area* to change only that area), **Fill area with AI**
+  (paints the area anew from a description), **Upscale with AI** and **Remove background** (its
+  *Subject* output is the cut-out's outline as a mask). Each has an **Image engine** setting: *The
+  one in use* (your default image engine) or one you choose. For an edit of an area, *Colours of an
+  area* matches its colours to the picture around it; choose *As the AI made them* for changes of
+  colour on purpose, such as colorizing. AI steps run when you click **Run AI steps** (or
+  **Apply** in the panel), and a step that cannot run is outlined and listed under **Problems**.
 * **Save** (`Ctrl+S`) and **Save as…** write the filter into the filters folder; the Filters panel
   shows the change at once.
 

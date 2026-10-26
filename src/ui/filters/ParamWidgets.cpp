@@ -1,5 +1,6 @@
 #include "ui/filters/ParamWidgets.h"
 
+#include "ai/FilterNodes.h"
 #include "filters/Ops.h"
 #include "ui/Theme.h"
 #include "ui/widgets/Controls.h"
@@ -11,6 +12,7 @@
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
+#include <QPlainTextEdit>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -272,6 +274,44 @@ ParamField::ParamField(const filters::ParamSpec &spec, const QVariant &value, co
         break;
     }
     case PortType::Text:
+        if (spec.editor == ai::filter_nodes::EngineEditor) {
+            // An AI step's image engine: "The one in use" or one of the engines set up.
+            auto *row = new QHBoxLayout(this);
+            row->setContentsMargins(0, 0, 0, 0);
+            row->setSpacing(8);
+            m_engines = true;
+            m_combo = new QComboBox(this);
+            m_combo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+            m_combo->setMinimumContentsLength(8);
+            m_combo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+            for (const filters::ChoiceOption &o : ai::filterNodeEngines()) {
+                m_combo->addItem(o.label, o.id);
+                m_combo->setItemData(m_combo->count() - 1, o.label, Qt::ToolTipRole);
+            }
+            m_combo->setAccessibleName(text);
+            row->addWidget(labelWidget());
+            row->addWidget(m_combo, 1);
+            setValue(value);
+            connect(m_combo, &QComboBox::currentIndexChanged, this, [this] { emit valueChanged(m_combo->currentData()); });
+            break;
+        }
+        if (spec.editor == ai::filter_nodes::PromptEditor) {
+            // A prompt: a few lines, wrapped, so a whole sentence can be read and changed.
+            auto *column = new QVBoxLayout(this);
+            column->setContentsMargins(0, 0, 0, 0);
+            column->setSpacing(4);
+            column->addWidget(labelWidget());
+            m_prompt = new QPlainTextEdit(this);
+            m_prompt->setAccessibleName(text);
+            m_prompt->setTabChangesFocus(true);
+            m_prompt->setPlaceholderText(tr("Describe it in your own words"));
+            m_prompt->setFixedHeight(m_prompt->fontMetrics().lineSpacing() * 4 + 12);
+            column->addWidget(m_prompt);
+            setValue(value);
+            connect(m_prompt, &QPlainTextEdit::textChanged, this, [this] { emit valueChanged(m_prompt->toPlainText()); });
+            break;
+        }
+        [[fallthrough]];
     case PortType::Image:
     case PortType::Mask: {
         auto *column = new QVBoxLayout(this);
@@ -312,6 +352,8 @@ QVariant ParamField::value() const
         return m_color->color();
     if (m_text)
         return m_text->text();
+    if (m_prompt)
+        return m_prompt->toPlainText();
     return {};
 }
 
@@ -322,8 +364,19 @@ void ParamField::setValue(const QVariant &value)
         m_slider->setValue(value.toDouble());
     } else if (m_combo) {
         QSignalBlocker block(m_combo);
-        const int i = m_combo->findData(value.toString());
+        int i = m_combo->findData(value.toString());
+        if (i < 0 && m_engines && !value.toString().isEmpty()) {
+            // An engine that is gone stays chosen (the step says so) until another one is picked.
+            m_combo->addItem(ai::filterNodeEngineName(value.toString()), value.toString());
+            i = m_combo->count() - 1;
+        }
         m_combo->setCurrentIndex(std::max(0, i));
+    } else if (m_prompt) {
+        const QString t = value.toString();
+        if (m_prompt->toPlainText() != t) {
+            QSignalBlocker block(m_prompt);
+            m_prompt->setPlainText(t);
+        }
     } else if (m_color) {
         QSignalBlocker block(m_color);
         m_color->setColor(value.value<QColor>());

@@ -117,6 +117,10 @@ public:
     // the output). Messages in plain words.
     QList<Issue> validate() const;
     bool isValid() const;
+    // The nodes that cannot run now (NodeType::unavailableReason: an AI step without an image
+    // engine that can do it), as warnings with the reason. Not part of validate(): the answer
+    // depends on the app's engines, not on the graph. GUI thread.
+    QList<Issue> unavailable() const;
 
     // The nodes `target` depends on, inputs before the nodes they feed, ending with `target`.
     // Empty when the target does not exist or is part of a loop.

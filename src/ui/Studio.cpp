@@ -1,5 +1,6 @@
 #include "ui/Studio.h"
 
+#include "ai/FilterNodes.h"
 #include "ai/ProviderCatalog.h"
 #include "core/Async.h"
 #include "doc/PsdIO.h"
@@ -39,6 +40,9 @@ Studio::Studio(QObject *parent)
 {
     ai::registerBuiltInProviders(m_registry);
     m_registry.load();
+    // The AI steps of node filters run through this studio's engines; registered before any
+    // filter is loaded (FilterCatalog), or filters with AI steps would not load.
+    ai::registerFilterNodes(&m_generation);
     applyConcurrency();
     connect(&m_registry, &ai::ProviderRegistry::providersChanged, this, &Studio::applyConcurrency);
     m_runtimes.load();

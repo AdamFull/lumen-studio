@@ -1,0 +1,40 @@
+{
+    "format": "lumen-filter",
+    "version": 1,
+    "name": "Remove background",
+    "description": "Cuts out the main subject: the background becomes transparent.",
+    "nodes": [
+        {
+            "id": "n1",
+            "type": "input",
+            "x": 0,
+            "y": 0
+        },
+        {
+            "id": "n2",
+            "type": "ai-remove-background",
+            "x": 260,
+            "y": 0
+        },
+        {
+            "id": "n3",
+            "type": "output",
+            "x": 520,
+            "y": 0
+        }
+    ],
+    "links": [
+        {
+            "from": "n1",
+            "output": "image",
+            "to": "n2",
+            "input": "image"
+        },
+        {
+            "from": "n2",
+            "output": "image",
+            "to": "n3",
+            "input": "image"
+        }
+    ]
+}

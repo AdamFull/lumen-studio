@@ -1,0 +1,43 @@
+{
+    "format": "lumen-filter",
+    "version": 1,
+    "name": "Upscale ×2",
+    "description": "Makes the picture twice as large with an AI upscaler, which adds detail. With nothing selected, the whole picture grows.",
+    "nodes": [
+        {
+            "id": "n1",
+            "type": "input",
+            "x": 0,
+            "y": 0
+        },
+        {
+            "id": "n2",
+            "type": "ai-upscale",
+            "x": 260,
+            "y": 0,
+            "params": {
+                "factor": 2
+            }
+        },
+        {
+            "id": "n3",
+            "type": "output",
+            "x": 520,
+            "y": 0
+        }
+    ],
+    "links": [
+        {
+            "from": "n1",
+            "output": "image",
+            "to": "n2",
+            "input": "image"
+        },
+        {
+            "from": "n2",
+            "output": "image",
+            "to": "n3",
+            "input": "image"
+        }
+    ]
+}

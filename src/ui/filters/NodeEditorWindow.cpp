@@ -1,5 +1,7 @@
 #include "ui/filters/NodeEditorWindow.h"
 
+#include "ai/FilterNodes.h"
+#include "ai/GenerationService.h"
 #include "core/Async.h"
 #include "core/Error.h"
 #include "filters/Registry.h"
@@ -187,6 +189,15 @@ NodeEditorWindow::NodeEditorWindow(FilterCatalog *catalog, QWidget *parent)
     connect(m_scene, &QGraphicsScene::selectionChanged, this, &NodeEditorWindow::selectionChanged);
     connect(m_model, &GraphModel::changed, this, &NodeEditorWindow::modelChanged);
     connect(m_model, &GraphModel::modifiedChanged, this, &NodeEditorWindow::updateTitle);
+    // AI steps say whether an engine can run them, and list the engines: both change when one is
+    // added or removed.
+    if (ai::GenerationService *service = ai::filterNodeService()) {
+        connect(service->registry(), &ai::ProviderRegistry::providersChanged, this, [this] {
+            m_scene->sync();
+            updateProblems();
+            rebuildNodeSection();
+        });
+    }
 
     m_previewTimer.setSingleShot(true);
     m_previewTimer.setInterval(60);
@@ -710,7 +721,8 @@ void NodeEditorWindow::updateProblems()
 {
     m_problems->clear();
     const Palette &pal = Theme::palette();
-    for (const filters::Issue &issue : m_model->graph().validate()) {
+    // Steps that cannot run now (an AI step without a capable engine) are listed with the rest.
+    for (const filters::Issue &issue : m_model->graph().validate() + m_model->graph().unavailable()) {
         const bool error = issue.severity == filters::Issue::Severity::Error;
         auto *item = new QListWidgetItem(QIcon(Icons::pixmap(QStringLiteral("warning"), 16, error ? pal.danger : pal.warning)),
                                          issue.message);
@@ -814,6 +826,15 @@ void NodeEditorWindow::startPreview()
     if (run) {
         setRunning(true);
         showPreview(m_previewImage, tr("Running the AI steps…"));
+        // The AI step's job tells how far it is ("Step 2 / 4").
+        options.stepProgress = [self = QPointer<NodeEditorWindow>(this), generation](double, const QString &status) {
+            QMetaObject::invokeMethod(qApp, [self, generation, status] {
+                if (self && self->m_running && generation == self->m_previewGeneration && !status.isEmpty()) {
+                    self->m_previewInfo->setText(tr("Running the AI steps… %1").arg(status));
+                    self->m_previewInfo->show();
+                }
+            }, Qt::QueuedConnection);
+        };
     }
     const filters::NodeTypePtr type = node->type;
     m_previewFuture = m_evaluator->evaluate(g, {source, m_source.isNull() ? QImage() : m_selection}, options);

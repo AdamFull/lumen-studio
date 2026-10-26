@@ -1,0 +1,57 @@
+{
+    "format": "lumen-filter",
+    "version": 1,
+    "name": "Colorize with AI",
+    "description": "Gives a black-and-white photo natural colours and keeps everything else as it is. With a selection, only the selected area is coloured.",
+    "nodes": [
+        {
+            "id": "n1",
+            "type": "input",
+            "x": 0,
+            "y": 0
+        },
+        {
+            "id": "n2",
+            "type": "ai-edit",
+            "x": 260,
+            "y": 0,
+            "params": {
+                "prompt": "Colorize this black-and-white photo with natural, realistic colours. Keep everything else exactly the same: the people, the objects, the composition, the lighting and every detail.",
+                "colors": "keep"
+            }
+        },
+        {
+            "id": "n3",
+            "type": "output",
+            "x": 520,
+            "y": 0
+        }
+    ],
+    "links": [
+        {
+            "from": "n1",
+            "output": "image",
+            "to": "n2",
+            "input": "image"
+        },
+        {
+            "from": "n1",
+            "output": "selection",
+            "to": "n2",
+            "input": "mask"
+        },
+        {
+            "from": "n2",
+            "output": "image",
+            "to": "n3",
+            "input": "image"
+        }
+    ],
+    "published": [
+        {
+            "node": "n2",
+            "param": "prompt",
+            "label": "Instruction"
+        }
+    ]
+}

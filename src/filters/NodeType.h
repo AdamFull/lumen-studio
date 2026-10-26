@@ -138,6 +138,10 @@ public:
         virtual QImage source(double scale) = 0;
         virtual QImage selection(double scale) = 0; // all 255 without a selection
         virtual QSize sourceSize() const = 0;       // full resolution
+        // A callable that passes a running node's own progress on (EvalOptions::stepProgress); it
+        // may outlive the node's evaluate() and does nothing once the evaluation has ended. Empty
+        // when nobody listens.
+        virtual std::function<void(double fraction, const QString &status)> progressReporter() { return {}; }
     };
 
     EvalContext(Run *run, QString nodeId, double scale);
@@ -159,6 +163,11 @@ public:
     QSize sourceSize() const;
     // Checks for cancellation as a callable, for the pixel operations in Ops.h.
     std::function<bool()> cancelCheck() const;
+    // For a node that takes long (an AI step waiting for its queue job): reports how far it is,
+    // from any thread and also after evaluate() has returned, while its future is pending. The
+    // fraction is in [0, 1], negative when it is not known; the status is in plain words ("Step 2
+    // of 4"). Empty when nobody listens.
+    std::function<void(double fraction, const QString &status)> progressReporter() const;
 
 private:
     Run *m_run = nullptr;
@@ -205,6 +214,13 @@ public:
     // Required inputs are always connected; image and mask inputs arrive in the canonical formats
     // and may differ in size (a node stretches a mask to its image). Called on a worker thread.
     virtual NodeResult evaluate(const NodeArgs &args, EvalContext &ctx) const = 0;
+
+    // Why a node of this type cannot run now, in plain words (an AI step without an image engine
+    // that can do it); empty when it can. `params` are the node's stored values. Asked on the GUI
+    // thread by the node editor and the Filters panel, so they can say so before anything runs;
+    // evaluate() fails with the reason when the node runs anyway. Answers may change over time
+    // (an engine is added), so callers ask again rather than keep the answer.
+    virtual QString unavailableReason(const QVariantMap &params) const;
 
 private:
     NodeTypeInfo m_info;

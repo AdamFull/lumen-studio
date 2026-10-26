@@ -1,7 +1,10 @@
 // The node editor, saved filters and the Filters panel (M17 §17.6, plan 17.8 "Node editor window,
-// saved filters, the Filters panel"). Synthetic images and test node types only; nothing runs on
-// the GPU.
+// saved filters, the Filters panel"), and the AI nodes (plan 17.8 "AI nodes"). Synthetic images,
+// test node types and mock image servers only; nothing runs on the GPU.
 
+#include "MockHttpServer.h"
+#include "ai/FilterNodes.h"
+#include "ai/providers/SdCppProvider.h"
 #include "core/Async.h"
 #include "core/ImageOps.h"
 #include "core/Paths.h"
@@ -25,11 +28,16 @@
 #include <QComboBox>
 #include <QDir>
 #include <QDoubleSpinBox>
+#include <QElapsedTimer>
 #include <QFile>
+#include <QJsonArray>
 #include <QJsonDocument>
+#include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QMutex>
 #include <QPainter>
+#include <QPlainTextEdit>
 #include <QPromise>
 #include <QPushButton>
 #include <QSignalSpy>
@@ -171,6 +179,205 @@ QString builtIn(const QString &id)
     return QStringLiteral(":/filters/builtin/%1.lumenfilter").arg(id);
 }
 
+// The built-in filters with AI steps.
+const QStringList kAiFilters{QStringLiteral("colorize-with-ai"), QStringLiteral("clean-up-background"),
+                             QStringLiteral("remove-background"), QStringLiteral("upscale-2x")};
+
+const QColor kOrange(255, 128, 0);
+
+// A photo with detail everywhere, so a change outside the selection would show.
+QImage detailed(const QSize &size)
+{
+    QImage im(size, QImage::Format_ARGB32_Premultiplied);
+    for (int y = 0; y < size.height(); ++y) {
+        auto *line = reinterpret_cast<QRgb *>(im.scanLine(y));
+        for (int x = 0; x < size.width(); ++x)
+            line[x] = qRgb((x * 7) % 256, (y * 5) % 256, ((x + y) * 3) % 256);
+    }
+    return im;
+}
+
+QImage rectMask(const QSize &size, const QRect &rect)
+{
+    QImage m = img::createMask(size, 0);
+    QPainter p(&m);
+    p.fillRect(rect, Qt::white);
+    return m;
+}
+
+QString pngB64(const QImage &image)
+{
+    return QString::fromLatin1(img::toBase64(image));
+}
+
+// Waits for an evaluation with the event loop running (AI steps finish through it). Gives its
+// error in plain words, "cancelled", or empty when it has a result.
+QString waitFor(QFuture<filters::EvalResult> future, int ms = 10000)
+{
+    QElapsedTimer timer;
+    timer.start();
+    while (!future.isFinished() && timer.elapsed() < ms)
+        QTest::qWait(10);
+    if (!future.isFinished())
+        return QStringLiteral("timed out");
+    try {
+        future.waitForFinished();
+    } catch (const std::exception &e) {
+        return describeException(e);
+    }
+    return future.resultCount() == 1 ? QString() : QStringLiteral("cancelled");
+}
+
+// The servers the AI steps talk to, in one: stable-diffusion.cpp's native API (img_gen answers
+// with a job that reports one generating step and then a picture of one colour at the requested
+// size; with `hold`, it keeps generating until it is cancelled; the upscaler makes pictures four
+// times larger) and Stable Diffusion WebUI's background removal (the right half becomes
+// transparent).
+class MockImageServer
+{
+public:
+    MockImageServer()
+    {
+        m_http.route("POST", QStringLiteral("/sdcpp/v1/img_gen"), [this](const MockRequest &req) {
+            payloads << req.json();
+            polls = 0;
+            cancelled = false;
+            return MockResponse::json({{QStringLiteral("id"), QStringLiteral("job_1")}}, 202);
+        });
+        m_http.route("GET", QStringLiteral("/sdcpp/v1/jobs/job_1"), [this](const MockRequest &) {
+            ++polls;
+            if (cancelled)
+                return MockResponse::json({{QStringLiteral("status"), QStringLiteral("cancelled")}});
+            if (hold || polls == 1) {
+                const QJsonObject preview{{QStringLiteral("step"), 2}, {QStringLiteral("total_steps"), 4}};
+                return MockResponse::json({{QStringLiteral("status"), QStringLiteral("generating")}, {QStringLiteral("preview"), preview}});
+            }
+            const QJsonObject p = payloads.last();
+            QImage im(QSize(p.value(QStringLiteral("width")).toInt(), p.value(QStringLiteral("height")).toInt()), QImage::Format_ARGB32);
+            im.fill(colour);
+            const QJsonArray images{QJsonObject{{QStringLiteral("index"), 0}, {QStringLiteral("b64_json"), pngB64(im)}}};
+            return MockResponse::json({{QStringLiteral("status"), QStringLiteral("completed")},
+                                       {QStringLiteral("result"), QJsonObject{{QStringLiteral("images"), images}}}});
+        });
+        m_http.route("POST", QStringLiteral("/sdcpp/v1/jobs/job_1/cancel"), [this](const MockRequest &) {
+            cancelled = true;
+            return MockResponse::json({{QStringLiteral("status"), QStringLiteral("cancelled")}});
+        });
+        m_http.route("POST", QStringLiteral("/sdcpp/v1/upscale"), [this](const MockRequest &req) {
+            ++upscales;
+            const QImage in = img::fromBase64(req.json().value(QStringLiteral("image")).toString().toLatin1());
+            const QImage out = in.scaled(in.size() * 4, Qt::IgnoreAspectRatio, Qt::FastTransformation);
+            return MockResponse::json({{QStringLiteral("images"), QJsonArray{QJsonObject{{QStringLiteral("b64_json"), pngB64(out)}}}}});
+        });
+        m_http.route("POST", QStringLiteral("/rembg"), [this](const MockRequest &req) {
+            ++cutouts;
+            QImage im = img::fromBase64(req.json().value(QStringLiteral("input_image")).toString().toLatin1())
+                            .convertToFormat(QImage::Format_ARGB32);
+            QPainter p(&im);
+            p.setCompositionMode(QPainter::CompositionMode_Source);
+            p.fillRect(QRect(im.width() / 2, 0, im.width() - im.width() / 2, im.height()), Qt::transparent);
+            p.end();
+            return MockResponse::json({{QStringLiteral("image"), pngB64(im)}});
+        });
+    }
+
+    QString url() const { return m_http.baseUrl().toString(); }
+    bool received(const QString &path) const
+    {
+        for (const MockRequest &r : m_http.requests) {
+            if (r.path == path)
+                return true;
+        }
+        return false;
+    }
+
+    QList<QJsonObject> payloads; // img_gen requests
+    QColor colour = kOrange;
+    bool hold = false;
+    int polls = 0;
+    bool cancelled = false;
+    int upscales = 0;
+    int cutouts = 0;
+
+private:
+    MockHttpServer m_http;
+};
+
+// Image engines added to a Studio for one test and removed at its end (their settings are written
+// to the test's own data folder).
+class TestEngines
+{
+public:
+    explicit TestEngines(Studio &studio)
+        : m_studio(studio)
+    {
+    }
+    ~TestEngines()
+    {
+        for (const QString &id : std::as_const(m_ids))
+            m_studio.providers()->removeProvider(id);
+        QFile::remove(m_studio.providers()->configPath());
+    }
+
+    // A stable-diffusion.cpp server running FLUX.2 klein (instruction edits, from its preset), or,
+    // without the preset, a model that cannot edit from a description.
+    ai::SdCppProvider *sdcpp(const MockImageServer &server, bool editModel = true, bool upscaler = false)
+    {
+        ai::ModelDefaults klein;
+        klein.id = QStringLiteral("flux2-klein-4b");
+        klein.cfg = 1.0;
+        klein.steps = 4;
+        klein.sampler = QStringLiteral("euler");
+        klein.nativeResolution = 1024;
+        klein.edit = true;
+        klein.references = 4;
+        klein.negativePrompt = false;
+        QVariantMap settings{{QStringLiteral("url"), server.url()},
+                             {QStringLiteral("model"), QStringLiteral("flux-2-klein-4b.safetensors")},
+                             {QStringLiteral("upscaler"), upscaler}};
+        if (editModel)
+            settings.insert(QStringLiteral("model_preset"), klein.toVariant());
+        auto *p = qobject_cast<ai::SdCppProvider *>(
+            m_studio.providers()->addProvider(QStringLiteral("sdcpp"), editModel ? QStringLiteral("Klein") : QStringLiteral("SDXL"), settings));
+        if (p) {
+            p->pollIntervalMs = 20;
+            m_ids << p->instanceId();
+        }
+        return p;
+    }
+    // Stable Diffusion WebUI: removes backgrounds.
+    ai::Provider *webUi(const MockImageServer &server)
+    {
+        ai::Provider *p = m_studio.providers()->addProvider(QStringLiteral("sdwebui"), QStringLiteral("WebUI"),
+                                                            {{QStringLiteral("url"), server.url()}});
+        if (p)
+            m_ids << p->instanceId();
+        return p;
+    }
+
+private:
+    Studio &m_studio;
+    QStringList m_ids;
+};
+
+QPushButton *buttonNamed(QWidget *in, const QString &text)
+{
+    for (QPushButton *b : in->findChildren<QPushButton *>()) {
+        if (b->text() == text)
+            return b;
+    }
+    return nullptr;
+}
+
+QComboBox *targetCombo(FiltersPanel &panel)
+{
+    for (QComboBox *c : panel.findChildren<QComboBox *>()) {
+        if (c->accessibleName() == QStringLiteral("Put the result on"))
+            return c;
+    }
+    return nullptr;
+}
+
 } // namespace
 
 class TestFiltersUi : public QObject
@@ -196,6 +403,12 @@ private slots:
     void panelAiFilterRunsOnRequest();
     void panelManagesFilters();
     void editorFiltersTab();
+    void aiNodesSayWhatTheyNeed();
+    void aiEditFeedsNextNode();
+    void aiEditOfSelection();
+    void aiStepCancel();
+    void aiInpaintGraphOnSelection();
+    void builtInAiFiltersEndToEnd();
 
 private:
     std::unique_ptr<QTemporaryDir> m_dir;
@@ -206,6 +419,9 @@ void TestFiltersUi::initTestCase()
 {
     QStandardPaths::setTestModeEnabled(true);
     registerTestNodes();
+    // The AI nodes, as a Studio registers them at start-up, so the catalogs of the tests (made
+    // before their Studio) load the built-in AI filters.
+    ai::registerFilterNodes();
 }
 
 void TestFiltersUi::init()
@@ -240,33 +456,48 @@ void TestFiltersUi::filtersFolderDefault()
 void TestFiltersUi::builtInFiltersValidate()
 {
     const QStringList files = QDir(QStringLiteral(":/filters/builtin")).entryList({QStringLiteral("*.lumenfilter")});
-    QVERIFY2(files.size() >= 7, qPrintable(files.join(QLatin1Char(' '))));
+    QVERIFY2(files.size() >= 11, qPrintable(files.join(QLatin1Char(' '))));
     for (const QString &file : files) {
         const QString path = QStringLiteral(":/filters/builtin/") + file;
+        const bool ai = kAiFilters.contains(QFileInfo(file).completeBaseName());
         QString error;
         const std::optional<filters::Graph> g = filters::Graph::load(path, filters::NodeRegistry::global(), &error);
         QVERIFY2(g, qPrintable(file + QStringLiteral(": ") + error));
         QVERIFY2(!g->name.isEmpty() && !g->description.isEmpty(), qPrintable(file));
         for (const filters::Issue &issue : g->validate())
             QVERIFY2(false, qPrintable(file + QStringLiteral(": ") + issue.message)); // no errors, no warnings
+        QCOMPARE(g->needsExplicitRun(), ai);
+        filters::Evaluator evaluator;
+        if (ai) {
+            // An AI step runs only when asked (the tests below run them against mock servers).
+            filters::EvalOptions preview;
+            preview.runExpensive = false;
+            auto f = evaluator.evaluate(*g, {twoColours(), {}}, preview);
+            f.waitForFinished();
+            QVERIFY2(f.resultCount() == 1 && f.result().needsRun && f.result().evaluated.isEmpty(), qPrintable(file));
+            continue;
+        }
         QVERIFY2(!g->published().isEmpty(), qPrintable(file + QStringLiteral(" publishes no setting")));
         // Applied to a picture, every one changes it.
-        filters::Evaluator evaluator;
         auto f = evaluator.evaluate(*g, {twoColours(), {}});
         f.waitForFinished();
         QVERIFY2(f.resultCount() == 1, qPrintable(file));
         QCOMPARE(f.result().image.size(), QSize(64, 48));
         QVERIFY2(f.result().image != img::normalized(twoColours()), qPrintable(file));
     }
-    // The catalog lists them first, in their order, with thumbnails.
+    // The catalog lists them first, in their order (those with AI steps last), with thumbnails.
     const QList<FilterCatalog::Entry> entries = m_catalog->entries();
-    QVERIFY(entries.size() >= 7);
+    QVERIFY(entries.size() >= 11);
     QCOMPARE(entries.first().name, QStringLiteral("Black and white"));
     QCOMPARE(entries.first().path, builtIn(QStringLiteral("black-and-white")));
+    QCOMPARE(entries.at(7).name, QStringLiteral("Colorize with AI"));
+    bool seenAi = false;
     for (const FilterCatalog::Entry &e : entries) {
         QVERIFY(e.builtIn);
         QVERIFY2(e.error.isEmpty(), qPrintable(e.error));
-        QVERIFY(!e.usesAi);
+        QCOMPARE(e.usesAi, kAiFilters.contains(QFileInfo(e.path).completeBaseName()));
+        QVERIFY(e.usesAi || !seenAi); // the AI ones after the classic ones
+        seenAi = seenAi || e.usesAi;
     }
     QSignalSpy ready(m_catalog.get(), &FilterCatalog::thumbnailReady);
     QVERIFY(m_catalog->thumbnail(entries.first().path).isNull()); // computed in the background
@@ -756,6 +987,9 @@ void TestFiltersUi::panelListsAndSettings()
         texts << list->item(i)->text();
     QVERIFY(texts.contains(QStringLiteral("Your filters")));
     QVERIFY(texts.contains(QStringLiteral("Soft focus")));
+    // Those with AI steps under a heading of their own, after the others.
+    QVERIFY(texts.indexOf(QStringLiteral("Built in, with AI")) > texts.indexOf(QStringLiteral("Old photo")));
+    QCOMPARE(texts.indexOf(QStringLiteral("Colorize with AI")), texts.indexOf(QStringLiteral("Built in, with AI")) + 1);
 
     // A saved filter appears when it is saved.
     filters::Graph g = chain(QStringLiteral("levels"), QStringLiteral("Lift"));
@@ -1057,6 +1291,444 @@ void TestFiltersUi::editorFiltersTab()
     }
     side->setCurrentIndex(0);
     QVERIFY(page.canvas()->preview().isNull());
+}
+
+// ---- AI nodes (plan 17.8 "AI nodes") -------------------------------------------------------------
+
+// The AI steps: in the registry, expensive. Each says in plain words what it needs before anything
+// runs (the Filters panel and the node editor show it), and fails with that when it runs anyway.
+void TestFiltersUi::aiNodesSayWhatTheyNeed()
+{
+    namespace fn = ai::filter_nodes;
+    filters::NodeRegistry &registry = filters::NodeRegistry::global();
+    for (const QString &id : {fn::Edit, fn::Inpaint, fn::Upscale, fn::RemoveBackground}) {
+        const filters::NodeTypePtr type = registry.find(id);
+        QVERIFY2(type, qPrintable(id));
+        QVERIFY(type->info().expensive);
+        QCOMPARE(type->info().category, filters::categories::Ai);
+        QVERIFY(type->info().param(fn::EngineParam));
+    }
+    QCOMPARE(registry.find(fn::RemoveBackground)->info().outputs.size(), 2); // the cut-out and its mask
+    const filters::NodeTypePtr edit = registry.find(fn::Edit);
+
+    Studio studio;
+    QCOMPARE(ai::filterNodeService(), studio.generation()); // the newest Studio's engines
+    TestEngines engines(studio);
+    // No image engine at all.
+    QVERIFY2(edit->unavailableReason({}).contains(QStringLiteral("no image engine")), qPrintable(edit->unavailableReason({})));
+    const std::optional<filters::Graph> colorize = m_catalog->load(builtIn(QStringLiteral("colorize-with-ai")));
+    QVERIFY(colorize);
+    QCOMPARE(colorize->unavailable().size(), 1);
+    filters::Evaluator evaluator;
+    QString error = waitFor(evaluator.evaluate(*colorize, {twoColours(), {}}));
+    QVERIFY2(error.startsWith(QStringLiteral("“Edit with AI”: There is no image engine")), qPrintable(error));
+
+    // The Filters panel says so before anything runs; Run gives the same reason.
+    doc::Document *doc = studio.openImageAsDocument(twoColours(), QStringLiteral("Two colours"));
+    EditorState state;
+    CanvasView canvas(&state);
+    canvas.setDocument(doc);
+    FiltersPanel panel(&studio, &canvas, nullptr, m_catalog.get());
+    QVERIFY(panel.selectFilter(builtIn(QStringLiteral("colorize-with-ai"))));
+    auto *availability = panel.findChild<QLabel *>(QStringLiteral("FilterAvailability"));
+    QVERIFY(availability);
+    QVERIFY(!availability->isHidden());
+    QVERIFY2(availability->text().contains(QStringLiteral("no image engine")), qPrintable(availability->text()));
+    QSignalSpy finished(panel.runner(), &FilterRunner::finished);
+    QPushButton *run = buttonNamed(&panel, QStringLiteral("Run AI steps"));
+    QVERIFY(run && !run->isHidden());
+    run->click();
+    QVERIFY(finished.wait(5000));
+    QVERIFY(!finished.first().at(0).toBool());
+    QVERIFY(finished.first().at(1).toString().contains(QStringLiteral("no image engine")));
+    QVERIFY(panel.statusText().contains(QStringLiteral("no image engine")));
+
+    // A server whose model cannot edit from a description: it can still fill an area, but it has
+    // no upscaler and removes no backgrounds. The panel follows when an engine is added.
+    MockImageServer server;
+    ai::SdCppProvider *sdxl = engines.sdcpp(server, false);
+    QVERIFY(sdxl);
+    QTRY_VERIFY(availability->text().contains(QStringLiteral("“SDXL” cannot change a picture from a description")));
+    QVERIFY(edit->unavailableReason({}).contains(QStringLiteral("cannot change a picture from a description")));
+    QVERIFY(registry.find(fn::Inpaint)->unavailableReason({}).isEmpty());
+    QVERIFY(registry.find(fn::Upscale)->unavailableReason({}).contains(QStringLiteral("has an upscaler")));
+    QVERIFY(registry.find(fn::RemoveBackground)->unavailableReason({}).contains(QStringLiteral("can remove a background")));
+    // An engine chosen in the node that is gone.
+    QVERIFY(edit->unavailableReason({{fn::EngineParam, QStringLiteral("sdcpp-gone")}}).contains(QStringLiteral("no longer set up")));
+    // With an edit model nothing is missing: chosen in the node, or as the engine in use.
+    ai::SdCppProvider *klein = engines.sdcpp(server);
+    QVERIFY(klein);
+    QVERIFY(edit->unavailableReason({{fn::EngineParam, klein->instanceId()}}).isEmpty());
+    QVERIFY(!edit->unavailableReason({}).isEmpty()); // the one in use is still the first one
+    studio.providers()->setDefaultImageProvider(klein->instanceId());
+    QVERIFY(edit->unavailableReason({}).isEmpty());
+    QTRY_VERIFY(availability->isHidden());
+    // An empty instruction is refused when the step runs, before anything is sent.
+    error = waitFor(evaluator.evaluate(chain(fn::Edit, QStringLiteral("Empty")), {twoColours(), {}}));
+    QVERIFY2(error.contains(QStringLiteral("“Instruction” is empty")), qPrintable(error));
+    QVERIFY(server.payloads.isEmpty());
+
+    // The node editor: the engine as a list of the engines, the instruction in a field of several
+    // lines, and a step that cannot run among the problems, outlined.
+    QWidget owner;
+    auto *w = new NodeEditorWindow(m_catalog.get(), &owner);
+    w->setSaveQuestion({});
+    const QString node = w->addNode(fn::Edit);
+    auto *engine = w->findChild<ParamField *>(QStringLiteral("param:engine"))->findChild<QComboBox *>();
+    QVERIFY(engine);
+    QCOMPARE(engine->count(), 3);
+    QCOMPARE(engine->itemText(0), QStringLiteral("The one in use"));
+    QCOMPARE(engine->itemText(1), QStringLiteral("SDXL"));
+    QCOMPARE(engine->itemText(2), QStringLiteral("Klein"));
+    auto *prompt = w->findChild<ParamField *>(QStringLiteral("param:prompt"))->findChild<QPlainTextEdit *>();
+    QVERIFY(prompt);
+    prompt->setPlainText(QStringLiteral("make it night"));
+    QCOMPARE(w->model()->graph().param(node, QStringLiteral("prompt")).toString(), QStringLiteral("make it night"));
+    QVERIFY(!w->problems().join(QLatin1Char('\n')).contains(QStringLiteral("cannot change")));
+    engine->setCurrentIndex(1);
+    QCOMPARE(w->model()->graph().param(node, fn::EngineParam).toString(), sdxl->instanceId());
+    QVERIFY2(w->problems().join(QLatin1Char('\n')).contains(QStringLiteral("“SDXL” cannot change a picture from a description")),
+             qPrintable(w->problems().join(QLatin1Char('\n'))));
+    QVERIFY(w->scene()->nodeItem(node)->toolTip().contains(QStringLiteral("cannot change")));
+    QVERIFY(w->scene()->nodeItem(node)->summary().contains(QStringLiteral("Image engine: SDXL")));
+}
+
+// "Edit with AI" sends an instruction edit to the engine as a Queue job, reports its progress, and
+// its result feeds the next node; once it has run, it comes from the cache.
+void TestFiltersUi::aiEditFeedsNextNode()
+{
+    Studio studio;
+    TestEngines engines(studio);
+    MockImageServer server;
+    QVERIFY(engines.sdcpp(server));
+    filters::Graph g;
+    const QString in = g.addNode(QStringLiteral("input"));
+    const QString edit = g.addNode(ai::filter_nodes::Edit, QPointF(260, 0));
+    const QString invert = g.addNode(QStringLiteral("invert"), QPointF(520, 0));
+    const QString out = g.addNode(QStringLiteral("output"), QPointF(780, 0));
+    QVERIFY(g.connect(in, QStringLiteral("image"), edit, QStringLiteral("image")));
+    QVERIFY(g.connect(edit, QStringLiteral("image"), invert, QStringLiteral("image")));
+    QVERIFY(g.connect(invert, QStringLiteral("image"), out, QStringLiteral("image")));
+    QVERIFY(g.setParam(edit, QStringLiteral("prompt"), QStringLiteral("colorize it")));
+    QVERIFY(g.isValid() && g.needsExplicitRun() && g.unavailable().isEmpty());
+
+    const QImage picture = detailed(QSize(300, 200));
+    filters::Evaluator evaluator;
+    QMutex mutex;
+    QStringList statuses;
+    filters::EvalOptions options;
+    options.stepProgress = [&](double, const QString &status) {
+        QMutexLocker lock(&mutex);
+        statuses << status;
+    };
+    QFuture<filters::EvalResult> f = evaluator.evaluate(g, {picture, {}}, options);
+    const QString error = waitFor(f);
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+
+    // The request: an instruction edit of the whole picture at the model's working size.
+    QCOMPARE(server.payloads.size(), 1);
+    const QJsonObject payload = server.payloads.first();
+    QCOMPARE(payload.value(QStringLiteral("prompt")).toString(), QStringLiteral("colorize it"));
+    QCOMPARE(payload.value(QStringLiteral("ref_images")).toArray().size(), 1);
+    QVERIFY(!payload.contains(QStringLiteral("init_image")));
+    QCOMPARE(QSize(payload.value(QStringLiteral("width")).toInt(), payload.value(QStringLiteral("height")).toInt()),
+             img::fitToPixelBudget(picture.size(), 1024 * 1024, 64));
+    // Its result, back at the picture's size, went through Invert.
+    const filters::EvalResult r = f.result();
+    QCOMPARE(r.image.size(), picture.size());
+    QCOMPARE(QColor(r.image.pixel(150, 100)), QColor(255 - kOrange.red(), 255 - kOrange.green(), 255 - kOrange.blue()));
+    QCOMPARE(r.evaluated, (QStringList{in, edit, invert, out}));
+    // The step was a job in the Queue, which reported how far it was.
+    {
+        QMutexLocker lock(&mutex);
+        QVERIFY2(statuses.join(QLatin1Char('\n')).contains(QStringLiteral("2 / 4")), qPrintable(statuses.join(QLatin1Char('\n'))));
+    }
+    Job *job = nullptr;
+    for (Job *j : studio.jobs()->jobs()) {
+        if (j->title().startsWith(QStringLiteral("Edit with AI: colorize it")))
+            job = j;
+    }
+    QVERIFY(job);
+    QCOMPARE(job->state(), Job::State::Succeeded);
+    // Evaluated again, everything comes from the cache: no second request.
+    f = evaluator.evaluate(g, {picture, {}}, options);
+    QVERIFY(waitFor(f).isEmpty());
+    QVERIFY(f.result().evaluated.isEmpty());
+    QCOMPARE(server.payloads.size(), 1);
+}
+
+// A selection limits the change: the edit is of a crop around it (the region pipeline) and every
+// pixel outside the selection stays as it was. Run previews it; Apply reuses it, as one undo step.
+void TestFiltersUi::aiEditOfSelection()
+{
+    Studio studio;
+    TestEngines engines(studio);
+    MockImageServer server;
+    ai::SdCppProvider *klein = engines.sdcpp(server);
+    QVERIFY(klein);
+    const QSize size(900, 600);
+    doc::Document *doc = studio.openImageAsDocument(detailed(size), QStringLiteral("Photo"));
+    const QRect area(300, 200, 200, 150);
+    doc->applySelection(rectMask(size, area), QStringLiteral("Select"));
+    EditorState state;
+    CanvasView canvas(&state);
+    canvas.setDocument(doc);
+    FiltersPanel panel(&studio, &canvas, nullptr, m_catalog.get());
+    panel.resize(320, 640);
+    panel.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&panel));
+    targetCombo(panel)->setCurrentIndex(0);
+    QVERIFY(panel.selectFilter(builtIn(QStringLiteral("colorize-with-ai"))));
+    QVERIFY(panel.runner()->needsRun());
+    QVERIFY(panel.findChild<QLabel *>(QStringLiteral("FilterAvailability"))->isHidden());
+    // The instruction can be changed in the panel.
+    QVERIFY(panel.field(QStringLiteral("Instruction")));
+    auto *instruction = panel.field(QStringLiteral("Instruction"))->findChild<QPlainTextEdit *>();
+    QVERIFY(instruction && instruction->toPlainText().startsWith(QStringLiteral("Colorize this black-and-white photo")));
+
+    QSignalSpy finished(panel.runner(), &FilterRunner::finished);
+    QSignalSpy step(panel.runner(), &FilterRunner::stepProgress);
+    QPushButton *run = buttonNamed(&panel, QStringLiteral("Run AI steps"));
+    QVERIFY(run && !run->isHidden());
+    run->click();
+    QVERIFY(finished.wait(10000));
+    QVERIFY2(finished.first().at(0).toBool(), qPrintable(finished.first().at(1).toString()));
+    QTRY_VERIFY(!canvas.preview().isNull());
+    QVERIFY(step.count() >= 1);
+    // The request: a crop around the selection at the model's working size.
+    QCOMPARE(server.payloads.size(), 1);
+    const QJsonObject payload = server.payloads.first();
+    ai::ImageRequest probe;
+    probe.mode = ai::GenMode::Edit;
+    const ai::RegionPlan plan = ai::planRegion(img::maskBounds(doc->selection(), 8), size, 48, klein->capabilitiesFor(probe));
+    QVERIFY(plan.rect != QRect(QPoint(0, 0), size));
+    QCOMPARE(QSize(payload.value(QStringLiteral("width")).toInt(), payload.value(QStringLiteral("height")).toInt()), plan.modelSize);
+    QCOMPARE(payload.value(QStringLiteral("ref_images")).toArray().size(), 1);
+
+    // Apply: what Run computed, onto a new layer, one undo step; nothing outside the selection changes.
+    const QImage before = doc->flattened();
+    const int steps = doc->undoStack()->count();
+    finished.clear();
+    QVERIFY(panel.applySelected());
+    QVERIFY(finished.wait(10000));
+    QVERIFY2(finished.first().at(0).toBool(), qPrintable(finished.first().at(1).toString()));
+    QCOMPARE(server.payloads.size(), 1);
+    QCOMPARE(doc->layerCount(), 2);
+    QCOMPARE(doc->undoStack()->count(), steps + 1);
+    const QImage after = doc->flattened();
+    QVERIFY(sameOutside(before, after, doc->selection()));
+    QCOMPARE(QColor(after.pixel(area.center())), kOrange); // the colours as the model made them
+    doc->undoStack()->undo();
+    QCOMPARE(doc->flattened(), before);
+}
+
+// Cancel stops the step's job (the server is asked to cancel it) and nothing changes.
+void TestFiltersUi::aiStepCancel()
+{
+    Studio studio;
+    TestEngines engines(studio);
+    MockImageServer server;
+    server.hold = true;
+    QVERIFY(engines.sdcpp(server));
+    doc::Document *doc = studio.openImageAsDocument(detailed(QSize(320, 240)), QStringLiteral("Photo"));
+    EditorState state;
+    CanvasView canvas(&state);
+    canvas.setDocument(doc);
+    FiltersPanel panel(&studio, &canvas, nullptr, m_catalog.get());
+    QVERIFY(panel.selectFilter(builtIn(QStringLiteral("colorize-with-ai"))));
+    const int layers = doc->layerCount();
+    const int steps = doc->undoStack()->count();
+    QSignalSpy finished(panel.runner(), &FilterRunner::finished);
+    QVERIFY(panel.applySelected());
+    QTRY_VERIFY_WITH_TIMEOUT(server.polls >= 2, 10000); // the job runs on the server
+    QPointer<Job> job;
+    for (Job *j : studio.jobs()->jobs()) {
+        if (j->title().startsWith(QStringLiteral("Edit with AI")))
+            job = j;
+    }
+    QVERIFY(job);
+    QCOMPARE(job->state(), Job::State::Running);
+    panel.cancel();
+    QTRY_COMPARE(finished.count(), 1);
+    QVERIFY(!finished.first().at(0).toBool());
+    QVERIFY(finished.first().at(1).toString().contains(QStringLiteral("Cancelled")));
+    QTRY_VERIFY(server.cancelled);
+    QVERIFY(server.received(QStringLiteral("/sdcpp/v1/jobs/job_1/cancel")));
+    QTRY_COMPARE(job->state(), Job::State::Cancelled);
+    QVERIFY(!panel.runner()->isBusy());
+    QCOMPARE(doc->layerCount(), layers);
+    QCOMPARE(doc->undoStack()->count(), steps);
+}
+
+// The plan's example of a saved filter (acceptance 5): Levels → Mask from image → Fill area with AI,
+// applied from the Filters panel on a selection. The bright part is inpainted (an inpainting
+// request of a crop around it, with its mask), as one undo step, and nothing outside the selection
+// changes.
+void TestFiltersUi::aiInpaintGraphOnSelection()
+{
+    Studio studio;
+    TestEngines engines(studio);
+    MockImageServer server;
+    QVERIFY(engines.sdcpp(server));
+    filters::Graph g;
+    g.name = QStringLiteral("Fill the sky");
+    const QString in = g.addNode(QStringLiteral("input"));
+    const QString levels = g.addNode(QStringLiteral("levels"), QPointF(260, 0));
+    const QString bright = g.addNode(QStringLiteral("mask-from-image"), QPointF(520, 0));
+    const QString fill = g.addNode(ai::filter_nodes::Inpaint, QPointF(780, 0));
+    const QString out = g.addNode(QStringLiteral("output"), QPointF(1040, 0));
+    QVERIFY(g.connect(in, QStringLiteral("image"), levels, QStringLiteral("image")));
+    QVERIFY(g.connect(levels, QStringLiteral("image"), bright, QStringLiteral("image")));
+    QVERIFY(g.connect(in, QStringLiteral("image"), fill, QStringLiteral("image")));
+    QVERIFY(g.connect(bright, QStringLiteral("mask"), fill, QStringLiteral("mask")));
+    QVERIFY(g.connect(fill, QStringLiteral("image"), out, QStringLiteral("image")));
+    QVERIFY(g.setParam(levels, QStringLiteral("inBlack"), 128));
+    QVERIFY(g.setParam(fill, QStringLiteral("prompt"), QStringLiteral("a sky full of stars")));
+    g.publish({fill, QStringLiteral("prompt"), QStringLiteral("What to paint")});
+    QVERIFY(g.isValid());
+    const QString path = m_catalog->save(g);
+    QVERIFY(!path.isEmpty());
+
+    // Bright above, dark below, with detail in both.
+    QImage photo(400, 300, QImage::Format_ARGB32_Premultiplied);
+    for (int y = 0; y < photo.height(); ++y) {
+        for (int x = 0; x < photo.width(); ++x)
+            photo.setPixel(x, y, y < 150 ? qRgb(230 + x % 26, 230 + y % 26, 240) : qRgb(x % 40, y % 40, 20));
+    }
+    doc::Document *doc = studio.openImageAsDocument(photo, QStringLiteral("Sky"));
+    doc->applySelection(rectMask(photo.size(), QRect(0, 0, 200, 300)), QStringLiteral("Select"));
+    EditorState state;
+    CanvasView canvas(&state);
+    canvas.setDocument(doc);
+    FiltersPanel panel(&studio, &canvas, nullptr, m_catalog.get());
+    targetCombo(panel)->setCurrentIndex(0);
+    QVERIFY(panel.selectFilter(path));
+    QVERIFY(panel.field(QStringLiteral("What to paint")));
+    const QImage before = doc->flattened();
+    const int steps = doc->undoStack()->index();
+    QSignalSpy finished(panel.runner(), &FilterRunner::finished);
+    QVERIFY(panel.applySelected());
+    QVERIFY(finished.wait(10000));
+    QVERIFY2(finished.first().at(0).toBool(), qPrintable(finished.first().at(1).toString()));
+
+    // An inpainting request: the crop, its mask and the strength, no reference images.
+    QCOMPARE(server.payloads.size(), 1);
+    const QJsonObject payload = server.payloads.first();
+    QVERIFY(payload.value(QStringLiteral("prompt")).toString().contains(QStringLiteral("a sky full of stars")));
+    QVERIFY(payload.contains(QStringLiteral("init_image")));
+    QVERIFY(payload.contains(QStringLiteral("mask_image")));
+    QCOMPARE(payload.value(QStringLiteral("strength")).toDouble(), 0.9);
+    QVERIFY(!payload.contains(QStringLiteral("ref_images")));
+    // One undo step; the bright part of the selection changed, the rest did not.
+    QCOMPARE(doc->layerCount(), 2);
+    QCOMPARE(doc->undoStack()->index(), steps + 1);
+    const QImage after = doc->flattened();
+    QVERIFY(sameOutside(before, after, doc->selection()));
+    QVERIFY(after.pixel(100, 60) != before.pixel(100, 60));
+    QCOMPARE(after.pixel(100, 260), before.pixel(100, 260)); // dark: not in the area
+    doc->undoStack()->undo();
+    QCOMPARE(doc->flattened(), before);
+}
+
+// Every built-in AI filter from the Filters panel against the mock servers: Colorize with AI and
+// Clean up background (instruction edits), Remove background (the original layer hidden under the
+// cut-out) and Upscale ×2 (the picture becomes twice as large), each as one undo step.
+void TestFiltersUi::builtInAiFiltersEndToEnd()
+{
+    Studio studio;
+    TestEngines engines(studio);
+    MockImageServer server;
+    QVERIFY(engines.sdcpp(server, true, true)); // FLUX.2 klein, and an upscaler
+    QVERIFY(engines.webUi(server));             // removes backgrounds
+    const QSize size(240, 160);
+    const QImage photo = img::normalized(detailed(size));
+    doc::Document *doc = studio.openImageAsDocument(photo, QStringLiteral("Photo"));
+    const QUuid original = doc->activeLayerId();
+    EditorState state;
+    CanvasView canvas(&state);
+    canvas.setDocument(doc);
+    FiltersPanel panel(&studio, &canvas, nullptr, m_catalog.get());
+    targetCombo(panel)->setCurrentIndex(0);
+    QSignalSpy finished(panel.runner(), &FilterRunner::finished);
+    auto apply = [&](const QString &id) -> QString {
+        doc->setActiveLayer(original);
+        if (!panel.selectFilter(builtIn(id)))
+            return QStringLiteral("not listed");
+        if (!panel.findChild<QLabel *>(QStringLiteral("FilterAvailability"))->isHidden())
+            return panel.findChild<QLabel *>(QStringLiteral("FilterAvailability"))->text();
+        finished.clear();
+        if (!panel.applySelected())
+            return panel.statusText();
+        if (!finished.wait(10000))
+            return QStringLiteral("timed out");
+        return finished.first().at(0).toBool() ? QString() : finished.first().at(1).toString();
+    };
+    // Undo steps by the stack's index: an undone step stays in its count until the next one.
+    int steps = doc->undoStack()->index();
+
+    // Colorize with AI, nothing selected: the whole picture is edited.
+    QString error = apply(QStringLiteral("colorize-with-ai"));
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    QCOMPARE(server.payloads.size(), 1);
+    QVERIFY(server.payloads.last().value(QStringLiteral("prompt")).toString().startsWith(QStringLiteral("Colorize this black-and-white photo")));
+    QCOMPARE(QSize(server.payloads.last().value(QStringLiteral("width")).toInt(), server.payloads.last().value(QStringLiteral("height")).toInt()),
+             img::fitToPixelBudget(size, 1024 * 1024, 64));
+    QCOMPARE(doc->layerCount(), 2);
+    QCOMPARE(doc->undoStack()->index(), steps + 1);
+    QCOMPARE(QColor(doc->flattened().pixel(10, 10)), kOrange);
+    doc->undoStack()->undo();
+    QCOMPARE(doc->layerCount(), 1);
+
+    // Clean up background, on the selected background only.
+    const QRect background(0, 0, size.width(), 50);
+    doc->applySelection(rectMask(size, background), QStringLiteral("Select"));
+    const QImage before = doc->flattened();
+    error = apply(QStringLiteral("clean-up-background"));
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    QCOMPARE(server.payloads.size(), 2);
+    QVERIFY(server.payloads.last().value(QStringLiteral("prompt")).toString().startsWith(QStringLiteral("Clean up the background")));
+    const QImage cleaned = doc->flattened();
+    QVERIFY(sameOutside(before, cleaned, doc->selection()));
+    int changed = 0;
+    for (int y = background.top(); y <= background.bottom(); ++y) {
+        for (int x = background.left(); x <= background.right(); ++x)
+            changed += cleaned.pixel(x, y) != before.pixel(x, y);
+    }
+    QVERIFY2(changed * 2 > background.width() * background.height(), qPrintable(QString::number(changed)));
+    doc->undoStack()->undo();
+    doc->clearSelection();
+
+    // Remove background: the cut-out on a new layer, the original hidden (and unchanged) under it.
+    steps = doc->undoStack()->index();
+    error = apply(QStringLiteral("remove-background"));
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    QCOMPARE(server.cutouts, 1);
+    QCOMPARE(doc->layerCount(), 2);
+    QCOMPARE(doc->undoStack()->index(), steps + 1);
+    QVERIFY(!doc->findLayer(original)->props.visible);
+    QCOMPARE(doc->findLayer(original)->image, photo);
+    const QImage cut = doc->activeLayer()->image;
+    QCOMPARE(qAlpha(cut.pixel(200, 80)), 0);           // the right half was background
+    QCOMPARE(cut.pixel(40, 80), photo.pixel(40, 80)); // the subject stays as it was
+    QVERIFY2(panel.statusText().contains(QStringLiteral("hidden")), qPrintable(panel.statusText()));
+    doc->undoStack()->undo();
+    QCOMPARE(doc->layerCount(), 1);
+    QVERIFY(doc->findLayer(original)->props.visible);
+
+    // Upscale ×2: the picture becomes twice as large, with the upscaled picture on a new layer.
+    steps = doc->undoStack()->index();
+    error = apply(QStringLiteral("upscale-2x"));
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    QCOMPARE(server.upscales, 1);
+    QCOMPARE(doc->size(), size * 2);
+    QCOMPARE(doc->layerCount(), 2);
+    QCOMPARE(doc->activeLayer()->image.size(), size * 2);
+    QCOMPARE(doc->undoStack()->index(), steps + 1);
+    QVERIFY2(panel.statusText().contains(QStringLiteral("480 × 320")), qPrintable(panel.statusText()));
+    doc->undoStack()->undo();
+    QCOMPARE(doc->size(), size);
+    QCOMPARE(doc->layerCount(), 1);
+    QCOMPARE(doc->activeLayer()->image, photo);
 }
 
 QTEST_MAIN(TestFiltersUi)

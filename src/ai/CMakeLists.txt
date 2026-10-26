@@ -21,6 +21,7 @@ add_library(lumen_ai STATIC
     PromptStyle.h PromptStyle.cpp
     ModelDefaults.h ModelDefaults.cpp
     GenerationService.h GenerationService.cpp
+    FilterNodes.h FilterNodes.cpp
     CastGeneration.h CastGeneration.cpp
     CharacterContext.h CharacterContext.cpp
     Director.h Director.cpp
@@ -29,5 +30,7 @@ add_library(lumen_ai STATIC
     PartService.h PartService.cpp
 )
 target_include_directories(lumen_ai PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
-target_link_libraries(lumen_ai PUBLIC lumen_core lumen_net lumen_pose lumen_doc Qt6::Gui)
+# lumen_filters for the AI steps of node filters (FilterNodes); the filters library never depends
+# on this one.
+target_link_libraries(lumen_ai PUBLIC lumen_core lumen_net lumen_pose lumen_doc lumen_filters Qt6::Gui)
 lumen_configure_target(lumen_ai)

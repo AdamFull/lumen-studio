@@ -390,6 +390,19 @@ QList<Issue> Graph::validate() const
     return issues;
 }
 
+QList<Issue> Graph::unavailable() const
+{
+    QList<Issue> issues;
+    for (const Node &n : m_nodes) {
+        if (!n.type)
+            continue;
+        const QString reason = n.type->unavailableReason(n.params);
+        if (!reason.isEmpty())
+            issues.append({Issue::Severity::Warning, n.id, Text::tr("“%1”: %2").arg(nodeLabel(n.id), reason)});
+    }
+    return issues;
+}
+
 bool Graph::isValid() const
 {
     for (const Issue &i : validate()) {

@@ -1,5 +1,6 @@
 #include "ui/filters/FiltersPanel.h"
 
+#include "ai/ProviderRegistry.h"
 #include "core/Settings.h"
 #include "filters/Graph.h"
 #include "ui/Icons.h"
@@ -34,6 +35,7 @@
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <cmath>
 
 namespace lumen::ui {
 
@@ -146,6 +148,12 @@ FiltersPanel::FiltersPanel(Studio *studio, CanvasView *canvas, QWidget *parent, 
     m_selectionHint = mutedLabel(QString(), m_details);
     m_selectionHint->setWordWrap(true);
     details->addWidget(m_selectionHint);
+    m_availability = new QLabel(m_details);
+    m_availability->setObjectName(QStringLiteral("FilterAvailability"));
+    m_availability->setWordWrap(true);
+    Theme::setRole(m_availability, QStringLiteral("error"));
+    m_availability->hide();
+    details->addWidget(m_availability);
     auto *actions = new QHBoxLayout;
     actions->setSpacing(6);
     m_runButton = new QPushButton(Icons::get(QStringLiteral("play")), tr("Run AI steps"), m_details);
@@ -255,11 +263,25 @@ FiltersPanel::FiltersPanel(Studio *studio, CanvasView *canvas, QWidget *parent, 
         }
         updateButtons();
     });
+    // The bar counts steps in hundredths, so an AI step's job moves it while it runs.
     connect(m_runner, &FilterRunner::progress, this, [this](int done, int total, const QString &step) {
-        m_progress->setRange(0, std::max(1, total));
-        m_progress->setValue(done);
+        m_stepsDone = done;
+        m_stepsTotal = std::max(1, total);
+        m_stepName = step;
+        m_progress->setRange(0, m_stepsTotal * 100);
+        m_progress->setValue(done * 100);
         if (!step.isEmpty())
             m_progressText->setText(tr("%1 (step %2 of %3)").arg(step).arg(done + 1).arg(total));
+    });
+    connect(m_runner, &FilterRunner::stepProgress, this, [this](double fraction, const QString &status) {
+        if (m_stepName.isEmpty())
+            return;
+        if (fraction >= 0.0) {
+            m_progress->setRange(0, m_stepsTotal * 100);
+            m_progress->setValue(m_stepsDone * 100 + int(std::lround(std::clamp(fraction, 0.0, 1.0) * 100)));
+        }
+        const QString step = tr("%1 (step %2 of %3)").arg(m_stepName).arg(m_stepsDone + 1).arg(m_stepsTotal);
+        m_progressText->setText(status.isEmpty() ? step : tr("%1: %2").arg(step, status));
     });
     // A successful apply has said where the result went (applied); failures say what happened.
     connect(m_runner, &FilterRunner::finished, this, [this](bool ok, const QString &message) {
@@ -268,9 +290,15 @@ FiltersPanel::FiltersPanel(Studio *studio, CanvasView *canvas, QWidget *parent, 
     });
     connect(m_runner, &FilterRunner::applied, this, [this] {
         const QString where = m_runner->target() == FilterRunner::Target::NewLayer ? tr("on a new layer") : tr("on the layer");
-        setStatus(tr("Applied “%1” %2. Undo (Ctrl+Z) takes it back.").arg(m_runner->name(), where));
+        QString text = tr("Applied “%1” %2.").arg(m_runner->name(), where);
+        if (!m_runner->appliedNote().isEmpty())
+            text += QLatin1Char(' ') + m_runner->appliedNote();
+        setStatus(text + QLatin1Char(' ') + tr("Undo (Ctrl+Z) takes it back."));
     });
     connect(studio, &Studio::activeDocumentChanged, this, &FiltersPanel::setDocument);
+    // Whether the AI steps can run depends on the image engines that are set up.
+    connect(studio->providers(), &ai::ProviderRegistry::providersChanged, this, &FiltersPanel::updateAvailability);
+    connect(studio->providers(), &ai::ProviderRegistry::rolesChanged, this, &FiltersPanel::updateAvailability);
 
     rebuildList();
     setDocument(studio->activeDocument());
@@ -325,8 +353,14 @@ void FiltersPanel::rebuildList()
     };
     const QList<FilterCatalog::Entry> entries = m_catalog->entries();
     bool savedHeader = false;
+    bool aiHeader = false;
     header(tr("Built in"));
     for (const FilterCatalog::Entry &e : entries) {
+        // The built-in filters with AI steps follow the others under a heading of their own.
+        if (e.builtIn && e.usesAi && !aiHeader) {
+            header(tr("Built in, with AI"));
+            aiHeader = true;
+        }
         if (!e.builtIn && !savedHeader) {
             header(tr("Your filters"));
             savedHeader = true;
@@ -407,7 +441,23 @@ void FiltersPanel::loadSelected()
     m_about->setVisible(!m_about->text().isEmpty());
     setStatus(entry && !entry->error.isEmpty() ? tr("This filter cannot be used.") : error, !error.isEmpty() || (entry && !entry->error.isEmpty()));
     rebuildSettings();
+    updateAvailability();
     updateButtons();
+}
+
+void FiltersPanel::updateAvailability()
+{
+    QStringList reasons;
+    if (const std::optional<filters::Graph> &graph = m_runner->graph()) {
+        for (const QString &id : graph->evaluationOrder(graph->outputNode())) {
+            const filters::Node *node = graph->node(id);
+            const QString reason = node && node->type ? node->type->unavailableReason(node->params) : QString();
+            if (!reason.isEmpty() && !reasons.contains(reason))
+                reasons << reason;
+        }
+    }
+    m_availability->setText(reasons.join(QLatin1Char('\n')));
+    m_availability->setVisible(!reasons.isEmpty());
 }
 
 void FiltersPanel::rebuildSettings()

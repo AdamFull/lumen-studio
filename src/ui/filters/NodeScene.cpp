@@ -1,5 +1,6 @@
 #include "ui/filters/NodeScene.h"
 
+#include "ai/FilterNodes.h"
 #include "filters/Ops.h"
 #include "filters/Registry.h"
 #include "ui/Theme.h"
@@ -79,7 +80,9 @@ QString summaryOf(const filters::ParamSpec &spec, const QVariant &value)
     case PortType::Text:
         if (spec.editor == QLatin1String("curve"))
             return NodeItem::tr("%1: %n point(s)", nullptr, int(filters::ops::parseCurve(value.toString()).size())).arg(spec.label);
-        return QStringLiteral("%1: %2").arg(spec.label, value.toString());
+        if (spec.editor == ai::filter_nodes::EngineEditor)
+            return QStringLiteral("%1: %2").arg(spec.label, ai::filterNodeEngineName(value.toString()));
+        return QStringLiteral("%1: %2").arg(spec.label, value.toString().simplified());
     case PortType::Image:
     case PortType::Mask:
         break;
@@ -416,13 +419,20 @@ void NodeScene::sync()
 
 void NodeScene::applyProblems()
 {
+    // Per node: the outline of its worst problem, and every problem in its tooltip. A step that
+    // cannot run now (an AI step without a capable engine) is marked like a warning.
     QHash<QString, filters::Issue> worst;
-    for (const filters::Issue &issue : m_model->graph().validate()) {
+    for (const filters::Issue &issue : m_model->graph().validate() + m_model->graph().unavailable()) {
         if (issue.node.isEmpty())
             continue;
-        const auto it = worst.constFind(issue.node);
-        if (it == worst.constEnd() || (it->severity == filters::Issue::Severity::Warning && issue.severity == filters::Issue::Severity::Error))
+        const auto it = worst.find(issue.node);
+        if (it == worst.end()) {
             worst.insert(issue.node, issue);
+            continue;
+        }
+        if (it->severity == filters::Issue::Severity::Warning && issue.severity == filters::Issue::Severity::Error)
+            it->severity = issue.severity;
+        it->message += QLatin1Char('\n') + issue.message;
     }
     for (auto it = m_nodes.cbegin(); it != m_nodes.cend(); ++it) {
         const auto w = worst.constFind(it.key());

@@ -513,22 +513,33 @@ void TestLayout::filterTools()
     studio.openImageAsDocument(sampleImage(), QStringLiteral("Sample"));
     FilterCatalog *catalog = FilterCatalog::of(&studio);
     const QString softFocus = QStringLiteral(":/filters/builtin/soft-focus.lumenfilter");
+    // An AI filter too: its instruction (a field of several lines), the colours list, the engine
+    // list, and the reason it cannot run (no image engine is set up here).
+    const QString colorize = QStringLiteral(":/filters/builtin/colorize-with-ai.lumenfilter");
+    struct Shown
     {
+        QString path;
+        QString node; // selected in the node editor
+        QString name; // in the surface's name
+    };
+    const QList<Shown> shown{{softFocus, QStringLiteral("n3"), QString()}, // the blend: a list and a slider
+                             {colorize, QStringLiteral("n2"), QStringLiteral(" AI")}};
+    for (const Shown &s : shown) {
         NodeEditorWindow editor(catalog);
         editor.setAttribute(Qt::WA_DeleteOnClose, false);
-        editor.setGraph(*catalog->load(softFocus));
+        editor.setGraph(*catalog->load(s.path));
         editor.resize(kWindowSizes.first());
         editor.show();
         QVERIFY(QTest::qWaitForWindowExposed(&editor));
         editor.frameAll();
-        editor.selectNode(QStringLiteral("n3")); // the blend: a list and a slider
+        editor.selectNode(s.node);
         QTRY_VERIFY(!editor.isPreviewPending());
         Auditor::settle();
-        const QString surface = QStringLiteral("Node editor 1280x720");
+        const QString surface = QStringLiteral("Node editor%1 1280x720").arg(s.name);
         m_auditor.audit(&editor, surface);
         m_auditor.shoot(&editor, surface);
     }
-    {
+    for (const Shown &s : shown) {
         // The side panel's minimum width, about its height in a 1280×720 window.
         EditorState state;
         CanvasView canvas(&state);
@@ -537,12 +548,12 @@ void TestLayout::filterTools()
         layout->setContentsMargins(0, 0, 0, 0);
         auto *panel = new FiltersPanel(&studio, &canvas, &host, catalog);
         layout->addWidget(panel);
-        panel->selectFilter(softFocus);
+        panel->selectFilter(s.path);
         host.resize(300, 600);
         host.show();
         QVERIFY(QTest::qWaitForWindowExposed(&host));
         Auditor::settle();
-        const QString surface = QStringLiteral("Filters panel 300x600");
+        const QString surface = QStringLiteral("Filters panel%1 300x600").arg(s.name);
         m_auditor.audit(&host, surface);
         m_auditor.shoot(&host, surface);
     }

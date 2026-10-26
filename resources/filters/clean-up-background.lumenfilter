@@ -1,0 +1,56 @@
+{
+    "format": "lumen-filter",
+    "version": 1,
+    "name": "Clean up background",
+    "description": "Tidies the background (clutter, stray objects, spots) and keeps the main subject as it is. Select the background to change only that.",
+    "nodes": [
+        {
+            "id": "n1",
+            "type": "input",
+            "x": 0,
+            "y": 0
+        },
+        {
+            "id": "n2",
+            "type": "ai-edit",
+            "x": 260,
+            "y": 0,
+            "params": {
+                "prompt": "Clean up the background: remove clutter, stray objects, spots and distractions so that it looks tidy and simple. Keep the main subject exactly as it is."
+            }
+        },
+        {
+            "id": "n3",
+            "type": "output",
+            "x": 520,
+            "y": 0
+        }
+    ],
+    "links": [
+        {
+            "from": "n1",
+            "output": "image",
+            "to": "n2",
+            "input": "image"
+        },
+        {
+            "from": "n1",
+            "output": "selection",
+            "to": "n2",
+            "input": "mask"
+        },
+        {
+            "from": "n2",
+            "output": "image",
+            "to": "n3",
+            "input": "image"
+        }
+    ],
+    "published": [
+        {
+            "node": "n2",
+            "param": "prompt",
+            "label": "Instruction"
+        }
+    ]
+}
