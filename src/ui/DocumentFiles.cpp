@@ -123,7 +123,7 @@ QStringList DocumentFiles::saveOverReasons(const doc::Document *doc, const doc::
     return reasons;
 }
 
-QString DocumentFiles::suggestedPath(const doc::Document *doc, const doc::ImageFormat &format) const
+QString DocumentFiles::suggestedPath(const doc::Document *doc, const doc::ImageFormat &format, bool copy) const
 {
     QString folder = doc->hasFile() ? QFileInfo(doc->file().path).absolutePath() : Settings::instance().value(kLastFolderKey).toString();
     if (folder.isEmpty() || !QFileInfo(folder).isDir())
@@ -134,7 +134,38 @@ QString DocumentFiles::suggestedPath(const doc::Document *doc, const doc::ImageF
     name = name.simplified();
     if (name.isEmpty())
         name = tr("Untitled");
+    // A copy is not offered the picture's own file: Enter would write over it.
+    if (copy && doc->hasFile())
+        name = tr("%1 copy").arg(name);
     return QDir(folder).filePath(name + QLatin1Char('.') + format.suffixes.first());
+}
+
+std::optional<std::pair<QString, doc::ImageFormat>> DocumentFiles::choosePath(const doc::Document *doc, const QString &title,
+                                                                              const doc::ImageFormat &preferred, bool copy,
+                                                                              const QString &chosen)
+{
+    const QList<doc::ImageFormat> formats = doc::writableImageFormats();
+    QString path = chosen;
+    if (path.isEmpty()) {
+        QString filter = preferred.filter();
+        path = askPath(title, suggestedPath(doc, preferred, copy), doc::imageFileFilter(formats), &filter);
+        if (path.isEmpty())
+            return std::nullopt;
+        // A name typed without a suffix gets the one of the format chosen in the list.
+        if (QFileInfo(path).suffix().isEmpty()) {
+            for (const doc::ImageFormat &f : formats) {
+                if (f.filter() == filter)
+                    path += QLatin1Char('.') + f.suffixes.first();
+            }
+        }
+    }
+    const std::optional<doc::ImageFormat> format = doc::imageFormatFor(path);
+    if (!format) {
+        m_studio->notify(tr("Lumen cannot write %1 files. Choose one of the formats in the list.").arg(QFileInfo(path).suffix().toUpper()),
+                         QStringLiteral("warning"));
+        return std::nullopt;
+    }
+    return std::make_pair(QDir::cleanPath(QFileInfo(path).absoluteFilePath()), *format);
 }
 
 QFuture<bool> DocumentFiles::save(doc::Document *doc)
@@ -150,20 +181,28 @@ QFuture<bool> DocumentFiles::save(doc::Document *doc)
         return saveAs(doc);
     }
     const int quality = link.quality > 0 ? link.quality : format->defaultQuality;
-    if (link.dontAsk || m_confirmed.contains(doc))
+    // Another program changed the file since Lumen read or wrote it: always asked, whatever was
+    // answered before, so its changes are not lost by surprise.
+    const bool changedOnDisk = link.size >= 0 && QFileInfo::exists(link.path) && !link.isUnchangedOnDisk();
+    if (!changedOnDisk && (link.dontAsk || m_confirmed.contains(doc)))
         return write(doc, link.path, *format, quality, false);
     // Asked the first time per document when it changes the picture in the file.
     QPointer<doc::Document> guard(doc);
     const doc::DocumentSnapshot layers = doc->snapshot();
     const QSize size = doc->size();
     const doc::ImageFormat f = *format;
+    const QString path = link.path;
     return async::run([layers, size, f] { return doc::saveEffects(layers, size, f); })
-        .then(this, [this, guard, f, quality](const doc::SaveEffects &effects) -> QFuture<bool> {
-            if (!guard)
+        .then(this, [this, guard, f, quality, path, changedOnDisk](const doc::SaveEffects &effects) -> QFuture<bool> {
+            // Saved as another file meanwhile (Save as…): the document saves there now.
+            if (!guard || !paths::sameFile(guard->file().path, path))
                 return ready(false);
-            const QStringList reasons = saveOverReasons(guard, f, effects);
+            QStringList reasons = saveOverReasons(guard, f, effects);
+            if (changedOnDisk)
+                reasons.prepend(tr("Another program changed %1 since Lumen opened or saved it; saving over it loses those changes.")
+                                    .arg(guard->file().fileName()));
             if (reasons.isEmpty())
-                return write(guard, guard->file().path, f, quality, false);
+                return write(guard, path, f, quality, false);
             const SaveOverReply reply = askSaveOver(SaveOverQuestion{guard->file().fileName(), reasons});
             if (!guard || reply.answer == SaveOverReply::Cancel)
                 return ready(false);
@@ -180,7 +219,7 @@ QFuture<bool> DocumentFiles::save(doc::Document *doc)
                 d->updateFile(link);
                 d->setModified(true); // the project remembers it
             }
-            return write(d, d->file().path, f, quality, false);
+            return write(d, path, f, quality, false);
         })
         .unwrap();
 }
@@ -189,60 +228,33 @@ QFuture<bool> DocumentFiles::saveAs(doc::Document *doc, const QString &chosen)
 {
     if (!doc)
         return ready(false);
-    const QList<doc::ImageFormat> formats = doc::writableImageFormats();
     const doc::FileLink link = doc->file();
     // The format the picture has, else PNG (it keeps transparency and loses nothing).
-    const doc::ImageFormat preferred = doc::imageFormatById(link.format).value_or(formats.first());
-    QString path = chosen;
-    if (path.isEmpty()) {
-        QString filter = preferred.filter();
-        path = askPath(tr("Save as"), suggestedPath(doc, preferred), doc::imageFileFilter(formats), &filter);
-        if (path.isEmpty())
-            return ready(false);
-        if (QFileInfo(path).suffix().isEmpty()) {
-            for (const doc::ImageFormat &f : formats) {
-                if (f.filter() == filter)
-                    path += QLatin1Char('.') + f.suffixes.first();
-            }
-        }
-    }
-    const std::optional<doc::ImageFormat> format = doc::imageFormatFor(path);
-    if (!format) {
-        m_studio->notify(tr("Lumen cannot write %1 files. Choose one of the formats in the list.").arg(QFileInfo(path).suffix().toUpper()),
-                         QStringLiteral("warning"));
+    const doc::ImageFormat preferred = doc::imageFormatById(link.format).value_or(doc::writableImageFormats().first());
+    const auto target = choosePath(doc, tr("Save as"), preferred, false, chosen);
+    if (!target)
         return ready(false);
-    }
-    const int quality = format->id == link.format && link.quality > 0 ? link.quality : format->defaultQuality;
-    return write(doc, QDir::cleanPath(QFileInfo(path).absoluteFilePath()), *format, quality, true);
+    const auto &[path, format] = *target;
+    // The picture's own file in its own format is File → Save, which says what saving over it changes.
+    if (doc->hasFile() && paths::sameFile(path, link.path) && format.id == link.format)
+        return save(doc);
+    const int quality = format.id == link.format && link.quality > 0 ? link.quality : format.defaultQuality;
+    return write(doc, path, format, quality, true);
 }
 
 QFuture<bool> DocumentFiles::exportCopy(doc::Document *doc, const QString &chosen)
 {
     if (!doc)
         return ready(false);
-    const QList<doc::ImageFormat> formats = doc::writableImageFormats();
-    QString path = chosen;
-    if (path.isEmpty()) {
-        QString filter = formats.first().filter();
-        path = askPath(tr("Export a copy"), suggestedPath(doc, formats.first()), doc::imageFileFilter(formats), &filter);
-        if (path.isEmpty())
-            return ready(false);
-        if (QFileInfo(path).suffix().isEmpty()) {
-            for (const doc::ImageFormat &f : formats) {
-                if (f.filter() == filter)
-                    path += QLatin1Char('.') + f.suffixes.first();
-            }
-        }
-    }
-    const std::optional<doc::ImageFormat> format = doc::imageFormatFor(path);
-    if (!format) {
-        m_studio->notify(tr("Lumen cannot write %1 files. Choose one of the formats in the list.").arg(QFileInfo(path).suffix().toUpper()),
-                         QStringLiteral("warning"));
+    const auto target = choosePath(doc, tr("Export a copy"), doc::writableImageFormats().first(), true, chosen);
+    if (!target)
         return ready(false);
-    }
+    const auto [path, f] = *target;
+    // Not a copy: the picture's own file is written as Save as… writes it (and asked about as Save asks).
+    if (doc->hasFile() && paths::sameFile(path, doc->file().path))
+        return saveAs(doc, path);
     const doc::DocumentSnapshot layers = doc->snapshot();
     const QSize size = doc->size();
-    const doc::ImageFormat f = *format;
     const QString name = QFileInfo(path).fileName();
     Settings::instance().setValue(kLastFolderKey, QFileInfo(path).absolutePath());
     return async::run([path, f, layers, size] { doc::writeImageFile(path, f, layers, size, f.defaultQuality); })
@@ -264,12 +276,24 @@ QFuture<bool> DocumentFiles::write(doc::Document *doc, const QString &path, cons
     // A change made while the file is written is not in it: the document stays modified then.
     const int step = doc->undoStack()->index();
     const QString name = QFileInfo(path).fileName();
+    // The file the document saves to from now on: the one Save as… chose last.
+    const doc::Document *key = doc;
+    if (link)
+        m_linking.insert(key, path);
     return async::run([path, format, layers, size, quality] { doc::writeImageFile(path, format, layers, size, quality); })
-        .then(this, [this, guard, path, format, quality, link, step, name] {
+        .then(this, [this, guard, key, path, format, quality, link, step, name] {
             Settings::instance().addRecentFile(path);
             if (link)
                 Settings::instance().setValue(kLastFolderKey, QFileInfo(path).absolutePath());
-            if (guard) {
+            // A Save or Save as… that finishes after a later Save as… does not point the document
+            // back at its file: that file is written, the document saves to the one chosen last.
+            bool current = guard && paths::sameFile(guard->file().path, path);
+            if (link) {
+                current = m_linking.value(key) == path;
+                if (current)
+                    m_linking.remove(key);
+            }
+            if (guard && current) {
                 doc::FileLink file = link ? doc::FileLink{} : guard->file();
                 file.path = path;
                 file.format = format.id;
@@ -299,7 +323,9 @@ QFuture<bool> DocumentFiles::write(doc::Document *doc, const QString &path, cons
             emit saved(guard, path);
             return true;
         })
-        .onFailed(this, [this, name](const std::exception &e) {
+        .onFailed(this, [this, key, path, name](const std::exception &e) {
+            if (m_linking.value(key) == path)
+                m_linking.remove(key);
             m_studio->notify(tr("%1 was not saved, the file is as it was: %2").arg(name, describeException(e)), QStringLiteral("error"));
             return false;
         });

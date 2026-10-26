@@ -2126,8 +2126,7 @@ void TestFiltersUi::upscaleWithSelection()
     auto *hint = panel.findChild<QLabel *>(QStringLiteral("FilterSelectionHint"));
     QVERIFY(hint);
     // Upscale ×2 reads the whole picture, as the AI menu's upscale does.
-    QCOMPARE(hint->text(), QStringLiteral("Only the selected area changes. The filter reads every visible layer; its result goes on a new "
-                                          "layer on top."));
+    QCOMPARE(hint->text(), QStringLiteral("Reads the whole picture; only the selected area goes onto a new layer."));
     QSignalSpy finished(panel.runner(), &FilterRunner::finished);
     buttonNamed(&panel, QStringLiteral("Run AI steps"))->click();
     QVERIFY(finished.wait(10000));

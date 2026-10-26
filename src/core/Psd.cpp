@@ -555,10 +555,31 @@ std::optional<File> read(QIODevice *device, QString *error)
     if (depth != 8 || mode != 3)
         return fail(QStringLiteral("Only 8-bit RGB PSD files are supported"));
     r.skip(r.u32()); // colour mode data
-    r.skip(r.u32()); // image resources
 
     File file;
     file.size = QSize(width, height);
+    // Image resources ("8BIM", id, a padded Pascal name, padded data): only the colour profile.
+    const quint32 resourcesLength = r.u32();
+    const qsizetype resourcesEnd = r.pos() + resourcesLength;
+    while (r.ok() && resourcesEnd - r.pos() >= 12) {
+        if (r.bytes(4) != "8BIM")
+            break;
+        const quint16 id = r.u16();
+        const int nameLength = r.u8();
+        // A block that does not fit ends the list, not the reading of the file.
+        const qsizetype nameSkip = nameLength + ((nameLength + 1) % 2);
+        if (resourcesEnd - r.pos() < nameSkip + 4)
+            break;
+        r.skip(nameSkip);
+        const quint32 dataLength = r.u32();
+        if (resourcesEnd - r.pos() < qsizetype(dataLength))
+            break;
+        const QByteArray resource = r.bytes(dataLength);
+        if (id == 1039)
+            file.iccProfile = resource;
+        r.skip(dataLength % 2);
+    }
+    r.seek(resourcesEnd);
     const quint32 layerMaskLength = r.u32();
     const qsizetype layerMaskEnd = r.pos() + layerMaskLength;
     if (layerMaskLength > 0) {
@@ -577,6 +598,7 @@ std::optional<File> read(QIODevice *device, QString *error)
                 QByteArray blend = "norm";
                 bool clipped = false;
                 bool hasMask = false;
+                QList<QByteArray> otherInfo;
             };
             QList<Record> records;
             for (int i = 0; i < count && r.ok(); ++i) {
@@ -617,6 +639,8 @@ std::optional<File> read(QIODevice *device, QString *error)
                             rec.name = u;
                     } else if (key == "lsct" && payload.size() >= 4) {
                         rec.section = qFromBigEndian<quint32>(payload.constData());
+                    } else if (!rec.otherInfo.contains(key)) {
+                        rec.otherInfo.append(key);
                     }
                 }
                 r.seek(extraEnd);
@@ -632,6 +656,7 @@ std::optional<File> read(QIODevice *device, QString *error)
                 layer.blendKey = rec.blend;
                 layer.clipped = rec.clipped;
                 layer.hasMask = rec.hasMask;
+                layer.otherInfo = rec.otherInfo;
                 QHash<qint16, QByteArray> planes;
                 bool ok = true;
                 for (const auto &[id, length] : rec.channels) {

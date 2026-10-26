@@ -562,16 +562,23 @@ with words.
   changes that are not in the file; undoing back to what was saved takes the `*` away.
 * The first time you save over a picture in a way that changes the file (the layers merged into one,
   transparent parts that become white, the small loss of quality of a JPEG, or what Lumen cannot
-  keep of the file, such as 16 bits per colour or Photoshop layer masks), Lumen asks first, in plain
-  words: **Save over**, **Save as…** or **Cancel**. **Don't ask again for this picture** stops the
-  question for it, also next time.
+  keep of the file: 16 bits per colour, a colour profile, the camera's details of a photo such as
+  its date and place, Photoshop layer masks, text layers, layer effects and adjustment layers),
+  Lumen asks first, in plain words: **Save over**, **Save as…** or **Cancel**. **Don't ask again for
+  this picture** stops the question for it, also next time.
+* If another program changed the file since Lumen opened or saved it, **Save** always asks first,
+  so its changes are not lost by surprise.
+* A photo in colours of its own (Display P3 from a phone, Adobe RGB) is shown and saved in standard
+  colours (sRGB): it looks as it did, only colours more vivid than sRGB can show become a little
+  duller. A Photoshop file is saved with its layers and their groups.
 * A new picture (from a prompt, a blank canvas, the clipboard) has no file yet: **Save** asks for
   one, as **File → Save as…** (`Ctrl+Shift+S`) does. Save as writes PNG, JPEG, WebP and TIFF (where
   your copy of Qt can write them) or a layered Photoshop file (PSD), and from then on the picture
   saves to that file and its tab takes the file's name. A format Lumen cannot write (GIF) goes to
   Save as too.
-* **File → Export a copy…** (`Ctrl+Shift+E`) writes a copy in any of those formats; the picture
-  keeps saving to its own file.
+* **File → Export a copy…** (`Ctrl+Shift+E`) writes a copy in any of those formats ("photo
+  copy.png" is suggested); the picture keeps saving to its own file. Choosing the picture's own file
+  there or in Save as is the same as **Save**, with its question.
 * A picture is written to a temporary file first, which replaces the old one only once it is
   complete: if saving fails, the file stays as it was.
 * Closing a picture (**File → Close document**, `Ctrl+W`, or the ✕ on its tab) or quitting while it

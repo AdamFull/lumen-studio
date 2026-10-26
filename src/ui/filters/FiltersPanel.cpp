@@ -598,11 +598,15 @@ void FiltersPanel::updateSelectionHint()
         m_selectionHint->setText(m_doc->hasSelection() ? tr("%1 Only the selected area gets the filter; the rest is only resized.").arg(becomes)
                                                        : becomes);
     } else if (m_runner->readsWholePicture()) {
-        // It sees every visible layer, as the canvas shows them.
-        const QString area = m_doc->hasSelection() ? tr("Only the selected area changes.") : tr("Nothing is selected, so the whole picture changes.");
-        m_selectionHint->setText(m_runner->target() == FilterRunner::Target::NewLayer
-                                     ? tr("%1 The filter reads every visible layer; its result goes on a new layer on top.").arg(area)
-                                     : tr("%1 The filter reads every visible layer; its result goes into the active layer.").arg(area));
+        // It sees every visible layer, as the canvas shows them. Short: the hint sits in the
+        // panel's fixed footer, above Apply.
+        const bool newLayer = m_runner->target() == FilterRunner::Target::NewLayer;
+        if (m_doc->hasSelection())
+            m_selectionHint->setText(newLayer ? tr("Reads the whole picture; only the selected area goes onto a new layer.")
+                                              : tr("Reads the whole picture; only the selected area changes."));
+        else
+            m_selectionHint->setText(newLayer ? tr("Reads the whole picture; the result goes onto a new layer.")
+                                              : tr("Reads the whole picture; the result goes into the active layer."));
     } else if (m_doc->hasSelection()) {
         m_selectionHint->setText(tr("Only the selected area changes."));
     } else {

@@ -413,7 +413,7 @@ DocumentSnapshot Document::snapshot() const
     DocumentSnapshot s;
     s.reserve(m_layers.size());
     for (const LayerPtr &l : m_layers)
-        s.append(LayerSnapshot{l->image, l->props});
+        s.append(LayerSnapshot{l->image, l->props, l->meta.value(QStringLiteral("psd_group")).toString()});
     return s;
 }
 

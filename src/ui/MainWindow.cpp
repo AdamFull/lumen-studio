@@ -1056,23 +1056,25 @@ void MainWindow::closeEvent(QCloseEvent *e)
     if (m_quitting)
         return; // the questions or the saves of a quit are on their way
     m_quitting = true;
-    // Pictures with changes not saved to their files first (Save / Don't save / Cancel), as in other
-    // editors; then the jobs. The window closes once everything is on disk. Saving a picture may
-    // ask too (the first time it saves over one), so this goes on when the answers are in.
+    // Every question before anything is done about an answer: the running jobs first, then the
+    // pictures with changes not saved to their files (Save / Don't save / Cancel, as in other
+    // editors), whose "Don't save" closes them and so cancels their prompt-bar runs. Cancel on
+    // either leaves everything as it was. Saving a picture may ask too (the first time it saves
+    // over one), so this goes on when the answers are in; the window closes once all is on disk.
+    const int running = m_studio->jobs()->activeCount() + m_studio->jobs()->pendingCount();
+    if (running > 0) {
+        const auto answer = QMessageBox::question(this, tr("Quit"), tr("%n job(s) are still running. Quit anyway?", nullptr, running));
+        if (answer != QMessageBox::Yes) {
+            m_quitting = false;
+            return;
+        }
+    }
     m_editor->files()->confirmQuit().then(this, [this](bool quit) {
         if (!quit) {
             m_quitting = false;
             return;
         }
-        const int running = m_studio->jobs()->activeCount() + m_studio->jobs()->pendingCount();
-        if (running > 0) {
-            const auto answer = QMessageBox::question(this, tr("Quit"), tr("%n job(s) are still running. Quit anyway?", nullptr, running));
-            if (answer != QMessageBox::Yes) {
-                m_quitting = false;
-                return;
-            }
-            m_studio->jobs()->cancelAll();
-        }
+        m_studio->jobs()->cancelAll();
         // Save open documents (and which are open, for the next start) before quitting. The close is
         // queued: with nothing to save the futures are finished already and the continuation may run
         // inside the close event, where a nested close() does nothing.

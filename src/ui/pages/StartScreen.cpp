@@ -70,8 +70,9 @@ QIcon tileIcon(const QPixmap &thumbnail, bool document = false)
     return QIcon(square);
 }
 
-// A name on two lines at most, shortened with "…" at the end of the second.
-QString twoLines(const QFontMetrics &fm, const QString &name, int width)
+// A name on two lines at most, shortened with "…" in the second (at its end, or in its middle so
+// a file name keeps its end and its extension).
+QString twoLines(const QFontMetrics &fm, const QString &name, int width, Qt::TextElideMode elide)
 {
     if (fm.horizontalAdvance(name) <= width)
         return name;
@@ -90,9 +91,9 @@ QString twoLines(const QFontMetrics &fm, const QString &name, int width)
         int n = name.size();
         while (n > 1 && fm.horizontalAdvance(name.left(n)) > width)
             --n;
-        return name.left(n) + u'\n' + fm.elidedText(name.mid(n), Qt::ElideRight, width);
+        return name.left(n) + u'\n' + fm.elidedText(name.mid(n), elide, width);
     }
-    return first + u'\n' + fm.elidedText(words.mid(used).join(u' '), Qt::ElideRight, width);
+    return first + u'\n' + fm.elidedText(words.mid(used).join(u' '), elide, width);
 }
 
 QPushButton *actionButton(const QString &icon, const QString &text, const QString &tip, QWidget *parent)
@@ -342,7 +343,8 @@ void StartScreen::updateSetupCard()
     m_setupCard->setVisible(!imageEngineInUse(m_studio->providers()));
 }
 
-QToolButton *StartScreen::addTile(FlowLayout *tiles, const QString &name, const QString &tooltip, const QPixmap &thumbnail, bool document)
+QToolButton *StartScreen::addTile(FlowLayout *tiles, const QString &name, const QString &tooltip, const QPixmap &thumbnail, bool document,
+                                   Qt::TextElideMode elide)
 {
     auto *tile = new QToolButton(tiles->parentWidget());
     tile->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
@@ -355,7 +357,7 @@ QToolButton *StartScreen::addTile(FlowLayout *tiles, const QString &name, const 
     const QString wide(40, u'M');
     tile->setText(wide);
     const int padding = tile->sizeHint().width() - tile->fontMetrics().horizontalAdvance(wide);
-    tile->setText(twoLines(tile->fontMetrics(), shown, tile->width() - padding - 2));
+    tile->setText(twoLines(tile->fontMetrics(), shown, tile->width() - padding - 2, elide));
     tile->setAccessibleName(shown);
     tile->setToolTip(QStringLiteral("%1\n%2").arg(shown, tooltip));
     tile->setIcon(thumbnail.isNull() ? Icons::get(QStringLiteral("image")) : tileIcon(thumbnail, document));
@@ -381,7 +383,8 @@ void StartScreen::rebuildRecent()
     for (const QString &path : std::as_const(files)) {
         const QFileInfo info(path);
         const QString tip = tr("%1\nChanged %2").arg(QDir::toNativeSeparators(path), QLocale().toString(info.lastModified(), QLocale::ShortFormat));
-        QToolButton *tile = addTile(m_fileTiles, info.fileName(), tip, m_fileThumbs.value(thumbnailKey(path)));
+        // Names of photos often differ only near the end (IMG_20261026_101523.jpg).
+        QToolButton *tile = addTile(m_fileTiles, info.fileName(), tip, m_fileThumbs.value(thumbnailKey(path)), false, Qt::ElideMiddle);
         tile->setProperty("filePath", path);
         connect(tile, &QToolButton::clicked, this, [this, path] { m_studio->openFile(path); });
         loadFileThumbnail(path);

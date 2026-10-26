@@ -172,6 +172,65 @@ int estimateJpegQuality(const QString &path)
     return estimateJpegQuality(file.read(64 * 1024));
 }
 
+bool hasCameraDetails(const QByteArray &data)
+{
+    const auto *d = reinterpret_cast<const uchar *>(data.constData());
+    const qsizetype n = data.size();
+    auto be16 = [d](qsizetype i) { return (int(d[i]) << 8) | d[i + 1]; };
+    auto be32 = [d](qsizetype i) { return (quint32(d[i]) << 24) | (quint32(d[i + 1]) << 16) | (quint32(d[i + 2]) << 8) | d[i + 3]; };
+    if (n >= 4 && d[0] == 0xFF && d[1] == 0xD8) {
+        // JPEG: an Exif APP1 segment among those before the picture data.
+        qsizetype i = 2;
+        while (i + 4 <= n) {
+            if (d[i] != 0xFF)
+                return false;
+            const uchar marker = d[i + 1];
+            if (marker == 0xFF) { // fill byte
+                ++i;
+                continue;
+            }
+            if (marker == 0xD9 || marker == 0xDA) // end, or the picture data
+                return false;
+            if (marker == 0x01 || (marker >= 0xD0 && marker <= 0xD7)) {
+                i += 2;
+                continue;
+            }
+            const int length = be16(i + 2);
+            if (marker == 0xE1 && i + 10 <= n && data.mid(i + 4, 6) == QByteArray("Exif\0\0", 6))
+                return true;
+            i += 2 + length;
+        }
+        return false;
+    }
+    if (data.startsWith("\x89PNG\r\n\x1a\n")) {
+        // PNG: an eXIf chunk.
+        qsizetype i = 8;
+        while (i + 8 <= n) {
+            const QByteArray type = data.mid(i + 4, 4);
+            if (type == "eXIf")
+                return true;
+            if (type == "IEND")
+                return false;
+            i += 12 + qsizetype(be32(i));
+        }
+        return false;
+    }
+    if (n >= 30 && data.startsWith("RIFF") && data.mid(8, 4) == "WEBP" && data.mid(12, 4) == "VP8X") {
+        // WebP: the Exif flag of the extended header (the chunk itself comes after the picture).
+        return (d[20] & 0x08) != 0;
+    }
+    return false;
+}
+
+bool hasCameraDetails(const QString &path)
+{
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly))
+        return false;
+    // The details come before the picture data in JPEG and PNG files as cameras and phones write them.
+    return hasCameraDetails(file.read(256 * 1024));
+}
+
 SaveEffects saveEffects(const DocumentSnapshot &layers, const QSize &size, const ImageFormat &format)
 {
     SaveEffects e;

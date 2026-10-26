@@ -28,6 +28,9 @@ struct Layer
     QByteArray blendKey = "norm"; // Photoshop blend mode key ("norm", "mul ", "scrn", ...)
     bool clipped = false;         // clipping mask onto the layer below (read only)
     bool hasMask = false;         // the layer had a layer mask (read only; masks are not applied)
+    // The keys of the additional layer information Lumen does not keep (read only): text ("TySh"),
+    // effects ("lfx2"), adjustments ("levl", "curv"…), smart objects ("SoLd")…
+    QList<QByteArray> otherInfo;
 
     static Layer pixels(const QString &name, const QImage &image, const QPoint &offset = {})
     {
@@ -59,6 +62,8 @@ struct File
     // Top-to-bottom order (as in a layers panel). A group is GroupBegin, its children, GroupEnd.
     QList<Layer> layers;
     QImage composite; // flattened preview (computed from the layers when null on write)
+    // The file's colour profile (ICC, its image resource 1039; read only, not written).
+    QByteArray iccProfile;
 };
 
 bool write(QIODevice *device, const File &file, QString *error = nullptr);

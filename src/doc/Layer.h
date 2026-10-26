@@ -60,6 +60,7 @@ struct LayerSnapshot
 {
     QImage image;
     LayerProps props;
+    QString group; // the Photoshop group ("Head/Eyes") the layer was in, written back to PSD files
 };
 using DocumentSnapshot = QList<LayerSnapshot>;
 

@@ -13,6 +13,7 @@
 #include "doc/Document.h"
 #include "doc/ImageFile.h"
 #include "doc/Project.h"
+#include "doc/PsdIO.h"
 #include "filters/Graph.h"
 #include "filters/Registry.h"
 #include "plugins/BuiltInPlugins.h"
@@ -34,7 +35,9 @@
 #include "ui/pages/VariantStrip.h"
 #include "ui/widgets/Controls.h"
 
+#include <QApplication>
 #include <QCheckBox>
+#include <QColorSpace>
 #include <QFile>
 #include <QImageReader>
 #include <QImageWriter>
@@ -48,8 +51,10 @@
 #include <QSignalSpy>
 #include <QTabBar>
 #include <QTemporaryDir>
+#include <QTimer>
 #include <QToolButton>
 #include <QUndoStack>
+#include <QtEndian>
 #include <QtTest>
 
 using namespace lumen;
@@ -121,6 +126,69 @@ QByteArray tinyGif()
                                         0xff, 0x00, 0x00, 0x00, 0x21, 0xf9, 0x04, 0x01, 0x00, 0x00, 0x00, 0x00, 0x2c, 0x00, 0x00,
                                         0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x02, 0x02, 0x44, 0x01, 0x00, 0x3b};
     return QByteArray(reinterpret_cast<const char *>(gif), sizeof(gif));
+}
+
+void writeBytes(const QString &path, const QByteArray &bytes)
+{
+    QFile f(path);
+    QVERIFY(f.open(QIODevice::WriteOnly));
+    QCOMPARE(f.write(bytes), bytes.size());
+}
+
+void addToBigEndian(QByteArray &bytes, qsizetype at, qint64 delta)
+{
+    const quint32 value = qFromBigEndian<quint32>(bytes.constData() + at);
+    qToBigEndian(quint32(value + delta), bytes.data() + at);
+}
+
+// Lumen's PSD of `file` (one pixel layer) as Photoshop writes a text, effect or adjustment layer:
+// its record also holds additional information `key`, which Lumen's writer never writes. With
+// `icc`, the file has that colour profile too (image resource 1039).
+QByteArray photoshopPsd(const psd::File &file, const QByteArray &key, const QByteArray &icc = {})
+{
+    QByteArray bytes = psd::toBytes(file);
+    // No colour mode data or image resources: the layer and mask section's length is at 34, the
+    // layer information's at 38; the record's extra data length follows its blend mode.
+    if (!key.isEmpty()) {
+        const QByteArray block = QByteArray("8BIM") + key + QByteArray("\0\0\0\4\0\0\0\0", 8);
+        const qsizetype record = bytes.indexOf("8BIMnorm");
+        const qsizetype luni = bytes.indexOf("8BIMluni", record);
+        bytes.insert(luni, block);
+        addToBigEndian(bytes, record + 12, block.size());
+        addToBigEndian(bytes, 38, block.size());
+        addToBigEndian(bytes, 34, block.size());
+    }
+    if (!icc.isEmpty()) {
+        QByteArray resource = QByteArray("8BIM") + QByteArray("\x04\x0f\0\0", 4); // 1039, no name
+        QByteArray length(4, Qt::Uninitialized);
+        qToBigEndian(quint32(icc.size()), length.data());
+        resource += length + icc;
+        if (icc.size() % 2)
+            resource += '\0';
+        bytes.insert(34, resource);
+        addToBigEndian(bytes, 30, resource.size());
+    }
+    return bytes;
+}
+
+// Answers the next message box (the main window's own questions) with `button` once it shows,
+// keeping its text in `text`.
+void answerNextBox(QMessageBox::StandardButton button, QString *text)
+{
+    auto *timer = new QTimer;
+    auto tries = std::make_shared<int>(0);
+    QObject::connect(timer, &QTimer::timeout, [timer, button, text, tries] {
+        auto *box = qobject_cast<QMessageBox *>(QApplication::activeModalWidget());
+        if (box || ++*tries > 250) {
+            timer->stop();
+            timer->deleteLater();
+        }
+        if (box) {
+            *text = box->text();
+            box->button(button)->click();
+        }
+    });
+    timer->start(20);
 }
 
 template<typename T>
@@ -297,6 +365,10 @@ private slots:
     void saveOverJpeg();
     void saveAsFormats();
     void closeAndQuitAsk();
+    void saveOverChangedFile();
+    void notACopyOfItself();
+    void photoshopFiles();
+    void coloursAndCameraDetails();
     void recentFiles();
     void shortcutsInOtherWindows();
     void closingStopsItsRun();
@@ -672,6 +744,216 @@ void TestFiles::closeAndQuitAsk()
     QCOMPARE(box->button(QMessageBox::Discard)->text(), QStringLiteral("Don't save"));
 }
 
+// A file another program changed since Lumen read or wrote it is never saved over without asking,
+// also with "Don't ask again" and after the first question; a Save that finishes after a later
+// Save as… leaves the document saving to the file chosen last.
+void TestFiles::saveOverChangedFile()
+{
+    Fixture f;
+    QVERIFY(f.setUp());
+    const QString path = f.path(QStringLiteral("shared.png"));
+    QVERIFY(photo().save(path));
+    doc::Document *doc = f.open(path);
+    QVERIFY(doc);
+    paintSquare(doc);
+    QVERIFY(waitFor(f.files()->save(doc))); // one layer in a PNG: not asked
+    QVERIFY(f.saveOverQuestions.isEmpty());
+    doc::FileLink link = doc->file();
+    link.dontAsk = true;
+    doc->updateFile(link);
+
+    // Another program writes the file; then Lumen's Save asks, and Cancel keeps their picture.
+    QTest::qWait(20);
+    QVERIFY(filled(QSize(30, 30), Qt::green).save(path));
+    const QByteArray theirs = bytesOf(path);
+    paintSquare(doc, QRect(40, 40, 10, 10));
+    f.saveOverReply = {SaveOverReply::Cancel, false};
+    QVERIFY(!waitFor(f.files()->save(doc)));
+    QCOMPARE(f.saveOverQuestions.size(), 1);
+    QCOMPARE(f.saveOverQuestions.first().reasons.value(0),
+             QStringLiteral("Another program changed shared.png since Lumen opened or saved it; saving over it loses those changes."));
+    QCOMPARE(bytesOf(path), theirs);
+    // Save over: written, and the next Save does not ask again (the file is Lumen's again).
+    f.saveOverReply = {SaveOverReply::SaveOver, false};
+    QVERIFY(waitFor(f.files()->save(doc)));
+    QCOMPARE(readImage(path), doc->flattened());
+    paintSquare(doc, QRect(60, 60, 10, 10));
+    QVERIFY(waitFor(f.files()->save(doc)));
+    QCOMPARE(f.saveOverQuestions.size(), 2);
+
+    // Ctrl+S and at once Save as… another file: whichever finishes last, the document saves to the
+    // file chosen last, and that one is not marked as changed.
+    doc->addLayer(QStringLiteral("Big"), photo(doc->size()));
+    paintSquare(doc, QRect(0, 0, 5, 5));
+    const QString other = f.path(QStringLiteral("other.jpg"));
+    QFuture<bool> saving = f.files()->save(doc);
+    QFuture<bool> savingAs = f.files()->saveAs(doc, other);
+    QVERIFY(waitFor(savingAs));
+    waitFor(saving);
+    QCOMPARE(doc->file().path, QDir::cleanPath(other));
+    QCOMPARE(doc->file().format, QByteArray("jpeg"));
+    QVERIFY(!doc->isFileModified());
+}
+
+// Export a copy… does not suggest the picture's own file, and Save as… or Export a copy… onto it is
+// File → Save: asked about what saving over it changes.
+void TestFiles::notACopyOfItself()
+{
+    Fixture f;
+    QVERIFY(f.setUp());
+    const QString path = f.path(QStringLiteral("photo.png"));
+    QVERIFY(photo().save(path));
+    doc::Document *doc = f.open(path);
+    QVERIFY(doc);
+    doc->addLayer(QStringLiteral("Note"), filled(QSize(20, 10), QColor(0, 200, 0)));
+    f.pathReply.clear();
+    QVERIFY(!waitFor(f.files()->exportCopy(doc)));
+    QCOMPARE(QFileInfo(f.pathQuestions.last()).fileName(), QStringLiteral("photo copy.png"));
+    QVERIFY(!waitFor(f.files()->saveAs(doc)));
+    QCOMPARE(QFileInfo(f.pathQuestions.last()).fileName(), QStringLiteral("photo.png")); // as other editors do
+
+    const QByteArray before = bytesOf(path);
+    f.saveOverReply = {SaveOverReply::Cancel, false};
+    QVERIFY(!waitFor(f.files()->exportCopy(doc, path)));
+    QCOMPARE(f.saveOverQuestions.size(), 1);
+    QVERIFY(f.saveOverQuestions.last().reasons.contains(QStringLiteral("The layers are merged in the file; your project keeps them.")));
+    f.pathReply = path; // chosen in the dialog
+    QVERIFY(!waitFor(f.files()->saveAs(doc)));
+    QCOMPARE(f.saveOverQuestions.size(), 2);
+    QCOMPARE(bytesOf(path), before);
+    f.saveOverReply = {SaveOverReply::SaveOver, false};
+    QVERIFY(waitFor(f.files()->exportCopy(doc, path)));
+    QCOMPARE(readImage(path), doc->flattened());
+    QVERIFY(!doc->isFileModified()); // the document's own file, so it is saved
+    QVERIFY(doc->file().isUnchangedOnDisk());
+}
+
+// A layered Photoshop file is saved over with its groups; what Lumen does not keep of it (text,
+// effects and adjustment layers, the groups' own opacity, a colour profile) is said first.
+void TestFiles::photoshopFiles()
+{
+    Fixture f;
+    QVERIFY(f.setUp());
+    psd::File file;
+    file.size = QSize(40, 30);
+    QImage base(40, 30, QImage::Format_ARGB32);
+    base.fill(Qt::white);
+    QImage star(8, 8, QImage::Format_ARGB32);
+    star.fill(Qt::blue);
+    file.layers = {psd::Layer::groupBegin(QStringLiteral("Folder")), psd::Layer::pixels(QStringLiteral("Star"), star, QPoint(4, 4)),
+                   psd::Layer::groupEnd(), psd::Layer::pixels(QStringLiteral("Base"), base)};
+    const QString path = f.path(QStringLiteral("layers.psd"));
+    QVERIFY(psd::write(path, file));
+    doc::Document *doc = f.open(path);
+    QVERIFY(doc);
+    QCOMPARE(doc->layerCount(), 2);
+    QVERIFY(doc->file().losses.isEmpty());
+    paintSquare(doc, QRect(20, 20, 5, 5));
+    QVERIFY(waitFor(f.files()->save(doc)));
+    QVERIFY(f.saveOverQuestions.isEmpty()); // nothing is lost
+    const std::optional<psd::File> back = psd::read(path);
+    QVERIFY(back);
+    QStringList kinds;
+    for (const psd::Layer &l : back->layers)
+        kinds << (l.kind == psd::Layer::Kind::GroupBegin ? QStringLiteral("[") + l.name
+                  : l.kind == psd::Layer::Kind::GroupEnd ? QStringLiteral("]")
+                                                         : l.name);
+    QCOMPARE(kinds, (QStringList{QStringLiteral("[Folder"), QStringLiteral("Star"), QStringLiteral("]"), QStringLiteral("Base")}));
+
+    // Photoshop's text layer, in a file with a wide-gamut colour profile: Lumen reads both, and
+    // Save says what goes before it writes over the file.
+    psd::File single;
+    single.size = QSize(40, 30);
+    single.layers = {psd::Layer::pixels(QStringLiteral("Title"), star, QPoint(2, 2))};
+    const QString text = f.path(QStringLiteral("text.psd"));
+    writeBytes(text, photoshopPsd(single, "TySh", QColorSpace(QColorSpace::DisplayP3).iccProfile()));
+    const std::optional<psd::File> read = psd::read(text);
+    QVERIFY(read);
+    QCOMPARE(read->layers.first().otherInfo, QList<QByteArray>{"TySh"});
+    QCOMPARE(read->layers.first().name, QStringLiteral("Title"));
+    QVERIFY(!read->iccProfile.isEmpty());
+    doc::Document *titled = f.open(text);
+    QVERIFY(titled);
+    paintSquare(titled, QRect(20, 20, 5, 5));
+    const QByteArray before = bytesOf(text);
+    f.saveOverReply = {SaveOverReply::Cancel, false};
+    QVERIFY(!waitFor(f.files()->save(titled)));
+    QCOMPARE(f.saveOverQuestions.size(), 1);
+    const QString reasons = f.saveOverQuestions.first().reasons.join(u'|');
+    QVERIFY2(reasons.contains(QStringLiteral("1 text layer(s) became pictures of their text")), qPrintable(reasons));
+    QVERIFY2(reasons.contains(QStringLiteral("its colour profile is not kept")), qPrintable(reasons));
+    QCOMPARE(bytesOf(text), before);
+
+    // The rest of what Lumen does not keep, told from the file; an sRGB profile changes nothing.
+    psd::File other = single;
+    other.layers.first().otherInfo = {"lfx2", "levl", "SoLd"};
+    psd::Layer half = psd::Layer::groupBegin(QStringLiteral("Faded"));
+    half.opacity = 128;
+    other.layers.prepend(half);
+    other.layers.append(psd::Layer::groupEnd());
+    other.iccProfile = QColorSpace(QColorSpace::SRgb).iccProfile();
+    QCOMPARE(doc::importPsd(other).warnings,
+             (QStringList{QStringLiteral("the effects of 1 layer(s) (shadows, strokes, glows) are not kept"),
+                          QStringLiteral("1 adjustment or fill layer(s) are empty layers here"),
+                          QStringLiteral("1 smart object(s) became plain layers"),
+                          QStringLiteral("the opacity or hiding of 1 group(s) went onto their layers")}));
+}
+
+// A photo in colours of its own (Display P3) is turned into standard colours when it opens, and
+// saving over it says the profile goes; so do the camera's details of a JPEG.
+void TestFiles::coloursAndCameraDetails()
+{
+    Fixture f;
+    QVERIFY(f.setUp());
+    QImage wide = photo().convertToFormat(QImage::Format_RGB32);
+    wide.setColorSpace(QColorSpace(QColorSpace::DisplayP3));
+    const QString path = f.path(QStringLiteral("phone.png"));
+    QVERIFY(wide.save(path));
+    QVERIFY(QImageReader(path).read().colorSpace().isValid());
+    doc::Document *doc = f.open(path);
+    QVERIFY(doc);
+    // A P3 red is redder than sRGB's: in sRGB numbers it has no green or blue left.
+    const QImage shown = doc->flattened();
+    const QColor converted = shown.pixelColor(30, 0);
+    QVERIFY2(converted != QColor(wide.pixel(30, 0)), qPrintable(converted.name()));
+    QCOMPARE(doc->file().losses.size(), 1);
+    QVERIFY(doc->file().losses.first().contains(QStringLiteral("standard colours (sRGB)")));
+    paintSquare(doc);
+    f.saveOverReply = {SaveOverReply::SaveOver, false};
+    QVERIFY(waitFor(f.files()->save(doc)));
+    QCOMPARE(f.saveOverQuestions.size(), 1); // one layer in a PNG, still asked: the profile goes
+    QVERIFY(f.saveOverQuestions.first().reasons.first().contains(QStringLiteral("standard colours")));
+    QVERIFY(!QImageReader(path).read().colorSpace().isValid() || QImageReader(path).read().colorSpace() == QColorSpace(QColorSpace::SRgb));
+    QVERIFY(doc->file().losses.isEmpty()); // the file is the picture now
+
+    // An sRGB picture is left alone.
+    QImage plain = photo().convertToFormat(QImage::Format_RGB32);
+    plain.setColorSpace(QColorSpace(QColorSpace::SRgb));
+    const QString srgb = f.path(QStringLiteral("plain.png"));
+    QVERIFY(plain.save(srgb));
+    doc::Document *same = f.open(srgb);
+    QVERIFY(same);
+    QVERIFY(same->file().losses.isEmpty());
+    QCOMPARE(same->flattened().pixel(30, 0), photo().pixel(30, 0));
+
+    // A JPEG from a camera: its Exif segment right after the start.
+    QByteArray jpeg = img::encode(photo(), "JPEG", 90);
+    QVERIFY(!doc::hasCameraDetails(jpeg));
+    const QByteArray tiff("II*\0\x08\0\0\0\0\0", 10); // an empty Exif directory
+    QByteArray app1("\xFF\xE1", 2);
+    QByteArray length(2, Qt::Uninitialized);
+    qToBigEndian(quint16(2 + 6 + tiff.size()), length.data());
+    app1 += length + QByteArray("Exif\0\0", 6) + tiff;
+    jpeg.insert(2, app1);
+    QVERIFY(doc::hasCameraDetails(jpeg));
+    QVERIFY(!doc::hasCameraDetails(img::encode(photo(), "PNG")));
+    const QString camera = f.path(QStringLiteral("camera.jpg"));
+    writeBytes(camera, jpeg);
+    doc::Document *shot = f.open(camera);
+    QVERIFY(shot);
+    QVERIFY(shot->file().losses.contains(QStringLiteral("The photo's details from the camera (date, place, camera) are not kept.")));
+}
+
 // File → Open recent lists the pictures opened or saved as, a missing one greyed; the start screen
 // shows those that are there, with their thumbnails; a picture the project keeps unchanged opens
 // with its layers, one changed by another program from the file.
@@ -757,6 +1039,14 @@ void TestFiles::recentFiles()
     QVERIFY(!Settings::instance().recentFiles().contains(QDir::cleanPath(three)));
     QTRY_COMPARE(start->recentFileTiles().size(), 1);
     QVERIFY(f.studio.documents().isEmpty());
+
+    // A long name keeps its end and its extension on the tile (how much of it depends on the fonts).
+    const QString longName = f.path(QStringLiteral("A picture from disk with a long name that goes on 7.png"));
+    QVERIFY(photo(QSize(40, 40)).save(longName));
+    Settings::instance().addRecentFile(longName);
+    QTRY_COMPARE(start->recentFileTiles().size(), 2);
+    const QString caption = start->recentFileTiles().first()->text();
+    QVERIFY2(caption.endsWith(QStringLiteral("png")) && caption.contains(QChar(0x2026)), qPrintable(caption));
 
     // Clear the list.
     emit recent->aboutToShow();
@@ -917,6 +1207,38 @@ void TestFiles::closingStopsItsRun()
     QCOMPARE(f.studio.activeDocument(), b);
     QCOMPARE(strip->count(), 0);
     QVERIFY(!strip->isRunning());
+
+    // Quitting while a picture with unsaved changes to its file has its run going: every question
+    // comes before anything is done, so No to the running jobs leaves the picture open and its
+    // run going, and nothing was asked about the file yet.
+    const QString path = f.path(QStringLiteral("running.png"));
+    QVERIFY(photo(QSize(240, 160)).save(path));
+    doc::Document *d = f.open(path);
+    QVERIFY(d);
+    paintSquare(d);
+    QTRY_VERIFY(bar->plan().action == PromptAction::EditImage);
+    words->setPlainText(QStringLiteral("make it rain"));
+    const qsizetype queued = generationJobs().size();
+    QTest::keyClick(words, Qt::Key_Return);
+    QTRY_VERIFY_WITH_TIMEOUT(generationJobs().size() > queued, 10000);
+    Job *dJob = generationJobs().last();
+    const qsizetype asked = f.unsavedQuestions.size();
+    f.unsavedReply = QMessageBox::Discard;
+    QString question;
+    answerNextBox(QMessageBox::No, &question);
+    f.window->close();
+    QVERIFY2(question.contains(QStringLiteral("still running")), qPrintable(question));
+    QVERIFY(f.window->isVisible());
+    QCOMPARE(f.unsavedQuestions.size(), asked);
+    QVERIFY(f.studio.documents().contains(d));
+    QVERIFY(!dJob->isFinished());
+    // Yes, then Don't save: the picture closes, its run is cancelled and Lumen quits.
+    question.clear();
+    answerNextBox(QMessageBox::Yes, &question);
+    f.window->close();
+    QTRY_VERIFY_WITH_TIMEOUT(!f.window->isVisible(), 10000);
+    QCOMPARE(f.unsavedQuestions.size(), asked + 1);
+    QTRY_COMPARE(dJob->state(), Job::State::Cancelled);
     sd.hold = false;
 }
 
@@ -1035,7 +1357,7 @@ void TestFiles::wholePictureInput()
     QVERIFY(panel.selectFilter(QStringLiteral(":/filters/builtin/colorize-with-ai.lumenfilter")));
     auto *hint = panel.findChild<QLabel *>(QStringLiteral("FilterSelectionHint"));
     QVERIFY(hint);
-    QVERIFY2(hint->text().contains(QStringLiteral("every visible layer")), qPrintable(hint->text()));
+    QVERIFY2(hint->text().startsWith(QStringLiteral("Reads the whole picture")), qPrintable(hint->text()));
     QVERIFY(panel.selectFilter(QStringLiteral(":/filters/builtin/black-and-white.lumenfilter")));
     QCOMPARE(hint->text(), QStringLiteral("Nothing is selected, so the whole layer changes."));
 }

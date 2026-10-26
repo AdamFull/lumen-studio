@@ -297,18 +297,35 @@ void TestDoc::psdImportExport()
     QCOMPARE(imported.layers[1]->image.pixelColor(31, 21), QColor(Qt::blue)); // placed at its offset
     QCOMPARE(imported.layers[2]->props.blend, doc::BlendMode::Multiply);
     QVERIFY(std::abs(imported.layers[2]->props.opacity - 128 / 255.0) < 1e-6);
-    QVERIFY(imported.warnings.isEmpty());
+    // The group's hiding went onto its layer: said, as saving over the file keeps it that way.
+    QCOMPARE(imported.warnings, QStringList{QStringLiteral("the opacity or hiding of 1 group(s) went onto their layers")});
 
-    // Export the stack again and read it back.
+    // Export the stack again, with the group the layer came from.
     doc::DocumentSnapshot snap;
     for (const doc::LayerPtr &l : imported.layers)
-        snap.append(doc::LayerSnapshot{l->image, l->props});
+        snap.append(doc::LayerSnapshot{l->image, l->props, l->meta.value(QStringLiteral("psd_group")).toString()});
     const psd::File out = doc::exportPsd(snap, imported.size);
-    QCOMPARE(out.layers.size(), 3);
+    QCOMPARE(out.layers.size(), 5);
     QCOMPARE(out.layers[0].name, QStringLiteral("Shade")); // front-most first
     QCOMPARE(out.layers[0].blendKey, QByteArray("mul "));
     QCOMPARE(out.layers[0].opacity, 128);
-    QVERIFY(!out.layers[1].visible);
+    QCOMPARE(out.layers[1].kind, psd::Layer::Kind::GroupBegin);
+    QCOMPARE(out.layers[1].name, QStringLiteral("Extras"));
+    QCOMPARE(out.layers[2].name, QStringLiteral("Star"));
+    QVERIFY(!out.layers[2].visible);
+    QCOMPARE(out.layers[3].kind, psd::Layer::Kind::GroupEnd);
+    QCOMPARE(out.layers[4].name, QStringLiteral("Base"));
+    // Nested groups open and close as the layers go down.
+    doc::DocumentSnapshot nested{{a, {}, QStringLiteral("Head")}, {a, {}, QStringLiteral("Head/Eyes")}, {a, {}, QStringLiteral("Head/Eyes")}, {a, {}, {}}};
+    QList<psd::Layer::Kind> kinds;
+    QStringList names;
+    for (const psd::Layer &l : doc::exportPsd(nested, QSize(40, 30)).layers) {
+        kinds << l.kind;
+        names << l.name;
+    }
+    using K = psd::Layer::Kind;
+    QCOMPARE(kinds, (QList<K>{K::Pixels, K::GroupBegin, K::GroupBegin, K::Pixels, K::Pixels, K::GroupEnd, K::Pixels, K::GroupEnd}));
+    QCOMPARE(names.mid(1, 2), (QStringList{QStringLiteral("Head"), QStringLiteral("Eyes")}));
     QCOMPARE(doc::blendModeFromPsdKey("lddg"), doc::BlendMode::Add);
     bool known = true;
     doc::blendModeFromPsdKey("vLit", &known);

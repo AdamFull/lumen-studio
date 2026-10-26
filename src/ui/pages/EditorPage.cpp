@@ -619,15 +619,16 @@ void EditorPage::importAsLayer()
                                                       tr("Images (*.png *.jpg *.jpeg *.webp *.bmp *.tif *.tiff)"));
     if (file.isEmpty())
         return;
+    // Nothing open to add it to: opened as File → Open opens it, so it remembers its file.
+    if (!m_doc) {
+        m_studio->openFile(file);
+        return;
+    }
     QImageReader reader(file);
     reader.setAutoTransform(true);
     const QImage img = reader.read();
     if (img.isNull()) {
         m_studio->notify(tr("Cannot read %1: %2").arg(QFileInfo(file).fileName(), reader.errorString()), QStringLiteral("error"));
-        return;
-    }
-    if (!m_doc) {
-        m_studio->openImageAsDocument(img, QFileInfo(file).completeBaseName());
         return;
     }
     QApplication::clipboard()->setImage(img);

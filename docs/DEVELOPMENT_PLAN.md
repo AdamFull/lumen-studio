@@ -3280,12 +3280,40 @@ Survey of the code, the app log and user testing (October 2026):
     close and quit questions, the start screen with recent files at 1280 × 720; no findings (the
     audit stays at 4, §17.9 item 8). The whole suite passes (Qt's totals over the 21 binaries: 390
     passed, 28 skipped: the live checks and one runtime test).
-  * Not yet: the file's metadata (EXIF, colour profile) is not written back; a picture deeper than 8
-    bits per colour is saved at 8 (said before saving over); WebP files are taken as lossy (their
-    quality is not read back); a file changed on disk by another program while it is open is not
-    noticed; *File → Save* in another window (a plugin's) does nothing; open plugin windows are not
-    reopened at the next start; switching projects closes documents without asking (they stay in that
-    project's session, with their marks); the German translation of the new texts.
+  * Review fixes: *Save* always asks when another program changed the file since Lumen read or
+    wrote it (the link's size and time; "Another program changed photo.jpg…" first among the
+    reasons), whatever "don't ask again" or an earlier answer say. Quitting asks about running jobs
+    before the unsaved files, so *No* there leaves the pictures open and their runs going (*Don't
+    save* closes them, which cancels their runs, only once the quit is certain). A Save or Save as…
+    that finishes after a later Save as… leaves the document linked to the file chosen last (and a
+    Save writes the file it was asked for). *Export a copy…* suggests "photo copy.png"; it and *Save
+    as…* onto the picture's own file in its format are *Save*, with its question and the new stamp
+    (one `choosePath` for both dialogs). PSD: `exportPsd` writes the groups back from the layers'
+    `psd_group` (`LayerSnapshot::group`; nested, a group whose layers were moved apart once per run of
+    them); `psd::read` keeps the keys of the additional layer information it drops
+    (`Layer::otherInfo`) and the colour profile (`File::iccProfile`, resource 1039), so `importPsd`
+    says what goes: text layers, effects, adjustment and fill layers, smart objects, the groups' own
+    opacity and hiding, a profile other than sRGB. `Studio::openFile` turns a picture with an RGB
+    profile of other primaries (Display P3, Adobe RGB) into sRGB and says the profile is not kept;
+    a JPEG, PNG or WebP with Exif (`doc::hasCameraDetails`) says the camera's details are not kept.
+    *Import image as layer…* with nothing open opens the file as *Open* does. The start screen's file
+    tiles shorten names in the middle, so the end and the extension stay. The Filters panel's line for
+    a filter of the whole picture is shorter ("Reads the whole picture; the result goes onto a new
+    layer."). Tests: `tst_files` `saveOverChangedFile`, `notACopyOfItself`, `photoshopFiles` (a PSD
+    with a group saved over without a question and with its group; a Photoshop text layer and a P3
+    profile spliced into a file, read and asked about; the other warnings), `coloursAndCameraDetails`
+    (a P3 PNG converted and asked about, an sRGB one untouched, a JPEG with an Exif segment); quitting
+    with a run going in `closingStopsItsRun`; a long name in `recentFiles`; `tst_doc psdImportExport`
+    (groups written back, nested). The whole suite passes (394 passed, 28 skipped).
+  * Not yet: the file's metadata (Exif, colour profile) is not written back (said before saving
+    over; a picture in other colours is turned into sRGB when it opens); a picture deeper than 8 bits
+    per colour is saved at 8 (said before saving over); WebP files are taken as lossy (their quality
+    is not read back); a file changed on disk by another program is noticed when it is saved over,
+    not while it is open; Photoshop image resources other than the colour profile (guides, print
+    size, slices) are dropped without a word; *File → Save* in another window (a plugin's) does
+    nothing; open plugin windows are not reopened at the next start; switching projects closes
+    documents without asking (they stay in that project's session, with their marks); the German
+    translation of the new texts.
 - [ ] User guide and README rewritten around the editor; plugins documented separately.
 - [ ] Short live check (RTX 4060 8 GB, FLUX.2 klein 4B through sd.cpp): one selection edit, one
   whole-image colorize, one new image. Everything before this step uses mock servers.

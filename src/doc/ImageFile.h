@@ -44,6 +44,11 @@ QString imageFileFilter(const QList<ImageFormat> &formats);
 int estimateJpegQuality(const QByteArray &data);
 int estimateJpegQuality(const QString &path);
 
+// Whether a JPEG, PNG or WebP file holds the camera's details (Exif: the date, the camera, the
+// place), which Qt does not write back.
+bool hasCameraDetails(const QByteArray &data);
+bool hasCameraDetails(const QString &path);
+
 // What saving `layers` in `format` changes compared with the document.
 struct SaveEffects
 {

@@ -14,6 +14,7 @@
 #include "runtime/ModelPresets.h"
 #include "ui/ext/Extension.h"
 
+#include <QColorSpace>
 #include <QDir>
 #include <QJsonArray>
 #include <QFileInfo>
@@ -662,7 +663,7 @@ void Studio::openFile(const QString &file)
     QImageReader reader(path);
     reader.setAutoTransform(true);
     QByteArray format = reader.format().toLower();
-    const QImage image = reader.read();
+    QImage image = reader.read();
     if (image.isNull()) {
         notify(tr("Cannot open %1: %2").arg(QFileInfo(path).fileName(), reader.errorString()), QStringLiteral("error"));
         return;
@@ -679,6 +680,20 @@ void Studio::openFile(const QString &file)
     // The document keeps 8 bits per colour.
     if (image.depth() > 32 || image.format() == QImage::Format_Grayscale16)
         link.losses << tr("The file has 16 bits per colour; Lumen saves 8, so the finest shades are lost.");
+    // A picture in colours of its own (Display P3 from a phone, Adobe RGB) is turned into standard
+    // colours (sRGB), which Lumen shows and saves: it looks as it did, only colours more vivid than
+    // sRGB can show are lost, and the file is saved without its profile.
+    const QColorSpace space = image.colorSpace();
+    if (space.isValid() && space.colorModel() == QColorSpace::ColorModel::Rgb && space.primaries() != QColorSpace::Primaries::SRgb) {
+        const QImage standard = image.convertedToColorSpace(QColorSpace(QColorSpace::SRgb), QImage::Format_ARGB32);
+        if (!standard.isNull())
+            image = standard;
+        const QString profile = space.description().isEmpty() ? tr("a colour profile of its own") : space.description();
+        link.losses << tr("The file has %1; Lumen saves it in standard colours (sRGB), so the most vivid colours may be a little duller.")
+                           .arg(profile);
+    }
+    if (doc::hasCameraDetails(path))
+        link.losses << tr("The photo's details from the camera (date, place, camera) are not kept.");
     link.stamp();
     doc::Document *doc = openImageAsDocument(image, QFileInfo(path).completeBaseName());
     doc->setFile(link);

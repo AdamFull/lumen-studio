@@ -47,7 +47,7 @@ private:
     void scheduleRebuild();
     void updateSetupCard();
     QToolButton *addTile(FlowLayout *tiles, const QString &name, const QString &tooltip, const QPixmap &thumbnail,
-                         bool document = false);
+                         bool document = false, Qt::TextElideMode elide = Qt::ElideRight);
     // Reads a small picture of an image file in the background, once per file and change.
     void loadFileThumbnail(const QString &path);
     static QString thumbnailKey(const QString &path);

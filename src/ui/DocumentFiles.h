@@ -4,12 +4,15 @@
 #include "doc/ImageFile.h"
 
 #include <QFuture>
+#include <QHash>
 #include <QMessageBox>
 #include <QObject>
 #include <QPointer>
 #include <QSet>
 
 #include <functional>
+#include <optional>
+#include <utility>
 
 namespace lumen::ui {
 
@@ -39,7 +42,8 @@ QMessageBox *unsavedChangesBox(const QStringList &fileNames, bool quitting, QWid
 // WebP, TIFF where Qt can write them, layered PSD) that the document remembers from then on; Export
 // a copy… writes one it does not. The first time per document that Save would change the picture
 // in the file (the layers merged, transparency or quality lost, parts of the file Lumen does not
-// keep), it asks first. A document that cannot be written back (none, or a format Lumen cannot
+// keep), it asks first; it always asks when another program has changed the file since Lumen read
+// or wrote it. Save as… or Export a copy… onto the picture's own file is Save. A document that cannot be written back (none, or a format Lumen cannot
 // write) goes to Save as…. Closing a document or quitting with changes not saved to its file asks
 // Save / Don't save / Cancel. The project keeps every document with its layers whatever is chosen.
 // Writing goes through a temporary file, so a failed save leaves the picture as it was.
@@ -61,7 +65,8 @@ public:
     QFuture<bool> close(doc::Document *doc);
     // Before quitting: one question about every document with changes not saved to its file.
     // Resolves to whether Lumen may quit; those not saved are closed, so the next start does not
-    // bring them back.
+    // bring them back. Asked last, when the quit is otherwise certain (the main window asks about
+    // running jobs first): closing them cancels their prompt-bar runs.
     QFuture<bool> confirmQuit();
 
     // The documents with changes not saved to their files.
@@ -81,13 +86,20 @@ private:
     // What saving over the document's file changes, in plain words (empty: nothing).
     QStringList saveOverReasons(const doc::Document *doc, const doc::ImageFormat &format, const doc::SaveEffects &effects) const;
     QFuture<bool> write(doc::Document *doc, const QString &path, const doc::ImageFormat &format, int quality, bool link);
-    QString suggestedPath(const doc::Document *doc, const doc::ImageFormat &format) const;
+    // `copy`: for Export a copy…, a name other than the picture's own file.
+    QString suggestedPath(const doc::Document *doc, const doc::ImageFormat &format, bool copy = false) const;
+    // The file to write (`chosen`, else asked in the dialog) and its format; nothing when cancelled
+    // or when Lumen cannot write that format (said in a notice).
+    std::optional<std::pair<QString, doc::ImageFormat>> choosePath(const doc::Document *doc, const QString &title,
+                                                                   const doc::ImageFormat &preferred, bool copy, const QString &chosen);
     QFuture<bool> saveEach(QList<QPointer<doc::Document>> docs);
 
     Studio *m_studio;
     QPointer<QWidget> m_window;
     // Documents whose save-over question was answered in this session ("the first time").
     QSet<const doc::Document *> m_confirmed;
+    // The file a Save as… on its way is to link each document to (the one chosen last).
+    QHash<const doc::Document *, QString> m_linking;
 };
 
 } // namespace lumen::ui
