@@ -183,7 +183,25 @@ because selecting is where changing an area with words starts.
   Alt or the right mouse button takes paint away. *Tint the selection* in the tool's options shows
   what is painted.
 * **Select** menu: **Select all** (`Ctrl+A`), **Deselect** (`Ctrl+D`), **Invert selection**
-  (`Ctrl+Shift+I`), **Delete selected pixels** (`Del`).
+  (`Ctrl+Shift+I`), **By description…**, **Delete selected pixels** (`Del`).
+
+**Selecting by description.** Say what to select and Lumen finds it, without any AI model:
+
+* **lines, strokes, scratches, cracks** ("the black lines", "thin white scratches"): thin marks
+  darker (or lighter) than what is around them. Larger shapes of the same colour, such as a black
+  coat, are left out. *Up to* sets the widest line, *Contrast* how faint a line may be;
+* **dust, specks, spots**: small isolated marks;
+* **a colour** ("the red", "everything blue"): all its shades, dark and light; *How wide a range*
+  takes in more of them.
+
+**Select → By description…** shows what Lumen understood, the settings and the found area tinted on
+a preview, and whether it becomes a **New selection**, is **Added**, **Taken away**, or kept **Where
+both are**. **Select** makes it the selection, as one step you can undo. In the prompt bar, words
+that start with **select** ("select: the black lines") do the same and clear the bar, so you can go
+on with "remove them" or **Remove object**. Some German words work too ("auswählen: Staub", "die
+schwarzen Linien"). Objects such as "the cup" need a detection model, which comes later; the dialog
+says so. The filter editor has the same finders as steps: *Find lines*, *Find specks* and *Colour
+range* (§8).
 
 The selection is used by the prompt bar (§5), the filters (§8) and the transform and delete
 commands. Without one, the prompt bar and the filters work on the whole picture.

@@ -1,5 +1,7 @@
 #include "ui/pages/EditorPage.h"
 
+#include "ui/dialogs/SelectByDescriptionDialog.h"
+
 #include "core/Async.h"
 #include "core/Error.h"
 #include "core/ImageOps.h"
@@ -330,6 +332,13 @@ EditorPage::EditorPage(Studio *studio, QWidget *parent)
     shortcut(QStringLiteral("select-all"), tr("Select all"), {QStringLiteral("Ctrl+A")}, [this] { if (m_doc) m_doc->selectAll(); });
     shortcut(QStringLiteral("invert-selection"), tr("Invert selection"), {QStringLiteral("Ctrl+Shift+I")},
              [this] { if (m_doc) m_doc->invertSelection(); });
+    // Lines, dust or a colour found by what they look like (plan M18 §18.1).
+    shortcut(QStringLiteral("select-by-description"), tr("By description…"), {}, [this] {
+        if (!m_doc)
+            return;
+        SelectByDescriptionDialog dlg(m_doc, this);
+        dlg.exec();
+    });
     shortcut(QStringLiteral("delete-pixels"), tr("Delete selected pixels"), {QStringLiteral("Del")}, [this] { deleteSelectionPixels(); });
     shortcut(QStringLiteral("fit"), tr("Fit to window"), {QStringLiteral("Ctrl+0")}, [this] { m_canvas->fitToView(); });
     shortcut(QStringLiteral("actual-pixels"), tr("Actual pixels (100 %)"), {QStringLiteral("Ctrl+1")}, [this] { m_canvas->actualPixels(); });

@@ -68,6 +68,8 @@ public:
     // main button and Enter ask for one (setUpAiRequested).
     void generate();
     void remove();
+    // "select: the black lines": the area is found by how it looks and becomes the selection.
+    void selectByWords(const QString &description);
     void variation();
     void cancel();
 

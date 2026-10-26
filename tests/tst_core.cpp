@@ -1,4 +1,5 @@
 #include "core/CrashGuard.h"
+#include "core/Finders.h"
 #include "core/ImageOps.h"
 #include "core/JobQueue.h"
 #include "core/JsonSchema.h"
@@ -33,6 +34,8 @@ private slots:
     void jobQueueConcurrency();
     void jobCancelQueued();
     void sessionLockDetectsCrash();
+    void finders();
+    void finderWords();
 };
 
 void TestCore::maskBoundsAndEmpty()
@@ -322,6 +325,145 @@ void TestCore::sessionLockDetectsCrash()
     QVERIFY(third.previousSessionCrashed());
     third.release();
     QVERIFY(crash::reports(dir.path()).isEmpty());
+}
+
+namespace {
+
+// Paper (off-white with a gentle gradient) with thin black pen lines, a large dark coat, a few
+// specks of dust and a red and a blue patch.
+QImage scannedDrawing()
+{
+    QImage im(400, 300, QImage::Format_ARGB32);
+    for (int y = 0; y < im.height(); ++y) {
+        auto *line = reinterpret_cast<QRgb *>(im.scanLine(y));
+        for (int x = 0; x < im.width(); ++x) {
+            const int v = 236 - x / 40; // a scan's uneven light
+            line[x] = qRgb(v, v, v - 6);
+        }
+    }
+    QPainter p(&im);
+    p.setRenderHint(QPainter::Antialiasing);
+    p.setPen(QPen(QColor(25, 25, 25), 3));
+    p.drawLine(20, 40, 380, 60);   // a long stroke
+    p.drawLine(60, 280, 160, 120); // another
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(30, 30, 30));
+    p.drawRect(240, 150, 120, 120); // a large dark shape: not a line
+    p.setBrush(QColor(60, 60, 60));
+    for (const QPoint &d : {QPoint(200, 100), QPoint(120, 200), QPoint(330, 110)})
+        p.drawEllipse(d, 2, 2);     // dust
+    p.setBrush(QColor(200, 30, 30));
+    p.drawRect(20, 100, 40, 30);    // red
+    p.setBrush(QColor(140, 20, 20));
+    p.drawRect(20, 140, 40, 20);    // dark red
+    p.setBrush(QColor(30, 60, 210));
+    p.drawRect(80, 100, 40, 30);    // blue
+    return im;
+}
+
+int on(const QImage &mask, int x, int y)
+{
+    return qGray(mask.pixel(x, y)) > 127;
+}
+
+double coverage(const QImage &mask, const QRect &r)
+{
+    int n = 0, in = 0;
+    for (int y = r.top(); y <= r.bottom(); ++y)
+        for (int x = r.left(); x <= r.right(); ++x, ++n)
+            in += on(mask, x, y);
+    return n ? double(in) / n : 0;
+}
+
+} // namespace
+
+// The classic finders of plan M18 §18.1 on a scanned drawing: lines but not the large dark shape,
+// dust but not the lines, colours by their hue (dark red is red), and a colour picked exactly.
+void TestCore::finders()
+{
+    const QImage drawing = scannedDrawing();
+    const QImage lines = img::findStrokes(drawing);
+    QCOMPARE(lines.format(), QImage::Format_Grayscale8);
+    QCOMPARE(lines.size(), drawing.size());
+    QVERIFY(on(lines, 200, 50));            // on the first stroke
+    QVERIFY(on(lines, 110, 200));           // on the second
+    QVERIFY(coverage(lines, QRect(260, 170, 80, 80)) < 0.01); // inside the dark shape
+    QVERIFY(coverage(lines, QRect(300, 10, 60, 20)) < 0.01);  // plain paper
+    QVERIFY(!on(lines, 200, 100));          // a speck is too short for a line
+    // Light strokes on dark ground are left alone when dark ones are asked for, and found otherwise.
+    QImage negative = drawing;
+    negative.invertPixels();
+    QVERIFY(coverage(img::findStrokes(negative), QRect(150, 45, 100, 10)) < 0.05);
+    img::StrokeOptions lightStrokes;
+    lightStrokes.dark = false;
+    QVERIFY(on(img::findStrokes(negative, lightStrokes), 200, 50));
+    // A stroke wider than the widest asked for is not one: a 14 px band against a 3 px line.
+    QImage bands(300, 200, QImage::Format_ARGB32);
+    bands.fill(QColor(235, 235, 230));
+    {
+        QPainter p(&bands);
+        p.fillRect(QRect(20, 40, 260, 14), QColor(20, 20, 20));
+        p.fillRect(QRect(20, 140, 260, 3), QColor(20, 20, 20));
+    }
+    const QImage banded = img::findStrokes(bands);
+    QVERIFY(!on(banded, 150, 47));
+    QVERIFY(on(banded, 150, 141));
+    img::StrokeOptions wide;
+    wide.maxWidth = 16;
+    QVERIFY(on(img::findStrokes(bands, wide), 150, 47));
+
+    const QImage dust = img::findSpecks(drawing);
+    // (The one at 120, 200 is 5 px from a line: the paper between them is not a light speck.)
+    QVERIFY(on(dust, 200, 100) && on(dust, 120, 200) && on(dust, 330, 110));
+    QVERIFY(!on(dust, 200, 50));            // the lines are too long for dust
+    QVERIFY(coverage(dust, QRect(260, 170, 80, 80)) < 0.01);
+
+    const QImage red = img::findColorName(drawing, QStringLiteral("red"));
+    QVERIFY(coverage(red, QRect(25, 105, 30, 20)) > 0.95);
+    QVERIFY(coverage(red, QRect(25, 143, 30, 14)) > 0.95); // dark red is red
+    QVERIFY(coverage(red, QRect(85, 105, 30, 20)) < 0.01); // blue is not
+    QVERIFY(coverage(red, QRect(300, 10, 60, 20)) < 0.01); // nor the paper
+    QVERIFY(coverage(img::findColorName(drawing, QStringLiteral("blau")), QRect(85, 105, 30, 20)) > 0.95);
+    QVERIFY(coverage(img::findColorName(drawing, QStringLiteral("white")), QRect(300, 10, 60, 20)) > 0.95);
+    QVERIFY(img::findColorName(drawing, QStringLiteral("teacup")).isNull());
+    const QImage exact = img::findColor(drawing, QColor(200, 30, 30), 10);
+    QVERIFY(coverage(exact, QRect(25, 105, 30, 20)) > 0.95);
+    QVERIFY(coverage(exact, QRect(25, 143, 30, 14)) < 0.05); // far from it in Lab
+
+    // A 12-megapixel scan stays quick (O(n) filters).
+    QElapsedTimer t;
+    t.start();
+    img::findStrokes(drawing.scaled(4000, 3000));
+    QVERIFY2(t.elapsed() < 8000, qPrintable(QString::number(t.elapsed())));
+}
+
+// The words of "Select → By description" read as a finder (English and some German), or as none.
+void TestCore::finderWords()
+{
+    using K = img::FinderRequest::Kind;
+    img::FinderRequest r = img::parseFinderRequest(QStringLiteral("the black lines"));
+    QCOMPARE(r.kind, K::Strokes);
+    QVERIFY(r.strokes.dark);
+    QCOMPARE(r.strokes.maxWidth, 6);
+    r = img::parseFinderRequest(QStringLiteral("thin white scratches"));
+    QCOMPARE(r.kind, K::Strokes);
+    QVERIFY(!r.strokes.dark);
+    QCOMPARE(r.strokes.maxWidth, 3);
+    r = img::parseFinderRequest(QStringLiteral("die dicken schwarzen Linien"));
+    QCOMPARE(r.kind, K::Strokes);
+    QVERIFY(r.strokes.dark);
+    QCOMPARE(r.strokes.maxWidth, 12);
+    r = img::parseFinderRequest(QStringLiteral("dust and specks"));
+    QCOMPARE(r.kind, K::Specks);
+    QCOMPARE(r.specks.tone, img::SpeckOptions::Tone::Both);
+    QCOMPARE(img::parseFinderRequest(QStringLiteral("white dust")).specks.tone, img::SpeckOptions::Tone::Light);
+    QCOMPARE(img::parseFinderRequest(QStringLiteral("Staub")).kind, K::Specks);
+    r = img::parseFinderRequest(QStringLiteral("everything red"));
+    QCOMPARE(r.kind, K::Color);
+    QCOMPARE(r.color, QStringLiteral("red"));
+    QCOMPARE(img::parseFinderRequest(QStringLiteral("die grüne Fläche")).color, QStringLiteral("green"));
+    QCOMPARE(img::parseFinderRequest(QStringLiteral("the cup")).kind, K::None);
+    QVERIFY(img::runFinder(scannedDrawing(), img::parseFinderRequest(QStringLiteral("the cup"))).isNull());
 }
 
 QTEST_MAIN(TestCore)

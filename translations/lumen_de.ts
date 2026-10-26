@@ -3308,7 +3308,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::filters::ClassicNodes</name>
     <message>
-        <location filename="../src/filters/ClassicNodes.cpp" line="+24"/>
+        <location filename="../src/filters/ClassicNodes.cpp" line="+25"/>
         <source>Image</source>
         <translation>Bild</translation>
     </message>
@@ -3490,11 +3490,13 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
+        <location line="+211"/>
+        <location line="+22"/>
         <source>Contrast</source>
         <translation>Kontrast</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="-226"/>
         <source>Hue and saturation</source>
         <translation>Farbton und Sättigung</translation>
     </message>
@@ -3510,12 +3512,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+273"/>
+        <location line="+335"/>
         <source>°</source>
         <translation>°</translation>
     </message>
     <message>
-        <location line="-272"/>
+        <location line="-334"/>
         <source>Saturation</source>
         <translation>Sättigung</translation>
     </message>
@@ -3694,12 +3696,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <location line="+8"/>
         <location line="+12"/>
         <location line="+44"/>
-        <location line="+60"/>
+        <location line="+122"/>
         <source>%</source>
         <translation>%</translation>
     </message>
     <message>
-        <location line="-118"/>
+        <location line="-180"/>
         <source>Unsharp mask</source>
         <translation>Unscharf maskieren</translation>
     </message>
@@ -3952,6 +3954,128 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <location line="+1"/>
         <source>Selects what was not selected.</source>
         <translation>Wählt aus, was nicht ausgewählt war.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Dark on lighter ground</source>
+        <translation>Dunkel auf hellerem Grund</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Light on darker ground</source>
+        <translation>Hell auf dunklerem Grund</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Find lines</source>
+        <translation>Linien finden</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Selects thin lines, scratches and cracks, leaving larger shapes of the same colour out.</source>
+        <translation>Wählt dünne Linien, Kratzer und Risse aus und lässt größere Formen derselben Farbe aus.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Lines</source>
+        <translation>Linien</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Widest line</source>
+        <translation>Breiteste Linie</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Lines up to this width are found; wider shapes are left out.</source>
+        <translation>Linien bis zu dieser Breite werden gefunden; breitere Formen nicht.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>How much darker (or lighter) than the ground a line must be.</source>
+        <translation>Um wie viel dunkler (oder heller) als der Grund eine Linie sein muss.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Shortest line</source>
+        <translation>Kürzeste Linie</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Shorter pieces are left out; 0 is four times the widest line.</source>
+        <translation>Kürzere Stücke werden ausgelassen; 0 ist das Vierfache der breitesten Linie.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+20"/>
+        <source>Grow</source>
+        <translation>Erweitern</translation>
+    </message>
+    <message>
+        <location line="-20"/>
+        <location line="+20"/>
+        <source>Widens what is found, to cover soft edges.</source>
+        <translation>Verbreitert das Gefundene, damit weiche Kanten mit erfasst werden.</translation>
+    </message>
+    <message>
+        <location line="-9"/>
+        <source>Find specks</source>
+        <translation>Flecken finden</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Selects small spots such as dust and specks.</source>
+        <translation>Wählt kleine Stellen wie Staub und Flecken aus.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Specks</source>
+        <translation>Flecken</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Dark and light</source>
+        <translation>Dunkel und hell</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Largest speck</source>
+        <translation>Größter Fleck</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Larger spots are left out.</source>
+        <translation>Größere Stellen werden ausgelassen.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>How much darker (or lighter) than what is around it a speck must be.</source>
+        <translation>Um wie viel dunkler (oder heller) als seine Umgebung ein Fleck sein muss.</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Colour range</source>
+        <translation>Farbbereich</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Selects the pixels close to a colour, with a soft edge.</source>
+        <translation>Wählt die Pixel nahe an einer Farbe aus, mit weicher Kante.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Colour</source>
+        <translation>Farbe</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Tolerance</source>
+        <translation>Toleranz</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>How far from the colour a pixel may be and still count.</source>
+        <translation>Wie weit ein Pixel von der Farbe entfernt sein darf und noch zählt.</translation>
     </message>
     <message>
         <location line="+9"/>
@@ -8650,7 +8774,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::EditorPage</name>
     <message>
-        <location filename="../src/ui/pages/EditorPage.cpp" line="+108"/>
+        <location filename="../src/ui/pages/EditorPage.cpp" line="+110"/>
         <source>Undo (Ctrl+Z)</source>
         <translation>Rückgängig (Strg+Z)</translation>
     </message>
@@ -8706,29 +8830,29 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="-9"/>
-        <location line="+173"/>
+        <location line="+180"/>
         <source>Layers</source>
         <translation>Ebenen</translation>
     </message>
     <message>
-        <location line="-299"/>
+        <location line="-306"/>
         <source>New blank canvas (Ctrl+N)</source>
         <translation>Neue leere Arbeitsfläche (Strg+N)</translation>
     </message>
     <message>
         <location line="+127"/>
-        <location line="+172"/>
+        <location line="+179"/>
         <source>History</source>
         <translation>Protokoll</translation>
     </message>
     <message>
-        <location line="-170"/>
-        <location line="+170"/>
+        <location line="-177"/>
+        <location line="+177"/>
         <source>Filters</source>
         <translation>Filter</translation>
     </message>
     <message>
-        <location line="-163"/>
+        <location line="-170"/>
         <source>Close the AI tab</source>
         <translation>Registerkarte „KI“ schließen</translation>
     </message>
@@ -8768,7 +8892,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Auswahl umkehren</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+3"/>
+        <source>By description…</source>
+        <translation>Nach Beschreibung…</translation>
+    </message>
+    <message>
+        <location line="+6"/>
         <source>Delete selected pixels</source>
         <translation>Ausgewählte Pixel löschen</translation>
     </message>
@@ -11904,18 +12033,18 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
     </message>
     <message>
         <location line="+9"/>
-        <location line="+789"/>
+        <location line="+790"/>
         <source>(none)</source>
         <translation>(keine)</translation>
     </message>
     <message>
-        <location line="-785"/>
-        <location line="+741"/>
+        <location line="-786"/>
+        <location line="+742"/>
         <source>Quit</source>
         <translation>Beenden</translation>
     </message>
     <message>
-        <location line="-739"/>
+        <location line="-740"/>
         <source>&amp;Edit</source>
         <translation>&amp;Bearbeiten</translation>
     </message>
@@ -11925,7 +12054,7 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         <translation>Auf eine Ebene reduziert kopieren</translation>
     </message>
     <message>
-        <location line="+31"/>
+        <location line="+32"/>
         <source>&amp;View</source>
         <translation>&amp;Ansicht</translation>
     </message>
@@ -11966,13 +12095,13 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         <translation>&lt;h3&gt;Lumen Studio %1&lt;/h3&gt;&lt;p&gt;KI-gestützte Bildgenerierung und -bearbeitung.&lt;/p&gt;&lt;p&gt;Erstellt mit Qt %2.&lt;/p&gt;</translation>
     </message>
     <message>
-        <location line="-335"/>
-        <location line="+480"/>
+        <location line="-336"/>
+        <location line="+481"/>
         <source>Jobs</source>
         <translation>Aufträge</translation>
     </message>
     <message>
-        <location line="-697"/>
+        <location line="-698"/>
         <source>Project images — Lumen Studio</source>
         <translation>Projektbilder — Lumen Studio</translation>
     </message>
@@ -12127,7 +12256,7 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         <translation>Au&amp;swahl</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+9"/>
         <source>&amp;Image</source>
         <translation>B&amp;ild</translation>
     </message>
@@ -15729,7 +15858,7 @@ oder eines aus den Projektbildern ziehen</translation>
 <context>
     <name>lumen::ui::PromptBar</name>
     <message>
-        <location filename="../src/ui/pages/PromptBar.cpp" line="+59"/>
+        <location filename="../src/ui/pages/PromptBar.cpp" line="+63"/>
         <source>Progress</source>
         <translation>Fortschritt</translation>
     </message>
@@ -16029,7 +16158,22 @@ oder eines aus den Projektbildern ziehen</translation>
         </translation>
     </message>
     <message>
-        <location line="+89"/>
+        <location line="+99"/>
+        <source>Nothing like &quot;%1&quot; was found. Select → By description… has settings to find fainter or larger ones.</source>
+        <translation>Nichts wie „%1“ gefunden. Auswahl → Nach Beschreibung… hat Einstellungen, um blassere oder größere zu finden.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Select: %1</source>
+        <translation>Auswahl: %1</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Selected: %1 Now say what should change there, or press Remove object.</source>
+        <translation>Ausgewählt: %1 Sagen Sie jetzt, was sich dort ändern soll, oder drücken Sie „Objekt entfernen“.</translation>
+    </message>
+    <message>
+        <location line="+14"/>
         <source>Removed</source>
         <translation>Entfernt</translation>
     </message>
@@ -16379,6 +16523,245 @@ oder eines aus den Projektbildern ziehen</translation>
         <location line="+11"/>
         <source>Model&apos;s choice</source>
         <translation>Wahl des Modells</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::ui::SelectByDescriptionDialog</name>
+    <message>
+        <location filename="../src/ui/dialogs/SelectByDescriptionDialog.cpp" line="+29"/>
+        <source>red</source>
+        <translation>Rote</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>orange</source>
+        <translation>Orange</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>yellow</source>
+        <translation>Gelbe</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>green</source>
+        <translation>Grüne</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>cyan</source>
+        <translation>Türkise</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>blue</source>
+        <translation>Blaue</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>purple</source>
+        <translation>Violette</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>pink</source>
+        <translation>Rosa</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>brown</source>
+        <translation>Braune</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>black</source>
+        <translation>Schwarze</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>white</source>
+        <translation>Weiße</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>gray</source>
+        <translation>Graue</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Lines darker than what is around them, up to %1 px wide.</source>
+        <translation>Linien, dunkler als ihre Umgebung, bis %1 px breit.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Lines lighter than what is around them, up to %1 px wide.</source>
+        <translation>Linien, heller als ihre Umgebung, bis %1 px breit.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Dark specks up to %1 px across.</source>
+        <translation>Dunkle Flecken bis %1 px groß.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Light specks up to %1 px across.</source>
+        <translation>Helle Flecken bis %1 px groß.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Dark and light specks up to %1 px across.</source>
+        <translation>Dunkle und helle Flecken bis %1 px groß.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Everything %1, in all its shades.</source>
+        <translation>Alles %1, in allen Tönen.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Lumen finds lines, scratches, dust and colours by itself (e.g. &quot;the black lines&quot;, &quot;dust&quot;, &quot;the red&quot;). Objects such as &quot;the cup&quot; need a detection model, which comes in a later version.</source>
+        <translation>Lumen findet Linien, Kratzer, Staub und Farben selbst (z. B. „die schwarzen Linien“, „Staub“, „das Rote“). Gegenstände wie „die Tasse“ brauchen ein Erkennungsmodell, das in einer späteren Version kommt.</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>Select by description</source>
+        <translation>Nach Beschreibung auswählen</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <location line="+3"/>
+        <source>What to select</source>
+        <translation>Was ausgewählt werden soll</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>e.g. the black lines, dust, the red</source>
+        <translation>z. B. die schwarzen Linien, Staub, das Rote</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Dark or light</source>
+        <translation>Dunkel oder hell</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Find</source>
+        <translation>Finden</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Size</source>
+        <translation>Größe</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source> px</source>
+        <translation> px</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Up to</source>
+        <translation>Bis</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Contrast</source>
+        <translation>Kontrast</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>How much darker (or lighter) than what is around it something must be to be found. Lower finds fainter lines and more of the paper&apos;s grain.</source>
+        <translation>Um wie viel dunkler (oder heller) als seine Umgebung etwas sein muss, um gefunden zu werden. Niedriger findet blassere Linien und mehr von der Papierstruktur.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>How wide a range</source>
+        <translation>Wie weit der Bereich ist</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Higher takes in more shades near the colour.</source>
+        <translation>Höher nimmt mehr Töne nahe der Farbe mit.</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>New selection</source>
+        <translation>Neue Auswahl</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Add</source>
+        <translation>Hinzufügen</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Take away</source>
+        <translation>Abziehen</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Where both are</source>
+        <translation>Wo beide sind</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Select</source>
+        <translation>Auswählen</translation>
+    </message>
+    <message>
+        <location line="+37"/>
+        <source>Say what to select, and Lumen finds it in the picture.</source>
+        <translation>Sagen Sie, was ausgewählt werden soll, und Lumen findet es im Bild.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Dark lines</source>
+        <translation>Dunkle Linien</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Light lines</source>
+        <translation>Helle Linien</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Dark and light specks</source>
+        <translation>Dunkle und helle Flecken</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Dark specks</source>
+        <translation>Dunkle Flecken</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Light specks</source>
+        <translation>Helle Flecken</translation>
+    </message>
+    <message>
+        <location line="+42"/>
+        <source>Looking…</source>
+        <translation>Wird gesucht…</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>There is no picture to select in.</source>
+        <translation>Es gibt kein Bild, in dem ausgewählt werden kann.</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>Nothing like that was found. Try a lower contrast or a larger size.</source>
+        <translation>Nichts dergleichen gefunden. Versuchen Sie einen niedrigeren Kontrast oder eine größere Größe.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Found %1 % of the picture (tinted).</source>
+        <translation>%1 % des Bildes gefunden (eingefärbt).</translation>
+    </message>
+    <message>
+        <location line="+25"/>
+        <source>Select: %1</source>
+        <translation>Auswahl: %1</translation>
     </message>
 </context>
 <context>

@@ -1,6 +1,7 @@
 #include "filters/ClassicNodes.h"
 
 #include "core/Error.h"
+#include "core/Finders.h"
 #include "core/ImageOps.h"
 #include "filters/Ops.h"
 #include "filters/Registry.h"
@@ -396,6 +397,68 @@ void addMaskNodes(NodeRegistry &r)
     invert.inputs = {maskPort()};
     invert.outputs = {maskPort()};
     add(r, invert, [](const NodeArgs &a, EvalContext &) -> NodeResult { return mask(img::invertMask(a.mask(MaskPort))); });
+
+    // Finding an area by how it looks (plan M18 §18.1, core/Finders): a mask for "fill area with AI".
+    const QList<ChoiceOption> tones{{QStringLiteral("dark"), Text::tr("Dark on lighter ground")},
+                                    {QStringLiteral("light"), Text::tr("Light on darker ground")}};
+    NodeTypeInfo lines = describe(QStringLiteral("find-lines"), Text::tr("Find lines"), Mask,
+                                  Text::tr("Selects thin lines, scratches and cracks, leaving larger shapes of the same colour out."));
+    lines.inputs = {imagePort()};
+    lines.outputs = {maskPort()};
+    lines.params = {choice(QStringLiteral("tone"), Text::tr("Lines"), QStringLiteral("dark"), tones),
+                    pixels(QStringLiteral("width"), Text::tr("Widest line"), 6, 1, 64, 0,
+                           Text::tr("Lines up to this width are found; wider shapes are left out.")),
+                    number(QStringLiteral("contrast"), Text::tr("Contrast"), 40, 1, 255, {}, 0,
+                           Text::tr("How much darker (or lighter) than the ground a line must be.")),
+                    pixels(QStringLiteral("length"), Text::tr("Shortest line"), 0, 0, 2000, 0,
+                           Text::tr("Shorter pieces are left out; 0 is four times the widest line.")),
+                    pixels(QStringLiteral("grow"), Text::tr("Grow"), 1, 0, 32, 0, Text::tr("Widens what is found, to cover soft edges."))};
+    add(r, lines, [](const NodeArgs &a, EvalContext &) -> NodeResult {
+        img::StrokeOptions o;
+        o.dark = a.text(QStringLiteral("tone")) != QLatin1String("light");
+        o.maxWidth = std::max(1, a.integer(QStringLiteral("width")));
+        o.contrast = a.integer(QStringLiteral("contrast"));
+        o.minLength = a.integer(QStringLiteral("length"));
+        o.grow = a.integer(QStringLiteral("grow"));
+        return mask(img::findStrokes(a.image(ImagePort), o));
+    });
+
+    NodeTypeInfo specks = describe(QStringLiteral("find-specks"), Text::tr("Find specks"), Mask,
+                                   Text::tr("Selects small spots such as dust and specks."));
+    specks.inputs = {imagePort()};
+    specks.outputs = {maskPort()};
+    specks.params = {choice(QStringLiteral("tone"), Text::tr("Specks"), QStringLiteral("both"),
+                            {{QStringLiteral("both"), Text::tr("Dark and light")}, tones.at(0), tones.at(1)}),
+                     pixels(QStringLiteral("size"), Text::tr("Largest speck"), 6, 1, 64, 0, Text::tr("Larger spots are left out.")),
+                     number(QStringLiteral("contrast"), Text::tr("Contrast"), 40, 1, 255, {}, 0,
+                            Text::tr("How much darker (or lighter) than what is around it a speck must be.")),
+                     pixels(QStringLiteral("grow"), Text::tr("Grow"), 1, 0, 32, 0, Text::tr("Widens what is found, to cover soft edges."))};
+    add(r, specks, [](const NodeArgs &a, EvalContext &) -> NodeResult {
+        img::SpeckOptions o;
+        const QString tone = a.text(QStringLiteral("tone"));
+        o.tone = tone == QLatin1String("dark") ? img::SpeckOptions::Tone::Dark
+               : tone == QLatin1String("light") ? img::SpeckOptions::Tone::Light
+                                                : img::SpeckOptions::Tone::Both;
+        o.maxSize = std::max(1, a.integer(QStringLiteral("size")));
+        o.contrast = a.integer(QStringLiteral("contrast"));
+        o.grow = a.integer(QStringLiteral("grow"));
+        return mask(img::findSpecks(a.image(ImagePort), o));
+    });
+
+    NodeTypeInfo range = describe(QStringLiteral("color-range"), Text::tr("Colour range"), Mask,
+                                  Text::tr("Selects the pixels close to a colour, with a soft edge."));
+    range.inputs = {imagePort()};
+    range.outputs = {maskPort()};
+    ParamSpec color;
+    color.id = QStringLiteral("color");
+    color.label = Text::tr("Colour");
+    color.type = PortType::Color;
+    color.defaultValue = QColor(Qt::red);
+    range.params = {color, number(QStringLiteral("tolerance"), Text::tr("Tolerance"), 25, 1, 100, {}, 0,
+                                  Text::tr("How far from the colour a pixel may be and still count."))};
+    add(r, range, [](const NodeArgs &a, EvalContext &) -> NodeResult {
+        return mask(img::findColor(a.image(ImagePort), a.color(QStringLiteral("color")), a.integer(QStringLiteral("tolerance"))));
+    });
 }
 
 void addTransformNodes(NodeRegistry &r)

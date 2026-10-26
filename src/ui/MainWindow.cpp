@@ -439,6 +439,7 @@ void MainWindow::buildMenus()
     editorAction(select, QStringLiteral("select-all"));
     editorAction(select, QStringLiteral("deselect"));
     editorAction(select, QStringLiteral("invert-selection"));
+    editorAction(select, QStringLiteral("select-by-description"), QStringLiteral("target"));
     select->addSeparator();
     editorAction(select, QStringLiteral("delete-pixels"), QStringLiteral("trash"));
 

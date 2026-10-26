@@ -39,6 +39,8 @@
 #include "ui/dialogs/ModelHubDialog.h"
 #include "ui/dialogs/NewFromPromptDialog.h"
 #include "ui/dialogs/NewCanvasDialog.h"
+#include "ui/dialogs/SelectByDescriptionDialog.h"
+#include "doc/Document.h"
 #include "ui/dialogs/PoseEditDialog.h"
 #include "ui/dialogs/SettingsDialog.h"
 #include "ui/dialogs/SetupWizard.h"
@@ -73,6 +75,7 @@
 #include <QListWidget>
 #include <QLocale>
 #include <QPainter>
+#include <QSignalSpy>
 #include <QPushButton>
 #include <QRadioButton>
 #include <QRegularExpression>
@@ -963,6 +966,23 @@ void TestLayout::dialogs()
     {
         NewCanvasDialog d(&studio);
         m_auditor.auditDialog(&d, QStringLiteral("New blank canvas dialog"));
+    }
+    {
+        // Select → By description, with lines found (their settings shown) and with a colour.
+        QImage page(1200, 900, QImage::Format_ARGB32_Premultiplied);
+        page.fill(QColor(235, 235, 230));
+        {
+            QPainter p(&page);
+            p.fillRect(QRect(40, 100, 1100, 4), QColor(20, 20, 20));
+        }
+        doc::Document *doc = studio.openImageAsDocument(page, QStringLiteral("Scan"));
+        SelectByDescriptionDialog d(doc);
+        QSignalSpy found(&d, &SelectByDescriptionDialog::foundChanged);
+        d.setWords(QStringLiteral("the black lines"));
+        QTRY_VERIFY(found.size() >= 1 && !d.found().isNull());
+        m_auditor.auditDialog(&d, QStringLiteral("Select by description dialog (lines)"));
+        d.setWords(QStringLiteral("the red"));
+        m_auditor.auditDialog(&d, QStringLiteral("Select by description dialog (a colour)"));
     }
     {
         ImageSizeDialog image(ImageSizeDialog::Kind::Image, QSize(4032, 3024));

@@ -7,6 +7,7 @@
 #include "filters/Ops.h"
 #include "filters/Registry.h"
 
+#include <QPainter>
 #include <QFile>
 #include <QJsonDocument>
 #include <QPromise>
@@ -477,7 +478,8 @@ void TestFilters::registryDescribesEveryNode()
                               QStringLiteral("sharpen"), QStringLiteral("unsharp-mask"), QStringLiteral("noise"),
                               QStringLiteral("median"), QStringLiteral("blend"), QStringLiteral("mix"),
                               QStringLiteral("mask-from-image"), QStringLiteral("grow-shrink-feather"),
-                              QStringLiteral("invert-mask"), QStringLiteral("resize"), QStringLiteral("crop"),
+                              QStringLiteral("invert-mask"), QStringLiteral("find-lines"), QStringLiteral("find-specks"), QStringLiteral("color-range"),
+                              QStringLiteral("resize"), QStringLiteral("crop"),
                               QStringLiteral("flip"), QStringLiteral("rotate")};
     const QList<NodeTypePtr> types = NodeRegistry::global().types();
     QCOMPARE(types.size(), classic.size());
@@ -908,6 +910,35 @@ void TestFilters::maskNodes()
     const QImage inverted = applyToMask(QStringLiteral("invert-mask"), values);
     QCOMPARE(maskAt(inverted, 0, 0), 255);
     QCOMPARE(maskAt(inverted, 1, 0), 55);
+
+    // Finding masks by how things look (core/Finders): a page with a pen line, a large dark block and
+    // a speck of dust, and a red patch.
+    QImage page(160, 120, QImage::Format_ARGB32);
+    page.fill(QColor(235, 235, 230));
+    {
+        QPainter p(&page);
+        p.fillRect(QRect(10, 20, 140, 3), QColor(20, 20, 20));   // a line
+        p.fillRect(QRect(100, 60, 40, 40), QColor(20, 20, 20));  // a block
+        p.fillRect(QRect(40, 80, 3, 3), QColor(60, 60, 60));     // dust
+        p.fillRect(QRect(10, 60, 20, 20), QColor(210, 30, 30));  // red
+    }
+    auto find = [&page](const QString &id, const QVariantMap &params = {}) {
+        return evaluateNode(*type(id), {{QStringLiteral("image"), page}}, params).value(QStringLiteral("mask")).value<QImage>();
+    };
+    const QImage lines = find(QStringLiteral("find-lines"));
+    QCOMPARE(lines.format(), QImage::Format_Grayscale8);
+    QCOMPARE(maskAt(lines, 80, 21), 255);
+    QCOMPARE(maskAt(lines, 120, 80), 0);  // the block is not a line
+    QCOMPARE(maskAt(lines, 41, 81), 0);   // nor the dust
+    QCOMPARE(maskAt(find(QStringLiteral("find-lines"), {{QStringLiteral("tone"), QStringLiteral("light")}}), 80, 21), 0);
+    const QImage specks = find(QStringLiteral("find-specks"));
+    QCOMPARE(maskAt(specks, 41, 81), 255);
+    QCOMPARE(maskAt(specks, 80, 21), 0);
+    QCOMPARE(maskAt(find(QStringLiteral("find-specks"), {{QStringLiteral("size"), 2}}), 41, 81), 0); // larger than 2 px
+    const QImage red = find(QStringLiteral("color-range"), {{QStringLiteral("color"), QColor(210, 30, 30)}, {QStringLiteral("tolerance"), 20}});
+    QCOMPARE(maskAt(red, 20, 70), 255);
+    QCOMPARE(maskAt(red, 120, 80), 0);
+    QCOMPARE(maskAt(red, 80, 100), 0);
 }
 
 void TestFilters::resizeNode()

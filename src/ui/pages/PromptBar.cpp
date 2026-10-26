@@ -8,12 +8,16 @@
 #include "ui/pages/AiOptions.h"
 #include "ui/widgets/LoraPicker.h"
 #include "ui/widgets/RunSettingsEditor.h"
+#include "ui/dialogs/SelectByDescriptionDialog.h"
+#include "core/Finders.h"
+#include "core/ImageOps.h"
 #include "ui/pages/AiPanel.h"
 #include "ui/pages/VariantStrip.h"
 #include "ui/widgets/Controls.h"
 #include "ui/widgets/ProviderCombo.h"
 #include "ui/widgets/ReferenceStrip.h"
 
+#include <QtConcurrent/QtConcurrentRun>
 #include <QCheckBox>
 #include <QFormLayout>
 #include <QGuiApplication>
@@ -517,8 +521,13 @@ void PromptBar::generate()
 {
     if (!m_doc || m_strip->isRunning())
         return;
-    const PromptPlan p = plan();
     const QString words = m_prompt->text().trimmed();
+    // "select: …" finds the area instead of changing the picture, and needs no engine.
+    if (const QString what = selectionWords(words); !what.isEmpty()) {
+        selectByWords(what);
+        return;
+    }
+    const PromptPlan p = plan();
     if (p.action == PromptAction::NoEngine) {
         emit setUpAiRequested();
         return;
@@ -537,6 +546,35 @@ void PromptBar::generate()
         return;
     }
     submit(p, p.mode, words, p.strength ? m_options->regionStrength() : 1.0, true, words.simplified().left(40));
+}
+
+void PromptBar::selectByWords(const QString &description)
+{
+    const img::FinderRequest request = img::parseFinderRequest(description);
+    if (request.kind == img::FinderRequest::Kind::None) {
+        m_studio->notify(finderDescription(request), QStringLiteral("warning"));
+        return;
+    }
+    QPointer<doc::Document> doc(m_doc);
+    QPointer<PromptBar> self(this);
+    QtConcurrent::run([picture = m_doc->flattened(), request] { return img::runFinder(picture, request); })
+        .then(this, [self, doc, request, description](const QImage &mask) {
+            if (!self || !doc)
+                return;
+            if (mask.isNull() || img::maskIsEmpty(mask)) {
+                self->m_studio->notify(tr("Nothing like \"%1\" was found. Select → By description… has settings to find fainter "
+                                          "or larger ones.")
+                                           .arg(description),
+                                       QStringLiteral("warning"));
+                return;
+            }
+            doc->applySelection(mask, tr("Select: %1").arg(description.left(40)));
+            // The words asked to select; what comes next is the change.
+            if (doc == self->m_doc)
+                self->m_prompt->clear();
+            self->m_studio->notify(tr("Selected: %1 Now say what should change there, or press Remove object.").arg(finderDescription(request)),
+                                   QStringLiteral("success"));
+        });
 }
 
 void PromptBar::remove()

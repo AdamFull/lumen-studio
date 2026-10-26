@@ -1037,7 +1037,10 @@ void TestFiles::recentFiles()
     QVERIFY(photo(QSize(40, 40)).save(three));
     Settings::instance().addRecentFile(three);
     QTRY_COMPARE(start->recentFileTiles().size(), 2);
-    QVERIFY(QFile::remove(three));
+    // The start screen may still be reading it for its thumbnail (Windows keeps it locked meanwhile).
+    // (QTRY_VERIFY checks once more after it succeeds: `removed` keeps the first success.)
+    bool removed = false;
+    QTRY_VERIFY((removed = removed || QFile::remove(three)));
     start->recentFileTiles().first()->click();
     QVERIFY(!Settings::instance().recentFiles().contains(QDir::cleanPath(three)));
     QTRY_COMPARE(start->recentFileTiles().size(), 1);

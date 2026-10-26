@@ -8,6 +8,7 @@ add_library(lumen_core STATIC
     Job.h Job.cpp
     JobQueue.h JobQueue.cpp
     ImageOps.h ImageOps.cpp
+    Finders.h Finders.cpp
     MaskOps.h MaskOps.cpp
     Psd.h Psd.cpp
     JsonSchema.h JsonSchema.cpp

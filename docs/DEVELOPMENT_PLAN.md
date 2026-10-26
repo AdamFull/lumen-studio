@@ -3927,8 +3927,29 @@ Decisions (October 2026, with the user):
     and a chosen one in the request; a value a model does not take is not applied).
   * Not yet: ComfyUI templates take only the settings they bind; image guidance is offered only
     where a preset sets it (none does yet).
-- [ ] Classic finders (lines, specks, colour range) in `core/` with golden-image tests; *Select →
+- [x] Classic finders (lines, specks, colour range) in `core/` with golden-image tests; *Select →
   By description…* with the rule-based parser; *Find lines* node.
+  * `core/Finders`: `findStrokes` is a grayscale closing (an opening for light strokes) over a window
+    just wider than the widest stroke, with O(n) running min/max filters: where the picture is
+    darker than that estimate of the ground by the contrast, and the connected piece is long, it is
+    a stroke, so a black coat or a shadow stays out. `findSpecks` keeps the short pieces; with dark
+    and light both asked for, paper caught between dark marks is not a light speck. `findColorName`
+    goes by hue, saturation and lightness ranges, so dark red is red; `findColor` by CIE Lab
+    distance with a soft edge. `parseFinderRequest` reads "the black lines", "thin white
+    scratches", "dust", "the red" (and German "die schwarzen Linien", "Staub", "die grüne Fläche").
+  * *Select → By description…* (`SelectByDescriptionDialog`): what was understood, the finder's
+    settings, a preview with the found area tinted (worked out on a worker thread), New / Add / Take
+    away / Where both are, one undo step. The prompt bar's words starting with *select* ("select: the
+    black lines", "auswählen: …") find and select without an engine, then clear the bar.
+  * Filter nodes *Find lines*, *Find specks* and *Colour range* (mask outputs; their pixel settings
+    scale with the preview).
+  * Tests: `tst_core finders` (lines but not the dark block or the dust, dust but not the lines and
+    not the paper beside them, dark red is red, a wide band is not a line, 12 MP within seconds),
+    `finderWords`; `tst_filters maskNodes` (the three nodes); `tst_canvas selectByDescription` (the
+    dialog, one undo step, Add, "the cup", the prompt bar's "select:" without a request to the
+    engine); `tst_layout` audits the dialog with lines and with a colour at 100 % and 150 %.
+  * Not yet: objects ("the cup") need the model finder of the next step; a colour picked on the
+    canvas (the *Colour range* node takes one, the dialog only names).
 - [ ] ONNX Runtime as a managed component (pinned release, CUDA / DirectML / CPU builds, C API);
   the detector and segmenter presets; `Utility::FindArea` and its local provider; *Smart
   selection* (click and box); the *Find area* node. Tests against small ONNX test models, no GPU.

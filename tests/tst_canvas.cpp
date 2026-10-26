@@ -32,6 +32,8 @@
 #include "ui/pages/VariantStrip.h"
 #include "ui/widgets/JobCard.h"
 #include "ui/widgets/LoraPicker.h"
+#include "ui/dialogs/SelectByDescriptionDialog.h"
+#include "core/Finders.h"
 #include "ui/widgets/RunSettingsEditor.h"
 #include "ui/widgets/ProviderCombo.h"
 #include "ui/widgets/ReferenceStrip.h"
@@ -76,6 +78,7 @@
 #include "ui/ext/Extension.h"
 
 #include <QClipboard>
+#include <QRadioButton>
 #include <QCryptographicHash>
 #include <QDragEnterEvent>
 #include <QMenuBar>
@@ -207,6 +210,7 @@ private slots:
     void loraPickerElsewhere();
     void loraPickerFolder();
     void runSettingsPerModel();
+    void selectByDescription();
     void promptBarWithoutEdits();
     void aiMenuAndPanel();
     void promptBarKeepsTyping();
@@ -5258,6 +5262,76 @@ void TestCanvas::runSettingsPerModel()
     QCOMPARE(dr.describe().value(QStringLiteral("guidance")).toDouble(), 2.5);
 }
 
+// Select → By description and "select: …" in the prompt bar (plan M18 §18.1): the black lines are
+// found but not a large dark block, Select is one undo step and can add to a selection, words only a
+// model could find say so, and the prompt bar selects without asking the engine.
+void TestCanvas::selectByDescription()
+{
+    PromptBarFixture f;
+    QVERIFY(f.setUp(true));
+    QImage page(400, 300, QImage::Format_ARGB32_Premultiplied);
+    page.fill(QColor(235, 235, 230));
+    {
+        QPainter p(&page);
+        p.fillRect(QRect(20, 40, 360, 3), QColor(20, 20, 20));    // a pen line
+        p.fillRect(QRect(240, 150, 120, 120), QColor(20, 20, 20)); // a dark block
+    }
+    doc::Document *doc = f.studio.openImageAsDocument(page, QStringLiteral("Scan"));
+    QVERIFY(doc);
+    QVERIFY(f.window->findChild<QAction *>(QStringLiteral("editor-select-by-description")));
+
+    SelectByDescriptionDialog dlg(doc, f.window.get());
+    QSignalSpy found(&dlg, &SelectByDescriptionDialog::foundChanged);
+    dlg.setWords(QStringLiteral("the black lines"));
+    QTRY_VERIFY(found.size() >= 1 && !dlg.found().isNull());
+    QCOMPARE(dlg.request().kind, img::FinderRequest::Kind::Strokes);
+    QCOMPARE(dlg.findChild<QLabel *>(QStringLiteral("selectUnderstood"))->text(),
+             QStringLiteral("Lines darker than what is around them, up to 6 px wide."));
+    QVERIFY(dlg.findChild<QLabel *>(QStringLiteral("selectResult"))->text().startsWith(QStringLiteral("Found ")));
+    const int undoBefore = doc->undoStack()->count();
+    QVERIFY(dlg.apply());
+    QVERIFY(doc->hasSelection());
+    QCOMPARE(qGray(doc->selection().pixel(200, 41)), 255);
+    QCOMPARE(qGray(doc->selection().pixel(300, 210)), 0);
+    QCOMPARE(doc->undoStack()->count(), undoBefore + 1);
+    doc->undoStack()->undo();
+    QVERIFY(!doc->hasSelection());
+
+    // Add: what is found joins a rectangle that was selected.
+    QImage rect = img::createMask(doc->size());
+    {
+        QPainter p(&rect);
+        p.fillRect(QRect(10, 200, 40, 40), Qt::white);
+    }
+    doc->applySelection(rect, QStringLiteral("Rectangle"));
+    for (QRadioButton *b : dlg.findChildren<QRadioButton *>()) {
+        if (b->text() == QLatin1String("Add"))
+            b->setChecked(true);
+    }
+    QVERIFY(dlg.apply());
+    QCOMPARE(qGray(doc->selection().pixel(200, 41)), 255);
+    QCOMPARE(qGray(doc->selection().pixel(30, 220)), 255);
+    doc->clearSelection();
+
+    // Words only a model could find: what can be found instead, and nothing to select.
+    dlg.setWords(QStringLiteral("the cup"));
+    QTRY_COMPARE(dlg.request().kind, img::FinderRequest::Kind::None);
+    QVERIFY(dlg.findChild<QLabel *>(QStringLiteral("selectUnderstood"))->text().contains(QStringLiteral("detection model")));
+    QVERIFY(!dlg.apply());
+
+    // The prompt bar: "select: …" selects, clears the words and sends nothing to the engine.
+    QCOMPARE(selectionWords(QStringLiteral("Select: the black lines")), QStringLiteral("the black lines"));
+    QCOMPARE(selectionWords(QStringLiteral("auswählen: Staub")), QStringLiteral("Staub"));
+    QVERIFY(selectionWords(QStringLiteral("selected areas look nice")).isEmpty());
+    f.words()->setPlainText(QStringLiteral("select: the black lines"));
+    QTest::keyClick(f.words(), Qt::Key_Return);
+    QTRY_VERIFY(doc->hasSelection());
+    QCOMPARE(qGray(doc->selection().pixel(200, 41)), 255);
+    QCOMPARE(qGray(doc->selection().pixel(300, 210)), 0);
+    QTRY_VERIFY(f.words()->toPlainText().isEmpty());
+    QVERIFY(f.sd.generations.isEmpty());
+}
+
 // An engine without instruction edits (sd.cpp with a model it has no preset for): without a
 // selection the bar says it cannot change the whole image from words and offers a variation (img2img
 // at the variation strength) or selecting an area; with a selection it inpaints the area at the area
@@ -5719,7 +5793,7 @@ void TestCanvas::editorMenus()
     QVERIFY(edit && select && view);
     QCOMPARE(texts(edit).mid(0, 2), (QStringList{QStringLiteral("Undo"), QStringLiteral("Redo")}));
     QCOMPARE(texts(select), (QStringList{QStringLiteral("Select all"), QStringLiteral("Deselect"), QStringLiteral("Invert selection"),
-                                         QStringLiteral("Delete selected pixels")}));
+                                         QStringLiteral("By description…"), QStringLiteral("Delete selected pixels")}));
     QVERIFY(texts(view).contains(QStringLiteral("Zoom in")) && texts(view).contains(QStringLiteral("Fit to window")));
     // The editor's own action: its key shows in the menu.
     QAction *undo = window.findChild<QAction *>(QStringLiteral("editor-undo"));
