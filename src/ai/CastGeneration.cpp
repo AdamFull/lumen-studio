@@ -232,7 +232,7 @@ Job *startCastGeneration(GenerationService *service, const CastRequest &requestI
         }
         ImageProvider *provider = self->registry()->imageProvider(request.providerId);
         if (!provider) {
-            job->fail(Text::tr("No image provider is configured. Add one in Settings → Providers."));
+            job->fail(Text::tr("There is no image engine. Set one up with Help → Set up AI…"));
             return;
         }
         if (request.cast.isEmpty()) {

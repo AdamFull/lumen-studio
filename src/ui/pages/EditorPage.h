@@ -86,6 +86,8 @@ private:
     void rebuildTabs();
     void updateStatus();
     void updateStack();
+    // The right panel's tab names, or only their icons beside the AI tab when the names do not fit.
+    void updateSideTabs();
     void deleteSelectionPixels();
 
     Studio *m_studio;

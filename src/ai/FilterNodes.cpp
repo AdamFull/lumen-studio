@@ -45,7 +45,7 @@ QList<QPointer<GenerationService>> &services()
 
 QString noEngine()
 {
-    return Text::tr("There is no image engine to run this AI step. Add one in Settings → Providers.");
+    return Text::tr("There is no image engine to run this AI step. Set one up with Help → Set up AI…");
 }
 
 // The image engine a step runs on, or why there is none.
@@ -83,7 +83,10 @@ Engine engineFor(Step step, const QString &chosen)
                                             "use”.")
                                        .arg(provider->displayName())};
         }
-        if (ImageProvider *p = service->providerForUtility(utility))
+        // The engine for changes of Settings → AI when it can, as for the editor's AI menu; else the
+        // image engine or another one that can.
+        const ImageProvider *forChanges = registry->imageProviderFor(true);
+        if (ImageProvider *p = service->providerForUtility(utility, forChanges ? forChanges->instanceId() : QString()))
             return {p, {}};
         if (registry->imageProviders().isEmpty())
             return {nullptr, noEngine()};
@@ -104,14 +107,23 @@ Engine engineFor(Step step, const QString &chosen)
         ImageRequest probe;
         probe.mode = step == Step::Edit ? GenMode::Edit : GenMode::Inpaint;
         const ImageCapabilities caps = provider->capabilitiesFor(probe);
+        // Where to choose another: the step's own engine in the filter editor, or Settings → AI's
+        // engine for changes (the Filters panel has no engine to choose).
         if (step == Step::Edit && !caps.edit)
-            return {nullptr, Text::tr("“%1” cannot change a picture from a description. Choose an engine with an edit model for "
-                                      "this step (FLUX.2 klein, FLUX.1 Kontext or Qwen-Image-Edit on this computer, or OpenAI, "
-                                      "Gemini or fal.ai online), or use “Fill area with AI”.")
-                                 .arg(provider->displayName())};
+            return {nullptr, chosen.isEmpty()
+                                 ? Text::tr("“%1” cannot change a picture from a description. In Settings → AI, choose an engine for "
+                                            "changes with an edit model: FLUX.2 klein, Kontext or Qwen-Image-Edit, or OpenAI, Gemini "
+                                            "or fal.ai.")
+                                       .arg(provider->displayName())
+                                 : Text::tr("“%1” cannot change a picture from a description. Choose an engine with an edit model "
+                                            "for this step, or “The one in use”; or use “Fill area with AI”.")
+                                       .arg(provider->displayName())};
         if (step == Step::Inpaint && !caps.inpaint && !caps.edit && !caps.imageToImage)
-            return {nullptr, Text::tr("“%1” cannot change part of a picture. Choose another engine for this step.")
-                                 .arg(provider->displayName())};
+            return {nullptr, chosen.isEmpty()
+                                 ? Text::tr("“%1” cannot change part of a picture. Choose another engine for changes in Settings → AI.")
+                                       .arg(provider->displayName())
+                                 : Text::tr("“%1” cannot change part of a picture. Choose another engine for this step.")
+                                       .arg(provider->displayName())};
         return {provider, {}};
     }
     }
@@ -447,7 +459,8 @@ filters::ParamSpec engineParam()
 {
     return textParam(filter_nodes::EngineParam, Text::tr("Image engine"), QString(), filter_nodes::EngineEditor,
                      Text::tr("Which of your image engines runs this step. “The one in use” is the one Settings → AI uses for "
-                              "changes of a picture."));
+                              "changes of a picture (an upscale or a background removal goes to another engine that can do it "
+                              "when that one cannot)."));
 }
 
 filters::ParamSpec numberParam(const QString &id, const QString &label, double defaultValue, double minimum, double maximum,

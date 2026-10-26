@@ -2,24 +2,29 @@
 
 AI-assisted image generation and editing studio for the desktop, built with C++20 and Qt 6.
 
-It covers:
-* text-to-image and multi-reference character generation;
-* editable OpenPose poses, with a Live2D preset category;
+It opens as an image editor and covers:
+* a layered editor (selection, brush, fill, crop and free transform tools);
 * a prompt bar under the canvas: select an area and describe the change (or nothing selected for the
   whole image, or a blank canvas for a new image), then pick one of the results to keep as a layer;
-* LLM-driven shot planning, and an assistant that drives the studio through tool calls;
-* a layered editor (selection, brush, fill, crop and free transform tools);
+  *New from prompt* makes a new image;
 * filters for the picture or a selection, built in or made in a node editor, with AI steps
   (colorize, clean up or remove the background, upscale);
 * a setup wizard for the image engine: on this computer (it downloads only the files it does not
   find), an online service, or a server that is already running;
-* an asset library with batch background removal and upscaling;
-* character part slicing for Live2D.
+* the project's images (*File → Browse project images…*), with batch background removal and
+  upscaling.
+
+Plugins, off until switched on in *Tools → Plugins…*, add:
+* *Characters*: text-to-image and multi-reference character generation, LLM-driven shot planning,
+  and an assistant that drives the studio through tool calls;
+* *Poses*: editable OpenPose poses, with a Live2D preset category;
+* *Live2D parts*: character part slicing for Live2D.
 
 The interface is available in English and German, with dark, light and high-contrast themes.
 
-Local back-ends (Stable Diffusion WebUI / Forge, ComfyUI, llama.cpp, Ollama, LM Studio) and cloud
-APIs (OpenAI, Gemini, Anthropic, Stability AI, fal.ai, OpenRouter) both work.
+Local back-ends (stable-diffusion.cpp, which the setup wizard installs, Stable Diffusion WebUI /
+Forge, ComfyUI; for the plugins' language models llama.cpp, Ollama, LM Studio) and cloud APIs
+(OpenAI, Gemini, Anthropic, Stability AI, fal.ai, OpenRouter) both work.
 
 The [user guide](docs/USER_GUIDE.md) explains every window, tool and shortcut. See
 [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md) for the architecture, the technology stack and the roadmap.
@@ -112,10 +117,12 @@ LumenStudio --cubism path/to/model.model3.json
 | `src/net` | HTTP client (retry, streaming, multipart), SSE parser |
 | `src/pose` | OpenPose skeleton, renderer, FK/IK editing, 3D generation rig, presets |
 | `src/doc` | projects (SQLite), assets, layered documents, undo |
-| `src/ai` | provider framework, provider adapters, director pipeline, part slicing |
+| `src/ai` | provider framework, provider adapters, the generation service, the filters' AI nodes, director pipeline, part slicing |
 | `src/live2d` | Cubism Core runtime binding, model/motion loading, motion/expression/pose playback, physics, software renderer |
 | `src/filters` | node filter graphs: graph model, `.lumenfilter` files, evaluation with a result cache, classic image nodes |
-| `src/ui` | main window, canvas, tools, panels, dialogs |
+| `src/runtime` | local servers: hardware detection, runtime installs and updates, the models folder and model presets, downloads, the server supervisor, the setup wizard's plan, LoRA training |
+| `src/ui` | the core application: main window, canvas, tools, panels, dialogs, the extension interface |
+| `src/plugins` | the Characters, Poses and Live2D parts plugins; the core (`src/ui` and below) never includes them |
 | `src/app` | executable entry point |
 | `tests` | unit and contract tests (mock HTTP server) |
 | `resources/workflows` | bundled ComfyUI workflow templates (copied to `<bin>/data`) |

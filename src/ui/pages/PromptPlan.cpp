@@ -1,8 +1,9 @@
 #include "ui/pages/PromptPlan.h"
 
-#include "ai/GenerationService.h"
+#include "core/ImageOps.h"
 #include "doc/Document.h"
 
+#include <algorithm>
 #include <cmath>
 
 namespace lumen::ui {
@@ -105,10 +106,11 @@ QSize workingSize(const QSize &picture, const ai::ImageCapabilities &caps)
 {
     if (picture.isEmpty())
         return picture;
-    // The size a whole picture is changed at, shared with the AI panel's actions and the filters'
-    // AI steps; a new image needs one of the fixed sizes, while a change leaves that to the provider.
+    // The canvas's shape at the engine's pixels (as ai::wholeImageWorkSize, the size a whole picture
+    // is changed at), in multiples of 8 at least: what every model makes, also for engines that
+    // accept any size (some ComfyUI workflows). A new image needs one of the fixed sizes.
     if (caps.fixedSizes.isEmpty())
-        return ai::wholeImageWorkSize(picture, caps);
+        return img::fitToPixelBudget(picture, std::min(caps.nativePixels, caps.maxPixels), std::max(8, caps.sizeMultiple));
     const double aspect = double(picture.width()) / picture.height();
     QSize best = caps.fixedSizes.first();
     for (const QSize &s : caps.fixedSizes) {

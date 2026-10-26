@@ -382,6 +382,9 @@ void showResults(MainWindow &window, doc::Document *doc)
         QImage im = sampleImage().scaled(doc->size());
         if (i % 2)
             im.invertPixels();
+        // A selection's results are transparent around it (they show over the picture).
+        if (doc->hasSelection())
+            im = img::applyMaskToAlpha(img::normalized(im), doc->selection());
         results << im;
     }
     window.editor()->variantStrip()->addVariants(doc, results, QStringLiteral("a long description of what should change in the picture"));
@@ -402,7 +405,7 @@ void showFilters(MainWindow &window)
 {
     window.editor()->showFiltersPanel();
     QVERIFY(window.editor()->filtersPanel()->selectFilter(QStringLiteral(":/filters/builtin/old-photo.lumenfilter")));
-    QTRY_VERIFY(!window.editor()->canvas()->preview(CanvasView::Preview::Filter).isNull());
+    QTRY_VERIFY_WITH_TIMEOUT(!window.editor()->canvas()->preview(CanvasView::Preview::Filter).isNull(), 15000);
 }
 
 // Report and screenshot names of the plugin windows.
@@ -559,6 +562,12 @@ void TestLayout::mainWindow()
             m_auditor.shoot(popup, QStringLiteral("Prompt bar options %1").arg(res));
             popup->hide();
             window.editor()->showAiPanel();
+            // Not report-only: four tabs in the narrow panel show whole names or only icons.
+            QTRY_VERIFY2(sidePanel(window)->tabBar()->sizeHint().width() <= sidePanel(window)->width(),
+                         qPrintable(QStringLiteral("the side tabs need %1 px at %2, the panel has %3")
+                                        .arg(sidePanel(window)->tabBar()->sizeHint().width())
+                                        .arg(res)
+                                        .arg(sidePanel(window)->width())));
             auditWindow(QStringLiteral("Editor with the AI panel"));
             window.editor()->hideAiPanel();
             window.editor()->variantStrip()->discard();
@@ -690,6 +699,8 @@ void TestLayout::mainWindowFitsSmallScreen()
 
 void TestLayout::settingsDialog()
 {
+    // With the plugins on, as the comment below says: their tabs (Roles, Cloud training) too.
+    AllPlugins plugins;
     Studio studio;
     SettingsDialog dialog(&studio);
     m_auditor.auditDialog(&dialog, QStringLiteral("Settings"));
@@ -786,6 +797,19 @@ void TestLayout::dialogs()
             if (page == SetupWizard::Page::Local)
                 QTRY_VERIFY_WITH_TIMEOUT(planned.size() == 1, 30000);
             m_auditor.auditDialog(&d, QStringLiteral("Setup wizard - %1").arg(name));
+        }
+        {
+            // With a plugin that needs a language model: the Local page's check box for one and the
+            // Characters plugin's model set.
+            AllPlugins plugins;
+            SetupWizard withPlugins(&studio);
+            withPlugins.hardwareOverride = hw;
+            withPlugins.searchFolders = QStringList();
+            QSignalSpy plannedWith(&withPlugins, &SetupWizard::localPlanReady);
+            withPlugins.show(); // it looks at the computer once it shows
+            withPlugins.showPage(SetupWizard::Page::Local);
+            QTRY_VERIFY_WITH_TIMEOUT(plannedWith.size() == 1, 30000);
+            m_auditor.auditDialog(&withPlugins, QStringLiteral("Setup wizard - run on this computer, with plugins"));
         }
         // The result page while the test image is made, and the local setup while it downloads,
         // against a server that takes every request and never answers.

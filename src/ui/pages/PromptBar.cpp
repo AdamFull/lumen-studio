@@ -151,7 +151,7 @@ void PromptBar::buildOptions()
     m_negative->setPlaceholderText(tr("Things that should not be in the result"));
     m_form->addRow(tr("Leave out"), m_negative);
     m_references = new QPushButton(m_popup);
-    m_references->setToolTip(tr("Pictures the engine follows for a character, a style or an object (in the AI panel)"));
+    m_references->setToolTip(tr("Pictures the engine follows for a character, a style or an object (in the AI tab)"));
     m_form->addRow(tr("References"), m_references);
     m_pose = new QCheckBox(tr("Follow the document's control pose"), m_popup);
     m_form->addRow(m_pose);
@@ -185,7 +185,7 @@ void PromptBar::buildOptions()
     seedRow->addWidget(m_randomSeed);
     m_form->addRow(tr("Seed"), m_seedRow);
     m_allOptions = new QPushButton(Icons::get(QStringLiteral("adjust")), tr("All AI options…"), m_popup);
-    m_allOptions->setToolTip(tr("The AI panel: every option, and the actions that are not a description (upscale, expand, "
+    m_allOptions->setToolTip(tr("The AI tab: every option, and the actions that are not a description (upscale, expand, "
                                 "remove background…)"));
     m_form->addRow(m_allOptions);
 
@@ -204,9 +204,11 @@ void PromptBar::buildOptions()
     connect(m_variants, &QSpinBox::valueChanged, m_options, &AiOptions::setVariants);
     connect(m_negative, &QPlainTextEdit::textChanged, this, [this] { m_options->setNegative(m_negative->text()); });
     connect(m_pose, &QCheckBox::toggled, m_options, &AiOptions::setUsePose);
-    // Only a choice of the user's picks the engine (ProviderCombo::picked); choosing the one
-    // Settings → AI names leaves it to follow that one.
-    connect(m_engine, &ProviderCombo::picked, this, [this] { m_options->setProviderId(m_engine->pinnedProviderId()); });
+    // Only a choice of the user's picks the engine (ProviderCombo::picked), for the use the list
+    // shows; choosing the one Settings → AI names leaves it to follow that one.
+    connect(m_engine, &ProviderCombo::picked, this, [this] {
+        m_options->setProviderId(m_engine->use() == ProviderCombo::Use::Changes, m_engine->pinnedProviderId());
+    });
     connect(m_advanced, &QToolButton::toggled, this, [this](bool on) {
         m_advanced->setArrowType(on ? Qt::DownArrow : Qt::RightArrow);
         updateOptions();
@@ -263,6 +265,12 @@ bool PromptBar::changesPicture() const
 ai::ImageProvider *PromptBar::engine() const
 {
     return m_options->provider(m_studio->providers(), changesPicture());
+}
+
+bool PromptBar::engineChosenInEditor() const
+{
+    const ai::ImageProvider *p = engine();
+    return p && p->instanceId() == m_options->providerId(changesPicture());
 }
 
 PromptPlan PromptBar::plan() const
@@ -419,8 +427,12 @@ void PromptBar::updateOptions()
     const ai::ImageCapabilities caps = provider ? provider->capabilities() : ai::ImageCapabilities();
     const bool variation = p.action == PromptAction::CannotEditImage;
     // The engine list shows the engine this run goes to: the one for new images on a blank canvas,
-    // else the one for changes, unless one is chosen.
-    m_engine->setUse(changesPicture() ? ProviderCombo::Use::Changes : ProviderCombo::Use::NewImages);
+    // else the one for changes, unless one is chosen for that use; named as in Settings → AI.
+    const bool changes = changesPicture();
+    m_engine->setUse(changes ? ProviderCombo::Use::Changes : ProviderCombo::Use::NewImages);
+    if (auto *label = qobject_cast<QLabel *>(m_form->labelForField(m_engine)))
+        label->setText(changes ? tr("Engine for changes") : tr("Image engine"));
+    m_engine->setAccessibleName(changes ? tr("Engine for changes") : tr("Image engine"));
     {
         const QSignalBlocker b1(m_strength), b2(m_steps), b3(m_seed), b4(m_randomSeed), b5(m_variants), b6(m_pose), b7(m_engine);
         m_strength->setValue(std::round((variation ? m_options->variationStrength() : m_options->regionStrength()) * 100));
@@ -433,13 +445,13 @@ void PromptBar::updateOptions()
             m_seed->setValue(int(std::min<qint64>(m_options->seed(), m_seed->maximum())));
         m_variants->setValue(m_options->variants());
         m_pose->setChecked(m_options->usePose());
-        m_engine->setPinnedProviderId(m_options->providerId());
+        m_engine->setPinnedProviderId(m_options->providerId(changes));
     }
     // Not blocked: the field fits its height to the text (setting the same words back changes nothing).
     if (m_negative->text() != m_options->negative())
         m_negative->setPlainText(m_options->negative());
     const int refs = m_ai->references()->count();
-    m_references->setText(refs == 0 ? tr("Add in the AI panel…") : tr("%n picture(s) in the AI panel…", nullptr, refs));
+    m_references->setText(refs == 0 ? tr("Add in the AI tab…") : tr("%n picture(s) in the AI tab…", nullptr, refs));
     // Only what the request uses and the engine takes.
     m_form->setRowVisible(m_strength, p.strength);
     const bool advanced = m_advanced->isChecked();

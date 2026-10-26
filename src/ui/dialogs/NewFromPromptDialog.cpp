@@ -10,6 +10,7 @@
 #include "ui/Icons.h"
 #include "ui/Studio.h"
 #include "ui/Theme.h"
+#include "ui/pages/AiOptions.h"
 #include "ui/pages/AiPanel.h"
 #include "ui/widgets/Controls.h"
 #include "ui/widgets/FlowLayout.h"
@@ -221,6 +222,23 @@ NewFromPromptDialog::NewFromPromptDialog(Studio *studio, QWidget *parent)
     updateUi();
     updateSize();
     m_prompt->setFocus();
+}
+
+void NewFromPromptDialog::shareEngineChoice(AiOptions *options)
+{
+    auto show = [this, options] {
+        const QSignalBlocker block(m_engine);
+        m_engine->setPinnedProviderId(options->providerId(false));
+    };
+    show();
+    updateUi();
+    updateSize();
+    connect(options, &AiOptions::changed, this, [this, show] {
+        show();
+        updateUi();
+        updateSize();
+    });
+    connect(m_engine, &ProviderCombo::picked, options, [this, options] { options->setProviderId(false, m_engine->pinnedProviderId()); });
 }
 
 void NewFromPromptDialog::setPrompt(const QString &prompt, const QString &negative)

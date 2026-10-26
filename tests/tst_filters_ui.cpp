@@ -25,6 +25,7 @@
 #include "ui/pages/EditorPage.h"
 #include "ui/widgets/Controls.h"
 
+#include <QAction>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDir>
@@ -36,6 +37,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QMenu>
 #include <QMutex>
 #include <QPainter>
 #include <QPlainTextEdit>
@@ -1106,15 +1108,17 @@ void TestFiltersUi::panelListsAndSettings()
     QCOMPARE(panel.runner()->graph()->param(QStringLiteral("n2"), QStringLiteral("type")).toString(), QStringLiteral("color"));
     QCOMPARE(m_catalog->load(builtIn(QStringLiteral("film-grain")))->param(QStringLiteral("n2"), QStringLiteral("type")).toString(),
              QStringLiteral("mono"));
-    // Built-in filters: edited as a copy, never deleted.
-    bool deleteEnabled = true;
+    // Built-in filters: edited as a copy, never deleted (Delete is under ⋯, with Duplicate).
     for (QPushButton *b : panel.findChildren<QPushButton *>()) {
-        if (b->text() == QStringLiteral("Delete"))
-            deleteEnabled = b->isEnabled();
         if (b->text().startsWith(QStringLiteral("Edit")))
             QCOMPARE(b->text(), QStringLiteral("Edit a copy…"));
     }
-    QVERIFY(!deleteEnabled);
+    auto *more = panel.findChild<QToolButton *>(QStringLiteral("FilterMore"));
+    QVERIFY(more && more->menu());
+    auto *remove = panel.findChild<QAction *>(QStringLiteral("FilterDelete"));
+    QVERIFY(remove && more->menu()->actions().contains(remove));
+    QVERIFY(!remove->isEnabled());
+    QVERIFY(panel.findChild<QAction *>(QStringLiteral("FilterDuplicate"))->isEnabled());
 }
 
 void TestFiltersUi::panelPreviewAndApply()
@@ -1500,6 +1504,26 @@ void TestFiltersUi::aiNodesSayWhatTheyNeed()
     studio.providers()->setDefaultImageProvider(klein->instanceId());
     QVERIFY(!w->problems().join(QLatin1Char('\n')).contains(QStringLiteral("cannot change")));
     QVERIFY(!w->scene()->nodeItem(node)->toolTip().contains(QStringLiteral("cannot change")));
+
+    // Upscale and Remove background on "The one in use" go to the engine for changes too, as the AI
+    // menu's do; when it cannot, to the image engine or another engine that can.
+    MockImageServer forNew, forChanges;
+    ai::SdCppProvider *newImages = engines.sdcpp(forNew, true, true);
+    ai::SdCppProvider *changes = engines.sdcpp(forChanges, true, true);
+    QVERIFY(newImages && changes);
+    studio.providers()->setDefaultImageProvider(newImages->instanceId());
+    studio.providers()->setEditImageProvider(changes->instanceId());
+    error = waitFor(evaluator.evaluate(chain(fn::Upscale, QStringLiteral("Larger")), {twoColours(), {}}));
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    QCOMPARE(forChanges.upscales, 1);
+    QCOMPARE(forNew.upscales, 0);
+    studio.providers()->setEditImageProvider(sdxl->instanceId()); // no upscaler: the image engine's
+    error = waitFor(evaluator.evaluate(chain(fn::Upscale, QStringLiteral("Larger again")), {twoColours(), {}}));
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    QCOMPARE(forNew.upscales, 1);
+    QCOMPARE(forChanges.upscales, 1);
+    studio.providers()->setDefaultImageProvider(klein->instanceId());
+    studio.providers()->setEditImageProvider(QString());
 }
 
 // "Edit with AI" sends an instruction edit to the engine as a Queue job, reports its progress, and

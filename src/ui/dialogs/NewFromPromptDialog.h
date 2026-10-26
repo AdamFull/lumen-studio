@@ -24,6 +24,7 @@ struct AssetInfo;
 
 namespace lumen::ui {
 
+class AiOptions;
 class AutoTextEdit;
 class ProviderCombo;
 class Studio;
@@ -38,6 +39,9 @@ public:
     explicit NewFromPromptDialog(Studio *studio, QWidget *parent = nullptr);
 
     void setPrompt(const QString &prompt, const QString &negative = QString());
+    // The editor's choice of engine for new images (the prompt bar's ⋯ menu on a blank canvas): the
+    // dialog starts with it, and a choice here is that choice too.
+    void shareEngineChoice(AiOptions *options);
     // The prompt, negative prompt, size and seed an image was made with ("Re-run").
     void fillFrom(const doc::AssetInfo &asset);
     // The new document's control pose ("New image with this pose"); the engine follows it when it

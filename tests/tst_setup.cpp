@@ -885,16 +885,17 @@ void TestSetup::onlineService()
     QCOMPARE(studio.providers()->providers().size(), 2);
     studio.providers()->setEnabled(id, true);
 
-    // Picked by hand in the panel, a provider stays when the engine changes (the editor's options
-    // keep it); picking the engine of Settings → AI again follows it. The panel changes images, so
+    // Picked by hand in the panel, a provider stays (the editor's options keep it, as the choice for
+    // changes); picking the engine of Settings → AI again follows it. The panel changes images, so
     // it follows the engine for changes.
     panelEngine->setProviderId(other->instanceId());
-    QCOMPARE(options.providerId(), other->instanceId());
+    QCOMPARE(options.providerId(true), other->instanceId());
+    QVERIFY(options.providerId(false).isEmpty());
     studio.providers()->setDefaultImageProvider(id);
     QCOMPARE(panelEngine->providerId(), other->instanceId());
     panelEngine->setProviderId(id);
     QVERIFY(panelEngine->followsSettings());
-    QVERIFY(options.providerId().isEmpty());
+    QVERIFY(options.providerId(true).isEmpty());
     studio.providers()->setEditImageProvider(other->instanceId());
     QCOMPARE(panelEngine->providerId(), other->instanceId());
     studio.providers()->setEditImageProvider(QString());
@@ -1081,14 +1082,18 @@ void TestSetup::settingsAi()
     dlg.resize(1020, 640);
     dlg.show();
     dlg.showTab(QStringLiteral("ai"));
-    // The image engine: its name, the preset's name, and that it starts when needed.
-    QCOMPARE(named<ElidedLabel>(&dlg, QStringLiteral("aiImageEngine"))->fullText(), QStringLiteral("Klein here"));
-    QCOMPARE(named<ElidedLabel>(&dlg, QStringLiteral("aiImageModel"))->fullText(), QStringLiteral("Model: FLUX.2 [klein] 4B"));
+    // The image engine: by the name the status bar and the editor use (the preset's, on this
+    // computer; the server's own in the tooltip), no model line that says it again, and that it
+    // starts when needed.
+    QCOMPARE(named<ElidedLabel>(&dlg, QStringLiteral("aiImageEngine"))->fullText(), QStringLiteral("FLUX.2 [klein] 4B on this computer"));
+    QCOMPARE(named<ElidedLabel>(&dlg, QStringLiteral("aiImageEngine"))->fullText(), imageEngineName(managed));
+    QVERIFY(named<ElidedLabel>(&dlg, QStringLiteral("aiImageEngine"))->toolTip().contains(QStringLiteral("Klein here")));
+    QVERIFY(!named<ElidedLabel>(&dlg, QStringLiteral("aiImageModel"))->isVisibleTo(&dlg));
     QCOMPARE(named<QLabel>(&dlg, QStringLiteral("aiImageStatus"))->text(), QStringLiteral("On this computer; starts when it is needed"));
     QCOMPARE(named<QPushButton>(&dlg, QStringLiteral("aiImageChange"))->text(), QStringLiteral("Change…"));
     QVERIFY(named<QPushButton>(&dlg, QStringLiteral("aiImageChange"))->menu());
     // Changes use the image engine until another is chosen.
-    QCOMPARE(named<ElidedLabel>(&dlg, QStringLiteral("aiEditEngine"))->fullText(), QStringLiteral("The image engine (Klein here)"));
+    QCOMPARE(named<ElidedLabel>(&dlg, QStringLiteral("aiEditEngine"))->fullText(), QStringLiteral("The image engine (FLUX.2 [klein] 4B on this computer)"));
     ai::GenerationSpec edit;
     edit.request.mode = ai::GenMode::Edit;
     ai::GenerationSpec fresh;
@@ -1106,7 +1111,7 @@ void TestSetup::settingsAi()
             pick = a;
     }
     QVERIFY2(entries.contains(QStringLiteral("The image engine")), qPrintable(entries.join(QLatin1Char('|'))));
-    QVERIFY(entries.contains(QStringLiteral("Klein here — FLUX.2 [klein] 4B")));
+    QVERIFY(entries.contains(QStringLiteral("FLUX.2 [klein] 4B on this computer")));
     QVERIFY(entries.contains(QStringLiteral("Set up a new engine…")));
     QVERIFY(pick);
     pick->trigger();
@@ -1133,7 +1138,15 @@ void TestSetup::settingsAi()
         reloaded.load();
         QCOMPARE(reloaded.editImageProviderId(), other->instanceId());
     }
-    // The language model: listed while the Characters plugin is on.
+    // The language model: listed while the Characters plugin is on, with the Roles tab for its tasks.
+    auto tabNames = [](QDialog *d) {
+        QStringList names;
+        auto *tabs = d->findChild<QTabWidget *>();
+        for (int i = 0; tabs && i < tabs->count(); ++i)
+            names << tabs->tabText(i);
+        return names;
+    };
+    QVERIFY(tabNames(&dlg).contains(QStringLiteral("Roles")));
     auto *languageRow = named<QFrame>(&dlg, QStringLiteral("aiLanguage"));
     QVERIFY(languageRow->isVisibleTo(&dlg));
     QVERIFY(named<QLabel>(&dlg, QStringLiteral("aiLanguageText"))->text().contains(QLatin1String("Characters")));
@@ -1143,7 +1156,7 @@ void TestSetup::settingsAi()
         dlg.grab().save(shots + QStringLiteral("/settings-ai.png"));
     studio.providers()->removeProvider(other->instanceId());
     QCOMPARE(studio.providers()->editImageProviderId(), QString());
-    QCOMPARE(named<ElidedLabel>(&dlg, QStringLiteral("aiEditEngine"))->fullText(), QStringLiteral("The image engine (Klein here)"));
+    QCOMPARE(named<ElidedLabel>(&dlg, QStringLiteral("aiEditEngine"))->fullText(), QStringLiteral("The image engine (FLUX.2 [klein] 4B on this computer)"));
 
     // With every plugin that needs one off, no language model row.
     ext::Extensions::instance().setEnabled(QStringLiteral("characters"), false);
@@ -1152,6 +1165,7 @@ void TestSetup::settingsAi()
     without.show();
     without.showTab(QStringLiteral("ai"));
     QVERIFY(!named<QFrame>(&without, QStringLiteral("aiLanguage"))->isVisibleTo(&without));
+    QVERIFY2(!tabNames(&without).contains(QStringLiteral("Roles")), qPrintable(tabNames(&without).join(QLatin1Char('|'))));
 }
 
 // What only plugins need shows only with them: by default (every plugin off) the wizard offers no

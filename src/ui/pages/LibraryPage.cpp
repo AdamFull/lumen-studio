@@ -397,7 +397,7 @@ LibraryPage::LibraryPage(Studio *studio, QWidget *parent)
     auto *open = new QPushButton(Icons::get(QStringLiteral("brush")), tr("Open in editor"), inspector);
     Theme::setRole(open, QStringLiteral("primary"));
     auto *asRef = new QPushButton(Icons::get(QStringLiteral("link")), tr("Use as reference"), inspector);
-    asRef->setToolTip(tr("Add to the reference images of the editor's AI panel"));
+    asRef->setToolTip(tr("Add to the reference images of the editor's AI tab"));
     auto *usePrompt = new QPushButton(Icons::get(QStringLiteral("text")), tr("Reuse prompt"), inspector);
     usePrompt->setToolTip(tr("Put the image's prompt into the editor's prompt bar"));
     auto *rerun = new QPushButton(Icons::get(QStringLiteral("refresh")), tr("Make another like this"), inspector);
@@ -490,7 +490,7 @@ LibraryPage::LibraryPage(Studio *studio, QWidget *parent)
     connect(asRef, &QPushButton::clicked, this, [this] {
         for (const QString &id : selectedIds())
             m_studio->useAsReference(id);
-        m_studio->notify(tr("Added to the references in the editor's AI panel."));
+        m_studio->notify(tr("Added to the references in the editor's AI tab."));
     });
     connect(usePrompt, &QPushButton::clicked, this, [this] {
         const auto info = m_studio->project() ? m_studio->project()->asset(m_currentId) : std::nullopt;

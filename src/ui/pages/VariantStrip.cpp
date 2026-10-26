@@ -74,7 +74,7 @@ VariantStrip::VariantStrip(Studio *studio, CanvasView *canvas, QWidget *parent)
     // The line says which keys work, and they work only where the keyboard is.
     connect(qApp, &QApplication::focusChanged, this, [this] {
         if (isVisible())
-            m_label->setFullText(label());
+            updateLabel();
     });
     hide();
 }
@@ -358,8 +358,16 @@ QString VariantStrip::label() const
     const bool keys = !focus || focus == this || isAncestorOf(focus) || focus == m_canvas->focusProxy();
     if (n == 1)
         return keys ? tr("Keep it (Enter) or discard it (Esc)") : tr("Keep it or discard it");
-    return keys ? tr("Result %1 of %2 · ←/→ to compare · Generate again replaces these").arg(run->current + 1).arg(n)
-                : tr("Result %1 of %2 · click one to compare · Generate again replaces these").arg(run->current + 1).arg(n);
+    // Short enough for a 1280 × 720 window next to four results; the rest is in the tooltip.
+    return keys ? tr("Result %1 of %2 · ←/→ to compare").arg(run->current + 1).arg(n)
+                : tr("Result %1 of %2 · click one to compare").arg(run->current + 1).arg(n);
+}
+
+void VariantStrip::updateLabel()
+{
+    m_label->setFullText(label());
+    m_label->setToolTip(tr("Keep (Enter) adds the result shown as a layer on top; Discard (Esc) drops them all. Generate again "
+                           "replaces these results."));
 }
 
 void VariantStrip::keep()
@@ -466,7 +474,7 @@ void VariantStrip::refresh()
     if (show) {
         if (QAbstractButton *b = m_group->button(run->current))
             b->setChecked(true);
-        m_label->setFullText(label());
+        updateLabel();
     }
     if (m_canvas->document() == m_doc)
         m_canvas->setPreview(CanvasView::Preview::Result, show ? run->variants.value(run->current).image : QImage());

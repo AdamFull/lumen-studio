@@ -33,6 +33,8 @@
 #include <QToolButton>
 #include <QVBoxLayout>
 
+#include <cmath>
+
 namespace lumen::ui {
 
 AiPanel::AiPanel(Studio *studio, AiOptions *options, QWidget *parent)
@@ -52,9 +54,11 @@ AiPanel::AiPanel(Studio *studio, AiOptions *options, QWidget *parent)
     v->setContentsMargins(12, 12, 12, 12);
     v->setSpacing(10);
 
-    v->addWidget(sectionLabel(tr("Image engine")));
+    // Every action here changes the picture: the engine for changes, as Settings → AI calls it.
+    v->addWidget(sectionLabel(tr("Engine for changes")));
     m_provider = new ProviderCombo(studio->providers(), ai::ProviderKind::Image, content);
-    m_provider->setUse(ProviderCombo::Use::Changes); // every action here changes the image
+    m_provider->setUse(ProviderCombo::Use::Changes);
+    m_provider->setAccessibleName(tr("Engine for changes"));
     v->addWidget(m_provider);
     m_capsWarning = new QLabel(content);
     m_capsWarning->setProperty("role", QStringLiteral("muted"));
@@ -119,8 +123,10 @@ AiPanel::AiPanel(Studio *studio, AiOptions *options, QWidget *parent)
     m_modeHint = mutedLabel(QString(), content);
     v->addWidget(m_modeHint);
 
-    m_strength = new SliderField(tr("Strength"), 0.05, 1.0, options->variationStrength(), 2, QString(), content);
-    m_strength->setToolTip(tr("How much the variation may change the image: low keeps more of it."));
+    // In per cent, as in the prompt bar's ⋯ menu.
+    m_strength = new SliderField(tr("How much may change"), 5, 100, std::round(options->variationStrength() * 100), 0,
+                                 QStringLiteral(" %"), content);
+    m_strength->setToolTip(tr("How much a variation may change the image: a little keeps more of it."));
     v->addWidget(m_strength);
 
     m_expandBox = new QWidget(content);
@@ -183,9 +189,9 @@ AiPanel::AiPanel(Studio *studio, AiOptions *options, QWidget *parent)
 
     auto *form = new QGridLayout;
     form->setHorizontalSpacing(8);
-    form->addWidget(new QLabel(tr("Variants"), content), 0, 0);
+    form->addWidget(new QLabel(tr("Results per run"), content), 0, 0);
     m_variants = new QSpinBox(content);
-    m_variants->setAccessibleName(tr("Variants"));
+    m_variants->setAccessibleName(tr("Results per run"));
     m_variants->setRange(1, AiOptions::kMaxVariants);
     m_variants->setToolTip(tr("How many results each run makes to choose from."));
     form->addWidget(m_variants, 0, 1);
@@ -217,9 +223,10 @@ AiPanel::AiPanel(Studio *studio, AiOptions *options, QWidget *parent)
     m_negative->setPlaceholderText(tr("Things that should not be in the result"));
     nv->addWidget(m_negative);
     v->addWidget(m_negativeBox);
-    m_areaStrength = new SliderField(tr("Area strength"), 0.05, 1.0, options->regionStrength(), 2, QString(), content);
-    m_areaStrength->setToolTip(tr("How much a selected area may change when the prompt bar paints it anew: low keeps more of what "
-                                  "is there."));
+    m_areaStrength = new SliderField(tr("Area may change"), 5, 100, std::round(options->regionStrength() * 100), 0,
+                                     QStringLiteral(" %"), content);
+    m_areaStrength->setToolTip(tr("How much a selected area may change when the prompt bar paints it anew: a little keeps more of "
+                                  "what is there."));
     v->addWidget(m_areaStrength);
     m_padding = new SliderField(tr("Context"), 0, 512, options->padding(), 0, QStringLiteral(" px"), content);
     m_padding->setToolTip(tr("Surrounding area sent to the model along with the selection."));
@@ -236,13 +243,13 @@ AiPanel::AiPanel(Studio *studio, AiOptions *options, QWidget *parent)
     // Only a choice of the user's picks the engine (ProviderCombo::picked); one nobody chose follows
     // the engine for changes of Settings → AI.
     connect(m_provider, &ProviderCombo::picked, this, [this] {
-        m_options->setProviderId(m_provider->pinnedProviderId());
+        m_options->setProviderId(true, m_provider->pinnedProviderId());
         updateUi();
     });
     connect(studio->providers(), &ai::ProviderRegistry::providersChanged, this, &AiPanel::syncFromOptions);
     connect(studio->providers(), &ai::ProviderRegistry::rolesChanged, this, &AiPanel::syncFromOptions);
-    connect(m_strength, &SliderField::valueChanged, m_options, &AiOptions::setVariationStrength);
-    connect(m_areaStrength, &SliderField::valueChanged, m_options, &AiOptions::setRegionStrength);
+    connect(m_strength, &SliderField::valueChanged, this, [this](double percent) { m_options->setVariationStrength(percent / 100.0); });
+    connect(m_areaStrength, &SliderField::valueChanged, this, [this](double percent) { m_options->setRegionStrength(percent / 100.0); });
     connect(m_usePose, &QCheckBox::toggled, m_options, &AiOptions::setUsePose);
     connect(m_variants, &QSpinBox::valueChanged, m_options, &AiOptions::setVariants);
     connect(m_steps, &QSpinBox::valueChanged, m_options, &AiOptions::setSteps);
@@ -267,12 +274,12 @@ void AiPanel::syncFromOptions()
     {
         // The engine runs go to: the chosen one, else the engine for changes.
         const QSignalBlocker b(m_provider);
-        m_provider->setPinnedProviderId(m_options->providerId());
+        m_provider->setPinnedProviderId(m_options->providerId(true));
     }
     const QSignalBlocker b1(m_strength), b2(m_usePose), b3(m_variants), b4(m_steps), b5(m_seed), b6(m_randomSeed), b7(m_padding),
         b8(m_feather), b9(m_colorMatch), b10(m_areaStrength);
-    m_strength->setValue(m_options->variationStrength());
-    m_areaStrength->setValue(m_options->regionStrength());
+    m_strength->setValue(std::round(m_options->variationStrength() * 100));
+    m_areaStrength->setValue(std::round(m_options->regionStrength() * 100));
     m_usePose->setChecked(m_options->usePose());
     m_variants->setValue(m_options->variants());
     m_steps->setValue(m_options->steps());

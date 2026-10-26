@@ -23,6 +23,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QMenu>
 #include <QMessageBox>
 #include <QPainter>
 #include <QPainterPath>
@@ -96,19 +97,30 @@ FiltersPanel::FiltersPanel(Studio *studio, CanvasView *canvas, QWidget *parent, 
     m_list->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_list->setTextElideMode(Qt::ElideRight);
     m_list->setAccessibleName(tr("Filters"));
-    m_list->setMinimumHeight(140);
+    m_list->setMinimumHeight(110); // two filters; the chosen one's settings matter more
 
+    // One row, so the chosen filter's settings keep the room: what is used less is under ⋯.
     auto *buttons = new QWidget(this);
     auto *flow = new FlowLayout(buttons, 4, 4);
     flow->setContentsMargins(0, 0, 0, 0);
     m_newButton = new QPushButton(Icons::get(QStringLiteral("plus")), tr("New filter…"), buttons);
     m_newButton->setToolTip(tr("Build a filter of your own in the filter editor"));
     m_editButton = new QPushButton(Icons::get(QStringLiteral("edit")), tr("Edit…"), buttons);
-    m_duplicateButton = new QPushButton(Icons::get(QStringLiteral("copy")), tr("Duplicate"), buttons);
-    m_duplicateButton->setToolTip(tr("Make a copy in your filters to change"));
-    m_deleteButton = new QPushButton(Icons::get(QStringLiteral("trash")), tr("Delete"), buttons);
-    m_folderButton = iconButton(QStringLiteral("folder"), tr("Open filters folder"), buttons);
-    for (QWidget *w : std::initializer_list<QWidget *>{m_newButton, m_editButton, m_duplicateButton, m_deleteButton, m_folderButton})
+    m_moreButton = iconButton(QStringLiteral("dots"), tr("More: duplicate, delete, filters folder"), buttons);
+    m_moreButton->setObjectName(QStringLiteral("FilterMore"));
+    m_moreButton->setPopupMode(QToolButton::InstantPopup);
+    auto *more = new QMenu(m_moreButton);
+    m_duplicateAction = more->addAction(Icons::get(QStringLiteral("copy")), tr("Duplicate"));
+    m_duplicateAction->setObjectName(QStringLiteral("FilterDuplicate"));
+    m_duplicateAction->setToolTip(tr("Make a copy in your filters to change"));
+    m_deleteAction = more->addAction(Icons::get(QStringLiteral("trash")), tr("Delete"));
+    m_deleteAction->setObjectName(QStringLiteral("FilterDelete"));
+    more->addSeparator();
+    m_folderAction = more->addAction(Icons::get(QStringLiteral("folder")), tr("Open filters folder"));
+    m_folderAction->setObjectName(QStringLiteral("FilterFolder"));
+    more->setToolTipsVisible(true);
+    m_moreButton->setMenu(more);
+    for (QWidget *w : std::initializer_list<QWidget *>{m_newButton, m_editButton, m_moreButton})
         flow->addWidget(w);
 
     // The chosen filter.
@@ -179,7 +191,6 @@ FiltersPanel::FiltersPanel(Studio *studio, CanvasView *canvas, QWidget *parent, 
     m_runButton->setToolTip(tr("This filter has AI steps. They take a while, so the preview runs them only when you ask."));
     m_applyButton = new QPushButton(Icons::get(QStringLiteral("check")), tr("Apply"), m_footer);
     m_applyButton->setProperty("role", QStringLiteral("primary"));
-    m_applyButton->setToolTip(tr("Apply the filter to the active layer (only the selected area changes)"));
     actions->addWidget(m_runButton);
     actions->addStretch(1);
     actions->addWidget(m_applyButton);
@@ -220,8 +231,11 @@ FiltersPanel::FiltersPanel(Studio *studio, CanvasView *canvas, QWidget *parent, 
     QScrollArea *detailsScroll = verticalScroll(m_details, split);
     detailsScroll->setMinimumHeight(96); // the title and a setting or two
     split->addWidget(detailsScroll);
-    split->setStretchFactor(0, 1);
-    split->setStretchFactor(1, 1);
+    // The chosen filter's settings get the larger part (in a 1280 × 720 window the list shows two or
+    // three filters and scrolls; the settings of most filters show whole).
+    split->setStretchFactor(0, 2);
+    split->setStretchFactor(1, 3);
+    split->setSizes({200, 300});
     layout->addWidget(split, 1);
     layout->addWidget(separator(Qt::Horizontal, this));
     layout->addWidget(m_footer);
@@ -251,9 +265,9 @@ FiltersPanel::FiltersPanel(Studio *studio, CanvasView *canvas, QWidget *parent, 
     });
     connect(m_newButton, &QPushButton::clicked, this, [this] { newFilter(); });
     connect(m_editButton, &QPushButton::clicked, this, &FiltersPanel::editSelected);
-    connect(m_duplicateButton, &QPushButton::clicked, this, &FiltersPanel::duplicateSelected);
-    connect(m_deleteButton, &QPushButton::clicked, this, &FiltersPanel::deleteSelected);
-    connect(m_folderButton, &QToolButton::clicked, this, &FiltersPanel::openFolder);
+    connect(m_duplicateAction, &QAction::triggered, this, &FiltersPanel::duplicateSelected);
+    connect(m_deleteAction, &QAction::triggered, this, &FiltersPanel::deleteSelected);
+    connect(m_folderAction, &QAction::triggered, this, &FiltersPanel::openFolder);
     connect(m_applyButton, &QPushButton::clicked, this, &FiltersPanel::applySelected);
     connect(m_runButton, &QPushButton::clicked, this, [this] {
         QString why;
@@ -349,6 +363,10 @@ void FiltersPanel::setDocument(doc::Document *doc)
 {
     if (m_doc)
         disconnect(m_doc, nullptr, this, nullptr);
+    // What happened to the last picture ("Applied … Undo takes it back") is not this one's news;
+    // what is wrong with the chosen filter stays.
+    if (doc != m_doc)
+        setStatus(m_filterProblem, !m_filterProblem.isEmpty());
     m_doc = doc;
     if (m_canvas)
         m_canvas->setPreview(CanvasView::Preview::Filter, {}); // the old document's preview must not show over the new one
@@ -364,6 +382,9 @@ void FiltersPanel::setDocument(doc::Document *doc)
 
 QListWidgetItem *FiltersPanel::itemFor(const QString &path) const
 {
+    // The headings and the "none yet" line have no path: they are never a filter.
+    if (path.isEmpty())
+        return nullptr;
     for (int i = 0; i < m_list->count(); ++i) {
         if (m_list->item(i)->data(kPathRole).toString() == path)
             return m_list->item(i);
@@ -472,7 +493,8 @@ void FiltersPanel::loadSelected()
     m_title->setText(entry ? entry->name : tr("No filter chosen"));
     m_about->setText(entry ? (entry->error.isEmpty() ? entry->description : entry->error) : tr("Choose a filter in the list."));
     m_about->setVisible(!m_about->text().isEmpty());
-    setStatus(entry && !entry->error.isEmpty() ? tr("This filter cannot be used.") : error, !error.isEmpty() || (entry && !entry->error.isEmpty()));
+    m_filterProblem = entry && !entry->error.isEmpty() ? tr("This filter cannot be used.") : error;
+    setStatus(m_filterProblem, !m_filterProblem.isEmpty());
     rebuildSettings();
     updateAvailability();
     updateButtons();
@@ -540,12 +562,17 @@ void FiltersPanel::updateButtons()
     m_editButton->setText(entry && entry->builtIn ? tr("Edit a copy…") : tr("Edit…"));
     m_editButton->setToolTip(entry && entry->builtIn ? tr("Built-in filters stay as they are: this edits a copy in your filters")
                                                      : tr("Open the filter in the filter editor"));
-    m_duplicateButton->setEnabled(entry && entry->error.isEmpty());
-    m_deleteButton->setEnabled(entry && !entry->builtIn && !busy);
-    m_deleteButton->setToolTip(entry && entry->builtIn ? tr("Built-in filters cannot be deleted") : tr("Delete the filter"));
-    m_applyButton->setEnabled(usable && layer && !busy);
+    m_duplicateAction->setEnabled(entry && entry->error.isEmpty());
+    m_deleteAction->setEnabled(entry && !entry->builtIn && !busy);
+    m_deleteAction->setToolTip(entry && entry->builtIn ? tr("Built-in filters cannot be deleted") : tr("Delete the filter"));
+    // AI results to choose from cover the canvas: a filter applied now would change a layer that
+    // cannot be seen, under the result Keep then puts on top.
+    const bool results = showsResults();
+    m_applyButton->setEnabled(usable && layer && !busy && !results);
+    m_applyButton->setToolTip(results ? tr("Keep or discard the AI results first")
+                                      : tr("Apply the filter to the active layer (only the selected area changes)"));
     m_runButton->setVisible(usable && m_runner->needsRun());
-    m_runButton->setEnabled(!busy && layer);
+    m_runButton->setEnabled(!busy && layer && !results);
     m_target->setEnabled(!busy);
     for (ParamField *f : std::as_const(m_fields))
         f->setEnabled(!busy || !m_runner->isApplying());
@@ -598,6 +625,7 @@ void FiltersPanel::updatePreviewState()
     m_runner->setPreviewEnabled(on);
     if (!on && m_canvas)
         m_canvas->setPreview(CanvasView::Preview::Filter, {});
+    updateButtons();
 }
 
 void FiltersPanel::showEvent(QShowEvent *e)
@@ -709,9 +737,18 @@ void FiltersPanel::openFolder()
     QDesktopServices::openUrl(QUrl::fromLocalFile(m_catalog->folder()));
 }
 
+bool FiltersPanel::showsResults() const
+{
+    return m_canvas && !m_canvas->preview(CanvasView::Preview::Result).isNull();
+}
+
 bool FiltersPanel::applySelected()
 {
     QString why;
+    if (showsResults()) {
+        setStatus(tr("Keep or discard the AI results first: the canvas shows them, not the layer the filter would change."), true);
+        return false;
+    }
     if (!m_runner->apply(&why)) {
         setStatus(why, true);
         return false;

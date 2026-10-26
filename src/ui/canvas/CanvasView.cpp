@@ -423,10 +423,21 @@ void CanvasView::render(QPainter &p, const QRect &widgetRect)
         const QPointF br = mapFromDoc(QPointF(docRect.right() + 1, docRect.bottom() + 1));
         return QRectF(QPointF(std::round(tl.x()), std::round(tl.y())), QPointF(std::round(br.x()), std::round(br.y())));
     };
-    // A result to choose from or a filter's preview instead of the document's pixels (its
-    // transparency shows the checkerboard). Below 100 % a copy at the current zoom is drawn as it
-    // is, so that the repaints of the marching ants stay cheap.
+    // A filter's preview is the whole picture: it is drawn instead of the document's pixels (its
+    // transparency shows the checkerboard). A result to choose from is the layer Keep would add on
+    // top, transparent outside a selection's area, so it is drawn over them. Below 100 % a copy at
+    // the current zoom is drawn as it is, so that the repaints of the marching ants stay cheap.
     const QImage &shown = preview();
+    const bool overDocument = !m_resultPreview.isNull();
+    if (shown.isNull() || overDocument) {
+        for (int r = r0; r <= r1; ++r) {
+            for (int c = c0; c <= c1; ++c) {
+                const QImage &tile = tiles.tile(c, r, level);
+                if (!tile.isNull())
+                    p.drawImage(snapped(tiles.tileRect(c, r)), tile);
+            }
+        }
+    }
     if (!shown.isNull()) {
         const double scale = m_zoom * devicePixelRatioF();
         if (scale < 1.0) {
@@ -439,14 +450,6 @@ void CanvasView::render(QPainter &p, const QRect &widgetRect)
             const double sy = double(shown.height()) / m_doc->size().height();
             const QRectF source(visible.left() * sx, visible.top() * sy, visible.width() * sx, visible.height() * sy);
             p.drawImage(mapFromDoc(visible), shown, source);
-        }
-    } else {
-        for (int r = r0; r <= r1; ++r) {
-            for (int c = c0; c <= c1; ++c) {
-                const QImage &tile = tiles.tile(c, r, level);
-                if (!tile.isNull())
-                    p.drawImage(snapped(tiles.tileRect(c, r)), tile);
-            }
         }
     }
 

@@ -287,7 +287,7 @@ void GenerationService::execute(Job *job, const GenerationSpec &specIn, OutputHa
     // The default provider without one: the job's queue group (groupFor) was chosen the same way.
     ImageProvider *provider = specIn.providerId.isEmpty() ? m_registry->defaultImageProvider() : m_registry->imageProvider(specIn.providerId);
     if (!provider) {
-        job->fail(tr("No image provider is configured. Add one in Settings → Providers."));
+        job->fail(tr("There is no image engine. Set one up with Help → Set up AI…"));
         return;
     }
     QPointer<ImageProvider> providerGuard(provider);

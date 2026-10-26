@@ -51,6 +51,7 @@ private:
     Row makeRow(const QString &id, const QString &title, const QString &text);
     void fill(Row &row, ai::Provider *provider, const QString &none, bool edits);
     QString statusOf(ai::Provider *provider, bool *good);
+    QString nameOf(ai::Provider *provider) const;
     QString modelOf(ai::Provider *provider, bool edits) const;
     void fillImageMenu(QMenu *menu, bool edits);
     void fillLanguageMenu(QMenu *menu);

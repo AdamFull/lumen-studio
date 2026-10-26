@@ -55,8 +55,9 @@ RemovalRequest removalRequest(const PromptPlan &plan);
 bool isBlankCanvas(const doc::Document &doc);
 
 // The size an engine makes a new image at for a canvas of this size: the closest of its fixed
-// sizes, else the same shape at its native pixel count (ai::wholeImageWorkSize, the size a whole
-// picture is changed at). Results are scaled back to the canvas.
+// sizes, else the same shape at its native pixel count in multiples of 8 at least (as New from
+// prompt; ai::wholeImageWorkSize is the size a whole picture is changed at). Results are scaled
+// back to the canvas.
 QSize workingSize(const QSize &picture, const ai::ImageCapabilities &caps);
 
 } // namespace lumen::ui

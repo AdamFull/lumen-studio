@@ -5,6 +5,7 @@
 #include "ui/widgets/ProviderCombo.h"
 
 #include <algorithm>
+#include <utility>
 
 namespace lumen::ui {
 
@@ -26,18 +27,44 @@ void AiOptions::setPrompt(const QString &prompt)
     emit promptChanged();
 }
 
-void AiOptions::setProviderId(const QString &id)
+void AiOptions::setProviderId(bool changes, const QString &id)
 {
-    set(m_providerId, id);
+    set(m_providerId[changes ? 1 : 0], id);
 }
 
 ai::ImageProvider *AiOptions::provider(const ai::ProviderRegistry *registry, bool changes) const
 {
-    if (!m_providerId.isEmpty() && registry->isEnabled(m_providerId)) {
-        if (ai::ImageProvider *p = registry->imageProvider(m_providerId))
+    const QString &id = m_providerId[changes ? 1 : 0];
+    if (!id.isEmpty() && registry->isEnabled(id)) {
+        if (ai::ImageProvider *p = registry->imageProvider(id))
             return p;
     }
     return imageEngineInUse(registry, changes);
+}
+
+void AiOptions::followSettings(const ai::ProviderRegistry *registry)
+{
+    // Settings → AI's choice for each use, as stored (whether it is on or not, which changes without
+    // a new choice).
+    auto look = [this, registry] {
+        bool cleared = false;
+        for (const bool changes : {false, true}) {
+            const ai::ImageProvider *p = registry->imageProviderFor(changes);
+            const QString id = p ? p->instanceId() : QString();
+            QString &seen = m_settingsEngine[changes ? 1 : 0];
+            if (id == seen)
+                continue;
+            seen = id;
+            cleared = !std::exchange(m_providerId[changes ? 1 : 0], QString()).isEmpty() || cleared;
+        }
+        if (cleared)
+            emit changed();
+    };
+    for (const bool changes : {false, true}) {
+        const ai::ImageProvider *p = registry->imageProviderFor(changes);
+        m_settingsEngine[changes ? 1 : 0] = p ? p->instanceId() : QString();
+    }
+    connect(registry, &ai::ProviderRegistry::rolesChanged, this, look);
 }
 
 void AiOptions::setRegionStrength(double strength)

@@ -411,6 +411,10 @@ SettingsDialog::SettingsDialog(Studio *studio, QWidget *parent)
         {70, QStringLiteral("shortcuts"), [this] { return new ShortcutsPage(this); }, QStringLiteral("text"), tr("Shortcuts")},
         {80, QStringLiteral("plugins"), [this] { return buildPluginsTab(); }, QStringLiteral("parts"), tr("Plugins")},
     };
+    // The language models' tasks are the plugins' (the assistant, shot planning): without a plugin
+    // that needs one, no Roles tab, as Settings → AI shows no language model then.
+    if (ext::Extensions::instance().needingLanguageModel().isEmpty())
+        tabs.removeIf([](const Tab &tab) { return tab.id == QLatin1String("roles"); });
     for (const ext::SettingsTabSpec &spec : ext::Extensions::instance().settingsTabs())
         tabs.append({spec.order, spec.id, [this, studio, create = spec.create] { return create(studio, this); }, spec.icon, spec.label});
     std::stable_sort(tabs.begin(), tabs.end(), [](const Tab &a, const Tab &b) { return a.order < b.order; });
@@ -618,18 +622,13 @@ QWidget *SettingsDialog::buildRolesTab()
     auto *v = new QVBoxLayout(w);
     v->setContentsMargins(16, 16, 16, 16);
     v->setSpacing(12);
-    v->addWidget(mutedLabel(tr("Choose which provider handles each task. Roles without an assignment fall back to the chat assistant."), w));
+    // The image engines are Settings → AI's; these are the plugins' language model tasks.
+    v->addWidget(mutedLabel(tr("Choose which language model handles each task of the plugins. Tasks without one use the chat "
+                               "assistant's."),
+                            w));
     auto *form = new QFormLayout;
     form->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
     form->setVerticalSpacing(12);
-    auto *image = new ProviderCombo(m_studio->providers(), ai::ProviderKind::Image, w);
-    if (ai::ImageProvider *p = m_studio->providers()->defaultImageProvider())
-        image->setProviderId(p->instanceId());
-    connect(image, &ProviderCombo::providerChanged, this, [this](const QString &id) {
-        if (!id.isEmpty())
-            m_studio->providers()->setDefaultImageProvider(id);
-    });
-    form->addRow(tr("Default image generator"), image);
     for (ai::LlmRole role : ai::allLlmRoles()) {
         auto *row = new QWidget(w);
         auto *h = new QHBoxLayout(row);

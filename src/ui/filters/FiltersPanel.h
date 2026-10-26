@@ -8,6 +8,7 @@
 
 #include <functional>
 
+class QAction;
 class QCheckBox;
 class QComboBox;
 class QLabel;
@@ -31,11 +32,11 @@ class Studio;
 // small previews, the chosen filter's settings (the ones its graph publishes) as sliders and
 // lists, a live preview on the canvas at reduced resolution while they move, and Apply: the filter
 // on the active layer, through the selection, onto a new layer (or the layer itself) as one undo
-// step, in the background with progress and Cancel. New filter…, Edit…, Duplicate and Delete
-// manage the saved filters (Edit opens the filter editor, NodeEditorWindow); built-in filters are
-// edited as a copy. The actions stay in view under the details, which scroll. AI results to choose
+// step, in the background with progress and Cancel. New filter…, Edit… and, under ⋯, Duplicate
+// and Delete manage the saved filters (Edit opens the filter editor, NodeEditorWindow); built-in
+// filters are edited as a copy. The actions stay in view under the details, which scroll. AI results to choose
 // from (the results strip) show on the canvas instead of the preview until they are kept or
-// discarded.
+// discarded; Apply and Run AI steps wait for that too.
 class FiltersPanel : public QWidget
 {
     Q_OBJECT
@@ -88,6 +89,8 @@ private:
     void updateAvailability();
     void setStatus(const QString &text, bool problem = false);
     void updatePreviewState();
+    // Whether the canvas shows AI results to choose from (the results strip): no Apply meanwhile.
+    bool showsResults() const;
     void updateThumbnail(const QString &path);
     void sendSourceTo(NodeEditorWindow *window) const;
     QListWidgetItem *itemFor(const QString &path) const;
@@ -98,6 +101,7 @@ private:
     FilterRunner *m_runner;
     QPointer<doc::Document> m_doc;
     QString m_path;          // the chosen filter
+    QString m_filterProblem; // why the chosen filter cannot be used (loadSelected), else empty
     QDateTime m_loadedStamp; // the file's time when it was loaded
     bool m_shown = false;
     Confirm m_confirm;
@@ -105,9 +109,10 @@ private:
     QListWidget *m_list;
     QPushButton *m_newButton;
     QPushButton *m_editButton;
-    QPushButton *m_duplicateButton;
-    QPushButton *m_deleteButton;
-    QToolButton *m_folderButton;
+    QToolButton *m_moreButton;
+    QAction *m_duplicateAction;
+    QAction *m_deleteAction;
+    QAction *m_folderAction;
     QWidget *m_details;
     QLabel *m_title;
     QLabel *m_about;

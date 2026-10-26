@@ -59,6 +59,8 @@ EditorPage::EditorPage(Studio *studio, QWidget *parent)
     , m_state(new EditorState(this))
     , m_aiOptions(new AiOptions(this))
 {
+    // An engine chosen in the editor gives way to a new one in Settings → AI or the setup wizard.
+    m_aiOptions->followSettings(studio->providers());
     setAcceptDrops(true);
     auto *outer = new QVBoxLayout(this);
     outer->setContentsMargins(0, 0, 0, 0);
@@ -216,12 +218,13 @@ EditorPage::EditorPage(Studio *studio, QWidget *parent)
     m_side->addTab(m_history, Icons::get(QStringLiteral("history")), tr("History"));
     m_filters = new FiltersPanel(studio, m_canvas, m_side);
     m_side->addTab(m_filters, Icons::get(QStringLiteral("adjust")), tr("Filters"));
-    // Four tabs (with the AI panel) share a narrow panel: they shorten their names rather than hide
-    // behind arrows.
+    // Four tabs (with the AI panel) share a narrow panel: rather than hide behind arrows or shorten
+    // their names to "Lay…", the other three show only their icons then (updateSideTabs).
     m_side->setUsesScrollButtons(false);
     m_side->setElideMode(Qt::ElideRight);
+    m_side->installEventFilter(this);
     const int aiTab = m_side->addTab(m_ai, Icons::get(QStringLiteral("sparkles")), tr("AI"));
-    auto *closeAi = iconButton(QStringLiteral("close"), tr("Close the AI panel"), m_side->tabBar());
+    auto *closeAi = iconButton(QStringLiteral("close"), tr("Close the AI tab"), m_side->tabBar());
     closeAi->setIconSize(QSize(12, 12));
     m_side->tabBar()->setTabButton(aiTab, QTabBar::RightSide, closeAi);
     m_side->setTabVisible(aiTab, false);
@@ -363,13 +366,36 @@ bool EditorPage::eventFilter(QObject *watched, QEvent *event)
     if ((watched == m_strip || watched == m_bar)
         && (event->type() == QEvent::Show || event->type() == QEvent::Hide || event->type() == QEvent::Move || event->type() == QEvent::Resize))
         emit bottomAreaChanged();
+    if (watched == m_side && event->type() == QEvent::Resize)
+        updateSideTabs();
     return QWidget::eventFilter(watched, event);
+}
+
+void EditorPage::updateSideTabs()
+{
+    const int ai = m_side->indexOf(m_ai);
+    const QStringList names = {tr("Layers"), tr("History"), tr("Filters")};
+    auto label = [this, ai, &names](bool named) {
+        for (int i = 0, n = 0; i < m_side->count() && n < names.size(); ++i) {
+            if (i == ai)
+                continue;
+            m_side->setTabText(i, named ? names.at(n) : QString());
+            m_side->setTabToolTip(i, named ? QString() : names.at(n));
+            m_side->tabBar()->setAccessibleTabName(i, names.at(n));
+            ++n;
+        }
+    };
+    label(true);
+    // The names while they fit (the bar asks for their whole width, sizeHint).
+    if (m_side->isTabVisible(ai) && m_side->tabBar()->sizeHint().width() > m_side->width())
+        label(false);
 }
 
 void EditorPage::showAiPanel(std::optional<AiPanel::Mode> mode)
 {
     const int index = m_side->indexOf(m_ai);
     m_side->setTabVisible(index, true);
+    updateSideTabs();
     m_side->setCurrentIndex(index);
     if (mode)
         m_ai->setMode(*mode);
@@ -381,6 +407,7 @@ void EditorPage::hideAiPanel()
     if (m_side->currentIndex() == index)
         m_side->setCurrentWidget(m_layers);
     m_side->setTabVisible(index, false);
+    updateSideTabs();
 }
 
 bool EditorPage::isAiPanelShown() const

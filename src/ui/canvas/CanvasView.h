@@ -64,15 +64,17 @@ public:
 
     void setCursorOverride(const QCursor &cursor);
 
-    // A picture shown instead of the document's pixels, without changing the document; the
-    // selection's outline stays, its tint goes so the colours read right. Two can be set: a
-    // filter's preview (the Filters panel, at reduced resolution, stretched over the document, M17
-    // §17.6) and a result to choose from (the results strip, at the document's size). The result
-    // wins while there is one; the filter's preview shows again when the results are kept or
-    // discarded. A null image removes one; showing another document removes both.
+    // A picture shown on the canvas without changing the document; the selection's outline stays,
+    // its tint goes so the colours read right. Two can be set: a filter's preview (the Filters
+    // panel, at reduced resolution, stretched over the document and shown instead of its pixels,
+    // M17 §17.6) and a result to choose from (the results strip, at the document's size, drawn over
+    // the document as the layer Keep adds: transparent outside a selection's area). The result wins
+    // while there is one; the filter's preview shows again when the results are kept or discarded.
+    // A null image removes one; showing another document removes both.
     enum class Preview { Filter, Result };
     void setPreview(Preview kind, const QImage &image);
-    // What shows instead of the document: the result, else the filter's preview; null for none.
+    // What shows: the result (over the document), else the filter's preview (instead of it); null
+    // for none.
     const QImage &preview() const { return m_resultPreview.isNull() ? m_filterPreview : m_resultPreview; }
     const QImage &preview(Preview kind) const { return kind == Preview::Result ? m_resultPreview : m_filterPreview; }
 

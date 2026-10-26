@@ -115,6 +115,7 @@ private:
     void removeIfEmpty(doc::Document *doc);
     void rebuild();
     void refresh();
+    void updateLabel();
 
     Studio *m_studio;
     CanvasView *m_canvas;

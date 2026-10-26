@@ -461,8 +461,6 @@ void MainWindow::buildMenus()
     QAction *allOptions = aiMenu->addAction(Icons::get(QStringLiteral("adjust")), tr("All AI options…"), this, [this] { m_editor->showAiPanel(); });
     allOptions->setObjectName(QStringLiteral("ai-all-options"));
     m_documentActions << allOptions;
-    connect(m_studio, &Studio::documentsChanged, this, &MainWindow::updateDocumentActions);
-    updateDocumentActions();
 
     // Windows of their own: the filter editor, and one per plugin page.
     QMenu *tools = menuBar()->addMenu(tr("&Tools"));
@@ -476,15 +474,21 @@ void MainWindow::buildMenus()
     newFilter->setToolTip(tr("Build a filter of your own from steps in the filter editor; it is listed in the Filters panel"));
     newFilter->setStatusTip(newFilter->toolTip());
     bind(newFilter, QStringLiteral("new-filter"));
+    // The filter chosen in the Filters panel, which shows it: with a document, like View → Filters
+    // (on the start screen nobody sees which filter that is).
     QAction *filterEditor = tools->addAction(Icons::get(QStringLiteral("edit")), tr("Filter editor…"), this, [this] {
-        if (!m_studio->documents().isEmpty())
-            m_editor->showFiltersPanel();
-        m_editor->filtersPanel()->editSelected();
+        m_editor->showFiltersPanel();
+        // A filter that cannot be opened says why under the panel's Apply.
+        if (m_editor->filtersPanel()->currentPath().isEmpty())
+            m_studio->notify(tr("Choose a filter in the Filters panel to open it in the filter editor."));
+        else
+            m_editor->filtersPanel()->editSelected();
     });
     filterEditor->setObjectName(QStringLiteral("filterEditor"));
     filterEditor->setToolTip(tr("Open the filter chosen in the Filters panel in the filter editor (a built-in filter as a copy to change)"));
     filterEditor->setStatusTip(filterEditor->toolTip());
     bind(filterEditor, QStringLiteral("filter-editor"));
+    m_documentActions << filterEditor;
     tools->addSeparator();
     for (const ext::PageSpec &spec : std::as_const(m_pageSpecs)) {
         QAction *a = tools->addAction(Icons::get(spec.icon), spec.label);
@@ -499,6 +503,8 @@ void MainWindow::buildMenus()
     QAction *plugins = tools->addAction(Icons::get(QStringLiteral("settings")), tr("Plugins…"), this, [this] { openSettings(QStringLiteral("plugins")); });
     plugins->setToolTip(tr("Character creation, poses and Live2D parts are plugins: switch them on in Settings → Plugins"));
     plugins->setStatusTip(plugins->toolTip());
+    connect(m_studio, &Studio::documentsChanged, this, &MainWindow::updateDocumentActions);
+    updateDocumentActions();
 
     QMenu *help = menuBar()->addMenu(tr("&Help"));
     QAction *setup = help->addAction(Icons::get(QStringLiteral("sparkles")), tr("Set up AI…"), this, &MainWindow::setUpAi);
@@ -589,6 +595,8 @@ NewFromPromptDialog *MainWindow::newFromPrompt()
     if (!m_newFromPrompt) {
         m_newFromPrompt = new NewFromPromptDialog(m_studio, this);
         m_newFromPrompt->setAttribute(Qt::WA_DeleteOnClose);
+        // The engine for new images the editor uses (also on a blank canvas), and the status bar names.
+        m_newFromPrompt->shareEngineChoice(m_editor->aiOptions());
         // Its results are chosen like the prompt bar's, in the strip above the bar.
         connect(m_newFromPrompt, &NewFromPromptDialog::generationStarted, this,
                 [this](doc::Document *doc, const QList<Job *> &jobs, const QString &name, int results) {
@@ -779,8 +787,9 @@ void MainWindow::updateJobSummary()
 
 void MainWindow::updateEngine()
 {
-    // The engine the prompt bar's Generate goes to now: for a new image (a blank canvas, New from
-    // prompt) or for a change of the picture, as Settings → AI routes them, unless one is chosen in ⋯.
+    // The engine the prompt bar's Generate goes to now: for a new image (a blank canvas, and with no
+    // document New from prompt's) or for a change of the picture, as Settings → AI routes them,
+    // unless one is chosen in the editor for that use.
     const ai::ImageProvider *engine = m_editor->promptBar()->engine();
     if (!engine) {
         m_engineButton->setText(tr("No image engine – Set up AI"));
@@ -791,9 +800,14 @@ void MainWindow::updateEngine()
     }
     m_engineButton->setText(imageEngineName(engine));
     m_engineButton->setIcon(Icons::get(engine->type().local ? QStringLiteral("server") : QStringLiteral("cloud")));
-    m_engineButton->setToolTip(tr("The image engine the prompt bar uses now (%1). Click to choose the engines for new images and "
-                                  "for changes in Settings → AI.")
-                                   .arg(engine->displayName()));
+    if (m_editor->promptBar()->engineChosenInEditor())
+        m_engineButton->setToolTip(tr("The image engine the prompt bar uses now (%1), chosen in the editor. Click to choose the "
+                                      "engines in Settings → AI; a choice there replaces it.")
+                                       .arg(engine->displayName()));
+    else
+        m_engineButton->setToolTip(tr("The image engine the prompt bar uses now (%1). Click to choose the engines for new images and "
+                                      "for changes in Settings → AI.")
+                                       .arg(engine->displayName()));
 }
 
 void MainWindow::updateTitle()

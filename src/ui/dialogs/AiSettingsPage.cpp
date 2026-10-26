@@ -10,6 +10,7 @@
 #include "ui/dialogs/SetupWizard.h"
 #include "ui/ext/Extension.h"
 #include "ui/widgets/Controls.h"
+#include "ui/widgets/ProviderCombo.h"
 
 #include <QActionGroup>
 #include <QHBoxLayout>
@@ -120,6 +121,12 @@ AiSettingsPage::Row AiSettingsPage::makeRow(const QString &id, const QString &ti
     return row;
 }
 
+QString AiSettingsPage::nameOf(ai::Provider *p) const
+{
+    // Language models by their provider's name; image engines as everywhere else (imageEngineName).
+    return p->type().kind == ai::ProviderKind::Image ? imageEngineName(p) : p->displayName();
+}
+
 QString AiSettingsPage::modelOf(ai::Provider *p, bool edits) const
 {
     const ai::ModelDefaults preset = ai::modelDefaultsOf(p);
@@ -197,8 +204,14 @@ void AiSettingsPage::fill(Row &row, ai::Provider *provider, const QString &none,
         Theme::setRole(row.status, QStringLiteral("error"));
         return;
     }
-    row.engine->setFullText(provider->displayName());
-    const QString model = modelOf(provider, edits);
+    // By the names the status bar and the editor use; the model when the name does not say it.
+    const QString name = nameOf(provider);
+    row.engine->setFullText(name);
+    if (name != provider->displayName())
+        row.engine->setToolTip(tr("%1 (%2)").arg(name, provider->displayName()));
+    QString model = modelOf(provider, edits);
+    if (name.contains(model))
+        model.clear();
     row.model->setFullText(model.isEmpty() ? QString() : tr("Model: %1").arg(model));
     row.model->setVisible(!model.isEmpty());
     bool good = false;
@@ -221,7 +234,7 @@ void AiSettingsPage::refresh()
     } else {
         fill(m_edit, image, tr("No image engine yet"), true);
         if (image)
-            m_edit.engine->setFullText(tr("The image engine (%1)").arg(image->displayName()));
+            m_edit.engine->setFullText(tr("The image engine (%1)").arg(nameOf(image)));
     }
     m_edit.change->setEnabled(!registry->imageProviders().isEmpty());
 
@@ -261,8 +274,9 @@ void AiSettingsPage::fillImageMenu(QMenu *menu, bool edits)
                                   : (registry->defaultImageProvider() ? registry->defaultImageProvider()->instanceId() : QString());
     for (ai::ImageProvider *p : registry->imageProviders()) {
         const QString id = p->instanceId();
+        const QString name = nameOf(p);
         const QString model = modelOf(p, edits);
-        QAction *a = menu->addAction(model.isEmpty() ? p->displayName() : QStringLiteral("%1 — %2").arg(p->displayName(), model));
+        QAction *a = menu->addAction(model.isEmpty() || name.contains(model) ? name : QStringLiteral("%1 — %2").arg(name, model));
         a->setCheckable(true);
         a->setChecked(id == current);
         a->setEnabled(registry->isEnabled(id));

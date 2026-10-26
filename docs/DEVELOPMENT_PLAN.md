@@ -2258,7 +2258,7 @@ Survey of the code, the app log and user testing (October 2026):
     `Ctrl+Shift+A`), the theme. The editor's commands in the menus are its own shortcut actions
     (`EditorPage::editorAction`), so customised keys show and work there. *Tools*: one action per
     `PageSpec` (Create `Alt+1`, Poses `Alt+4`, Parts `Alt+5`) and *Plugins…* (Settings → Plugins).
-    *Help*: Set up AI… (on this branch the `OnboardingDialog`, reworded "Set up an image engine";
+    *Help*: Set up AI… (at step 7 the `OnboardingDialog`, reworded "Set up an image engine";
     since the merge below the setup wizard of §17.5, and the dialog is Providers → *Detect local*
     again), models and log folders, about. The merge adds *View → Filters* and *Tools → New
     filter…* / *Filter editor…*. The ComfyUI workflow folder is a button of the ComfyUI provider's
@@ -2685,8 +2685,11 @@ Survey of the code, the app log and user testing (October 2026):
   * Not yet: Qwen3 4B as a GGUF text encoder (unsloth's Q8_0, 4.0 GB instead of 7.5 GB) is untested
     with the pinned sd.cpp, so klein's download stays 11.8 GB; the per-image times are from the 8 GB
     live check only (AMD / Vulkan untested); the online services keep their default models; using
-    the model folder of a ComfyUI found running on the server page; the German translation of the
-    new texts.
+    the model folder of a ComfyUI found running on the server page; §17.5's "per-field server
+    options move under *Advanced*": the server profile dialog still shows the model, VAE and text
+    encoder fields at the top (its *Advanced* group, from M12, holds only the fields marked
+    advanced), and Settings → AI sends the user to the other tabs for every setting; the German
+    translation of the new texts.
 - [x] Filter graph core and classic nodes; golden-image tests per node.
   * `src/filters` (`lumen_filters`, `lumen::filters`): on `lumen_core` (`ImageOps`, `Async`) and Qt
     Gui only, no UI, AI, document or runtime code; `lumen_ui` links it. No UI yet.
@@ -2904,10 +2907,12 @@ Survey of the code, the app log and user testing (October 2026):
     1280 × 720 and the panel at 300 × 540 (the side panel's minimum width, its height in a
     1280 × 720 window; first audited at 300 × 600, where *Apply* was below the fold of the real
     tab), no findings (the audit's 7 findings stay as they were).
-  * Not yet: the filters folder cannot be moved; slider values are not remembered between sessions;
-    the preview's resolution does not follow the zoom; the node editor has no copy and paste and
-    does not link a new node to the selected one; a result of another size is stretched to the layer
-    (a crop does not crop the document); the German translation of the new texts.
+  * Not yet: the *Input* node reads the active layer only (§17.6 asks for "layer or document": a
+    filter of the whole picture, all layers, is not there yet); the filters folder cannot be moved;
+    slider values are not remembered between sessions; the preview's resolution does not follow the
+    zoom; the node editor has no copy and paste and does not link a new node to the selected one; a
+    result of another size is stretched to the layer (a crop does not crop the document); the German
+    translation of the new texts.
 - [x] AI nodes.
   * `ai/FilterNodes` (in `lumen_ai`, which now links `lumen_filters`; a configure check in
     `src/filters/CMakeLists.txt` fails when a filters source includes an AI, document, runtime or UI
@@ -3048,33 +3053,41 @@ Survey of the code, the app log and user testing (October 2026):
     instead of a second Settings dialog, *Set up local AI…* its local page.
   * One engine routing. `imageEngineInUse(registry, changes)`: the engine of Settings → AI for new
     images or for changes when it is on, else the first one on. `AiOptions::provider(registry,
-    changes)`: the engine chosen in ⋯ or the AI panel (for every run), else that one. The prompt
+    changes)`: the engine chosen in the editor for that use, else that one (since the review
+    fixes below one choice per use, which a new choice in Settings → AI replaces). The prompt
     bar's engine (`PromptBar::engine`) is the engine for new images on a blank canvas, and with no
     document (New from prompt), and the engine for changes otherwise (a selection is a change, also
     on a blank canvas); the plan is made for it and the run carries it (`PromptRun::providerId`),
     so *Generate*, *Remove object* and *Make a variation* go where the plan says. The AI panel and
     the AI menu use the engine for changes, New from prompt the engine for new images. The status
     bar names `PromptBar::engine` (`engineChanged`). The filters' *Edit with AI* and *Fill area
-    with AI* take the engine for changes too, as their help text says.
+    with AI* take the engine for changes too, as their help text says (since the review fixes
+    *Upscale with AI* and *Remove background* prefer it too).
   * One `ProviderCombo`: step 9's follow of Settings → AI per use (`Use::NewImages` /
     `Use::Changes`, on `rolesChanged`) with step 8's engine names and pinning only on a user's
     choice. `picked` (on `activated`, or `setProviderId` as the user would) and `pinnedProviderId` /
     `setPinnedProviderId` let the ⋯ menu and the AI panel keep one choice in `AiOptions`;
     `settingsChoice` uses `imageEngineInUse`, so a combo shows where the runs go also when the
-    engine of Settings → AI is off. The ⋯ combo switches its use with the bar's engine (`setUse`
-    leaves a pin as it is).
+    engine of Settings → AI is off. The ⋯ combo switches its use with the bar's engine: `setUse`
+    follows Settings → AI for the new use, and the bar then shows the choice `AiOptions` keeps for
+    it (`setPinnedProviderId`).
   * One "engine removed mid-run": `failWhenGone` (step 12's name, step 8's checks for no operation
     and one that finished already), "The image engine was removed while it was working." for every
     generation and utility job; `promptBarRuns` and `aiStepJobEnds` both pass.
   * A whole picture is changed at one size: the prompt bar's whole-image changes go through
     `ai::wholeImageInput` (as the AI steps and the assistant), with `detailSource` for
-    `img::restoreDetail`; `workingSize` keeps the closest fixed size for new images and takes
-    `ai::wholeImageWorkSize` otherwise.
+    `img::restoreDetail`; `workingSize`, the size of a new image, keeps the closest fixed size and
+    otherwise the canvas's shape at the engine's pixels (since the review fixes in multiples of 8 at
+    least again, as New from prompt; the merge had made it `ai::wholeImageWorkSize`, which keeps an
+    engine's multiple of 1).
   * Two previews on the canvas, which both sides had added as one `setPreview`:
     `CanvasView::setPreview(Preview::Filter | Preview::Result, image)`, `preview()` the one shown
-    (a result wins), `previewChanged(kind)`. One drawing path: instead of the composite, so a
-    preview's transparency shows the checkerboard; from a copy at the current zoom below 100 %;
-    without the selection tint; both cleared with another document. The Filters panel stops its
+    (a result wins), `previewChanged(kind)`. One drawing path, from a copy at the current zoom below
+    100 % and without the selection tint, both cleared with another document: a filter's preview
+    (the whole picture) instead of the composite, so its transparency shows the checkerboard; a
+    result over the composite, as *Keep* adds it (since the review fixes: the merge drew both
+    instead of the composite, and a selection's result, transparent around the area, showed alone on
+    the checkerboard). The Filters panel stops its
     preview while a result is on show (`previewChanged`) and says so in its footer ("The canvas
     shows the AI results to choose from…"); when they go it previews again: the unchanged picture
     after *Discard*, the picture with the kept layer after *Keep* (a document change). The filter's
@@ -3114,8 +3127,66 @@ Survey of the code, the app log and user testing (October 2026):
     runtime test).
   * `translations/lumen_en.ts`: the English plural forms of the shell's texts with `%n` (the ⋯
     menu's references; Browse project images' queued jobs, which now name the project images).
-  * Not yet: the filter editor does not know the editor's engine choice in ⋯ (its *The one in use*
-    is Settings → AI's); the filter's preview is computed again after the results go, not kept
+  * Review fixes (October 2026):
+    * A result to choose from is drawn over the picture again, as *Keep* adds it: the merge drew it
+      instead of the composite, so a selection's result (transparent around the area) showed alone
+      on the checkerboard. A filter's preview, the whole picture, is still drawn instead of it.
+    * One engine choice per use (`AiOptions::providerId(changes)`): ⋯ on a picture and the AI panel
+      choose the engine for changes, ⋯ on a blank canvas and New from prompt
+      (`NewFromPromptDialog::shareEngineChoice`) the one for new images, so with no document the
+      status bar names New from prompt's engine, and a choice on a photo no longer sends a blank
+      canvas's new image elsewhere. The last choice wins (`AiOptions::followSettings`): a new engine
+      for a use in Settings → AI, or one the setup wizard sets up, replaces the editor's choice for
+      that use; before, a choice in ⋯ outlived every change there, while the status bar sent the
+      user to Settings → AI. The status bar's tooltip says when the engine was chosen in the editor.
+      ⋯ names its list as Settings → AI does: *Engine for changes* on a picture, *Image engine* on
+      a blank canvas; the AI panel's heading is *Engine for changes*.
+    * The filters' *Upscale with AI* and *Remove background* on *The one in use* prefer the engine
+      for changes, as the AI menu's do and as the shared help text says (then the image engine, then
+      another engine that can). Their messages point to Help → Set up AI… without an engine and to
+      Settings → AI's engine for changes when it cannot do a step (to the step's own engine when one
+      is chosen); `GenerationService` says "There is no image engine. Set one up with Help → Set up
+      AI…" instead of "No image provider is configured…".
+    * The Filters panel chooses the first built-in filter from the start: `itemFor("")` matched the
+      list's heading, so nothing was chosen, Apply stayed off and *Tools → Filter editor…* did
+      nothing. That action needs a document now, like *View → Filters* (on the start screen nobody
+      sees which filter it opens). While results are on show, *Apply* and *Run AI steps* wait ("Keep
+      or discard the AI results first"): an applied filter went under the result that *Keep* then
+      put on top. What *Apply* said ("Applied … Undo takes it back") goes when another document is
+      shown. *Duplicate*, *Delete* and *Open filters folder* are under ⋯ next to *New filter…* and
+      *Edit…* (one row), and the chosen filter's settings get three fifths of the height, so Old
+      photo's settings show whole at 1280 × 720.
+    * A new image is made in multiples of 8 at least again (`workingSize`), as from New from prompt.
+    * Beside the AI tab the right panel's other tabs show only their icons (names in tooltips) when
+      their names do not fit (`EditorPage::updateSideTabs`), instead of "Lay… Hist… Filt…".
+    * The AI tab uses the ⋯ menu's names and units: *How much may change* and *Area may change* in
+      per cent, *Results per run*; the texts say "AI tab", as the guide does.
+    * Settings: the *Roles* tab shows only with a plugin that needs a language model (as Settings →
+      AI's row), without its *Default image generator* (Settings → AI's *Image engine*), and the
+      Director's label reads "shot and pose planning" (the "&" was a mnemonic). Settings → AI names
+      engines as the status bar does (`imageEngineName`, the server's own name in the tooltip) and
+      leaves out a model line that only says the name again.
+    * The results strip's line is "Result 1 of 4 · ←/→ to compare"; the rest is its tooltip (it was
+      cut at 1280 × 720).
+    * The filter's *Input* node says what it reads, the active layer (step 11's Not yet has the
+      whole image).
+    * Tests: `tst_canvas` `engineRouting` (a third engine: a choice on a blank canvas for new
+      images, the start screen's status bar and New from prompt with it, a choice there, Settings →
+      AI's new image engine replacing it in the open dialog; a choice in the AI panel on a photo for
+      changes, ⋯'s *Engine for changes*, Settings → AI without an engine for changes replacing it),
+      `filtersInTheShell` (*Filter editor…* off on the start screen; the first filter chosen and
+      opened without `selectFilter`; a selection's result over the red picture, red around it;
+      *Apply* off and refused while results show; the status gone with another document),
+      `promptBarEngine`, `aiMenuAndPanel` (per cent, *Results per run*, the side tabs fit beside
+      the AI tab), `promptModes` (`workingSize` of an engine with a multiple of 1); `tst_filters_ui`
+      `aiNodesSayWhatTheyNeed` (an upscale goes to the engine for changes, else to the image
+      engine), `panelListsAndSettings` (*Delete* under ⋯); `tst_setup` `settingsAi` (the engine's
+      name, no repeated model; the *Roles* tab with the Characters plugin only), `onlineService`. `tst_layout`: Settings with every plugin on (the
+      *Roles* and *Cloud training* tabs fit and are audited), the wizard's local page with a plugin
+      that needs a language model, the side tabs fit beside the AI tab at every size (strict), and a
+      selection's results are transparent around it.
+  * Not yet: the filter editor does not know the editor's engine choice (its *The one in use* is
+    Settings → AI's); the filter's preview is computed again after the results go, not kept
     meanwhile; the German translation of the new texts.
 - [ ] Fix the layout checklist (§17.9); screenshots after; then the audit runs strict in CI.
 - [ ] User guide and README rewritten around the editor; plugins documented separately.
@@ -3222,6 +3293,14 @@ button's text is measured by its widest line (the start screen's names take two)
 **Merge** (October 2026): the audit adds the editor with the Filters tab, and with results over its
 preview, at the three sizes, and `mainWindowFitsSmallScreen` checks both at 1280×720; the setup
 wizard and Settings → AI are audited as in step 9. Findings stay at 4 (item 8).
+
+**Merge review** (October 2026): what the audit did not see. Beside the AI tab the right panel's
+tabs read "Lay… Hist… Filt…" at every size (they show only their icons now, and the audit checks
+the tab bar fits, strictly); the Filters tab gave its list most of the height at 1280 × 720 and cut
+the chosen filter's settings (one row of buttons, three fifths for the settings); the results
+strip's line was cut at 1280 × 720. Settings is audited with every plugin on again (their tabs had
+gone from the check when plugins became off by default; the bar has no room to spare then), and
+the wizard's local page also with a plugin that needs a language model. Findings stay at 4 (item 8).
 
 ---
 

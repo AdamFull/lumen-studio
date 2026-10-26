@@ -73,11 +73,13 @@ the status bar) shows in one list what does the work: the *image engine* (new im
 canvas, New from prompt), the *engine for changes* (what the editor uses to change a picture or a
 selection: the prompt bar, the AI tab and menu, the AI steps of filters; usually the image engine,
 choose another when it follows instructions such as "colorize" better) and, while a plugin needs
-one, the *language model*. Each row shows the engine, its model and whether it runs or answers;
-**Change…** picks another engine you have set up or opens **Set up AI** (**Set up…** opens it
-directly while there is none). The editor follows the engines chosen here or in **Set up AI** at
-once, unless you picked another one in the prompt bar's ⋯ menu or the AI tab (§6). The other tabs
-hold every setting for advanced use.
+one, the *language model*. Each row shows the engine by the name the status bar uses, its model
+(when the name does not say it) and whether it runs or answers; **Change…** picks another engine you
+have set up or opens **Set up AI** (**Set up…** opens it directly while there is none). The editor
+follows the engines chosen here or in **Set up AI** at once; one you picked in the editor (§6) stays
+until you choose that engine here again, or another. The other tabs hold every setting for advanced
+use; **Roles** (which language model does which task) shows only while a plugin needs a language
+model.
 
 Providers can also be added by hand under **Settings → Providers**, which lists every provider, also
 the language models some plugins use (llama.cpp, Ollama, LM Studio and online ones); the editor
@@ -289,7 +291,8 @@ start, and the previous version stays installed, so you can switch back in the s
 Lumen Studio opens as an image editor: tools on the left, the canvas with a tab per document in
 the middle and the **prompt bar** under it (§6), and the **Layers**, **History** and **Filters**
 tabs on the right (§5). The **AI** tab with every AI option opens from the prompt bar's ⋯ menu or
-the AI menu.
+the AI menu; while it is open, the other three tabs show only their icons when their names do not
+fit (hover one for its name).
 
 **Start screen.** While no document is open, the window shows how to start:
 
@@ -305,7 +308,8 @@ the AI menu.
 write what you want, pick the shape (square, portrait or landscape ratios, or a custom width ×
 height) and how many images to make (1 to 4), and click **Create** (`Ctrl+Enter`). Lumen makes a
 document of that size and draws into it with the image engine (Settings → AI's engine for new
-images, unless you choose another in the dialog). The variants are shown over the new
+images, unless you choose another, here or in the prompt bar's ⋯ on a blank canvas: one choice for
+both). The variants are shown over the new
 document one at a time, as the prompt bar's results are (§6): ←/→ compares them and Enter keeps
 one as a layer. *More options* has the seed and, for models that take one, a negative prompt
 ("leave out"). Steps, guidance and the sampler follow the model. The shape and the number of
@@ -318,8 +322,9 @@ project in a window of its own (§7).
 **The status bar** shows the project; the image engine **Generate** uses now, by the name every
 engine list uses ("FLUX.2 [klein] 4B on this computer" for a server Lumen runs, else the provider's
 name): the engine for changes for a picture, the engine for new images on a blank canvas or the
-start screen, or the one you chose in ⋯ (click it to choose them in Settings → AI; without one it
-reads "No image engine – Set up AI", and a click opens Set up AI); the local servers, **Safe for
+start screen (the one New from prompt uses), or the one you chose in the editor for that, which its
+tooltip says (click it to choose them in Settings → AI; without one it reads "No image engine – Set
+up AI", and a click opens Set up AI); the local servers, **Safe for
 work** and the jobs (click for the Queue, which says when nothing is running). The Queue and the
 panels of plugins lie over the right of the editor, above the prompt bar, so they never hide it.
 
@@ -583,13 +588,15 @@ white*, *Warm tones*, *Cool tones*, *Sharpen*, *Soft focus*, *Film grain*, *Old 
 filters with AI steps (marked with a sparkle) and, under *Your filters*, the ones you made, each with
 a small preview.
 
-* Click a filter to see its settings. With **Preview on the canvas** on, the picture shows the
-  filter while you move its sliders, at a lower resolution so it stays quick. Nothing changes yet.
-  While you paint or move something, the canvas shows your picture as it is; the preview comes
-  back when you stop. After **Apply** the preview stays off until you change a setting or choose
-  another filter (or turn **Preview on the canvas** off and on), so it does not show the filter
-  twice. While the prompt bar's results wait to be chosen (§6), the canvas shows them instead and
-  the panel says so; the preview comes back when you discard them, or for the picture with the
+* The first filter is chosen when the panel opens; click another to see its settings (the line
+  between the list and the settings can be dragged). With **Preview on the canvas** on, the picture
+  shows the filter while you move its sliders, at a lower resolution so it stays quick. Nothing
+  changes yet. While you paint or move something, the canvas shows your picture as it is; the
+  preview comes back when you stop. After **Apply** the preview stays off until you change a setting
+  or choose another filter (or turn **Preview on the canvas** off and on), so it does not show the
+  filter twice. While the prompt bar's results wait to be chosen (§6), the canvas shows them instead
+  and the panel says so; **Apply** and **Run AI steps** wait too, since the filter would change a
+  layer under the results. The preview comes back when you discard them, or for the picture with the
   result once you keep one.
 * **Apply** (always at the bottom of the panel, with the line that says what will change) runs the
   filter on the active layer at full resolution. With a selection only the selected area changes,
@@ -602,11 +609,13 @@ a small preview.
   **Apply** then uses what the run made.
 
 **Filters with AI.** They use the engine for changes (Settings → AI: your image engine unless you
-chose another for changes); each AI step is a job in the Queue, where you see how far it is and can
+chose another for changes; an upscale or a background removal goes to another engine that can do
+it when that one cannot); each AI step is a job in the Queue, where you see how far it is and can
 cancel it (or press **Cancel** in the panel). To run a step again, apply the filter again: the Queue
-has no **Retry** for it. When no engine can do a step,
-the panel says so in red before anything runs, for example that your model cannot change a picture
-from a description. If you remove an engine while a step of it runs, the step stops and says so.
+has no **Retry** for it. When no engine can do a step, the panel says so in red before anything
+runs, and where to change that: Help → Set up AI… without an engine, Settings → AI's engine for
+changes when your model cannot change a picture from a description. If you remove an engine while a
+step of it runs, the step stops and says so.
 
 * **Colorize with AI** gives a black-and-white photo natural colours and keeps everything else as
   it is. With a selection only the selected area is coloured: the area around it is sent to the
@@ -628,9 +637,9 @@ from a description. If you remove an engine while a step of it runs, the step st
 ### Building your own filters
 
 **New filter…** (in the panel or the **Tools** menu) opens the filter editor, a window of its own;
-**Tools → Filter editor…** opens the filter chosen in the panel there. A filter is a chain of nodes
-from **Input** (the layer, with the selection as a mask) to **Output** (the result; connect a mask
-to its *Where to apply* to limit where it goes).
+**Tools → Filter editor…** (with a document open) shows the Filters tab and opens the filter chosen
+there. A filter is a chain of nodes from **Input** (the active layer, with the selection as a mask)
+to **Output** (the result; connect a mask to its *Where to apply* to limit where it goes).
 
 * **Add node** (`Shift+A`, or right-click on an empty place) lists the nodes by kind; type to
   search and press `Enter` to add the first one found.
@@ -651,7 +660,9 @@ to its *Where to apply* to limit where it goes).
   as the Input's *Selection*, to its *Area* to change only that area), **Fill area with AI**
   (paints the area anew from a description), **Upscale with AI** and **Remove background** (its
   *Subject* output is the cut-out's outline as a mask). Each has an **Image engine** setting: *The
-  one in use* (the engine for changes of Settings → AI) or one you choose. For an edit of an area,
+  one in use* (the engine for changes of Settings → AI; for an upscale or a background removal
+  another engine that can, when that one cannot) or one you choose. *The one in use* does not follow
+  an engine chosen in the prompt bar's ⋯. For an edit of an area,
   *Colours of an area* matches its colours to the picture around it; choose *As the AI made them*
   for changes of colour on purpose, such as colorizing. AI steps run when you click **Run AI steps** (or
   **Apply** in the panel), and a step that cannot run is outlined and listed under **Problems**.
@@ -662,9 +673,9 @@ to its *Where to apply* to limit where it goes).
 
 **Edit…** opens one of your filters again. Built-in filters stay as they are: **Edit a copy…** makes
 your own copy first ("Sharpen copy"), or opens the copy you made before while you have not changed
-it. **Duplicate** copies a filter, **Delete** removes one of yours, and the folder button opens the
-filters folder (`Documents\Lumen\Filters`). Filters are `.lumenfilter` files: one put into that
-folder appears in the list.
+it. Under **⋯** next to them, **Duplicate** copies a filter, **Delete** removes one of yours, and
+**Open filters folder** opens `Documents\Lumen\Filters`. Filters are `.lumenfilter` files: one put
+into that folder appears in the list.
 
 ## 6. AI editing
 
@@ -694,8 +705,10 @@ a second Enter does not start another run). A run that failed or was cancelled c
 the Queue; its results then come to the strip as well.
 
 **Choosing a result.** A run makes 1 to 4 results (2 at first; ⋯ → *Results per run*). They appear
-in a strip above the bar, and the canvas shows the current one over the image without changing it
-(a picture fitted into the window stays whole while the strip is there).
+in a strip above the bar, and the canvas shows the current one over the image without changing it,
+as *Keep* would add it (the result of a selection covers only that area; a picture fitted into the
+window stays whole while the strip is there). The strip's line says "Result 1 of 4 · ←/→ to
+compare"; its tooltip says what Keep, Discard and Generate do with them.
 * `←`/`→` or a click on a thumbnail shows another one. The keys work while the strip or the canvas
   has the keyboard: when the results arrive while you type the next words, the keyboard stays in
   the words (and Enter runs them), and so it does on a list, a slider or a number (a filter's
@@ -711,21 +724,24 @@ in a strip above the bar, and the canvas shows the current one over the image wi
 **⋯ (more options)** has what most people never need, only where it applies: *How much may change*
 (in per cent, for a painted area or a variation), *Results per run*, what to leave out (a negative
 prompt, for models that take one), reference images (they are in the AI tab), the document's
-control pose (with a pose ControlNet), the image engine (unless you choose one, a change of the
-picture goes to the engine for changes of Settings → AI and a new image on a blank canvas to the
-image engine; a choice here is for every run, also in the AI tab, until you choose the one Settings
-→ AI names again), under *Advanced* the steps (the model's choice unless you set them) and the seed
-(random, or fixed to repeat a result), and **All AI options…**.
+control pose (with a pose ControlNet), the engine, named as in Settings → AI: on a picture the
+*Engine for changes* (unless you choose one, Settings → AI's engine for changes), on a blank canvas
+the *Image engine* (Settings → AI's, for new images). A choice here is for that use only, shared
+with the AI tab (changes) or New from prompt (new images); it stays until you choose the engine
+Settings → AI names again, or choose an engine for that use in Settings → AI or Set up AI (the last
+choice wins). Under *Advanced* are the steps (the model's choice unless you set them) and the seed
+(random, or fixed to repeat a result), then **All AI options…**.
 
 **The AI tab and the AI menu.** *All AI options…* opens the **AI** tab on the right (✕ on the tab
-closes it). It has the same options as ⋯ (they are shared; its image engine is the engine for
-changes unless you chose one), the project's character button (with
-the Characters plugin), the reference images, and the settings of a selection's blending:
-*Context* (how much of the surroundings the model sees), *Blend edge* and colour matching. Its
-actions, also in the **AI** menu, are what is not a description of a change: **Variation**,
-**Expand canvas** (choose the sides and how far), **Upscale** (2×, 3× or 4×, as a new document),
-**Remove background** (a cut-out layer) and, with the Poses plugin, **Detect pose** (the
-document's control pose). Variation and Expand use the words in the prompt bar, if any.
+closes it). It has the same options as ⋯, by the same names (they are shared: *How much may change*
+for a variation and *Area may change* for a selected area, in per cent, *Results per run*; its
+*Engine for changes* is Settings → AI's unless you chose one), the project's character button (with
+the Characters plugin), the reference images, and the settings of a selection's blending: *Context*
+(how much of the surroundings the model sees), *Blend edge* and colour matching. Its actions, also
+in the **AI** menu, are what is not a description of a change: **Variation**, **Expand canvas**
+(choose the sides and how far), **Upscale** (2×, 3× or 4×, as a new document), **Remove background**
+(a cut-out layer) and, with the Poses plugin, **Detect pose** (the document's control pose).
+Variation and Expand use the words in the prompt bar, if any.
 
 **Instruction edits on your own computer.** With a model that edits from an instruction running
 in stable-diffusion.cpp (FLUX.2 [klein], FLUX.1 Kontext or Qwen-Image-Edit), the prompt bar edits
@@ -761,7 +777,8 @@ imported and edited image of the project, in a window of its own.
 for rigging:
 
 1. **Source**: pick an image (A-pose works best), or open a layered PSD.
-2. **Masks**: automatic segmentation (part server, ComfyUI or SD WebUI), then refine the masks
+2. **Masks**: automatic segmentation (the Lumen part server, a ComfyUI segmentation workflow or
+   Gemini; a skeleton-based split without one), then refine the masks
    with the brush, lasso, magic wand (`W`), cut line (`C`), skeleton (`K`) and split/merge commands.
 3. **Generate**: complete hidden areas of every part, the selected parts or one part at a time.
    Methods: inpainting with any image provider, see-through layer models, LayerDiffuse (ComfyUI)

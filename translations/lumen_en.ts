@@ -410,8 +410,8 @@ The models of the earlier version are in %2 (%n files, %3). Move them to the new
     <name>lumen::ui::PromptBar</name>
     <message numerus="yes">
         <location filename="../src/ui/pages/PromptBar.cpp" line="+1" />
-        <source>%n picture(s) in the AI panel…</source>
-        <translation><numerusform>%n picture in the AI panel…</numerusform><numerusform>%n pictures in the AI panel…</numerusform></translation>
+        <source>%n picture(s) in the AI tab…</source>
+        <translation><numerusform>%n picture in the AI tab…</numerusform><numerusform>%n pictures in the AI tab…</numerusform></translation>
     </message>
 </context>
 </TS>

@@ -46,10 +46,12 @@ public:
     PromptBar(Studio *studio, AiOptions *options, AiPanel *ai, VariantStrip *strip, QWidget *parent = nullptr);
 
     void setDocument(doc::Document *doc);
-    // The engine Generate uses now: the one chosen in ⋯ (or the AI panel), else the one Settings →
-    // AI names for this run: the engine for new images on a blank canvas (and with no document, for
-    // New from prompt), else the engine for changes. Null without one.
+    // The engine Generate uses now: for a new image on a blank canvas (and with no document, for New
+    // from prompt), else for a change of the picture; the one chosen in the editor for that use (⋯,
+    // the AI panel, New from prompt), else the one Settings → AI names for it. Null without one.
     ai::ImageProvider *engine() const;
+    // Whether engine() is one chosen in the editor rather than Settings → AI's.
+    bool engineChosenInEditor() const;
     // What Generate does for the document now.
     PromptPlan plan() const;
     // The line above the words.

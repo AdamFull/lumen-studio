@@ -19,8 +19,8 @@ QString imageEngineName(const ai::Provider *provider);
 // in sync with the registry. An image provider combo shows the engine Settings → AI names for its
 // use (imageEngineInUse), and follows it when it changes there (or in the setup wizard), until the
 // user picks another one in the combo (activated, not a change of the list); picking the engine of
-// Settings → AI again follows it again. The editor's two combos (the prompt bar's ⋯ menu and the AI
-// panel) keep that choice in AiOptions (pinnedProviderId, picked).
+// Settings → AI again follows it again. The editor's combos (the prompt bar's ⋯ menu, the AI panel
+// and New from prompt's) keep that choice in AiOptions, one per use (pinnedProviderId, picked).
 class ProviderCombo : public QComboBox
 {
     Q_OBJECT

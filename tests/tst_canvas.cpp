@@ -18,6 +18,7 @@
 #include "plugins/characters/CreatePage.h"
 #include "ui/dialogs/NewFromPromptDialog.h"
 #include "ui/dialogs/NewCanvasDialog.h"
+#include "ui/filters/FilterRunner.h"
 #include "ui/filters/FiltersPanel.h"
 #include "ui/filters/NodeEditorWindow.h"
 #include "ui/filters/ParamWidgets.h"
@@ -80,6 +81,7 @@
 #include <QCheckBox>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
+#include <QFormLayout>
 #include <QDirIterator>
 #include <QInputDialog>
 #include <QTableWidget>
@@ -4060,6 +4062,14 @@ void TestCanvas::promptModes()
     local.sizeMultiple = 64;
     QCOMPARE(workingSize(QSize(768, 512), local), img::fitToPixelBudget(QSize(768, 512), 1024 * 1024, 64));
     QCOMPARE(workingSize(QSize(1024, 1024), local), QSize(1024, 1024));
+    // An engine that takes any size (a ComfyUI workflow) still gets multiples of 8, as from New from
+    // prompt; a change of a whole picture leaves that to the engine.
+    ai::ImageCapabilities anySize;
+    anySize.nativePixels = 1024 * 1024;
+    anySize.sizeMultiple = 1;
+    const QSize any = workingSize(QSize(1000, 700), anySize);
+    QCOMPARE(any, img::fitToPixelBudget(QSize(1000, 700), 1024 * 1024, 8));
+    QVERIFY(any.width() % 8 == 0 && any.height() % 8 == 0);
     ai::ImageCapabilities fixed;
     fixed.fixedSizes = {QSize(1024, 1024), QSize(1536, 1024), QSize(1024, 1536)};
     QCOMPARE(workingSize(QSize(1600, 1000), fixed), QSize(1536, 1024));
@@ -4549,12 +4559,39 @@ void TestCanvas::aiMenuAndPanel()
     };
     bar->showOptions();
     QWidget *popup = bar->optionsPopup();
-    QVERIFY(spin(popup, QStringLiteral("Results per run")) && spin(editor->aiPanel(), QStringLiteral("Variants")));
+    QVERIFY(spin(popup, QStringLiteral("Results per run")) && spin(editor->aiPanel(), QStringLiteral("Results per run")));
     spin(popup, QStringLiteral("Results per run"))->setValue(3);
     QCOMPARE(editor->aiOptions()->variants(), 3);
-    QCOMPARE(spin(editor->aiPanel(), QStringLiteral("Variants"))->value(), 3);
+    QCOMPARE(spin(editor->aiPanel(), QStringLiteral("Results per run"))->value(), 3);
     spin(editor->aiPanel(), QStringLiteral("Steps"))->setValue(8);
     QCOMPARE(spin(popup, QStringLiteral("Steps"))->value(), 8);
+    // By the same names, in per cent as in ⋯: how much a variation and a selected area may change.
+    auto percent = [&editor](const QString &name) -> QDoubleSpinBox * {
+        for (QDoubleSpinBox *d : editor->aiPanel()->findChildren<QDoubleSpinBox *>()) {
+            if (d->accessibleName() == name)
+                return d;
+        }
+        return nullptr;
+    };
+    QVERIFY(percent(QStringLiteral("How much may change")) && percent(QStringLiteral("Area may change")));
+    QCOMPARE(percent(QStringLiteral("How much may change"))->suffix(), QStringLiteral(" %"));
+    QCOMPARE(percent(QStringLiteral("How much may change"))->value(), std::round(editor->aiOptions()->variationStrength() * 100));
+    percent(QStringLiteral("Area may change"))->setValue(60);
+    QCOMPARE(editor->aiOptions()->regionStrength(), 0.6);
+    // Four tabs in the narrow right panel: whole names, or only icons (named in their tooltips),
+    // never "Lay…".
+    QTabWidget *side = nullptr;
+    for (QTabWidget *t : editor->findChildren<QTabWidget *>()) {
+        if (t->indexOf(editor->aiPanel()) >= 0)
+            side = t;
+    }
+    QVERIFY(side);
+    QTRY_VERIFY2(side->tabBar()->sizeHint().width() <= side->width(),
+                 qPrintable(QStringLiteral("%1 > %2").arg(side->tabBar()->sizeHint().width()).arg(side->width())));
+    for (int i = 0; i < side->count(); ++i) {
+        if (side->isTabVisible(i) && side->widget(i) != editor->aiPanel())
+            QVERIFY(!side->tabText(i).isEmpty() || !side->tabToolTip(i).isEmpty());
+    }
     // Steps and the seed wait under Advanced.
     QVERIFY(!spin(popup, QStringLiteral("Steps"))->isVisibleTo(popup) && !spin(popup, QStringLiteral("Seed"))->isVisibleTo(popup));
     popup->findChild<QToolButton *>(QStringLiteral("promptAdvanced"))->click();
@@ -4568,7 +4605,7 @@ void TestCanvas::aiMenuAndPanel()
     QVERIFY(!popup->findChild<SliderField *>()->isVisibleTo(popup));
     QPushButton *references = nullptr;
     for (QPushButton *b : popup->findChildren<QPushButton *>()) {
-        if (b->text() == QStringLiteral("Add in the AI panel…"))
+        if (b->text() == QStringLiteral("Add in the AI tab…"))
             references = b;
     }
     QVERIFY(references && references->isVisibleTo(popup));
@@ -4737,7 +4774,7 @@ void TestCanvas::promptBarEngine()
     const QVariantMap url{{QStringLiteral("url"), QStringLiteral("http://127.0.0.1:1")}};
     ai::Provider *a = studio.providers()->addProvider(QStringLiteral("sdcpp"), QStringLiteral("A"), url);
     QVERIFY(a);
-    QVERIFY(options->providerId().isEmpty()); // set up, not chosen
+    QVERIFY(options->providerId(true).isEmpty()); // set up, not chosen
     QCOMPARE(options->provider(studio.providers(), true), a);
     ai::Provider *b = studio.providers()->addProvider(QStringLiteral("sdcpp"), QStringLiteral("B"), url);
     studio.providers()->setDefaultImageProvider(b->instanceId());
@@ -4748,14 +4785,16 @@ void TestCanvas::promptBarEngine()
     auto *engine = bar->optionsPopup()->findChild<ProviderCombo *>(QStringLiteral("promptEngine"));
     QCOMPARE(engine->providerId(), b->instanceId());
     QCOMPARE(editor->aiPanel()->findChild<ProviderCombo *>()->providerId(), b->instanceId());
-    // A choice of the user's pins it; choosing the one in use again follows the default.
+    // A choice of the user's pins it (on a photo: for changes); choosing the one in use again follows
+    // the default.
     engine->setCurrentIndex(engine->findData(a->instanceId()));
     emit engine->activated(engine->currentIndex());
-    QCOMPARE(options->providerId(), a->instanceId());
+    QCOMPARE(options->providerId(true), a->instanceId());
+    QVERIFY(options->providerId(false).isEmpty());
     QCOMPARE(editor->aiPanel()->findChild<ProviderCombo *>()->providerId(), a->instanceId());
     engine->setCurrentIndex(engine->findData(b->instanceId()));
     emit engine->activated(engine->currentIndex());
-    QVERIFY(options->providerId().isEmpty());
+    QVERIFY(options->providerId(true).isEmpty());
     bar->optionsPopup()->hide();
 }
 
@@ -5036,32 +5075,77 @@ void TestCanvas::engineRouting()
     QCOMPARE(lastJobEngine(), QStringLiteral("New images here"));
     QCOMPARE(f.sd.generations.size(), 3);
 
-    // Chosen in ⋯: every run goes there, the AI panel and the status bar follow; choosing the engine
-    // Settings → AI names for the run follows Settings → AI again.
+    // An engine chosen in the editor is for one use. In ⋯ on the blank canvas (named as in Settings
+    // → AI): for new images, here, in New from prompt and on the start screen; changes keep theirs.
+    ai::Provider *third = f.studio.providers()->addProvider(QStringLiteral("sdcpp"), QStringLiteral("Third"),
+                                                            {{QStringLiteral("url"), QStringLiteral("http://127.0.0.1:9")}});
+    QVERIFY(third);
+    AiOptions *options = editor->aiOptions();
     bar->showOptions();
+    auto engineLabel = [&] {
+        auto *form = qobject_cast<QFormLayout *>(bar->optionsPopup()->layout());
+        auto *label = form ? qobject_cast<QLabel *>(form->labelForField(engine)) : nullptr;
+        return label ? label->text() : QString();
+    };
+    QCOMPARE(engineLabel(), QStringLiteral("Image engine"));
     QCOMPARE(engine->providerId(), maker->instanceId());
-    engine->setCurrentIndex(engine->findData(f.provider->instanceId()));
+    engine->setCurrentIndex(engine->findData(third->instanceId()));
     emit engine->activated(engine->currentIndex());
-    QCOMPARE(editor->aiOptions()->providerId(), f.provider->instanceId());
-    QCOMPARE(bar->engine(), f.provider);
-    QTRY_COMPARE(status->text(), QStringLiteral("Klein"));
-    QCOMPARE(panelEngine->providerId(), f.provider->instanceId());
-    engine->setCurrentIndex(engine->findData(maker->instanceId()));
-    emit engine->activated(engine->currentIndex());
-    QVERIFY(editor->aiOptions()->providerId().isEmpty());
-    QCOMPARE(bar->engine(), maker);
-    QTRY_COMPARE(status->text(), QStringLiteral("New images here"));
+    QCOMPARE(options->providerId(false), third->instanceId());
+    QVERIFY(options->providerId(true).isEmpty());
+    QCOMPARE(bar->engine(), third);
+    QTRY_COMPARE(status->text(), QStringLiteral("Third"));
+    QVERIFY2(status->toolTip().contains(QStringLiteral("chosen in the editor")), qPrintable(status->toolTip()));
     QCOMPARE(panelEngine->providerId(), f.provider->instanceId()); // the panel changes pictures
     bar->optionsPopup()->hide();
-
-    // Settings → AI without an engine for changes: changes use the image engine too.
     f.studio.setActiveDocument(photo);
     QTRY_COMPARE(bar->engine(), f.provider);
+    QTRY_COMPARE(status->text(), QStringLiteral("Klein"));
+    f.studio.closeDocument(photo);
+    f.studio.closeDocument(blank);
+    QTRY_VERIFY(editor->showsStartScreen());
+    QTRY_COMPARE(status->text(), QStringLiteral("Third"));
+    fromPrompt = f.window->newFromPrompt();
+    auto *fromPromptEngine = fromPrompt->findChild<ProviderCombo *>();
+    QCOMPARE(fromPromptEngine->providerId(), third->instanceId());
+    // A choice in New from prompt is the editor's too; the engine of Settings → AI follows it again.
+    fromPromptEngine->setCurrentIndex(fromPromptEngine->findData(maker->instanceId()));
+    emit fromPromptEngine->activated(fromPromptEngine->currentIndex());
+    QVERIFY(options->providerId(false).isEmpty());
+    QTRY_COMPARE(status->text(), QStringLiteral("New images here"));
+    fromPromptEngine->setCurrentIndex(fromPromptEngine->findData(third->instanceId()));
+    emit fromPromptEngine->activated(fromPromptEngine->currentIndex());
+    QCOMPARE(options->providerId(false), third->instanceId());
+    QTRY_COMPARE(status->text(), QStringLiteral("Third"));
+    // The last choice wins: another image engine in Settings → AI (or from the setup wizard) takes
+    // the place of the editor's choice, here and in the open dialog.
+    f.studio.providers()->setDefaultImageProvider(f.provider->instanceId());
+    QVERIFY(options->providerId(false).isEmpty());
+    QTRY_COMPARE(status->text(), QStringLiteral("Klein"));
+    QCOMPARE(fromPromptEngine->providerId(), f.provider->instanceId());
+    fromPrompt->reject();
+    f.studio.providers()->setDefaultImageProvider(maker->instanceId());
+
+    // On a photo, a choice in the AI panel (or ⋯, which shows it as the engine for changes) is for
+    // changes; Settings → AI without an engine for changes then has changes use the image engine,
+    // in place of the editor's choice.
+    photo = f.studio.openImageAsDocument(detailedPhoto(), QStringLiteral("Photo again"));
+    QTRY_COMPARE(bar->engine(), f.provider);
+    panelEngine->setProviderId(third->instanceId());
+    QCOMPARE(options->providerId(true), third->instanceId());
+    QVERIFY(options->providerId(false).isEmpty());
+    QTRY_COMPARE(bar->engine(), third);
+    QTRY_COMPARE(status->text(), QStringLiteral("Third"));
+    bar->showOptions();
+    QCOMPARE(engineLabel(), QStringLiteral("Engine for changes"));
+    QCOMPARE(engine->providerId(), third->instanceId());
+    bar->optionsPopup()->hide();
     f.studio.providers()->setEditImageProvider(QString());
+    QVERIFY(options->providerId(true).isEmpty());
     QTRY_COMPARE(bar->engine(), maker);
     QTRY_COMPARE(status->text(), QStringLiteral("New images here"));
     QCOMPARE(panelEngine->providerId(), maker->instanceId());
-    f.studio.closeDocument(blank);
+    f.studio.closeDocument(photo);
 }
 
 // The Filters tab in the editor's right panel next to Layers and History, also reached from View →
@@ -5081,7 +5165,10 @@ void TestCanvas::filtersInTheShell()
     QAction *newFilter = window->findChild<QAction *>(QStringLiteral("newFilter"));
     QAction *filterEditor = window->findChild<QAction *>(QStringLiteral("filterEditor"));
     QVERIFY(viewFilters && newFilter && filterEditor);
-    QVERIFY(!viewFilters->isEnabled()); // nothing to filter on the start screen
+    // Nothing to filter on the start screen, and nobody would see which filter the editor opens.
+    QVERIFY(!viewFilters->isEnabled());
+    QVERIFY(!filterEditor->isEnabled());
+    QVERIFY(newFilter->isEnabled());
 
     QImage red(640, 480, QImage::Format_ARGB32_Premultiplied);
     red.fill(kRed);
@@ -5102,16 +5189,30 @@ void TestCanvas::filtersInTheShell()
     QCOMPARE(tabs, (QStringList{QStringLiteral("Layers"), QStringLiteral("History"), QStringLiteral("Filters")}));
     viewFilters->trigger();
     QCOMPARE(side->currentWidget(), panel);
+    // A filter is chosen from the start (the first built-in one, not the list's heading), so the
+    // preview shows and Tools → Filter editor… opens it.
+    QVERIFY2(panel->currentPath().startsWith(QStringLiteral(":/filters/builtin/")), qPrintable(panel->currentPath()));
+    QCOMPARE(panel->list()->currentItem()->data(Qt::UserRole).toString(), panel->currentPath());
+    QVERIFY(filterEditor->isEnabled());
+    QVERIFY(panel->applyButton()->isEnabled());
+    const int opened = int(NodeEditorWindow::openWindows().size());
+    filterEditor->trigger();
+    QTRY_COMPARE(int(NodeEditorWindow::openWindows().size()), opened + 1);
+    QPointer<NodeEditorWindow> firstCopy = NodeEditorWindow::openWindows().last();
+    QVERIFY2(!firstCopy->path().startsWith(QStringLiteral(":/")), qPrintable(firstCopy->path())); // a copy to change
+    firstCopy->close();
+    window->activateWindow();
+    QTRY_COMPARE(QApplication::activeWindow(), window);
     QVERIFY(panel->selectFilter(QStringLiteral(":/filters/builtin/black-and-white.lumenfilter")));
     QTRY_VERIFY(!canvas->preview(CanvasView::Preview::Filter).isNull());
     QCOMPARE(canvas->preview(), canvas->preview(CanvasView::Preview::Filter));
-    // What the canvas draws in the middle of the picture.
-    auto shown = [&] {
+    // What the canvas draws at a point of the picture (its middle by default).
+    auto shownAt = [&](const QPointF &docPoint) {
         QWidget *surface = canvas->focusProxy();
         const QImage shot = surface->grab().toImage();
-        const QPointF middle = canvas->mapFromDoc(QPointF(doc->size().width() / 2.0, doc->size().height() / 2.0));
-        return QColor(shot.pixel((middle * shot.devicePixelRatio()).toPoint()));
+        return QColor(shot.pixel((canvas->mapFromDoc(docPoint) * shot.devicePixelRatio()).toPoint()));
     };
+    auto shown = [&] { return shownAt(QPointF(doc->size().width() / 2.0, doc->size().height() / 2.0)); };
     auto grey = [](const QColor &c) { return std::abs(c.red() - c.green()) <= 2 && std::abs(c.green() - c.blue()) <= 2; };
     QTRY_VERIFY(grey(shown()));
     QVERIFY(canvas->isFitted());
@@ -5142,6 +5243,21 @@ void TestCanvas::filtersInTheShell()
     QTRY_VERIFY(grey(shown()));
     QVERIFY(canvas->isFitted());
 
+    // A result of a selected area is transparent around it: the canvas shows it over the picture,
+    // as Keep would add it (not over the checkerboard, and not over the filter's waiting preview).
+    QImage area(doc->size(), QImage::Format_ARGB32_Premultiplied);
+    area.fill(Qt::transparent);
+    const QRect inside(doc->size().width() / 4, doc->size().height() / 4, doc->size().width() / 2, doc->size().height() / 2);
+    QPainter(&area).fillRect(inside, QColor(0, 90, 200));
+    strip->addVariants(doc, {area}, QStringLiteral("Area"));
+    QCOMPARE(canvas->preview(), area);
+    QTRY_VERIFY(QRectF(canvas->focusProxy()->rect()).contains(canvas->mapFromDoc(QRectF(doc->bounds()))));
+    QTRY_COMPARE(shown(), QColor(0, 90, 200));
+    QTRY_COMPARE(shownAt(QPointF(20, 20)), kRed);
+    QTRY_COMPARE(shownAt(QPointF(doc->size().width() - 20, doc->size().height() - 20)), kRed);
+    strip->discard();
+    QTRY_VERIFY(grey(shown()));
+
     // A filter's slider has the keyboard when results arrive: it keeps it, and its keys stay its own.
     QVERIFY(panel->selectFilter(QStringLiteral(":/filters/builtin/old-photo.lumenfilter")));
     QSlider *slider = nullptr;
@@ -5157,6 +5273,12 @@ void TestCanvas::filtersInTheShell()
     strip->addVariants(doc, {blue, green}, QStringLiteral("Two again"));
     QCOMPARE(QApplication::focusWidget(), slider);
     QVERIFY(canvas->preview(CanvasView::Preview::Filter).isNull());
+    // Apply waits too: it would change a layer under the results, which Keep then covers.
+    QVERIFY(!panel->applyButton()->isEnabled());
+    const int layersWithResults = doc->layerCount();
+    QVERIFY(!panel->applySelected());
+    QVERIFY2(panel->statusText().startsWith(QStringLiteral("Keep or discard the AI results first")), qPrintable(panel->statusText()));
+    QCOMPARE(doc->layerCount(), layersWithResults);
     QTest::keyClick(slider, slider->value() < slider->maximum() ? Qt::Key_Right : Qt::Key_Left);
     QVERIFY(slider->value() != value);
     QCOMPARE(strip->current(), 0);
@@ -5164,6 +5286,7 @@ void TestCanvas::filtersInTheShell()
     QVERIFY(canvas->preview(CanvasView::Preview::Filter).isNull()); // a setting changed: it still waits
     strip->discard();
     QTRY_VERIFY(!canvas->preview(CanvasView::Preview::Filter).isNull());
+    QVERIFY(panel->applyButton()->isEnabled());
     // Kept: the preview comes back, of the picture with the kept result on top.
     QImage white(doc->size(), QImage::Format_ARGB32_Premultiplied);
     white.fill(Qt::white);
@@ -5175,6 +5298,15 @@ void TestCanvas::filtersInTheShell()
     QTRY_VERIFY(!canvas->preview(CanvasView::Preview::Filter).isNull());
     QTRY_VERIFY(shown().red() > 200);
     QVERIFY(shown() != kRed);
+
+    // What Apply said belongs to its picture: another document starts without it.
+    QSignalSpy applied(panel->runner(), &FilterRunner::finished);
+    QVERIFY(panel->applySelected());
+    QVERIFY(applied.wait(10000));
+    QVERIFY2(panel->statusText().startsWith(QStringLiteral("Applied")), qPrintable(panel->statusText()));
+    doc::Document *other = f.studio.newDocument(QSize(320, 240), QStringLiteral("Other"));
+    QTRY_COMPARE(f.studio.activeDocument(), other);
+    QCOMPARE(panel->statusText(), QString());
 
     // Tools → Filter editor… opens the chosen filter (a built-in one as a copy to change), New
     // filter… asks for a name; both in windows owned by the main window, which close with it.
@@ -5198,7 +5330,7 @@ void TestCanvas::filtersInTheShell()
     QVERIFY(QFileInfo(mine->path()).completeBaseName().contains(QStringLiteral("My shell filter")));
     QTRY_COMPARE(f.studio.jobs()->activeCount() + f.studio.jobs()->pendingCount(), 0); // no question on closing
     window->close();
-    QTRY_VERIFY_WITH_TIMEOUT(!copy && !mine, 5000);
+    QTRY_VERIFY_WITH_TIMEOUT(!copy && !mine && !firstCopy, 5000);
     QVERIFY(!window->isVisible());
 }
 

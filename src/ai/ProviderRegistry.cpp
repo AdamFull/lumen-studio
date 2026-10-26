@@ -30,7 +30,7 @@ QString llmRoleLabel(LlmRole role)
     switch (role) {
     case LlmRole::Assistant: return QObject::tr("Chat assistant");
     case LlmRole::Vision: return QObject::tr("Vision analysis (reference images)");
-    case LlmRole::Director: return QObject::tr("Director (shot & pose planning)");
+    case LlmRole::Director: return QObject::tr("Director (shot and pose planning)");
     case LlmRole::PromptWriter: return QObject::tr("Prompt writer");
     }
     return {};
