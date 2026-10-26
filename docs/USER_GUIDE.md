@@ -255,8 +255,20 @@ The **⋯** button next to Generate holds what most people never need, and only 
   in the AI tab);
 * the engine: *Engine for changes* on a picture, *Image engine* on a blank canvas. A choice here
   stays until you choose another engine for that use in Settings → AI or Set up AI;
-* **Advanced**: *Steps* (the model's choice unless you set them) and *Seed* (random, or fixed to get
-  the same result again);
+* **Advanced**: the settings the engine's model takes, each at *Model's choice* (with the model's own
+  value) until you change it, and *Seed* (random, or fixed to get the same result again). Only what
+  the model uses is shown:
+  * *Steps*;
+  * *Follow the words* (CFG): how closely the image follows the description. Distilled models such as
+    FLUX.2 [klein] and FLUX.1 run at CFG 1; for them a note says so instead, since a higher value
+    only makes them slower and burns the image (the klein *base* models do take it);
+  * *Guidance* for FLUX.1 dev (3.5 is usual), *Keep the picture* for edit models whose preset sets
+    it, *Flow shift* for Qwen-Image;
+  * *Sampler* and *Scheduler*;
+  * *CLIP skip* for SD 1.5 and SDXL models (Pony and Illustrious usually want 2).
+
+  The values are kept for each model type and are the same in the AI tab; *Back to the model's
+  choice* undoes them. Image models have no "temperature": the nearest is *Follow the words*;
 * **All AI options…** opens the AI tab.
 
 **LoRAs.** *Add a LoRA…* lists the LoRAs the engine can load. Those made for the engine's model come

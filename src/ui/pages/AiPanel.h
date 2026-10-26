@@ -24,6 +24,7 @@ namespace lumen::ui {
 
 class AiOptions;
 class AutoTextEdit;
+class RunSettingsEditor;
 class CharacterChip;
 class ProviderCombo;
 class ReferenceStrip;
@@ -136,7 +137,7 @@ private:
     QWidget *m_refsBox;
     QCheckBox *m_usePose;
     QSpinBox *m_variants;
-    QSpinBox *m_steps;
+    RunSettingsEditor *m_settings;
     QSpinBox *m_seed;
     QCheckBox *m_randomSeed;
     QWidget *m_negativeBox;

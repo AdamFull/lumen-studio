@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ai/RunSettings.h"
+
 #include <QHash>
 #include <QJsonObject>
 #include <QList>
@@ -62,9 +64,11 @@ public:
     void setRegionStrength(double strength);
     double variationStrength() const { return m_variationStrength; }
     void setVariationStrength(double strength);
-    // 0 = the model's (its preset, else the provider's).
-    int steps() const { return m_steps; }
-    void setSteps(int steps);
+    // The settings chosen for a model (steps, how closely to follow the words, sampler…), kept by
+    // its RunSettingsSpec::key (the model preset, else the engine) for the next session; empty = the
+    // model's own values.
+    ai::RunSettings runSettings(const QString &key) const { return m_runSettings.value(key); }
+    void setRunSettings(const QString &key, const ai::RunSettings &settings);
     // -1 = a new random seed for every run.
     qint64 seed() const { return m_seed; }
     void setSeed(qint64 seed);
@@ -113,7 +117,6 @@ private:
     QString m_settingsEngine[2]; // what Settings → AI named for each use when last looked at
     double m_regionStrength = 0.75;
     double m_variationStrength = 0.45;
-    int m_steps = 0;
     qint64 m_seed = -1;
     int m_variants = 2;
     QString m_negative;
@@ -122,6 +125,7 @@ private:
     int m_feather = 16;
     bool m_colorMatch = true;
     QHash<QString, QList<ChosenLora>> m_loras;
+    QHash<QString, ai::RunSettings> m_runSettings;
 };
 
 } // namespace lumen::ui

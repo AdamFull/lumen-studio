@@ -405,7 +405,12 @@ doc::Document *NewFromPromptDialog::create()
         r.loras = m_options->loraRefs(provider->instanceId());
         r.prompt = m_options->withTriggerWords(provider->instanceId(), r.prompt);
     }
-    // Steps, guidance and the sampler come from the model (its preset) and the provider.
+    // Steps, guidance and the sampler come from the model (its preset) and the provider, unless they
+    // were set for this model in the editor (⋯ → Advanced, the AI tab).
+    if (m_options) {
+        const ai::RunSettingsSpec spec = ai::runSettingsFor(provider);
+        ai::applyRunSettings(r, m_options->runSettings(spec.key), spec);
+    }
     std::optional<pose::Pose> fitted = m_pose;
     if (fitted) {
         fitted->resizeCanvas(size, true);

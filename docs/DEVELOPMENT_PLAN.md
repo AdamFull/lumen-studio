@@ -3905,7 +3905,28 @@ Decisions (October 2026, with the user):
   * Not yet: the AI tab has no picker of its own (its actions use the choice made in ⋯); ComfyUI does
     not list its LoRAs; suggestions; a LoRA for FLUX.1 trained on only its first few blocks would read
     as klein 4B.
-- [ ] Settings per model type (§18.4).
+- [x] Settings per model type (§18.4).
+  * `ai::RunSettingsSpec` (`runSettingsFor`): what the engine's model takes and its own values, from
+    its preset (ModelDefaults), its prompt style and the provider's capabilities. A preset with CFG 1
+    is *distilled* (FLUX.2 [klein] 4B / 9B, FLUX.1): no CFG to set, a note instead; FLUX.1 dev's
+    distilled guidance, image guidance and flow shift where the preset sets them; sampler and
+    scheduler where the provider takes them; CLIP skip for the SD 1.5 / SDXL presets (or, without a
+    preset, a name that reads as one). `ai::RunSettings` holds the user's values (0 = the model's),
+    kept per preset (else per engine) in `AiOptions` (`editor/ai/settings`); it replaces the one
+    global *Steps*.
+  * `ImageRequest` gained `guidance`, `imageCfg`, `flowShift` and `clipSkip` (0 = the model's);
+    sd.cpp sends them (`distilled_guidance`, `img_cfg`, `flow_shift`, `clip_skip`), WebUI sends CLIP
+    skip and Forge's `distilled_cfg_scale`; `describe()` keeps them in the results' details.
+  * `RunSettingsEditor` in ⋯ → *Advanced* and the AI tab (one value each for both): every row at
+    *Model's choice (value)*, plain names with the technical one in the tooltip, *Back to the
+    model's choice*. sd.cpp's sampler and scheduler lists fall back to the names every sd-server since
+    2024 knows when the server cannot be asked, so a list never starts a server.
+  * Tests: `tst_canvas runSettingsPerModel` (klein: steps and sampler, the distilled note, the
+    request's `sample_steps`, `sample_method` and CFG 1, kept per model type, the AI tab shows the
+    same, reset; an SDXL-class engine: CFG and CLIP skip kept apart; FLUX.1 dev: the preset's guidance
+    and a chosen one in the request; a value a model does not take is not applied).
+  * Not yet: ComfyUI templates take only the settings they bind; image guidance is offered only
+    where a preset sets it (none does yet).
 - [ ] Classic finders (lines, specks, colour range) in `core/` with golden-image tests; *Select →
   By description…* with the rule-based parser; *Find lines* node.
 - [ ] ONNX Runtime as a managed component (pinned release, CUDA / DirectML / CPU builds, C API);

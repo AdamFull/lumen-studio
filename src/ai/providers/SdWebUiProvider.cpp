@@ -277,9 +277,17 @@ QJsonObject SdWebUiProvider::buildPayload(const ImageRequest &r, const QStringLi
         p.insert(QStringLiteral("sampler_name"), r.sampler);
     if (!r.scheduler.isEmpty())
         p.insert(QStringLiteral("scheduler"), r.scheduler);
+    // Forge's distilled guidance for FLUX.1 dev.
+    if (r.guidance > 0)
+        p.insert(QStringLiteral("distilled_cfg_scale"), r.guidance);
+    QJsonObject overrides;
     const QString ckpt = checkpointName(r);
-    if (!ckpt.isEmpty()) {
-        p.insert(QStringLiteral("override_settings"), QJsonObject{{QStringLiteral("sd_model_checkpoint"), ckpt}});
+    if (!ckpt.isEmpty())
+        overrides.insert(QStringLiteral("sd_model_checkpoint"), ckpt);
+    if (r.clipSkip > 0)
+        overrides.insert(QStringLiteral("CLIP_stop_at_last_layers"), r.clipSkip);
+    if (!overrides.isEmpty()) {
+        p.insert(QStringLiteral("override_settings"), overrides);
         p.insert(QStringLiteral("override_settings_restore_afterwards"), false);
     }
     if (r.mode != GenMode::TextToImage) {

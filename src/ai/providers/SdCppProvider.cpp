@@ -117,14 +117,33 @@ QFuture<QStringList> SdCppProvider::listModels()
     });
 }
 
+// What every sd-server since 2024 knows, for when the server cannot be asked (a server Lumen runs is
+// started only for a run, not to fill a list).
+const QStringList kKnownSamplers{QStringLiteral("euler"),     QStringLiteral("euler_a"), QStringLiteral("heun"),
+                                 QStringLiteral("dpm2"),      QStringLiteral("dpm++2s_a"), QStringLiteral("dpm++2m"),
+                                 QStringLiteral("dpm++2mv2"), QStringLiteral("ipndm"),   QStringLiteral("ipndm_v"),
+                                 QStringLiteral("lcm"),       QStringLiteral("ddim_trailing"), QStringLiteral("tcd")};
+const QStringList kKnownSchedulers{QStringLiteral("discrete"), QStringLiteral("karras"), QStringLiteral("exponential"), QStringLiteral("ays"),
+                                   QStringLiteral("gits")};
+
 QFuture<QStringList> SdCppProvider::listSamplers()
 {
-    return serverCapabilities().then([](const QJsonObject &caps) { return stringsOf(caps.value(QStringLiteral("samplers")).toArray()); });
+    return serverCapabilities()
+        .then([](const QJsonObject &caps) {
+            const QStringList listed = stringsOf(caps.value(QStringLiteral("samplers")).toArray());
+            return listed.isEmpty() ? kKnownSamplers : listed;
+        })
+        .onFailed([](const std::exception_ptr &) { return kKnownSamplers; });
 }
 
 QFuture<QStringList> SdCppProvider::listSchedulers()
 {
-    return serverCapabilities().then([](const QJsonObject &caps) { return stringsOf(caps.value(QStringLiteral("schedulers")).toArray()); });
+    return serverCapabilities()
+        .then([](const QJsonObject &caps) {
+            const QStringList listed = stringsOf(caps.value(QStringLiteral("schedulers")).toArray());
+            return listed.isEmpty() ? kKnownSchedulers : listed;
+        })
+        .onFailed([](const std::exception_ptr &) { return kKnownSchedulers; });
 }
 
 QFuture<QStringList> SdCppProvider::listOptions(const QString &settingKey)
@@ -175,14 +194,17 @@ QJsonObject SdCppProvider::buildPayload(const ImageRequest &r) const
     // The request's values, else the provider's settings, else the model preset's.
     const ModelDefaults d = modelDefaultsOf(this);
     QJsonObject guidance{{QStringLiteral("txt_cfg"), r.cfg}};
-    if (d.guidance > 0)
-        guidance.insert(QStringLiteral("distilled_guidance"), d.guidance);
-    if (d.imageCfg > 0)
-        guidance.insert(QStringLiteral("img_cfg"), d.imageCfg);
+    const double distilled = r.guidance > 0 ? r.guidance : d.guidance;
+    if (distilled > 0)
+        guidance.insert(QStringLiteral("distilled_guidance"), distilled);
+    const double imageCfg = r.imageCfg > 0 ? r.imageCfg : d.imageCfg;
+    if (imageCfg > 0)
+        guidance.insert(QStringLiteral("img_cfg"), imageCfg);
     QJsonObject sample{{QStringLiteral("sample_steps"), r.steps > 0 ? r.steps : d.steps > 0 ? d.steps : 20},
                        {QStringLiteral("guidance"), guidance}};
-    if (d.flowShift > 0)
-        sample.insert(QStringLiteral("flow_shift"), d.flowShift);
+    const double flowShift = r.flowShift > 0 ? r.flowShift : d.flowShift;
+    if (flowShift > 0)
+        sample.insert(QStringLiteral("flow_shift"), flowShift);
     const QString sampler = !r.sampler.isEmpty() ? r.sampler : !text(QStringLiteral("sampler")).isEmpty() ? text(QStringLiteral("sampler")) : d.sampler;
     const QString scheduler = !r.scheduler.isEmpty() ? r.scheduler : !text(QStringLiteral("scheduler")).isEmpty() ? text(QStringLiteral("scheduler")) : d.scheduler;
     if (!sampler.isEmpty())
@@ -196,7 +218,7 @@ QJsonObject SdCppProvider::buildPayload(const ImageRequest &r) const
                   {QStringLiteral("height"), r.size.height()},
                   {QStringLiteral("seed"), double(r.seed)},
                   {QStringLiteral("batch_count"), std::max(1, r.batchCount)},
-                  {QStringLiteral("clip_skip"), -1},
+                  {QStringLiteral("clip_skip"), r.clipSkip > 0 ? r.clipSkip : -1},
                   {QStringLiteral("sample_params"), sample},
                   {QStringLiteral("preview"), preview},
                   {QStringLiteral("preview_interval"), 2},

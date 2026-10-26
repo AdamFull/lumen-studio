@@ -7,6 +7,7 @@
 #include "ui/Theme.h"
 #include "ui/pages/AiOptions.h"
 #include "ui/widgets/LoraPicker.h"
+#include "ui/widgets/RunSettingsEditor.h"
 #include "ui/pages/AiPanel.h"
 #include "ui/pages/VariantStrip.h"
 #include "ui/widgets/Controls.h"
@@ -179,12 +180,9 @@ void PromptBar::buildOptions()
     m_advanced->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
     m_advanced->setArrowType(Qt::RightArrow);
     m_form->addRow(m_advanced);
-    m_steps = new QSpinBox(m_popup);
-    m_steps->setAccessibleName(tr("Steps"));
-    m_steps->setRange(0, 150);
-    m_steps->setSpecialValueText(tr("Model's choice"));
-    m_steps->setToolTip(tr("More steps can add detail and take longer. The model's choice is right for most models."));
-    m_form->addRow(tr("Steps"), m_steps);
+    // The settings the engine's model takes (plan M18 §18.4), shared with the AI tab.
+    m_settings = new RunSettingsEditor(m_options, m_popup);
+    m_form->addRow(m_settings);
     m_seedRow = new QWidget(m_popup);
     auto *seedRow = new QHBoxLayout(m_seedRow);
     seedRow->setContentsMargins(0, 0, 0, 0);
@@ -207,7 +205,6 @@ void PromptBar::buildOptions()
         else
             m_options->setRegionStrength(percent / 100.0);
     });
-    connect(m_steps, &QSpinBox::valueChanged, m_options, &AiOptions::setSteps);
     connect(m_seed, &QSpinBox::valueChanged, this, [this](int seed) {
         if (!m_randomSeed->isChecked())
             m_options->setSeed(seed);
@@ -446,11 +443,10 @@ void PromptBar::updateOptions()
         label->setText(changes ? tr("Engine for changes") : tr("Image engine"));
     m_engine->setAccessibleName(changes ? tr("Engine for changes") : tr("Image engine"));
     {
-        const QSignalBlocker b1(m_strength), b2(m_steps), b3(m_seed), b4(m_randomSeed), b5(m_variants), b6(m_pose), b7(m_engine);
+        const QSignalBlocker b1(m_strength), b3(m_seed), b4(m_randomSeed), b5(m_variants), b6(m_pose), b7(m_engine);
         m_strength->setValue(std::round((variation ? m_options->variationStrength() : m_options->regionStrength()) * 100));
         m_strength->setToolTip(variation ? tr("How much a variation may change the image: a little keeps more of it.")
                                          : tr("How much the selected area may change: a little keeps more of what is there."));
-        m_steps->setValue(m_options->steps());
         m_randomSeed->setChecked(m_options->seed() < 0);
         m_seed->setEnabled(m_options->seed() >= 0);
         if (m_options->seed() >= 0)
@@ -467,8 +463,9 @@ void PromptBar::updateOptions()
     // Only what the request uses and the engine takes.
     m_form->setRowVisible(m_strength, p.strength);
     const bool advanced = m_advanced->isChecked();
-    m_form->setRowVisible(m_advanced, !provider || caps.steps || caps.seed);
-    m_form->setRowVisible(m_steps, advanced && (!provider || caps.steps));
+    m_settings->setEngine(provider);
+    m_form->setRowVisible(m_advanced, !provider || caps.seed || m_settings->hasSettings());
+    m_form->setRowVisible(m_settings, advanced && m_settings->hasSettings());
     m_form->setRowVisible(m_seedRow, advanced && (!provider || caps.seed));
     const bool negative = provider && caps.negativePrompt && ai::promptStyleFor(provider).supportsNegative;
     m_form->setRowVisible(m_negative, negative);

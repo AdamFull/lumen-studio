@@ -32,6 +32,7 @@
 #include "ui/pages/VariantStrip.h"
 #include "ui/widgets/JobCard.h"
 #include "ui/widgets/LoraPicker.h"
+#include "ui/widgets/RunSettingsEditor.h"
 #include "ui/widgets/ProviderCombo.h"
 #include "ui/widgets/ReferenceStrip.h"
 #include "ai/ModelDefaults.h"
@@ -205,6 +206,7 @@ private slots:
     void promptBarNewImage();
     void loraPickerElsewhere();
     void loraPickerFolder();
+    void runSettingsPerModel();
     void promptBarWithoutEdits();
     void aiMenuAndPanel();
     void promptBarKeepsTyping();
@@ -5127,6 +5129,133 @@ void TestCanvas::loraPickerFolder()
     QCOMPARE(QDir::cleanPath(QDir::fromNativeSeparators(refs.first().file)), QDir::cleanPath(dir.filePath(QStringLiteral("loras/ink_klein4b.safetensors"))));
     // The server was never started to list them.
     QCOMPARE(studio.servers()->state(profile.id), runtime::ServerState::Stopped);
+}
+
+// The settings of a run follow the model type (plan M18 §18.4): FLUX.2 [klein] 4B (distilled) offers
+// its steps and sampler and says why CFG is not set; an SDXL-class engine offers CFG and CLIP skip;
+// FLUX.1 dev its guidance. What is set goes with the request, is kept per model type, and the AI tab
+// shows the same values.
+void TestCanvas::runSettingsPerModel()
+{
+    Settings::instance().remove(QStringLiteral("editor/ai/settings"));
+    auto cleanup = qScopeGuard([] { Settings::instance().remove(QStringLiteral("editor/ai/settings")); });
+    PromptBarFixture f;
+    QVERIFY(f.setUp(true));
+    doc::Document *doc = f.studio.newDocument(QSize(512, 512), QStringLiteral("Blank"));
+    QVERIFY(doc);
+    QTRY_VERIFY(f.bar()->plan().action == PromptAction::NewImage);
+    QWidget *popup = f.bar()->optionsPopup();
+    f.bar()->findChild<QToolButton *>(QStringLiteral("promptMore"))->click();
+    QTRY_VERIFY(popup->isVisible());
+    RunSettingsEditor *settings = f.bar()->runSettings();
+    QVERIFY(settings && !settings->isVisibleTo(popup)); // under Advanced
+    popup->findChild<QToolButton *>(QStringLiteral("promptAdvanced"))->click();
+    QVERIFY(settings->isVisibleTo(popup));
+    auto byName = [](QWidget *root, const QString &name) -> QWidget * {
+        for (QWidget *w : root->findChildren<QWidget *>()) {
+            if (w->accessibleName() == name)
+                return w;
+        }
+        return nullptr;
+    };
+    QCOMPARE(settings->spec().key, QStringLiteral("preset:flux2-klein-4b"));
+    auto *steps = qobject_cast<QSpinBox *>(byName(settings, QStringLiteral("Steps")));
+    QVERIFY(steps && steps->isVisibleTo(popup));
+    QCOMPARE(steps->specialValueText(), QStringLiteral("Model's choice (4)"));
+    // Distilled: no CFG to set, and a note that says why.
+    QVERIFY(!byName(settings, QStringLiteral("Follow the words"))->isVisibleTo(popup));
+    QVERIFY(settings->findChild<QLabel *>(QStringLiteral("runSettingsDistilled"))->isVisibleTo(popup));
+    QVERIFY(!byName(settings, QStringLiteral("CLIP skip"))->isVisibleTo(popup));
+    QVERIFY(!byName(settings, QStringLiteral("Guidance"))->isVisibleTo(popup));
+    // The sampler list, though the server lists none (a server Lumen runs is not started for it).
+    auto *sampler = qobject_cast<QComboBox *>(byName(settings, QStringLiteral("Sampler")));
+    QVERIFY(sampler && sampler->isVisibleTo(popup));
+    QCOMPARE(sampler->itemText(0), QStringLiteral("Model's choice (euler)"));
+    QTRY_VERIFY(sampler->findData(QStringLiteral("euler_a")) > 0);
+    steps->setValue(6);
+    sampler->setCurrentIndex(sampler->findData(QStringLiteral("euler_a")));
+    emit sampler->activated(sampler->currentIndex());
+    AiOptions *options = f.editor()->aiOptions();
+    QCOMPARE(options->runSettings(QStringLiteral("preset:flux2-klein-4b")).steps, 6);
+    QCOMPARE(options->runSettings(QStringLiteral("preset:flux2-klein-4b")).sampler, QStringLiteral("euler_a"));
+    // The AI tab shows the same.
+    auto *panelSteps = qobject_cast<QSpinBox *>(byName(f.editor()->aiPanel(), QStringLiteral("Steps")));
+    QVERIFY(panelSteps);
+    QCOMPARE(panelSteps->value(), 6);
+    popup->hide();
+
+    f.words()->setPlainText(QStringLiteral("a lighthouse"));
+    QTest::keyClick(f.words(), Qt::Key_Return);
+    QTRY_COMPARE_WITH_TIMEOUT(f.strip()->count(), 2, 10000);
+    QJsonObject sample = f.sd.last().value(QStringLiteral("sample_params")).toObject();
+    QCOMPARE(sample.value(QStringLiteral("sample_steps")).toInt(), 6);
+    QCOMPARE(sample.value(QStringLiteral("sample_method")).toString(), QStringLiteral("euler_a"));
+    QCOMPARE(sample.value(QStringLiteral("guidance")).toObject().value(QStringLiteral("txt_cfg")).toDouble(), 1.0);
+    f.strip()->discard();
+    // Kept for the model type in the next session; back to the model's choice.
+    {
+        AiOptions next;
+        QCOMPARE(next.runSettings(QStringLiteral("preset:flux2-klein-4b")).steps, 6);
+    }
+    settings->findChild<QPushButton *>(QStringLiteral("runSettingsReset"))->click();
+    QVERIFY(options->runSettings(QStringLiteral("preset:flux2-klein-4b")).isEmpty());
+    QCOMPARE(steps->value(), 0);
+
+    // An SDXL-class engine without a preset: CFG and CLIP skip, kept apart from klein's.
+    auto *sdxl = qobject_cast<ai::SdCppProvider *>(f.studio.providers()->addProvider(
+        QStringLiteral("sdcpp"), QStringLiteral("SDXL"), {{QStringLiteral("url"), f.sd.server.baseUrl().toString()}}));
+    QVERIFY(sdxl);
+    auto removeSdxl = qScopeGuard([&] { f.studio.providers()->removeProvider(sdxl->instanceId()); });
+    RunSettingsEditor editor(options);
+    editor.setEngine(sdxl);
+    QCOMPARE(editor.spec().key, QStringLiteral("engine:") + sdxl->instanceId());
+    QVERIFY(editor.spec().cfg && editor.spec().clipSkip && !editor.spec().distilled);
+    auto *cfg = qobject_cast<QDoubleSpinBox *>(byName(&editor, QStringLiteral("Follow the words")));
+    auto *clipSkip = qobject_cast<QSpinBox *>(byName(&editor, QStringLiteral("CLIP skip")));
+    QVERIFY(cfg && clipSkip);
+    QCOMPARE(cfg->specialValueText(), QStringLiteral("Model's choice (6)"));
+    cfg->setValue(4.5);
+    clipSkip->setValue(2);
+    ai::ImageRequest r;
+    const ai::RunSettingsSpec spec = ai::runSettingsFor(sdxl);
+    ai::applyRunSettings(r, options->runSettings(spec.key), spec);
+    QVERIFY(r.cfgChosen);
+    QCOMPARE(r.cfg, 4.5);
+    QCOMPARE(sdxl->buildPayload(r).value(QStringLiteral("clip_skip")).toInt(), 2);
+    QVERIFY(options->runSettings(QStringLiteral("preset:flux2-klein-4b")).isEmpty());
+    // A value set for a model type does not reach one that does not take it (klein: no CFG).
+    ai::RunSettings forced;
+    forced.cfg = 7;
+    ai::ImageRequest kr;
+    ai::applyRunSettings(kr, forced, ai::runSettingsFor(f.provider));
+    QVERIFY(!kr.cfgChosen);
+
+    // FLUX.1 dev: its guidance, the preset's value unless one is set.
+    ai::ModelDefaults dev;
+    dev.id = QStringLiteral("flux1-dev");
+    dev.name = QStringLiteral("FLUX.1 [dev]");
+    dev.cfg = 1.0;
+    dev.guidance = 3.5;
+    dev.steps = 20;
+    auto *flux1 = qobject_cast<ai::SdCppProvider *>(f.studio.providers()->addProvider(
+        QStringLiteral("sdcpp"), QStringLiteral("Dev"),
+        {{QStringLiteral("url"), f.sd.server.baseUrl().toString()}, {QStringLiteral("model_preset"), dev.toVariant()}}));
+    QVERIFY(flux1);
+    auto removeFlux1 = qScopeGuard([&] { f.studio.providers()->removeProvider(flux1->instanceId()); });
+    const ai::RunSettingsSpec devSpec = ai::runSettingsFor(flux1);
+    QVERIFY(devSpec.guidance && devSpec.distilled && !devSpec.cfg && !devSpec.clipSkip);
+    QCOMPARE(devSpec.modelGuidance, 3.5);
+    ai::ImageRequest dr;
+    QCOMPARE(flux1->buildPayload(dr).value(QStringLiteral("sample_params")).toObject().value(QStringLiteral("guidance")).toObject()
+                 .value(QStringLiteral("distilled_guidance")).toDouble(),
+             3.5);
+    ai::RunSettings devSettings;
+    devSettings.guidance = 2.5;
+    ai::applyRunSettings(dr, devSettings, devSpec);
+    QCOMPARE(flux1->buildPayload(dr).value(QStringLiteral("sample_params")).toObject().value(QStringLiteral("guidance")).toObject()
+                 .value(QStringLiteral("distilled_guidance")).toDouble(),
+             2.5);
+    QCOMPARE(dr.describe().value(QStringLiteral("guidance")).toDouble(), 2.5);
 }
 
 // An engine without instruction edits (sd.cpp with a model it has no preset for): without a

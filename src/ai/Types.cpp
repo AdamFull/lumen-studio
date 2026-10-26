@@ -168,6 +168,14 @@ QJsonObject ImageRequest::describe() const
         o.insert(QStringLiteral("sampler"), sampler);
     if (!scheduler.isEmpty())
         o.insert(QStringLiteral("scheduler"), scheduler);
+    if (guidance > 0)
+        o.insert(QStringLiteral("guidance"), guidance);
+    if (imageCfg > 0)
+        o.insert(QStringLiteral("image_cfg"), imageCfg);
+    if (flowShift > 0)
+        o.insert(QStringLiteral("flow_shift"), flowShift);
+    if (clipSkip > 0)
+        o.insert(QStringLiteral("clip_skip"), clipSkip);
     if (!model.isEmpty())
         o.insert(QStringLiteral("model"), model);
     if (mode != GenMode::TextToImage)

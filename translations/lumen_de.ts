@@ -230,7 +230,7 @@
         <translation>Der Teile-Server hat keine Ebenen zurückgegeben</translation>
     </message>
     <message>
-        <location filename="../src/ai/providers/SdWebUiProvider.cpp" line="+451"/>
+        <location filename="../src/ai/providers/SdWebUiProvider.cpp" line="+459"/>
         <source>Step %1 / %2</source>
         <translation>Schritt %1 / %2</translation>
     </message>
@@ -2803,7 +2803,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Verbunden – Modell: %1</translation>
     </message>
     <message>
-        <location line="+176"/>
+        <location line="+198"/>
         <source>The model on this server does not edit images from an instruction (FLUX.2 [klein], FLUX.1 Kontext and Qwen-Image-Edit do); use inpainting or a variation instead.</source>
         <translation>Das Modell auf diesem Server bearbeitet keine Bilder nach einer Anweisung (FLUX.2 [klein], FLUX.1 Kontext und Qwen-Image-Edit können das); verwenden Sie stattdessen Inpainting oder eine Variation.</translation>
     </message>
@@ -2881,7 +2881,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ai::SdWebUiProvider</name>
     <message>
-        <location filename="../src/ai/providers/SdWebUiProvider.cpp" line="-390"/>
+        <location filename="../src/ai/providers/SdWebUiProvider.cpp" line="-398"/>
         <source>Local AUTOMATIC1111, Forge or reForge server started with --api. Pose control and character references use the ControlNet extension (built into Forge) with OpenPose and IP-Adapter models.</source>
         <translation>Lokaler AUTOMATIC1111-, Forge- oder reForge-Server, gestartet mit --api. Posensteuerung und Charakterreferenzen nutzen die ControlNet-Erweiterung (in Forge integriert) mit OpenPose- und IP-Adapter-Modellen.</translation>
     </message>
@@ -3011,7 +3011,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Verbunden – aktueller Checkpoint: %1</translation>
     </message>
     <message>
-        <location line="+188"/>
+        <location line="+196"/>
         <source>Pose control needs an OpenPose ControlNet model, but none was found on the server. Install one (e.g. controlnet-openpose-sdxl or xinsir union) or pick it in the provider settings.</source>
         <translation>Die Posensteuerung benötigt ein OpenPose-ControlNet-Modell, auf dem Server wurde jedoch keines gefunden. Installieren Sie eines (z. B. controlnet-openpose-sdxl oder xinsir union) oder wählen Sie es in den Anbietereinstellungen aus.</translation>
     </message>
@@ -6446,7 +6446,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::AiPanel</name>
     <message>
-        <location filename="../src/ui/pages/AiPanel.cpp" line="+91"/>
+        <location filename="../src/ui/pages/AiPanel.cpp" line="+92"/>
         <source>Action</source>
         <translation>Aktion</translation>
     </message>
@@ -6467,24 +6467,24 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+327"/>
+        <location line="+322"/>
         <source>Upscale</source>
         <translation>Hochskalieren</translation>
     </message>
     <message>
-        <location line="-326"/>
+        <location line="-321"/>
         <source>Cut out the subject onto a transparent layer.</source>
         <translation>Das Motiv auf eine transparente Ebene freistellen.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+327"/>
-        <location line="+321"/>
+        <location line="+322"/>
+        <location line="+320"/>
         <source>Detect pose</source>
         <translation>Pose erkennen</translation>
     </message>
     <message>
-        <location line="-588"/>
+        <location line="-582"/>
         <source>Left</source>
         <translation>Links</translation>
     </message>
@@ -6515,7 +6515,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Optionen</translation>
     </message>
     <message>
-        <location line="+55"/>
+        <location line="+51"/>
         <source>Context</source>
         <translation>Kontext</translation>
     </message>
@@ -6535,21 +6535,21 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Farben an die Umgebung angleichen</translation>
     </message>
     <message>
-        <location line="+146"/>
+        <location line="+144"/>
         <source>Will use %1 for this action.</source>
         <translation>Für diese Aktion wird %1 verwendet.</translation>
     </message>
     <message>
-        <location line="-312"/>
-        <location line="+327"/>
-        <location line="+304"/>
+        <location line="-306"/>
+        <location line="+322"/>
+        <location line="+303"/>
         <location line="+4"/>
         <source>Remove background</source>
         <translation>Hintergrund entfernen</translation>
     </message>
     <message>
-        <location line="-306"/>
-        <location line="+255"/>
+        <location line="-305"/>
+        <location line="+254"/>
         <source>Expand canvas</source>
         <translation>Arbeitsfläche erweitern</translation>
     </message>
@@ -6569,7 +6569,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>%1 Varianten wurden als Ebenen hinzugefügt – schalten Sie ihre Sichtbarkeit um, um sie zu vergleichen.</translation>
     </message>
     <message>
-        <location line="-439"/>
+        <location line="-433"/>
         <location line="+3"/>
         <source>Engine for changes</source>
         <translation>Engine für Änderungen</translation>
@@ -6611,12 +6611,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+20"/>
-        <location line="+238"/>
+        <location line="+233"/>
         <source>Make a variation</source>
         <translation>Eine Variation erstellen</translation>
     </message>
     <message>
-        <location line="-226"/>
+        <location line="-221"/>
         <source>These also apply to the prompt bar under the canvas.</source>
         <translation>Diese gelten auch für die Prompt-Leiste unter der Arbeitsfläche.</translation>
     </message>
@@ -6642,23 +6642,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Wie viele Ergebnisse jeder Durchlauf zur Auswahl erzeugt.</translation>
     </message>
     <message>
-        <location line="+2"/>
-        <location line="+2"/>
-        <source>Steps</source>
-        <translation>Schritte</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Model&apos;s choice</source>
-        <translation>Wahl des Modells</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>More steps can add detail and take longer. The model&apos;s choice is right for most models.</source>
-        <translation>Mehr Schritte können Details hinzufügen und dauern länger. Die Wahl des Modells passt für die meisten Modelle.</translation>
-    </message>
-    <message>
-        <location line="+2"/>
+        <location line="+5"/>
         <location line="+3"/>
         <source>Seed</source>
         <translation>Seed</translation>
@@ -6704,7 +6688,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Wie breit der Rand ist, über den ein Ergebnis in das Bild rund um die Auswahl übergeht.</translation>
     </message>
     <message>
-        <location line="+137"/>
+        <location line="+135"/>
         <source>It uses the words in the prompt bar under the canvas, if any.</source>
         <translation>Es verwendet die Worte in der Prompt-Leiste unter der Arbeitsfläche, falls vorhanden.</translation>
     </message>
@@ -15745,7 +15729,7 @@ oder eines aus den Projektbildern ziehen</translation>
 <context>
     <name>lumen::ui::PromptBar</name>
     <message>
-        <location filename="../src/ui/pages/PromptBar.cpp" line="+58"/>
+        <location filename="../src/ui/pages/PromptBar.cpp" line="+59"/>
         <source>Progress</source>
         <translation>Fortschritt</translation>
     </message>
@@ -15771,12 +15755,12 @@ oder eines aus den Projektbildern ziehen</translation>
     </message>
     <message>
         <location line="+4"/>
-        <location line="+318"/>
+        <location line="+314"/>
         <source>Generate</source>
         <translation>Generieren</translation>
     </message>
     <message>
-        <location line="-313"/>
+        <location line="-309"/>
         <source>Remove object</source>
         <translation>Objekt entfernen</translation>
     </message>
@@ -15843,34 +15827,18 @@ oder eines aus den Projektbildern ziehen</translation>
     </message>
     <message>
         <location line="+4"/>
-        <location line="+274"/>
+        <location line="+270"/>
         <location line="+1"/>
         <source>Image engine</source>
         <translation>Bild-Engine</translation>
     </message>
     <message>
-        <location line="-271"/>
+        <location line="-267"/>
         <source>Advanced</source>
         <translation>Erweitert</translation>
     </message>
     <message>
-        <location line="+7"/>
-        <location line="+4"/>
-        <source>Steps</source>
-        <translation>Schritte</translation>
-    </message>
-    <message>
-        <location line="-2"/>
-        <source>Model&apos;s choice</source>
-        <translation>Wahl des Modells</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>More steps can add detail and take longer. The model&apos;s choice is right for most models.</source>
-        <translation>Mehr Schritte können Details hinzufügen und dauern länger. Die Wahl des Modells passt für die meisten Modelle.</translation>
-    </message>
-    <message>
-        <location line="+6"/>
+        <location line="+13"/>
         <location line="+6"/>
         <source>Seed</source>
         <translation>Seed</translation>
@@ -15896,7 +15864,7 @@ oder eines aus den Projektbildern ziehen</translation>
         <translation>Die KI-Registerkarte: alle Optionen und die Aktionen, die keine Beschreibung sind (Hochskalieren, Erweitern, Hintergrund entfernen…)</translation>
     </message>
     <message>
-        <location line="+140"/>
+        <location line="+139"/>
         <source>Describe the change, e.g. “colorize it” or “replace the cup with a candle”</source>
         <translation>Beschreiben Sie die Änderung, z. B. „färbe es ein“ oder „ersetze die Tasse durch eine Kerze“</translation>
     </message>
@@ -16048,7 +16016,7 @@ oder eines aus den Projektbildern ziehen</translation>
         <translation>Wie stark sich der ausgewählte Bereich ändern darf: wenig behält mehr vom Vorhandenen.</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+13"/>
         <source>Add in the AI tab…</source>
         <translation>In der KI-Registerkarte hinzufügen…</translation>
     </message>
@@ -16061,7 +16029,7 @@ oder eines aus den Projektbildern ziehen</translation>
         </translation>
     </message>
     <message>
-        <location line="+88"/>
+        <location line="+89"/>
         <source>Removed</source>
         <translation>Entfernt</translation>
     </message>
@@ -16287,6 +16255,130 @@ oder eines aus den Projektbildern ziehen</translation>
         <location line="+8"/>
         <source>From project images (drag images here)</source>
         <translation>Aus den Projektbildern (Bilder hierher ziehen)</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::ui::RunSettingsEditor</name>
+    <message>
+        <location filename="../src/ui/widgets/RunSettingsEditor.cpp" line="+41"/>
+        <location line="+3"/>
+        <source>Steps</source>
+        <translation>Schritte</translation>
+    </message>
+    <message>
+        <location line="-1"/>
+        <source>More steps can add detail and take longer. The model&apos;s choice is right for most models.</source>
+        <translation>Mehr Schritte können Details hinzufügen und dauern länger. Die Wahl des Modells passt für die meisten Modelle.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <location line="+6"/>
+        <source>Follow the words</source>
+        <translation>Den Worten folgen</translation>
+    </message>
+    <message>
+        <location line="-2"/>
+        <source>How closely the image follows the description (CFG). Higher follows it more strictly but can look harsh; lower is freer and softer.</source>
+        <translation>Wie genau das Bild der Beschreibung folgt (CFG). Höher folgt ihr strenger, kann aber hart wirken; niedriger ist freier und weicher.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>This model is distilled: it runs at CFG 1, so how closely it follows the words is not set here (a higher CFG only makes it slower and burns the image).</source>
+        <translation>Dieses Modell ist destilliert: Es läuft mit CFG 1, deshalb wird hier nicht eingestellt, wie genau es den Worten folgt (ein höherer CFG macht es nur langsamer und lässt das Bild ausbrennen).</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <location line="+6"/>
+        <source>Guidance</source>
+        <translation>Guidance</translation>
+    </message>
+    <message>
+        <location line="-2"/>
+        <source>FLUX.1 dev&apos;s built-in guidance (distilled guidance): how closely it follows the description. 3.5 is usual; lower looks more natural.</source>
+        <translation>Die eingebaute Guidance von FLUX.1 dev (Distilled Guidance): wie genau es der Beschreibung folgt. 3,5 ist üblich; niedriger wirkt natürlicher.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <location line="+5"/>
+        <source>Keep the picture</source>
+        <translation>Bild beibehalten</translation>
+    </message>
+    <message>
+        <location line="-1"/>
+        <source>How closely an edit keeps the picture it changes (image guidance).</source>
+        <translation>Wie genau eine Bearbeitung das Bild beibehält, das sie ändert (Image Guidance).</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <location line="+6"/>
+        <source>Flow shift</source>
+        <translation>Flow Shift</translation>
+    </message>
+    <message>
+        <location line="-2"/>
+        <source>Where the model spends its steps (flow shift): higher puts more into the overall layout, lower into fine detail.</source>
+        <translation>Worauf das Modell seine Schritte verwendet (Flow Shift): höher mehr auf den Gesamtaufbau, niedriger auf feine Details.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <location line="+2"/>
+        <source>Sampler</source>
+        <translation>Sampler</translation>
+    </message>
+    <message>
+        <location line="-1"/>
+        <source>The method that turns noise into the image, step by step. The model&apos;s choice suits it best.</source>
+        <translation>Das Verfahren, das Schritt für Schritt aus Rauschen das Bild macht. Die Wahl des Modells passt am besten zu ihm.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <location line="+2"/>
+        <source>Scheduler</source>
+        <translation>Scheduler</translation>
+    </message>
+    <message>
+        <location line="-1"/>
+        <source>How the steps are spread from rough to fine (scheduler).</source>
+        <translation>Wie die Schritte von grob bis fein verteilt werden (Scheduler).</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <location line="+3"/>
+        <source>CLIP skip</source>
+        <translation>CLIP Skip</translation>
+    </message>
+    <message>
+        <location line="-1"/>
+        <source>Leaves out the text encoder&apos;s last layers (CLIP skip). Pony and Illustrious models usually want 2.</source>
+        <translation>Lässt die letzten Schichten des Text-Encoders aus (CLIP Skip). Pony- und Illustrious-Modelle wollen meist 2.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Back to the model&apos;s choice</source>
+        <translation>Zurück zur Wahl des Modells</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Every setting here goes back to the model&apos;s own value</source>
+        <translation>Jede Einstellung hier kehrt zum eigenen Wert des Modells zurück</translation>
+    </message>
+    <message>
+        <location line="+20"/>
+        <source>Settings for %1</source>
+        <translation>Einstellungen für %1</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <location line="+17"/>
+        <source>Model&apos;s choice (%1)</source>
+        <translation>Wahl des Modells (%1)</translation>
+    </message>
+    <message>
+        <location line="-17"/>
+        <location line="+6"/>
+        <location line="+11"/>
+        <source>Model&apos;s choice</source>
+        <translation>Wahl des Modells</translation>
     </message>
 </context>
 <context>

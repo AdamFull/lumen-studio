@@ -20,6 +20,7 @@ add_library(lumen_ui STATIC
     widgets/LayersPanel.h widgets/LayersPanel.cpp
     widgets/ProviderCombo.h widgets/ProviderCombo.cpp
     widgets/LoraPicker.h widgets/LoraPicker.cpp
+    widgets/RunSettingsEditor.h widgets/RunSettingsEditor.cpp
     widgets/JobCard.h widgets/JobCard.cpp
     widgets/Toasts.h widgets/Toasts.cpp
     widgets/ServerStatus.h widgets/ServerStatus.cpp

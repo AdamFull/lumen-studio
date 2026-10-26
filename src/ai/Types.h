@@ -111,6 +111,13 @@ struct ImageRequest
     bool stepsChosen = false;
     QString sampler;
     QString scheduler;
+    // Settings only some models take (plan M18 §18.4); 0 = the model's (its preset, else the
+    // server's): FLUX.1 dev's distilled guidance, an edit model's image guidance, the flow shift of
+    // flow models (Qwen-Image), and how many of the text encoder's last layers to skip (SD 1.5, SDXL).
+    double guidance = 0;
+    double imageCfg = 0;
+    double flowShift = 0;
+    int clipSkip = 0;
     QString model;
     int batchCount = 1;
 

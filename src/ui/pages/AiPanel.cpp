@@ -11,6 +11,7 @@
 #include "ui/Theme.h"
 #include "ui/dialogs/CharacterLoraDialog.h"
 #include "ui/pages/AiOptions.h"
+#include "ui/widgets/RunSettingsEditor.h"
 #include "ui/pages/PromptPlan.h"
 #include "ui/widgets/CharacterChip.h"
 #include "ui/widgets/Controls.h"
@@ -222,13 +223,9 @@ AiPanel::AiPanel(Studio *studio, AiOptions *options, QWidget *parent)
     m_variants->setRange(1, AiOptions::kMaxVariants);
     m_variants->setToolTip(tr("How many results each run makes to choose from."));
     form->addWidget(m_variants, 0, 1);
-    form->addWidget(new QLabel(tr("Steps"), content), 1, 0);
-    m_steps = new QSpinBox(content);
-    m_steps->setAccessibleName(tr("Steps"));
-    m_steps->setRange(0, 150);
-    m_steps->setSpecialValueText(tr("Model's choice"));
-    m_steps->setToolTip(tr("More steps can add detail and take longer. The model's choice is right for most models."));
-    form->addWidget(m_steps, 1, 1);
+    // The settings the engine's model takes (plan M18 §18.4), shared with the prompt bar's ⋯.
+    m_settings = new RunSettingsEditor(options, content);
+    form->addWidget(m_settings, 1, 0, 1, 2);
     form->addWidget(new QLabel(tr("Seed"), content), 2, 0);
     auto *seedRow = new QHBoxLayout;
     m_seed = new QSpinBox(content);
@@ -281,7 +278,6 @@ AiPanel::AiPanel(Studio *studio, AiOptions *options, QWidget *parent)
     connect(m_areaStrength, &SliderField::valueChanged, this, [this](double percent) { m_options->setRegionStrength(percent / 100.0); });
     connect(m_usePose, &QCheckBox::toggled, m_options, &AiOptions::setUsePose);
     connect(m_variants, &QSpinBox::valueChanged, m_options, &AiOptions::setVariants);
-    connect(m_steps, &QSpinBox::valueChanged, m_options, &AiOptions::setSteps);
     connect(m_seed, &QSpinBox::valueChanged, this, [this](int seed) {
         if (!m_randomSeed->isChecked())
             m_options->setSeed(seed);
@@ -305,13 +301,12 @@ void AiPanel::syncFromOptions()
         const QSignalBlocker b(m_provider);
         m_provider->setPinnedProviderId(m_options->providerId(true));
     }
-    const QSignalBlocker b1(m_strength), b2(m_usePose), b3(m_variants), b4(m_steps), b5(m_seed), b6(m_randomSeed), b7(m_padding),
+    const QSignalBlocker b1(m_strength), b2(m_usePose), b3(m_variants), b5(m_seed), b6(m_randomSeed), b7(m_padding),
         b8(m_feather), b9(m_colorMatch), b10(m_areaStrength);
     m_strength->setValue(std::round(m_options->variationStrength() * 100));
     m_areaStrength->setValue(std::round(m_options->regionStrength() * 100));
     m_usePose->setChecked(m_options->usePose());
     m_variants->setValue(m_options->variants());
-    m_steps->setValue(m_options->steps());
     m_randomSeed->setChecked(m_options->seed() < 0);
     m_seed->setEnabled(m_options->seed() >= 0);
     if (m_options->seed() >= 0)
@@ -421,7 +416,8 @@ void AiPanel::updateUi()
     m_capsWarning->setVisible(!warning.isEmpty());
     m_negativeBox->setVisible(takesNegative(provider));
     m_usePose->setVisible(caps.poseControl && m_doc && m_doc->controlPose());
-    m_steps->setEnabled(!provider || caps.steps);
+    m_settings->setEngine(provider);
+    m_settings->setVisible(m_settings->hasSettings());
     m_run->setEnabled(m_doc != nullptr && runnable);
     const QString runText = m_mode == Mode::Upscale ? tr("Upscale")
                           : m_mode == Mode::RemoveBackground ? tr("Remove background")
@@ -445,10 +441,9 @@ ai::ImageRequest AiPanel::baseRequest(const ai::ImageProvider *provider, const Q
     r.references = m_refs->references();
     if (provider) {
         const ai::ImageCapabilities caps = provider->capabilities();
-        if (m_options->steps() > 0 && caps.steps) {
-            r.steps = m_options->steps();
-            r.stepsChosen = true;
-        }
+        // What was set for this model (steps, how closely to follow the words, sampler…).
+        const ai::RunSettingsSpec spec = ai::runSettingsFor(provider);
+        ai::applyRunSettings(r, m_options->runSettings(spec.key), spec);
         r.references = r.references.mid(0, caps.maxReferences);
         // The LoRAs chosen for this engine that are on (the picker turns off those that do not fit
         // its model), and the words that call them up.

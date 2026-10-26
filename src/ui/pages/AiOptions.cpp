@@ -17,6 +17,8 @@ namespace {
 const QString kVariantsKey = QStringLiteral("editor/ai/variants");
 // {engine id: [ChosenLora…]} as JSON.
 const QString kLorasKey = QStringLiteral("editor/ai/loras");
+// {RunSettingsSpec::key: RunSettings} as JSON.
+const QString kRunSettingsKey = QStringLiteral("editor/ai/settings");
 }
 
 QJsonObject ChosenLora::toJson() const
@@ -54,6 +56,27 @@ AiOptions::AiOptions(QObject *parent)
         if (!list.isEmpty())
             m_loras.insert(it.key(), list);
     }
+    const QJsonObject settings = QJsonDocument::fromJson(Settings::instance().value(kRunSettingsKey).toByteArray()).object();
+    for (auto it = settings.begin(); it != settings.end(); ++it) {
+        const ai::RunSettings s = ai::RunSettings::fromJson(it.value().toObject());
+        if (!s.isEmpty())
+            m_runSettings.insert(it.key(), s);
+    }
+}
+
+void AiOptions::setRunSettings(const QString &key, const ai::RunSettings &settings)
+{
+    if (key.isEmpty() || m_runSettings.value(key) == settings)
+        return;
+    if (settings.isEmpty())
+        m_runSettings.remove(key);
+    else
+        m_runSettings.insert(key, settings);
+    QJsonObject saved;
+    for (auto it = m_runSettings.cbegin(); it != m_runSettings.cend(); ++it)
+        saved.insert(it.key(), it.value().toJson());
+    Settings::instance().setValue(kRunSettingsKey, QJsonDocument(saved).toJson(QJsonDocument::Compact));
+    emit changed();
 }
 
 void AiOptions::setLoras(const QString &providerId, const QList<ChosenLora> &loras)
@@ -163,11 +186,6 @@ void AiOptions::setRegionStrength(double strength)
 void AiOptions::setVariationStrength(double strength)
 {
     set(m_variationStrength, std::clamp(strength, 0.05, 1.0));
-}
-
-void AiOptions::setSteps(int steps)
-{
-    set(m_steps, std::max(0, steps));
 }
 
 void AiOptions::setSeed(qint64 seed)

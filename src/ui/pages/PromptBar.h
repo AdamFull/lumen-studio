@@ -28,6 +28,7 @@ class AiOptions;
 class AiPanel;
 class AutoTextEdit;
 class LoraPicker;
+class RunSettingsEditor;
 class ElidedLabel;
 class ProviderCombo;
 class SliderField;
@@ -75,6 +76,7 @@ public:
     // engine, steps and seed under "Advanced", and "All AI options…".
     QWidget *optionsPopup() const { return m_popup; }
     LoraPicker *loraPicker() const { return m_loras; }
+    RunSettingsEditor *runSettings() const { return m_settings; }
     void showOptions();
 
 signals:
@@ -125,7 +127,7 @@ private:
     QFrame *m_popup = nullptr;
     QFormLayout *m_form = nullptr;
     SliderField *m_strength = nullptr;
-    QSpinBox *m_steps = nullptr;
+    RunSettingsEditor *m_settings = nullptr;
     QWidget *m_seedRow = nullptr;
     QSpinBox *m_seed = nullptr;
     QCheckBox *m_randomSeed = nullptr;

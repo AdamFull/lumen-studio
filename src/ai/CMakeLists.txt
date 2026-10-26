@@ -20,6 +20,7 @@ add_library(lumen_ai STATIC
     StructuredChat.h StructuredChat.cpp
     PromptStyle.h PromptStyle.cpp
     ModelDefaults.h ModelDefaults.cpp
+    RunSettings.h RunSettings.cpp
     GenerationService.h GenerationService.cpp
     FilterNodes.h FilterNodes.cpp
     CastGeneration.h CastGeneration.cpp
