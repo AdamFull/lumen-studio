@@ -3,6 +3,7 @@
 #include "ai/ProviderRegistry.h"
 #include "ai/Director.h"
 #include "ai/ModelDefaults.h"
+#include "ai/PromptRules.h"
 #include "ai/PromptStyle.h"
 #include "ai/ProviderUtil.h"
 #include "ai/providers/ComfyUiProvider.h"
@@ -47,6 +48,7 @@ private slots:
     void sdcppFailureCancelAndUpscale();
     void lorasAcrossProviders();
     void sdCppPromptStyle();
+    void promptRules();
     void sdcppPresetDefaultsAndEdit();
 
 private:
@@ -881,6 +883,81 @@ void TestProviders::lorasAcrossProviders()
         QCOMPARE(input("8", "vae"), (QJsonArray{QStringLiteral("4"), 2}));
         QCOMPARE(ComfyUiProvider::insertLoras(graph, {}), graph);
     }
+}
+
+// Prompts written for the model (plan M18 §18.2): an instruction becomes what should be there for a
+// model that fills an area, in its family's dialect; instruction models and new pictures keep the
+// words; Use my words as they are sends exactly what was typed.
+void TestProviders::promptRules()
+{
+    using K = Instruction::Kind;
+    struct Case
+    {
+        QString words;
+        K kind;
+        QString target;
+        QString result;
+    };
+    const QList<Case> cases{
+        {QStringLiteral("replace the cup with a candle"), K::Replace, QStringLiteral("the cup"), QStringLiteral("a candle")},
+        {QStringLiteral("Please turn the dog into a cat."), K::Replace, QStringLiteral("the dog"), QStringLiteral("a cat")},
+        {QStringLiteral("remove the black lines"), K::Remove, QStringLiteral("the black lines"), {}},
+        {QStringLiteral("remove it"), K::Remove, {}, {}},
+        {QStringLiteral("get rid of the lamp"), K::Remove, QStringLiteral("the lamp"), {}},
+        {QStringLiteral("make the car red"), K::Recolor, QStringLiteral("the car"), QStringLiteral("red")},
+        {QStringLiteral("change the colour of the dress to dark blue"), K::Recolor, QStringLiteral("the dress"), QStringLiteral("dark blue")},
+        {QStringLiteral("paint it green"), K::Recolor, {}, QStringLiteral("green")},
+        {QStringLiteral("add a hat"), K::Add, {}, QStringLiteral("a hat")},
+        {QStringLiteral("ersetze die Tasse durch eine Kerze"), K::Replace, QStringLiteral("die Tasse"), QStringLiteral("eine Kerze")},
+        {QStringLiteral("entferne die Lampe"), K::Remove, QStringLiteral("die Lampe"), {}},
+        {QStringLiteral("füge einen Hut hinzu"), K::Add, {}, QStringLiteral("einen Hut")},
+        {QStringLiteral("mach das Auto rot"), K::Recolor, QStringLiteral("das Auto"), QStringLiteral("rot")},
+        {QStringLiteral("a girl in a red dress"), K::None, {}, {}},
+        {QStringLiteral("make it look older"), K::None, {}, {}},
+    };
+    for (const Case &c : cases) {
+        const Instruction in = parseInstruction(c.words);
+        QVERIFY2(in.kind == c.kind, qPrintable(c.words));
+        QCOMPARE(in.target, c.target);
+        QCOMPARE(in.result, c.result);
+    }
+
+    PromptStyle tags;
+    tags.family = QStringLiteral("illustrious");
+    tags.dialect = PromptStyle::Dialect::Tags;
+    tags.qualityPrefix = QStringLiteral("masterpiece, best quality, ");
+    tags.defaultNegative = QStringLiteral("lowres");
+    PromptStyle natural;
+    natural.family = QStringLiteral("flux");
+    natural.supportsNegative = false;
+
+    // An area inpainted: what should be there, as tags for a tag model.
+    FittedPrompt f = fitPrompt(tags, GenMode::Inpaint, true, QStringLiteral("replace the cup with a candle"), {});
+    QCOMPARE(f.prompt, QStringLiteral("masterpiece, best quality, candle"));
+    QCOMPARE(f.negative, QStringLiteral("lowres"));
+    QVERIFY(f.rewritten);
+    QCOMPARE(fitPrompt(natural, GenMode::Inpaint, true, QStringLiteral("replace the cup with a candle"), {}).prompt, QStringLiteral("a candle"));
+    QCOMPARE(fitPrompt(natural, GenMode::ImageToImage, true, QStringLiteral("make the car red"), {}).prompt, QStringLiteral("red car"));
+    // Removed: an empty place, and what was there among the things to leave out.
+    f = fitPrompt(tags, GenMode::Inpaint, true, QStringLiteral("remove the lamp"), QStringLiteral("blurry"));
+    QCOMPARE(f.prompt, QStringLiteral("masterpiece, best quality, ") + emptyPlaceWords());
+    QCOMPARE(f.negative, QStringLiteral("lamp, blurry"));
+    QCOMPARE(fitPrompt(natural, GenMode::Inpaint, true, QStringLiteral("remove the lamp"), {}).negative, QString());
+    // Words that are no instruction stay; so do instructions for edit models and new pictures.
+    QCOMPARE(fitPrompt(tags, GenMode::Inpaint, true, QStringLiteral("1girl, red scarf"), {}).prompt,
+             QStringLiteral("masterpiece, best quality, 1girl, red scarf"));
+    f = fitPrompt(tags, GenMode::Edit, true, QStringLiteral("replace the cup with a candle"), {});
+    QCOMPARE(f.prompt, QStringLiteral("replace the cup with a candle"));
+    QVERIFY(!f.rewritten);
+    QCOMPARE(fitPrompt(tags, GenMode::TextToImage, false, QStringLiteral("add a hat"), {}).prompt,
+             QStringLiteral("masterpiece, best quality, add a hat"));
+    QCOMPARE(fitPrompt(tags, GenMode::ImageToImage, false, QStringLiteral("add a hat"), {}).prompt,
+             QStringLiteral("masterpiece, best quality, add a hat")); // a variation of the whole picture
+    // Use my words as they are.
+    f = fitPrompt(tags, GenMode::Inpaint, true, QStringLiteral("replace the cup with a candle"), {}, true);
+    QCOMPARE(f.prompt, QStringLiteral("replace the cup with a candle"));
+    QCOMPARE(f.negative, QString());
+    QVERIFY(!f.rewritten);
 }
 
 QTEST_MAIN(TestProviders)

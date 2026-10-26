@@ -18,6 +18,7 @@ add_library(lumen_ai STATIC
     providers/PartServerProvider.h providers/PartServerProvider.cpp
     ProviderCatalog.h ProviderCatalog.cpp
     StructuredChat.h StructuredChat.cpp
+    PromptRules.h PromptRules.cpp
     PromptStyle.h PromptStyle.cpp
     ModelDefaults.h ModelDefaults.cpp
     RunSettings.h RunSettings.cpp

@@ -188,6 +188,10 @@ void PromptBar::buildOptions()
     // The settings the engine's model takes (plan M18 §18.4), shared with the AI tab.
     m_settings = new RunSettingsEditor(m_options, m_popup);
     m_form->addRow(m_settings);
+    m_literal = new QCheckBox(tr("Use my words as they are"), m_popup);
+    m_literal->setObjectName(QStringLiteral("promptLiteralWords"));
+    m_literal->setToolTip(literalWordsHelp());
+    m_form->addRow(m_literal);
     m_seedRow = new QWidget(m_popup);
     auto *seedRow = new QHBoxLayout(m_seedRow);
     seedRow->setContentsMargins(0, 0, 0, 0);
@@ -218,6 +222,7 @@ void PromptBar::buildOptions()
     connect(m_variants, &QSpinBox::valueChanged, m_options, &AiOptions::setVariants);
     connect(m_negative, &QPlainTextEdit::textChanged, this, [this] { m_options->setNegative(m_negative->text()); });
     connect(m_pose, &QCheckBox::toggled, m_options, &AiOptions::setUsePose);
+    connect(m_literal, &QCheckBox::toggled, m_options, &AiOptions::setLiteralWords);
     // Only a choice of the user's picks the engine (ProviderCombo::picked), for the use the list
     // shows; choosing the one Settings → AI names leaves it to follow that one.
     connect(m_engine, &ProviderCombo::picked, this, [this] {
@@ -448,7 +453,7 @@ void PromptBar::updateOptions()
         label->setText(changes ? tr("Engine for changes") : tr("Image engine"));
     m_engine->setAccessibleName(changes ? tr("Engine for changes") : tr("Image engine"));
     {
-        const QSignalBlocker b1(m_strength), b3(m_seed), b4(m_randomSeed), b5(m_variants), b6(m_pose), b7(m_engine);
+        const QSignalBlocker b1(m_strength), b3(m_seed), b4(m_randomSeed), b5(m_variants), b6(m_pose), b7(m_engine), b8(m_literal);
         m_strength->setValue(std::round((variation ? m_options->variationStrength() : m_options->regionStrength()) * 100));
         m_strength->setToolTip(variation ? tr("How much a variation may change the image: a little keeps more of it.")
                                          : tr("How much the selected area may change: a little keeps more of what is there."));
@@ -458,6 +463,7 @@ void PromptBar::updateOptions()
             m_seed->setValue(int(std::min<qint64>(m_options->seed(), m_seed->maximum())));
         m_variants->setValue(m_options->variants());
         m_pose->setChecked(m_options->usePose());
+        m_literal->setChecked(m_options->literalWords());
         m_engine->setPinnedProviderId(m_options->providerId(changes));
     }
     // Not blocked: the field fits its height to the text (setting the same words back changes nothing).
@@ -472,6 +478,7 @@ void PromptBar::updateOptions()
     m_form->setRowVisible(m_advanced, !provider || caps.seed || m_settings->hasSettings());
     m_form->setRowVisible(m_settings, advanced && m_settings->hasSettings());
     m_form->setRowVisible(m_seedRow, advanced && (!provider || caps.seed));
+    m_form->setRowVisible(m_literal, advanced);
     const bool negative = provider && caps.negativePrompt && ai::promptStyleFor(provider).supportsNegative;
     m_form->setRowVisible(m_negative, negative);
     m_loras->setEngine(provider);

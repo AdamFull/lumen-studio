@@ -5672,6 +5672,36 @@ void TestCanvas::promptBarWithoutEdits()
     QCOMPARE(outside, 0);
     QCOMPARE(changed, 0);
 
+    // An instruction for the area: this model fills areas, so it gets what should be there (plan
+    // M18 §18.2), and each result's tooltip says what it got; Use my words as they are sends them.
+    f.words()->setPlainText(QStringLiteral("replace the scarf with a blue hat"));
+    QTRY_VERIFY(generate->isEnabled());
+    generate->click();
+    QTRY_COMPARE_WITH_TIMEOUT(strip->count(), 2, 10000);
+    sent = f.sd.last();
+    const QString fitted = sent.value(QStringLiteral("prompt")).toString();
+    QVERIFY2(fitted.endsWith(QStringLiteral("a blue hat")) && !fitted.contains(QStringLiteral("replace")), qPrintable(fitted));
+    QToolButton *first = nullptr;
+    for (QToolButton *b : strip->findChildren<QToolButton *>()) {
+        if (b->accessibleName() == QLatin1String("Result 1") && b->isVisibleTo(strip))
+            first = b;
+    }
+    QVERIFY(first);
+    QVERIFY2(first->toolTip().contains(QStringLiteral("The model got: ") + fitted), qPrintable(first->toolTip()));
+    strip->discard();
+    bar->showOptions();
+    auto *literal = bar->optionsPopup()->findChild<QCheckBox *>(QStringLiteral("promptLiteralWords"));
+    QVERIFY(literal && !literal->isChecked());
+    literal->setChecked(true);
+    QVERIFY(editor->aiOptions()->literalWords());
+    bar->optionsPopup()->hide();
+    generate->click();
+    QTRY_COMPARE_WITH_TIMEOUT(strip->count(), 2, 10000);
+    sent = f.sd.last();
+    QCOMPARE(sent.value(QStringLiteral("prompt")).toString(), QStringLiteral("replace the scarf with a blue hat"));
+    strip->discard();
+    editor->aiOptions()->setLiteralWords(false);
+
     // Remove: the area painted in from its surroundings, at full strength.
     const int layers = doc->layerCount();
     remove->click();

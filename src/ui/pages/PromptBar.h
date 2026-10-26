@@ -138,6 +138,7 @@ private:
     LoraPicker *m_loras = nullptr;
     QPushButton *m_references = nullptr;
     QCheckBox *m_pose = nullptr;
+    QCheckBox *m_literal = nullptr;
     ProviderCombo *m_engine = nullptr;
     QToolButton *m_advanced = nullptr;
     QPushButton *m_allOptions = nullptr;

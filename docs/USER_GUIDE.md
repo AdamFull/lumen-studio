@@ -267,7 +267,8 @@ A run makes 1 to 4 results (2 at first). While it works, the bar shows its progr
 becomes **Cancel**. The results appear in a strip above the bar, and the canvas shows the current
 one over your picture without changing it yet ("Result 1 of 4 · ←/→ to compare").
 
-* `←`/`→` or a click on a thumbnail shows another result.
+* `←`/`→` or a click on a thumbnail shows another result. Its tooltip shows what the model got: your
+  words as Lumen fitted them to the model (see below), and what it was told to leave out.
 * **Keep** (`Enter`) adds the result shown as a **new layer** on top, named after your words. A
   result of a selection covers only that area, so the original stays underneath. One **Undo** takes
   it away.
@@ -307,8 +308,20 @@ The **⋯** button next to Generate holds what most people never need, and only 
   * *CLIP skip* for SD 1.5 and SDXL models (Pony and Illustrious usually want 2).
 
   The values are kept for each model type and are the same in the AI tab; *Back to the model's
-  choice* undoes them. Image models have no "temperature": the nearest is *Follow the words*;
+  choice* undoes them. Image models have no "temperature": the nearest is *Follow the words*.
+  *Use my words as they are* is there too (see below);
 * **All AI options…** opens the AI tab.
+
+**Your words, fitted to the model.** Lumen adds the quality words the model's family expects
+(Illustrious, Pony and Anima models are trained on tags such as "masterpiece, best quality") and, for
+models that take one, a usual *Leave out* list when yours is empty. Models that edit from an
+instruction (FLUX.2 [klein], Kontext, Qwen-Image-Edit) get your words as they are. A model that
+fills a selected area draws what its words describe, so an instruction becomes a description of the
+result: "replace the cup with a candle" sends "a candle", "make the car red" sends "red car", "add a
+hat" sends "a hat", and "remove the lamp" sends the words for an empty place with "lamp" among the
+things to leave out. Tag models get tags ("candle"). Some German phrasings work too ("ersetze die
+Tasse durch eine Kerze"). **Use my words as they are** (in ⋯ → Advanced and in the AI tab) turns all
+of this off: the model gets exactly what you typed.
 
 **LoRAs.** *Add a LoRA…* lists the LoRAs the engine can load. Those made for the engine's model come
 first; the others are greyed out under *Made for another model*, with what they were made for (a LoRA

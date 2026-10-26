@@ -4024,7 +4024,29 @@ Decisions (October 2026, with the user):
     dialog finds the ball through it and says so; without the engine, nothing can find objects).
   * Not yet: a choice between the engine and the models when both are there (the models win, they
     are free and stay on this computer); ComfyUI's mask threshold is the template's.
-- [ ] Prompt rules per family; *Use my words as they are*; what was sent in the results' details.
+- [x] Prompt rules per family; *Use my words as they are*; what was sent in the results' details.
+  * `ai::parseInstruction` (`src/ai/PromptRules`): remove, replace ("with", "into"), recolour
+    (named colours, "dark blue") and add, in English and some German; pronouns ("it", "das") name no
+    target. `ai::fitPrompt` is the one place the words become the request: a new picture and a
+    variation of the whole picture get the family's quality words (`PromptStyle::apply`, as before);
+    an instruction edit gets the words as they are; an area inpainted or redrawn gets what should be
+    there (the replacement, the colour with the object, the added thing; for "remove", the empty
+    place words of *Remove object* with the object put first in the negative prompt), as bare
+    lower-case tags for tag families. The default negative is filled in where the model takes one.
+  * The family data stay in `PromptStyle` (dialect, quality words, default negative, safe tag) next
+    to the model presets that override them, rather than in `resources/prompts`: the rules are code
+    with unit tests, the words per family were already there.
+  * *Use my words as they are* (`AiOptions::literalWords`, remembered as `editor/ai/literal`) in ⋯ →
+    Advanced and in the AI tab: the words and the user's own negative prompt only.
+  * What was sent: each result's thumbnail tooltip in the results strip says what the model got
+    and what it was told to leave out (from the job's request); the asset's details already kept the
+    request.
+  * Tests: `tst_providers promptRules` (fifteen phrasings; tags, natural, remove, edit, new picture,
+    variation, literal); `tst_canvas promptBarWithoutEdits` (an SD engine with a selection: "replace
+    the scarf with a blue hat" sends "… a blue hat", the tooltip shows it, *Use my words as they are*
+    sends the instruction).
+  * Not yet: a language model rewriting what the rules cannot (§18.2's optional part, with the
+    planning step); a long description into tags for Anima.
 - [ ] LoRA suggestions; the picker for ComfyUI.
 - [ ] Planning with a vision model: `AgentRun` in the core, *Plan this change*, the proposal view.
 - [ ] Short live check (RTX 4060 8 GB): "remove the black lines" on a scanned drawing with a classic

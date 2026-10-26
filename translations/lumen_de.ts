@@ -6723,9 +6723,17 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
 </context>
 <context>
+    <name>lumen::ui::AiOptions</name>
+    <message>
+        <location filename="../src/ui/pages/AiOptions.cpp" line="+28"/>
+        <source>Lumen fits your words to the model: quality words its family expects, a usual &quot;leave out&quot; list, and for a model that fills an area, what should be there instead of the change (&quot;replace the cup with a candle&quot; becomes &quot;a candle&quot;). With this on, the model gets exactly what you typed.</source>
+        <translation>Lumen passt Ihre Worte an das Modell an: Qualitätswörter, die seine Familie erwartet, eine übliche „Weglassen“-Liste und für ein Modell, das einen Bereich füllt, was dort stattdessen sein soll („replace the cup with a candle“ wird zu „a candle“). Ist dies an, bekommt das Modell genau, was Sie eingegeben haben.</translation>
+    </message>
+</context>
+<context>
     <name>lumen::ui::AiPanel</name>
     <message>
-        <location filename="../src/ui/pages/AiPanel.cpp" line="+92"/>
+        <location filename="../src/ui/pages/AiPanel.cpp" line="+93"/>
         <source>Action</source>
         <translation>Aktion</translation>
     </message>
@@ -6746,24 +6754,24 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+322"/>
+        <location line="+328"/>
         <source>Upscale</source>
         <translation>Hochskalieren</translation>
     </message>
     <message>
-        <location line="-321"/>
+        <location line="-327"/>
         <source>Cut out the subject onto a transparent layer.</source>
         <translation>Das Motiv auf eine transparente Ebene freistellen.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+322"/>
+        <location line="+328"/>
         <location line="+320"/>
         <source>Detect pose</source>
         <translation>Pose erkennen</translation>
     </message>
     <message>
-        <location line="-582"/>
+        <location line="-588"/>
         <source>Left</source>
         <translation>Links</translation>
     </message>
@@ -6794,7 +6802,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Optionen</translation>
     </message>
     <message>
-        <location line="+51"/>
+        <location line="+55"/>
         <source>Context</source>
         <translation>Kontext</translation>
     </message>
@@ -6814,13 +6822,13 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Farben an die Umgebung angleichen</translation>
     </message>
     <message>
-        <location line="+144"/>
+        <location line="+146"/>
         <source>Will use %1 for this action.</source>
         <translation>Für diese Aktion wird %1 verwendet.</translation>
     </message>
     <message>
-        <location line="-306"/>
-        <location line="+322"/>
+        <location line="-312"/>
+        <location line="+328"/>
         <location line="+303"/>
         <location line="+4"/>
         <source>Remove background</source>
@@ -6828,7 +6836,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="-305"/>
-        <location line="+254"/>
+        <location line="+253"/>
         <source>Expand canvas</source>
         <translation>Arbeitsfläche erweitern</translation>
     </message>
@@ -6848,7 +6856,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>%1 Varianten wurden als Ebenen hinzugefügt – schalten Sie ihre Sichtbarkeit um, um sie zu vergleichen.</translation>
     </message>
     <message>
-        <location line="-433"/>
+        <location line="-438"/>
         <location line="+3"/>
         <source>Engine for changes</source>
         <translation>Engine für Änderungen</translation>
@@ -6890,12 +6898,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+20"/>
-        <location line="+233"/>
+        <location line="+239"/>
         <source>Make a variation</source>
         <translation>Eine Variation erstellen</translation>
     </message>
     <message>
-        <location line="-221"/>
+        <location line="-227"/>
         <source>These also apply to the prompt bar under the canvas.</source>
         <translation>Diese gelten auch für die Prompt-Leiste unter der Arbeitsfläche.</translation>
     </message>
@@ -6953,6 +6961,11 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+3"/>
+        <source>Use my words as they are</source>
+        <translation>Meine Worte unverändert verwenden</translation>
+    </message>
+    <message>
+        <location line="+4"/>
         <source>Area may change</source>
         <translation>Änderung im Bereich</translation>
     </message>
@@ -6967,7 +6980,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Wie breit der Rand ist, über den ein Ergebnis in das Bild rund um die Auswahl übergeht.</translation>
     </message>
     <message>
-        <location line="+135"/>
+        <location line="+137"/>
         <source>It uses the words in the prompt bar under the canvas, if any.</source>
         <translation>Es verwendet die Worte in der Prompt-Leiste unter der Arbeitsfläche, falls vorhanden.</translation>
     </message>
@@ -6977,7 +6990,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>%1 erstellt nur neue Bilder; es kann keine Variation dieses Bildes erstellen.</translation>
     </message>
     <message>
-        <location line="+130"/>
+        <location line="+129"/>
         <location line="+91"/>
         <source>Set up an image engine first: Help → Set up AI…</source>
         <translation>Richten Sie zuerst eine Bild-Engine ein: Hilfe → KI einrichten…</translation>
@@ -6993,7 +7006,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Wählen Sie mindestens eine Richtung.</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+26"/>
         <source>Expand: %1</source>
         <translation>Erweitern: %1</translation>
     </message>
@@ -16082,12 +16095,12 @@ oder eines aus den Projektbildern ziehen</translation>
     </message>
     <message>
         <location line="+4"/>
-        <location line="+314"/>
+        <location line="+319"/>
         <source>Generate</source>
         <translation>Generieren</translation>
     </message>
     <message>
-        <location line="-309"/>
+        <location line="-314"/>
         <source>Remove object</source>
         <translation>Objekt entfernen</translation>
     </message>
@@ -16154,18 +16167,23 @@ oder eines aus den Projektbildern ziehen</translation>
     </message>
     <message>
         <location line="+4"/>
-        <location line="+270"/>
+        <location line="+275"/>
         <location line="+1"/>
         <source>Image engine</source>
         <translation>Bild-Engine</translation>
     </message>
     <message>
-        <location line="-267"/>
+        <location line="-272"/>
         <source>Advanced</source>
         <translation>Erweitert</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+9"/>
+        <source>Use my words as they are</source>
+        <translation>Meine Worte unverändert verwenden</translation>
+    </message>
+    <message>
+        <location line="+8"/>
         <location line="+6"/>
         <source>Seed</source>
         <translation>Seed</translation>
@@ -16191,7 +16209,7 @@ oder eines aus den Projektbildern ziehen</translation>
         <translation>Die KI-Registerkarte: alle Optionen und die Aktionen, die keine Beschreibung sind (Hochskalieren, Erweitern, Hintergrund entfernen…)</translation>
     </message>
     <message>
-        <location line="+139"/>
+        <location line="+140"/>
         <source>Describe the change, e.g. “colorize it” or “replace the cup with a candle”</source>
         <translation>Beschreiben Sie die Änderung, z. B. „färbe es ein“ oder „ersetze die Tasse durch eine Kerze“</translation>
     </message>
@@ -16343,7 +16361,7 @@ oder eines aus den Projektbildern ziehen</translation>
         <translation>Wie stark sich der ausgewählte Bereich ändern darf: wenig behält mehr vom Vorhandenen.</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+14"/>
         <source>Add in the AI tab…</source>
         <translation>In der KI-Registerkarte hinzufügen…</translation>
     </message>
@@ -16356,7 +16374,7 @@ oder eines aus den Projektbildern ziehen</translation>
         </translation>
     </message>
     <message numerus="yes">
-        <location line="+113"/>
+        <location line="+114"/>
         <source>Selected %n object(s). Now say what should change there, or press Remove object.</source>
         <translation>
             <numerusform>%n Objekt ausgewählt. Sagen Sie jetzt, was sich dort ändern soll, oder drücken Sie Objekt entfernen.</numerusform>
@@ -19002,7 +19020,7 @@ Geändert %2</translation>
         <translation>Alle Ergebnisse verwerfen; das Bild bleibt, wie es ist (Esc)</translation>
     </message>
     <message>
-        <location line="+319"/>
+        <location line="+325"/>
         <source>Result %1 of %2 · more on the way</source>
         <translation>Ergebnis %1 von %2 · weitere folgen</translation>
     </message>
@@ -19037,12 +19055,27 @@ Geändert %2</translation>
         <translation>KI-Ergebnis behalten</translation>
     </message>
     <message>
-        <location line="+79"/>
+        <location line="+69"/>
+        <source>The model got: %1</source>
+        <translation>Das Modell bekam: %1</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>(no words)</source>
+        <translation>(keine Worte)</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Left out: %1</source>
+        <translation>Weglassen: %1</translation>
+    </message>
+    <message>
+        <location line="+25"/>
         <source>Result %1</source>
         <translation>Ergebnis %1</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-32"/>
         <source>Result %1 (←/→)</source>
         <translation>Ergebnis %1 (←/→)</translation>
     </message>

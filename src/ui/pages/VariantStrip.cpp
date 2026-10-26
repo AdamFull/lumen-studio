@@ -229,8 +229,14 @@ void VariantStrip::finished(doc::Document *doc, Job *job, const QString &name)
         const ai::GenerationOutput out = ai::GenerationService::outputOf(job);
         // A result of a selection shows the area it changed (the engine's picture of it).
         const bool region = !out.region.isEmpty() && out.rawImages.size() == out.images.size();
+        // What the model got (plan M18 §18.2), for the thumbnail's tooltip.
+        const QJsonObject sent = job->metadata().value(QStringLiteral("request")).toJsonObject();
         for (int i = 0; i < out.images.size(); ++i) {
             QJsonObject meta{{QStringLiteral("generated"), true}};
+            if (!sent.isEmpty()) {
+                meta.insert(QStringLiteral("sent_prompt"), sent.value(QStringLiteral("prompt")));
+                meta.insert(QStringLiteral("sent_negative"), sent.value(QStringLiteral("negative_prompt")));
+            }
             if (i < out.assets.size() && !out.assets[i].id.isEmpty())
                 meta.insert(QStringLiteral("asset"), out.assets[i].id);
             run.variants << Variant{fitted(out.images[i], doc->size()), region ? out.rawImages[i] : out.images[i], name, meta};
@@ -465,6 +471,24 @@ void VariantStrip::keyPressEvent(QKeyEvent *e)
         QFrame::keyPressEvent(e);
 }
 
+namespace {
+
+// "Result 2 (←/→)", and what the model got for it.
+QString resultTip(int number, const QJsonObject &meta)
+{
+    QString tip = QCoreApplication::translate("lumen::ui::VariantStrip", "Result %1 (←/→)").arg(number);
+    const QString prompt = meta.value(QStringLiteral("sent_prompt")).toString();
+    const QString negative = meta.value(QStringLiteral("sent_negative")).toString();
+    if (meta.contains(QStringLiteral("sent_prompt")))
+        tip += u'\n' + QCoreApplication::translate("lumen::ui::VariantStrip", "The model got: %1")
+                           .arg(prompt.isEmpty() ? QCoreApplication::translate("lumen::ui::VariantStrip", "(no words)") : prompt.left(400));
+    if (!negative.isEmpty())
+        tip += u'\n' + QCoreApplication::translate("lumen::ui::VariantStrip", "Left out: %1").arg(negative.left(300));
+    return tip;
+}
+
+} // namespace
+
 void VariantStrip::rebuild()
 {
     for (QAbstractButton *b : m_group->buttons()) {
@@ -485,7 +509,7 @@ void VariantStrip::rebuild()
         b->setAutoRaise(true);
         b->setFocusPolicy(Qt::NoFocus);
         b->setAccessibleName(tr("Result %1").arg(i + 1));
-        b->setToolTip(tr("Result %1 (←/→)").arg(i + 1));
+        b->setToolTip(resultTip(i + 1, run->variants[i].meta));
         m_group->addButton(b, i);
         m_thumbs->addWidget(b);
     }

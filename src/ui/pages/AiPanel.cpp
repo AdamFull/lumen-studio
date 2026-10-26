@@ -1,5 +1,6 @@
 #include "ui/pages/AiPanel.h"
 
+#include "ai/PromptRules.h"
 #include "ai/PromptStyle.h"
 #include "core/Async.h"
 #include "core/Error.h"
@@ -247,6 +248,10 @@ AiPanel::AiPanel(Studio *studio, AiOptions *options, QWidget *parent)
     m_negative->setPlaceholderText(tr("Things that should not be in the result"));
     nv->addWidget(m_negative);
     v->addWidget(m_negativeBox);
+    m_literal = new QCheckBox(tr("Use my words as they are"), content);
+    m_literal->setObjectName(QStringLiteral("aiLiteralWords"));
+    m_literal->setToolTip(literalWordsHelp());
+    v->addWidget(m_literal);
     m_areaStrength = new SliderField(tr("Area may change"), 5, 100, std::round(options->regionStrength() * 100), 0,
                                      QStringLiteral(" %"), content);
     m_areaStrength->setToolTip(tr("How much a selected area may change when the prompt bar paints it anew: a little keeps more of "
@@ -277,6 +282,7 @@ AiPanel::AiPanel(Studio *studio, AiOptions *options, QWidget *parent)
     connect(m_strength, &SliderField::valueChanged, this, [this](double percent) { m_options->setVariationStrength(percent / 100.0); });
     connect(m_areaStrength, &SliderField::valueChanged, this, [this](double percent) { m_options->setRegionStrength(percent / 100.0); });
     connect(m_usePose, &QCheckBox::toggled, m_options, &AiOptions::setUsePose);
+    connect(m_literal, &QCheckBox::toggled, m_options, &AiOptions::setLiteralWords);
     connect(m_variants, &QSpinBox::valueChanged, m_options, &AiOptions::setVariants);
     connect(m_seed, &QSpinBox::valueChanged, this, [this](int seed) {
         if (!m_randomSeed->isChecked())
@@ -301,11 +307,12 @@ void AiPanel::syncFromOptions()
         const QSignalBlocker b(m_provider);
         m_provider->setPinnedProviderId(m_options->providerId(true));
     }
-    const QSignalBlocker b1(m_strength), b2(m_usePose), b3(m_variants), b5(m_seed), b6(m_randomSeed), b7(m_padding),
+    const QSignalBlocker b0(m_literal), b1(m_strength), b2(m_usePose), b3(m_variants), b5(m_seed), b6(m_randomSeed), b7(m_padding),
         b8(m_feather), b9(m_colorMatch), b10(m_areaStrength);
     m_strength->setValue(std::round(m_options->variationStrength() * 100));
     m_areaStrength->setValue(std::round(m_options->regionStrength() * 100));
     m_usePose->setChecked(m_options->usePose());
+    m_literal->setChecked(m_options->literalWords());
     m_variants->setValue(m_options->variants());
     m_randomSeed->setChecked(m_options->seed() < 0);
     m_seed->setEnabled(m_options->seed() >= 0);
@@ -427,15 +434,14 @@ void AiPanel::updateUi()
     m_run->setText(runText);
 }
 
-ai::ImageRequest AiPanel::baseRequest(const ai::ImageProvider *provider, const QString &prompt, bool styled) const
+ai::ImageRequest AiPanel::baseRequest(const ai::ImageProvider *provider, const QString &prompt, ai::GenMode mode, bool area) const
 {
     ai::ImageRequest r;
     const ai::PromptStyle style = ai::promptStyleFor(provider);
-    // Instruction edits take the user's words as they are; the style's tags would read as orders.
-    r.prompt = styled ? style.apply(prompt) : prompt;
-    r.negativePrompt = takesNegative(provider) ? m_options->negative().trimmed() : QString();
-    if (r.negativePrompt.isEmpty() && style.supportsNegative)
-        r.negativePrompt = style.defaultNegative;
+    const ai::FittedPrompt fitted = ai::fitPrompt(style, mode, area, prompt, takesNegative(provider) ? m_options->negative() : QString(),
+                                                  m_options->literalWords());
+    r.prompt = fitted.prompt;
+    r.negativePrompt = fitted.negative;
     r.batchCount = m_options->variants();
     r.seed = m_options->seed();
     r.references = m_refs->references();
@@ -558,7 +564,7 @@ void AiPanel::submitPrompt(const PromptRun &run)
     const bool colorMatch = m_options->colorMatch();
     const int variants = m_options->variants();
     const ai::GenMode mode = run.mode;
-    ai::ImageRequest base = baseRequest(provider, run.prompt, mode != ai::GenMode::Edit);
+    ai::ImageRequest base = baseRequest(provider, run.prompt, mode, region);
     base.mode = mode;
     base.denoise = run.strength;
     // A region gets the character's LoRA (or reference) only; the prompt describes the region.
@@ -687,7 +693,8 @@ void AiPanel::run(Mode mode)
                                          m_expandRight->isChecked() ? -overlap : 0, m_expandBottom->isChecked() ? -overlap : 0),
                        Qt::black);
         }
-        ai::ImageRequest base = baseRequest(provider, prompt, true);
+        // The words describe the new area.
+        ai::ImageRequest base = baseRequest(provider, prompt, ai::GenMode::Inpaint, false);
         base.denoise = 1.0;
         const int feather = m_options->feather();
         const bool colorMatch = m_options->colorMatch();

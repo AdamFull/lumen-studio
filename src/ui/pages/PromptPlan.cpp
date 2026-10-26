@@ -1,5 +1,6 @@
 #include "ui/pages/PromptPlan.h"
 
+#include "ai/PromptRules.h"
 #include "core/ImageOps.h"
 #include "doc/Document.h"
 
@@ -77,7 +78,7 @@ RemovalRequest removalRequest(const PromptPlan &plan)
                                "never been there. Keep everything else exactly as it is."),
                 1.0};
     return {plan.mode == ai::GenMode::Inpaint ? ai::GenMode::Inpaint : ai::GenMode::ImageToImage,
-            QStringLiteral("empty background, seamless continuation of the surroundings"), 1.0};
+            ai::emptyPlaceWords(), 1.0};
 }
 
 bool isBlankCanvas(const doc::Document &doc)

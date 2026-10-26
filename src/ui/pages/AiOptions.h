@@ -17,6 +17,9 @@ struct LoraRef;
 
 namespace lumen::ui {
 
+// What Use my words as they are does, for its tooltip.
+QString literalWordsHelp();
+
 // A LoRA chosen in the editor for an image engine (plan M18 §18.3): what its server calls it, the
 // file on this computer when Lumen knows it, how strongly it applies, whether it is used, and the
 // words that call it up (added to the description when they are not in it).
@@ -81,6 +84,10 @@ public:
     // The document's control pose goes along when the engine has pose control.
     bool usePose() const { return m_usePose; }
     void setUsePose(bool use);
+    // Use my words as they are (plan M18 §18.2): no quality words, no default negative prompt, and
+    // an instruction is not turned into a description for inpainting. Remembered.
+    bool literalWords() const { return m_literalWords; }
+    void setLiteralWords(bool literal);
     // The region pipeline: the surroundings sent along with a selection, the width of the blended
     // edge (document pixels) and colour matching to the surroundings.
     int padding() const { return m_padding; }
@@ -121,6 +128,7 @@ private:
     int m_variants = 2;
     QString m_negative;
     bool m_usePose = true;
+    bool m_literalWords = false;
     int m_padding = 64;
     int m_feather = 16;
     bool m_colorMatch = true;

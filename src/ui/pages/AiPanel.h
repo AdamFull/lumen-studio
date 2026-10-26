@@ -112,7 +112,9 @@ private:
     }
     // The request values shared by every prompt run: words, negative prompt, steps, seed, variants,
     // references and the control pose.
-    ai::ImageRequest baseRequest(const ai::ImageProvider *provider, const QString &prompt, bool styled) const;
+    // The request for the words, fitted to the engine's model (plan M18 §18.2): `area` for a change
+    // of the selection, whose instruction an inpainting model gets as a description of the result.
+    ai::ImageRequest baseRequest(const ai::ImageProvider *provider, const QString &prompt, ai::GenMode mode, bool area) const;
     bool takesNegative(const ai::ImageProvider *provider) const;
 
     Studio *m_studio;
@@ -136,6 +138,7 @@ private:
     ReferenceStrip *m_refs;
     QWidget *m_refsBox;
     QCheckBox *m_usePose;
+    QCheckBox *m_literal;
     QSpinBox *m_variants;
     RunSettingsEditor *m_settings;
     QSpinBox *m_seed;

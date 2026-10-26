@@ -5,6 +5,7 @@
 #include "core/Settings.h"
 #include "ui/widgets/ProviderCombo.h"
 
+#include <QCoreApplication>
 #include <QJsonArray>
 #include <QJsonDocument>
 
@@ -15,10 +16,19 @@ namespace lumen::ui {
 
 namespace {
 const QString kVariantsKey = QStringLiteral("editor/ai/variants");
+const QString kLiteralKey = QStringLiteral("editor/ai/literal");
 // {engine id: [ChosenLora…]} as JSON.
 const QString kLorasKey = QStringLiteral("editor/ai/loras");
 // {RunSettingsSpec::key: RunSettings} as JSON.
 const QString kRunSettingsKey = QStringLiteral("editor/ai/settings");
+}
+
+QString literalWordsHelp()
+{
+    return QCoreApplication::translate("lumen::ui::AiOptions",
+                                       "Lumen fits your words to the model: quality words its family expects, a usual \"leave out\" "
+                                       "list, and for a model that fills an area, what should be there instead of the change (\"replace "
+                                       "the cup with a candle\" becomes \"a candle\"). With this on, the model gets exactly what you typed.");
 }
 
 QJsonObject ChosenLora::toJson() const
@@ -48,6 +58,7 @@ AiOptions::AiOptions(QObject *parent)
     : QObject(parent)
 {
     m_variants = std::clamp(Settings::instance().value(kVariantsKey, m_variants).toInt(), 1, kMaxVariants);
+    m_literalWords = Settings::instance().value(kLiteralKey, false).toBool();
     const QJsonObject saved = QJsonDocument::fromJson(Settings::instance().value(kLorasKey).toByteArray()).object();
     for (auto it = saved.begin(); it != saved.end(); ++it) {
         QList<ChosenLora> list;
@@ -210,6 +221,12 @@ void AiOptions::setNegative(const QString &negative)
 void AiOptions::setUsePose(bool use)
 {
     set(m_usePose, use);
+}
+
+void AiOptions::setLiteralWords(bool literal)
+{
+    Settings::instance().setValue(kLiteralKey, literal);
+    set(m_literalWords, literal);
 }
 
 void AiOptions::setPadding(int pixels)
