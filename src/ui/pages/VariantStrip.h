@@ -109,6 +109,8 @@ private:
     Run *shown();
     const Run *shown() const;
     void drop(doc::Document *doc);
+    // The document closes: its run goes and what still runs is cancelled.
+    void forget(doc::Document *doc);
     void watch(doc::Document *doc, Job *job, const QString &name, int results);
     void rejoin(doc::Document *doc, Job *job, int results);
     void finished(doc::Document *doc, Job *job, const QString &name);

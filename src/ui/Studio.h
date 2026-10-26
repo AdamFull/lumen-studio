@@ -163,6 +163,8 @@ signals:
     void projectClosed();
     void documentsChanged();
     void activeDocumentChanged(lumen::doc::Document *doc);
+    // The document is closing (it is still in documents()): what works on it for the user stops.
+    void documentClosing(lumen::doc::Document *doc);
     void pageRequested(const QString &id);
     void referenceRequested(const QString &assetId);
     void poseForGenerationRequested(const lumen::pose::Pose &pose);

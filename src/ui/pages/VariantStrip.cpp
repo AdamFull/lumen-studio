@@ -76,7 +76,25 @@ VariantStrip::VariantStrip(Studio *studio, CanvasView *canvas, QWidget *parent)
         if (isVisible())
             updateLabel();
     });
+    // A document that closes takes its run with it: what still runs stops, and nothing it makes
+    // comes back here.
+    connect(studio, &Studio::documentClosing, this, &VariantStrip::forget);
     hide();
+}
+
+void VariantStrip::forget(doc::Document *doc)
+{
+    auto it = m_runs.find(doc);
+    if (it == m_runs.end())
+        return;
+    const QList<Tracked> jobs = it->jobs;
+    m_runs.erase(it);
+    disconnect(doc, nullptr, this, nullptr);
+    for (const Tracked &t : jobs) {
+        if (t.job && !t.job->isFinished())
+            t.job->cancel();
+    }
+    rebuild();
 }
 
 VariantStrip::Run *VariantStrip::shown()
@@ -136,6 +154,12 @@ void VariantStrip::track(doc::Document *doc, const QList<Job *> &jobs, const QSt
 {
     if (!doc)
         return;
+    // Prepared for a document that was closed meanwhile: its results would go nowhere.
+    if (!m_studio->documents().contains(doc)) {
+        for (Job *job : jobs)
+            job->cancel();
+        return;
+    }
     Run &run = runFor(doc);
     const bool stopped = run.stopped;
     if (run.submitting > 0)
@@ -183,6 +207,8 @@ void VariantStrip::watch(doc::Document *doc, Job *job, const QString &name, int 
 
 void VariantStrip::rejoin(doc::Document *doc, Job *job, int results)
 {
+    if (!m_studio->documents().contains(doc))
+        return; // retried after its document closed
     Run &run = runFor(doc);
     if (run.has(job))
         return;

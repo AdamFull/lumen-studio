@@ -760,6 +760,7 @@ QFuture<void> Studio::closeDocument(doc::Document *doc)
 {
     if (!doc || !m_documents.contains(doc))
         return QtFuture::makeReadyVoidFuture();
+    emit documentClosing(doc);
     QFuture<void> saved = QtFuture::makeReadyVoidFuture();
     if (doc->isModified() && m_project && m_project->isOpen()) {
         // Persist before closing; deletion waits for the save to finish.

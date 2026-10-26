@@ -1,6 +1,7 @@
 // Files as in an image editor (M17): File → Save writes a picture back to the file it came from,
 // Save as… and Export a copy…, the unsaved-changes marker and the questions on closing and quitting,
-// recent files; the main window's keys in other windows.
+// recent files; the main window's keys in other windows; closing a document stops its prompt-bar
+// run.
 
 #include "MockHttpServer.h"
 #include "ai/ModelDefaults.h"
@@ -187,6 +188,58 @@ struct Fixture
     }
 };
 
+// The mock stable-diffusion.cpp server of a FLUX.2 [klein] engine: every request is held while
+// `hold` is set, then answered with one plain colour per image.
+struct MockSdCpp
+{
+    MockHttpServer server;
+    QList<QJsonObject> generations;
+    bool hold = false;
+    int cancels = 0;
+
+    MockSdCpp()
+    {
+        server.route("GET", QStringLiteral("/sdcpp/v1/capabilities"), [](const MockRequest &) { return MockResponse::json({}); });
+        server.route("POST", QStringLiteral("/sdcpp/v1/img_gen"), [this](const MockRequest &req) {
+            generations << req.json();
+            return MockResponse::json({{QStringLiteral("id"), QStringLiteral("job_%1").arg(generations.size())}}, 202);
+        });
+        for (int n = 1; n <= 12; ++n) {
+            server.route("GET", QStringLiteral("/sdcpp/v1/jobs/job_%1").arg(n), [this, n](const MockRequest &) {
+                if (hold)
+                    return MockResponse::json({{QStringLiteral("status"), QStringLiteral("queued")}});
+                const QJsonObject g = generations.value(n - 1);
+                const QSize size(g.value(QStringLiteral("width")).toInt(), g.value(QStringLiteral("height")).toInt());
+                QJsonArray images;
+                for (int i = 0; i < std::max(1, g.value(QStringLiteral("batch_count")).toInt()); ++i) {
+                    QImage im(size, QImage::Format_ARGB32);
+                    im.fill(QColor(40 * i, 90, 200));
+                    images.append(QJsonObject{{QStringLiteral("index"), i}, {QStringLiteral("b64_json"), QString::fromLatin1(img::encode(im).toBase64())}});
+                }
+                return MockResponse::json({{QStringLiteral("status"), QStringLiteral("completed")},
+                                           {QStringLiteral("result"), QJsonObject{{QStringLiteral("images"), images}}}});
+            });
+            server.route("POST", QStringLiteral("/sdcpp/v1/jobs/job_%1/cancel").arg(n), [this](const MockRequest &) {
+                ++cancels;
+                return MockResponse::json({});
+            });
+        }
+    }
+};
+
+ai::ModelDefaults kleinPreset()
+{
+    ai::ModelDefaults klein;
+    klein.id = QStringLiteral("flux2-klein-4b");
+    klein.name = QStringLiteral("FLUX.2 [klein] 4B");
+    klein.cfg = 1.0;
+    klein.steps = 4;
+    klein.nativeResolution = 1024;
+    klein.edit = true;
+    klein.references = 4;
+    return klein;
+}
+
 } // namespace
 
 class TestFiles : public QObject
@@ -201,6 +254,7 @@ private slots:
     void closeAndQuitAsk();
     void recentFiles();
     void shortcutsInOtherWindows();
+    void closingStopsItsRun();
 };
 
 void TestFiles::initTestCase()
@@ -734,6 +788,90 @@ void TestFiles::shortcutsInOtherWindows()
     QVERIFY(doc->isModified());
     // In the main window the customised key is the Queue's (the editor's undo has its own there).
     editor->close();
+}
+
+// Closing a document while its prompt-bar run goes cancels that run's jobs; their results go
+// nowhere, and the next document's run and results are not touched.
+void TestFiles::closingStopsItsRun()
+{
+    MockSdCpp sd;
+    Fixture f;
+    for (ai::Provider *p : f.studio.providers()->providers())
+        f.studio.providers()->removeProvider(p->instanceId());
+    auto cleanup = qScopeGuard([&] {
+        for (ai::Provider *p : f.studio.providers()->providers())
+            f.studio.providers()->removeProvider(p->instanceId());
+        Settings::instance().remove(QStringLiteral("editor/ai"));
+    });
+    Settings::instance().remove(QStringLiteral("editor/ai"));
+    QVariantMap settings{{QStringLiteral("url"), sd.server.baseUrl().toString()},
+                         {QStringLiteral("model"), QStringLiteral("flux-2-klein-4b.safetensors")},
+                         {QStringLiteral("model_preset"), kleinPreset().toVariant()}};
+    auto *provider = qobject_cast<ai::SdCppProvider *>(f.studio.providers()->addProvider(QStringLiteral("sdcpp"), QStringLiteral("Klein"), settings));
+    QVERIFY(provider);
+    provider->pollIntervalMs = 20;
+    QVERIFY(f.setUp());
+    EditorPage *editor = f.window->editor();
+    PromptBar *bar = editor->promptBar();
+    VariantStrip *strip = editor->variantStrip();
+    auto *words = bar->findChild<AutoTextEdit *>(QStringLiteral("promptText"));
+    QVERIFY(words);
+    auto generationJobs = [&f] {
+        QList<Job *> jobs;
+        for (Job *j : f.studio.jobs()->jobs()) {
+            if (j->kind() == QLatin1String("generation"))
+                jobs << j;
+        }
+        return jobs;
+    };
+
+    // B runs first and keeps running; then A.
+    sd.hold = true;
+    doc::Document *b = f.studio.openImageAsDocument(photo(QSize(320, 240)), QStringLiteral("B"));
+    QTRY_VERIFY(bar->plan().action == PromptAction::EditImage);
+    words->setPlainText(QStringLiteral("make it night"));
+    QTest::keyClick(words, Qt::Key_Return);
+    QTRY_COMPARE_WITH_TIMEOUT(sd.generations.size(), 1, 10000);
+    Job *bJob = generationJobs().value(0);
+    QVERIFY(bJob);
+    // A's job waits in the Queue behind B's (one at a time per engine).
+    doc::Document *a = f.studio.openImageAsDocument(photo(QSize(300, 200)), QStringLiteral("A"));
+    QTRY_VERIFY(bar->plan().action == PromptAction::EditImage);
+    words->setPlainText(QStringLiteral("make it snow"));
+    QTest::keyClick(words, Qt::Key_Return);
+    QTRY_COMPARE_WITH_TIMEOUT(generationJobs().size(), 2, 10000);
+    Job *aJob = generationJobs().value(1);
+    QVERIFY(aJob && aJob != bJob);
+    QVERIFY(strip->isRunning());
+
+    // A closes: its job is cancelled, B's goes on and B is shown.
+    QVERIFY(waitFor(f.files()->close(a)));
+    QTRY_COMPARE(aJob->state(), Job::State::Cancelled);
+    QCOMPARE(f.studio.activeDocument(), b);
+    QVERIFY(!bJob->isFinished());
+    QVERIFY(strip->isRunning()); // B's run, on show
+    sd.hold = false;
+    QTRY_COMPARE_WITH_TIMEOUT(strip->count(), 2, 10000);
+    QCOMPARE(strip->currentName(), QStringLiteral("make it night"));
+    QCOMPARE(int(sd.generations.size()), 1); // A's never went out
+
+    // Closed while the run is still being prepared (before its jobs exist): they are cancelled as
+    // they come.
+    strip->discard();
+    sd.hold = true;
+    doc::Document *c = f.studio.openImageAsDocument(photo(QSize(200, 200)), QStringLiteral("C"));
+    QTRY_VERIFY(bar->plan().action == PromptAction::EditImage);
+    words->setPlainText(QStringLiteral("make it pink"));
+    const qsizetype before = generationJobs().size();
+    QTest::keyClick(words, Qt::Key_Return);
+    QVERIFY(waitFor(f.files()->close(c)));
+    QTRY_VERIFY_WITH_TIMEOUT(generationJobs().size() > before, 10000);
+    Job *cJob = generationJobs().last();
+    QTRY_COMPARE(cJob->state(), Job::State::Cancelled);
+    QCOMPARE(f.studio.activeDocument(), b);
+    QCOMPARE(strip->count(), 0);
+    QVERIFY(!strip->isRunning());
+    sd.hold = false;
 }
 
 QTEST_MAIN(TestFiles)
