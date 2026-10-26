@@ -330,6 +330,9 @@ LoRA does nothing on klein 4B). Lumen tells this from the file itself, not from 
 LoRA has a tick box (used while ticked), a strength (1 is full; 0.6 to 1 suits most) and ✕ to remove
 it; its trigger words, when the file names them, are added to your description. The choice is kept
 for each engine, also in **New from prompt** under *More options*. You do not type `<lora:…>` tags.
+LoRAs whose name or trigger words match your description are offered under *Suggested for your
+words*, each with an empty tick box: they are used only once you tick them. ComfyUI's LoRAs are
+listed too.
 
 For a server Lumen runs, the LoRAs come from the server's **LoRA folder** (Settings → Local servers),
 read without starting the server. Without one the list says so and *Server settings…* takes you there.

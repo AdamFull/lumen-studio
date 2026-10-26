@@ -359,6 +359,7 @@ void NewFromPromptDialog::updateUi()
     m_negativeBox->setVisible(takesNegative());
     if (m_loras) {
         m_loras->setEngine(provider);
+        m_loras->setWords(m_prompt->text());
         m_loras->parentWidget()->setVisible(provider && caps.loras);
     }
     m_poseBox->setVisible(m_pose.has_value());

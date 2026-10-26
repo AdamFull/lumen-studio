@@ -10,6 +10,8 @@
 #include <QDir>
 #include <QDirIterator>
 #include <QFileInfo>
+#include <QRegularExpression>
+#include <QSet>
 #include <QtConcurrent/QtConcurrentRun>
 
 #include <algorithm>
@@ -50,6 +52,79 @@ QList<LoraChoice> lorasInFolder(const QString &folder, const QString &family, co
         out << c;
     }
     sortChoices(out);
+    return out;
+}
+
+namespace {
+
+// Words of three letters or more, in lower case, without those that say nothing about a look.
+QStringList meaningfulWords(const QString &text)
+{
+    static const QSet<QString> filler{QStringLiteral("the"),   QStringLiteral("and"),     QStringLiteral("with"),   QStringLiteral("for"),
+                                      QStringLiteral("from"),  QStringLiteral("into"),    QStringLiteral("make"),   QStringLiteral("add"),
+                                      QStringLiteral("remove"), QStringLiteral("replace"), QStringLiteral("change"), QStringLiteral("this"),
+                                      QStringLiteral("that"),  QStringLiteral("style"),   QStringLiteral("lora"),   QStringLiteral("model"),
+                                      QStringLiteral("high"),  QStringLiteral("quality"), QStringLiteral("best"),   QStringLiteral("detailed"),
+                                      QStringLiteral("sdxl"),  QStringLiteral("flux"),    QStringLiteral("klein"),  QStringLiteral("pony"),
+                                      QStringLiteral("illustrious"), QStringLiteral("anima"), QStringLiteral("der"), QStringLiteral("die"),
+                                      QStringLiteral("das"),   QStringLiteral("und"),     QStringLiteral("mit"),    QStringLiteral("ein"),
+                                      QStringLiteral("eine")};
+    // camelCase and digits split words apart: "WatercolorFox_v2" → watercolor, fox.
+    QString spaced = text;
+    static const QRegularExpression camel(QStringLiteral("(\\p{Ll})(\\p{Lu})"));
+    spaced.replace(camel, QStringLiteral("\\1 \\2"));
+    static const QRegularExpression split(QStringLiteral("[^\\p{L}]+"));
+    QStringList out;
+    for (const QString &w : spaced.toLower().split(split, Qt::SkipEmptyParts)) {
+        if (w.size() >= 3 && !filler.contains(w) && !out.contains(w))
+            out << w;
+    }
+    return out;
+}
+
+bool sameWord(const QString &a, const QString &b)
+{
+    if (a == b)
+        return true;
+    // "watercolor" and "watercolour", "cats" and "cat": one starts the other, both long enough.
+    const QString &shorter = a.size() < b.size() ? a : b;
+    const QString &longer = a.size() < b.size() ? b : a;
+    return shorter.size() >= 4 && longer.startsWith(shorter.left(std::max<qsizetype>(4, shorter.size() - 1)));
+}
+
+} // namespace
+
+QList<LoraChoice> suggestedLoras(const QList<LoraChoice> &loras, const QString &words, int max)
+{
+    const QStringList wanted = meaningfulWords(words);
+    const QString lower = words.toLower();
+    QList<std::pair<int, LoraChoice>> scored;
+    for (const LoraChoice &c : loras) {
+        if (!c.mismatch.isEmpty())
+            continue;
+        int score = 0;
+        for (const QString &trigger : c.info.triggerWords) {
+            if (trigger.trimmed().size() >= 3 && lower.contains(trigger.trimmed().toLower()))
+                score += 3;
+        }
+        for (const QString &own : meaningfulWords(c.name)) {
+            for (const QString &w : wanted) {
+                if (sameWord(own, w)) {
+                    ++score;
+                    break;
+                }
+            }
+        }
+        if (score > 0)
+            scored.append({score, c});
+    }
+    std::stable_sort(scored.begin(), scored.end(), [](const auto &a, const auto &b) { return a.first > b.first; });
+    QList<LoraChoice> out;
+    for (const auto &[score, c] : std::as_const(scored)) {
+        if (out.size() >= max)
+            break;
+        out << c;
+    }
     return out;
 }
 

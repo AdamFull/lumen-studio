@@ -5011,6 +5011,46 @@ void TestCanvas::loraPickerElsewhere()
     QVERIFY(!sent.value(QStringLiteral("prompt")).toString().contains(QStringLiteral("inkstyle")));
     f.strip()->discard();
 
+    // Suggestions (plan M18 §18.3): by the LoRA's name or its trigger words, only those that fit.
+    {
+        LoraChoice fox;
+        fox.name = QStringLiteral("WatercolorFox_v2");
+        LoraChoice called;
+        called.name = QStringLiteral("x1");
+        called.info.triggerWords = {QStringLiteral("inkstyle")};
+        LoraChoice other;
+        other.name = QStringLiteral("fox_9b");
+        other.mismatch = QStringLiteral("Made for another model.");
+        const QList<LoraChoice> all{other, fox, called};
+        QList<LoraChoice> s = suggestedLoras(all, QStringLiteral("a watercolour painting of a fox"));
+        QCOMPARE(s.size(), 1);
+        QCOMPARE(s.first().name, QStringLiteral("WatercolorFox_v2"));
+        s = suggestedLoras(all, QStringLiteral("inkstyle, a fox"));
+        QCOMPARE(s.size(), 2);
+        QCOMPARE(s.first().name, QStringLiteral("x1")); // trigger words count most
+        QVERIFY(suggestedLoras(all, QStringLiteral("a red car in the style of")).isEmpty());
+    }
+    // In the picker: offered with a tick box, and only used once ticked.
+    QVERIFY(!picker->findChild<QCheckBox *>(QStringLiteral("loraSuggestion")));
+    f.words()->setPlainText(QStringLiteral("a castle in pixel art"));
+    f.bar()->showOptions();
+    QTRY_VERIFY(picker->findChild<QCheckBox *>(QStringLiteral("loraSuggestion")));
+    auto *suggestion = picker->findChild<QCheckBox *>(QStringLiteral("loraSuggestion"));
+    QCOMPARE(suggestion->text(), QStringLiteral("pixel"));
+    QVERIFY(!suggestion->isChecked());
+    QCOMPARE(options->loras(f.provider->instanceId()).size(), 1);
+    suggestion->setChecked(true);
+    QTRY_COMPARE(options->loras(f.provider->instanceId()).size(), 2);
+    QCOMPARE(options->loras(f.provider->instanceId()).last().name, QStringLiteral("pixel"));
+    QVERIFY(options->loras(f.provider->instanceId()).last().on);
+    QTRY_VERIFY(!picker->findChild<QCheckBox *>(QStringLiteral("loraSuggestion"))); // chosen, no longer suggested
+    {
+        QList<ChosenLora> back = options->loras(f.provider->instanceId());
+        back.removeLast();
+        options->setLoras(f.provider->instanceId(), back);
+    }
+    f.bar()->optionsPopup()->hide();
+
     // Kept for the engine in the next session.
     AiOptions next;
     QCOMPARE(next.loras(f.provider->instanceId()).size(), 1);

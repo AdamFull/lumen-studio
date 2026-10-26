@@ -51,6 +51,7 @@ private slots:
     void falQueueRoundTrip();
     void falErrorsAndCancel();
     void findAreaEngines();
+    void comfyLoras();
 
 private:
     net::HttpClient m_http;
@@ -693,6 +694,26 @@ void TestProvidersCloud::findAreaEngines()
         delete op;
     }
     QFile::remove(tplPath);
+}
+
+// ComfyUI lists its LoRAs (plan M18 §18.3): the LoraLoader node's choices, for the LoRA picker.
+void TestProvidersCloud::comfyLoras()
+{
+    MockHttpServer server;
+    server.route("GET", QStringLiteral("/object_info/LoraLoader"), [](const MockRequest &) {
+        return MockResponse::json({{QStringLiteral("LoraLoader"), QJsonObject{{QStringLiteral("input"), QJsonObject{{QStringLiteral("required"), QJsonObject{
+            {QStringLiteral("lora_name"), QJsonArray{QJsonArray{QStringLiteral("styles\\ink.safetensors"), QStringLiteral("pixel.safetensors")}}}}}}}}}});
+    });
+    ComfyUiProvider c(ComfyUiProvider::describe(), QStringLiteral("c"), &m_http, nullptr);
+    c.configure({{QStringLiteral("url"), server.baseUrl().toString()}});
+    QVERIFY(c.capabilities().loras);
+    QFuture<QList<ServerLora>> listed = c.availableLoras();
+    QTRY_VERIFY_WITH_TIMEOUT(listed.isFinished(), 5000);
+    const QList<ServerLora> loras = listed.result();
+    QCOMPARE(loras.size(), 2);
+    QCOMPARE(loras[0].name, QStringLiteral("ink"));
+    QCOMPARE(loras[0].path, QStringLiteral("styles/ink.safetensors"));
+    QCOMPARE(loras[1].name, QStringLiteral("pixel"));
 }
 
 QTEST_MAIN(TestProvidersCloud)

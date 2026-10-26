@@ -482,6 +482,7 @@ void PromptBar::updateOptions()
     const bool negative = provider && caps.negativePrompt && ai::promptStyleFor(provider).supportsNegative;
     m_form->setRowVisible(m_negative, negative);
     m_loras->setEngine(provider);
+    m_loras->setWords(m_prompt->text());
     m_form->setRowVisible(m_loras, provider && caps.loras);
     m_form->setRowVisible(m_references, caps.maxReferences > 0);
     m_form->setRowVisible(m_pose, caps.poseControl && m_doc && m_doc->controlPose());

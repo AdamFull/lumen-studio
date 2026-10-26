@@ -3902,8 +3902,8 @@ Decisions (October 2026, with the user):
     loraPickerElsewhere` (a listing server, the request's `lora` and trigger words, untick, kept in
     the next session) and `loraPickerFolder` (the folder read, the menu's two groups, a 9B LoRA
     turned off with its reason, no folder, the server not started).
-  * Not yet: the AI tab has no picker of its own (its actions use the choice made in ⋯); ComfyUI does
-    not list its LoRAs; suggestions; a LoRA for FLUX.1 trained on only its first few blocks would read
+  * Not yet: the AI tab has no picker of its own (its actions use the choice made in ⋯); ComfyUI's
+    LoRAs and suggestions came later (step 7 below); a LoRA for FLUX.1 trained on only its first few blocks would read
     as klein 4B.
 - [x] Settings per model type (§18.4).
   * `ai::RunSettingsSpec` (`runSettingsFor`): what the engine's model takes and its own values, from
@@ -4047,7 +4047,18 @@ Decisions (October 2026, with the user):
     sends the instruction).
   * Not yet: a language model rewriting what the rules cannot (§18.2's optional part, with the
     planning step); a long description into tags for Anima.
-- [ ] LoRA suggestions; the picker for ComfyUI.
+- [x] LoRA suggestions; the picker for ComfyUI.
+  * `ui::suggestedLoras`: the LoRAs that fit whose name (split at camelCase, `_`, digits; filler and
+    family names left out; "watercolor" matches "watercolour") or trigger words match the
+    description, trigger words counting most, at most three. The picker shows them under
+    *Suggested for your words:* with an empty tick box; ticking adds the LoRA as a chosen one. The
+    prompt bar's ⋯ and New from prompt pass their words (`LoraPicker::setWords`).
+  * `ComfyUiProvider::availableLoras`: the `LoraLoader` node's `lora_name` choices, so the picker
+    lists ComfyUI's LoRAs (what they were made for is not known for a server elsewhere, so none is
+    greyed out); the request already put them in the graph.
+  * Tests: `tst_canvas loraPickerElsewhere` (the matching rules; "pixel art" suggests "pixel", not
+    used until ticked, then chosen and no longer suggested); `tst_providers_cloud comfyLoras`.
+  * Not yet: tags from the LoRA's training metadata (`ss_tag_frequency`) for suggestions.
 - [ ] Planning with a vision model: `AgentRun` in the core, *Plan this change*, the proposal view.
 - [ ] Short live check (RTX 4060 8 GB): "remove the black lines" on a scanned drawing with a classic
   finder; "the cup" found and replaced with FLUX.2 [klein] and with SDXL; a klein 4B LoRA from the

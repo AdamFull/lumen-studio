@@ -86,6 +86,15 @@ void LoraPicker::refresh()
     });
 }
 
+void LoraPicker::setWords(const QString &words)
+{
+    const QString simplified = words.simplified();
+    if (simplified == m_words)
+        return;
+    m_words = simplified;
+    rebuild();
+}
+
 const LoraChoice *LoraPicker::find(const ChosenLora &l) const
 {
     for (const LoraChoice &c : m_listing.loras) {
@@ -193,6 +202,39 @@ void LoraPicker::rebuild()
                 QMetaObject::invokeMethod(this, [this, id, list] { m_options->setLoras(id, list); }, Qt::QueuedConnection);
             }
         });
+    }
+
+    // Suggested for the words (plan M18 §18.3): never used until ticked.
+    if (m_haveListing && !m_words.isEmpty()) {
+        QList<LoraChoice> suggested;
+        for (const LoraChoice &c : suggestedLoras(m_listing.loras, m_words, 6)) {
+            bool taken = false;
+            for (const ChosenLora &l : chosen)
+                taken = taken || (!l.path.isEmpty() && l.path.compare(c.path, Qt::CaseInsensitive) == 0)
+                        || l.name.compare(c.name, Qt::CaseInsensitive) == 0;
+            if (!taken && suggested.size() < 3)
+                suggested << c;
+        }
+        if (!suggested.isEmpty()) {
+            auto *title = new QLabel(tr("Suggested for your words:"), this);
+            title->setObjectName(QStringLiteral("loraSuggestedTitle"));
+            title->setProperty("role", QStringLiteral("muted"));
+            m_rows->addWidget(title);
+        }
+        for (const LoraChoice &c : std::as_const(suggested)) {
+            auto *box = new QCheckBox(c.name, this);
+            box->setObjectName(QStringLiteral("loraSuggestion"));
+            QString tip = tr("Its name matches your words. Tick it to use it.");
+            if (!c.info.triggerWords.isEmpty())
+                tip += QLatin1Char('\n') + tr("Words that call it up (added to the description): %1").arg(c.info.triggerWords.join(QStringLiteral(", ")));
+            box->setToolTip(tip);
+            m_rows->addWidget(box);
+            // Later: the rows are rebuilt from the options, and this box is one of them.
+            connect(box, &QCheckBox::toggled, this, [this, c](bool on) {
+                if (on)
+                    QMetaObject::invokeMethod(this, [this, c] { add(c); }, Qt::QueuedConnection);
+            });
+        }
     }
 
     QString status;

@@ -231,6 +231,16 @@ QFuture<QStringList> ComfyUiProvider::nodeOptions(const QString &nodeClass, cons
     });
 }
 
+QFuture<QList<ServerLora>> ComfyUiProvider::availableLoras()
+{
+    return nodeOptions(QStringLiteral("LoraLoader"), QStringLiteral("lora_name")).then([](const QStringList &names) {
+        QList<ServerLora> out;
+        for (const QString &n : names)
+            out.append({QFileInfo(n).completeBaseName(), QDir::fromNativeSeparators(n)});
+        return out;
+    });
+}
+
 QFuture<bool> ComfyUiProvider::hasNode(const QString &nodeClass)
 {
     if (m_nodeCache.contains(nodeClass))

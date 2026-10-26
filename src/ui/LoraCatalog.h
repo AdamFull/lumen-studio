@@ -36,6 +36,11 @@ struct LoraListing
 // thread, headers only), so listing never starts the server; a server elsewhere is asked.
 QFuture<LoraListing> listLoras(Studio *studio, ai::ImageProvider *provider);
 
+// The LoRAs of `loras` that fit and whose name or trigger words match `words` (plan M18 §18.3), best
+// first, at most `max`: "a watercolor fox" suggests "watercolor_style_v2". They are offered with a
+// tick box, never used without one.
+QList<LoraChoice> suggestedLoras(const QList<LoraChoice> &loras, const QString &words, int max = 3);
+
 // The LoRA files of a folder (what sd-server lists from its --lora-model-dir), with their headers.
 // Blocking; for a worker thread.
 QList<LoraChoice> lorasInFolder(const QString &folder, const QString &family, const QString &variant);

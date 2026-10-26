@@ -1460,7 +1460,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Verbunden – ComfyUI %1 %2</translation>
     </message>
     <message>
-        <location line="+182"/>
+        <location line="+192"/>
         <source>Select a checkpoint for ComfyUI in Settings → Providers.</source>
         <translation>Wählen Sie unter Einstellungen → Anbieter einen Checkpoint für ComfyUI aus.</translation>
     </message>
@@ -11225,7 +11225,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::LoraCatalog</name>
     <message>
-        <location filename="../src/ui/LoraCatalog.cpp" line="+60"/>
+        <location filename="../src/ui/LoraCatalog.cpp" line="+135"/>
         <source>There is no image engine to use LoRAs with.</source>
         <translation>Es gibt keine Bild-Engine, mit der LoRAs verwendet werden können.</translation>
     </message>
@@ -12104,7 +12104,7 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         <translation>Einstellungen → Lokale Server, wo der LoRA-Ordner des Servers gewählt wird</translation>
     </message>
     <message>
-        <location line="+83"/>
+        <location line="+92"/>
         <source>It is not in the server&apos;s LoRAs any more.</source>
         <translation>Er ist nicht mehr unter den LoRAs des Servers.</translation>
     </message>
@@ -12115,11 +12115,12 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
     </message>
     <message>
         <location line="+2"/>
+        <location line="+75"/>
         <source>Words that call it up (added to the description): %1</source>
         <translation>Wörter, die ihn aufrufen (werden der Beschreibung hinzugefügt): %1</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="-71"/>
         <source>Strength of %1</source>
         <translation>Stärke von %1</translation>
     </message>
@@ -12135,7 +12136,17 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         <translation>%1 entfernen</translation>
     </message>
     <message>
-        <location line="+40"/>
+        <location line="+50"/>
+        <source>Suggested for your words:</source>
+        <translation>Passend zu Ihren Worten:</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Its name matches your words. Tick it to use it.</source>
+        <translation>Sein Name passt zu Ihren Worten. Haken Sie es an, um es zu verwenden.</translation>
+    </message>
+    <message>
+        <location line="+15"/>
         <source>There is no image engine to use LoRAs with.</source>
         <translation>Es gibt keine Bild-Engine, mit der LoRAs verwendet werden können.</translation>
     </message>
@@ -13820,7 +13831,7 @@ Downloads und trainierte LoRAs kommen hierher, in Unterordner mit Namen wie bei 
         <translation>Die Engine zeichnet das nächstliegende Format, das sie unterstützt; das Bild wird auf diese Größe skaliert.</translation>
     </message>
     <message>
-        <location line="+31"/>
+        <location line="+32"/>
         <source>This engine cannot follow a pose; the pose is kept with the new document.</source>
         <translation>Diese Engine kann keiner Pose folgen; die Pose bleibt beim neuen Dokument.</translation>
     </message>
@@ -16374,7 +16385,7 @@ oder eines aus den Projektbildern ziehen</translation>
         </translation>
     </message>
     <message numerus="yes">
-        <location line="+114"/>
+        <location line="+115"/>
         <source>Selected %n object(s). Now say what should change there, or press Remove object.</source>
         <translation>
             <numerusform>%n Objekt ausgewählt. Sagen Sie jetzt, was sich dort ändern soll, oder drücken Sie Objekt entfernen.</numerusform>

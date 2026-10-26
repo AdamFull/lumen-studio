@@ -35,6 +35,8 @@ public:
     ai::ImageProvider *engine() const { return m_engine; }
     // Lists the engine's LoRAs again (a file added to the folder, a new server setting).
     void refresh();
+    // The description the run will use: LoRAs that match it are suggested, each with a tick box.
+    void setWords(const QString &words);
 
     const LoraListing &listing() const { return m_listing; }
     QToolButton *addButton() const { return m_add; }
@@ -57,6 +59,7 @@ private:
     QPointer<ai::ImageProvider> m_engine;
     QString m_engineId;
     LoraListing m_listing;
+    QString m_words;
     bool m_haveListing = false;
     int m_request = 0;
     QVBoxLayout *m_rows;

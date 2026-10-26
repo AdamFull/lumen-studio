@@ -70,6 +70,8 @@ public:
     QFuture<QStringList> listOptions(const QString &settingKey) override;
     QFuture<QStringList> listSamplers() override;
     QFuture<QStringList> listSchedulers() override;
+    // The LoraLoader node's choices (relative to ComfyUI's loras folder).
+    QFuture<QList<ServerLora>> availableLoras() override;
 
     ImageCapabilities capabilities() const override;
     ImageCapabilities capabilitiesFor(const ImageRequest &request) const override;
