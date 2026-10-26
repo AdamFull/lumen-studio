@@ -576,6 +576,9 @@ ImageOperation *SdWebUiProvider::runUtility(Utility utility, const QImage &image
     case Utility::SegmentParts:
         failLater(op, tr("Stable Diffusion WebUI cannot segment character parts."));
         break;
+    case Utility::FindArea:
+        failLater(op, tr("Stable Diffusion WebUI cannot find objects by name."));
+        break;
     }
     return op;
 }

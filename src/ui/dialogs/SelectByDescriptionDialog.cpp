@@ -1,5 +1,6 @@
 #include "ui/dialogs/SelectByDescriptionDialog.h"
 
+#include "ai/Provider.h"
 #include "core/ImageOps.h"
 #include "doc/Document.h"
 #include "ui/SmartSelect.h"
@@ -205,10 +206,15 @@ void SelectByDescriptionDialog::parseWords()
 void SelectByDescriptionDialog::showSettings()
 {
     using K = img::FinderRequest::Kind;
-    m_understood->setText(m_words->text().trimmed().isEmpty() ? tr("Say what to select, and Lumen finds it in the picture.")
-                          : m_objects ? tr("Objects: \"%1\", found by a detection model on this computer.").arg(m_words->text().trimmed())
-                                      : finderDescription(m_request));
     const bool missing = m_objects && !m_finder->objectsReady();
+    const ai::ImageProvider *engine = missing ? m_finder->objectsEngine() : nullptr;
+    const QString words = m_words->text().trimmed();
+    m_understood->setText(words.isEmpty() ? tr("Say what to select, and Lumen finds it in the picture.")
+                          : !m_objects    ? finderDescription(m_request)
+                          : engine        ? tr("Objects: \"%1\", found by %2. With the detection models, they are found on this "
+                                               "computer instead.")
+                                         .arg(words, engine->displayName())
+                                          : tr("Objects: \"%1\", found by a detection model on this computer.").arg(words));
     m_download->setVisible(missing);
     if (missing && m_download->isEnabled())
         m_download->setText(tr("Download the detection models (about %1 MB, once)").arg(QLocale().toString(m_finder->objectsMissingSize() / 1e6, 'f', 0)));
@@ -263,7 +269,7 @@ void SelectByDescriptionDialog::find()
     m_found = QImage();
     if (m_objects && !m_picture.isNull()) {
         showPreview();
-        if (!m_finder->objectsReady())
+        if (!m_finder->canFindObjects())
             return;
         m_result->setText(tr("Looking… (the first time takes a few seconds)"));
         QPointer<SelectByDescriptionDialog> self(this);
@@ -273,7 +279,9 @@ void SelectByDescriptionDialog::find()
                     return;
                 self->m_found = area.mask;
                 self->showPreview();
-                self->m_result->setText(area.mask.isNull() ? area.error : tr("Found %n object(s) (tinted).", nullptr, area.objects));
+                self->m_result->setText(area.mask.isNull()       ? area.error
+                                        : area.foundBy.isEmpty() ? tr("Found %n object(s) (tinted).", nullptr, area.objects)
+                                                                 : tr("Found by %1 (tinted).").arg(area.foundBy));
                 emit self->foundChanged();
             });
         return;

@@ -71,8 +71,9 @@ public:
         SmartSelect *finder = currentFinder();
         if (!finder)
             return Text::tr("Finding objects is not available here.");
-        if (!finder->objectsReady())
-            return Text::tr("Finding objects needs the detection models (about %1 MB, once): Select → By description… offers the download.")
+        if (!finder->canFindObjects())
+            return Text::tr("Finding objects needs the detection models (about %1 MB, once), or an image engine that finds objects "
+                            "(ComfyUI, fal.ai, Google Gemini). Select → By description… offers the download.")
                 .arg(QLocale().toString(finder->objectsMissingSize() / 1e6, 'f', 0));
         return {};
     }

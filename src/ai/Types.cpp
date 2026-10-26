@@ -71,6 +71,7 @@ QString utilityName(Utility u)
     case Utility::DetectPose: return QStringLiteral("detect_pose");
     case Utility::Caption: return QStringLiteral("caption");
     case Utility::SegmentParts: return QStringLiteral("segment_parts");
+    case Utility::FindArea: return QStringLiteral("find_area");
     }
     return {};
 }

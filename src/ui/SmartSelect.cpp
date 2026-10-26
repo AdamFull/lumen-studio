@@ -1,10 +1,14 @@
 #include "ui/SmartSelect.h"
 
+#include "ai/GenerationService.h"
 #include "ai/Provider.h"
+#include "ai/ProviderRegistry.h"
 #include "core/ImageOps.h"
 #include "core/Job.h"
 #include "runtime/Components.h"
 
+#include <QJsonObject>
+#include <QPromise>
 #include <QtConcurrent/QtConcurrentRun>
 
 namespace lumen::ui {
@@ -141,6 +145,8 @@ QList<Job *> SmartSelect::installObjects()
 QFuture<SmartSelect::FoundArea> SmartSelect::findObjects(const QImage &picture, const QString &description)
 {
     if (!objectsReady()) {
+        if (ai::ImageProvider *engine = objectsEngine())
+            return findWithEngine(engine, picture, description);
         FoundArea none;
         none.error = tr("Finding objects by name needs the Grounding DINO model, which is not downloaded yet.");
         return QtFuture::makeReadyValueFuture(none);
@@ -214,6 +220,42 @@ QFuture<SmartSelect::FoundArea> SmartSelect::findObjects(const QImage &picture, 
             area.error = ai::errorMessage(e);
             return area;
         });
+}
+
+ai::ImageProvider *SmartSelect::objectsEngine() const
+{
+    if (!m_generation)
+        return nullptr;
+    // The engine for changes first, as for the filters' AI steps.
+    const ai::ImageProvider *forChanges = m_generation->registry()->imageProviderFor(true);
+    return m_generation->providerForUtility(ai::Utility::FindArea, forChanges ? forChanges->instanceId() : QString());
+}
+
+QFuture<SmartSelect::FoundArea> SmartSelect::findWithEngine(ai::ImageProvider *engine, const QImage &picture, const QString &description)
+{
+    auto promise = std::make_shared<QPromise<FoundArea>>();
+    promise->start();
+    const QFuture<FoundArea> future = promise->future();
+    Job *job = m_generation->submitUtility(engine->instanceId(), ai::Utility::FindArea, picture,
+                                           QJsonObject{{QStringLiteral("what"), description}}, tr("Find: %1").arg(description.left(40)),
+                                           false);
+    const QSize size = picture.size();
+    connect(job, &Job::finished, this, [promise, size, description, name = engine->displayName()](Job *job) {
+        FoundArea area;
+        area.foundBy = name;
+        if (job->state() == Job::State::Cancelled) {
+            area.error = tr("Looking for \"%1\" was cancelled.").arg(description);
+        } else if (job->state() == Job::State::Failed) {
+            area.error = job->errorString();
+        } else {
+            area.mask = ai::areaFromMasks(ai::GenerationService::outputOf(job).images, size, &area.objects);
+            if (area.mask.isNull())
+                area.error = tr("Nothing that looks like \"%1\" was found.").arg(description);
+        }
+        promise->addResult(area);
+        promise->finish();
+    });
+    return future;
 }
 
 } // namespace lumen::ui

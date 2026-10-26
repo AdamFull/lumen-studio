@@ -553,11 +553,12 @@ void PromptBar::selectByWords(const QString &description)
 {
     const img::FinderRequest request = img::parseFinderRequest(description);
     if (request.kind == img::FinderRequest::Kind::None) {
-        // An object by name: the detection models find it, once they are downloaded.
+        // An object by name: the detection models find it, once they are downloaded, or an image
+        // engine that can.
         SmartSelect *finder = m_studio->smartSelect();
-        if (!finder->objectsReady()) {
-            m_studio->notify(tr("Selecting objects by name needs the detection models (about %1 MB, once). Select → By description… "
-                                "offers the download.")
+        if (!finder->canFindObjects()) {
+            m_studio->notify(tr("Selecting objects by name needs the detection models (about %1 MB, once), or an image engine that "
+                                "finds objects: ComfyUI, fal.ai or Google Gemini. Select → By description… offers the download.")
                                  .arg(QLocale().toString(finder->objectsMissingSize() / 1e6, 'f', 0)),
                              QStringLiteral("warning"));
             return;
@@ -575,8 +576,11 @@ void PromptBar::selectByWords(const QString &description)
                 doc->applySelection(area.mask, tr("Select: %1").arg(description.left(40)));
                 if (doc == self->m_doc)
                     self->m_prompt->clear();
-                self->m_studio->notify(tr("Selected %n object(s). Now say what should change there, or press Remove object.", nullptr,
-                                          area.objects),
+                self->m_studio->notify(area.foundBy.isEmpty()
+                                           ? tr("Selected %n object(s). Now say what should change there, or press Remove object.",
+                                                nullptr, area.objects)
+                                           : tr("Selected what %1 found. Now say what should change there, or press Remove object.")
+                                                 .arg(area.foundBy),
                                        QStringLiteral("success"));
             });
         return;

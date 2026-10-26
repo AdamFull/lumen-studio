@@ -1,5 +1,6 @@
 #include "MockHttpServer.h"
 
+#include "ai/Detector.h"
 #include "ai/providers/AnthropicProvider.h"
 #include "ai/providers/ComfyUiProvider.h"
 #include "ai/providers/FalProvider.h"
@@ -9,7 +10,10 @@
 #include "core/ImageOps.h"
 #include "net/HttpClient.h"
 
+#include <QDir>
+#include <QFile>
 #include <QJsonArray>
+#include <QPainter>
 #include <QtTest>
 
 using namespace lumen;
@@ -46,6 +50,7 @@ private slots:
     void falBuildCall();
     void falQueueRoundTrip();
     void falErrorsAndCancel();
+    void findAreaEngines();
 
 private:
     net::HttpClient m_http;
@@ -540,6 +545,154 @@ void TestProvidersCloud::falErrorsAndCancel()
     QTRY_VERIFY(op->isFinished());
     QCOMPARE(op->state(), Operation::State::Failed);
     delete op;
+}
+
+// Objects by name on the image engines (plan M18 §18.1, Utility::FindArea): Gemini's masks for the
+// words (none is an answer), fal.ai's EVF-SAM and a ComfyUI text-prompted segmentation template;
+// ai::areaFromMasks puts the answers together.
+void TestProvidersCloud::findAreaEngines()
+{
+    const QSize canvas(200, 100);
+    QImage cup(40, 40, QImage::Format_Grayscale8);
+    cup.fill(255);
+
+    // Gemini.
+    MockHttpServer gemini;
+    QString asked;
+    bool none = false;
+    gemini.route("POST", QStringLiteral("/v1beta/models/gemini-2.5-flash:generateContent"), [&](const MockRequest &req) {
+        const QJsonArray parts = req.json().value(QStringLiteral("contents")).toArray().first().toObject().value(QStringLiteral("parts")).toArray();
+        asked = parts.last().toObject().value(QStringLiteral("text")).toString();
+        const QString list = none ? QStringLiteral("[]")
+                                  : QStringLiteral("[{\"box_2d\": [0, 0, 500, 250], \"mask\": \"%1\"}]").arg(img::toDataUrl(cup));
+        return MockResponse::json({{QStringLiteral("candidates"), QJsonArray{QJsonObject{{QStringLiteral("content"), QJsonObject{
+            {QStringLiteral("parts"), QJsonArray{QJsonObject{{QStringLiteral("text"), list}}}}}}}}}});
+    });
+    GeminiImageProvider g(GeminiImageProvider::describe(), QStringLiteral("g"), &m_http, nullptr);
+    g.configure({{QStringLiteral("url"), gemini.baseUrl().toString() + QStringLiteral("/v1beta")}, {QStringLiteral("api_key"), QStringLiteral("k")}});
+    QVERIFY(g.supportsUtility(Utility::FindArea));
+    QImage picture(canvas, QImage::Format_ARGB32);
+    picture.fill(Qt::gray);
+    for (bool empty : {false, true}) {
+        none = empty;
+        ImageOperation *op = g.runUtility(Utility::FindArea, picture, {{QStringLiteral("what"), QStringLiteral("the cup")}});
+        op->setAutoDelete(false);
+        QTRY_VERIFY_WITH_TIMEOUT(op->isFinished(), 5000);
+        QVERIFY2(op->state() == Operation::State::Succeeded, qPrintable(op->errorString()));
+        QVERIFY(asked.contains(QStringLiteral("Give the segmentation masks for: the cup.")));
+        int objects = -1;
+        QList<QImage> masks;
+        for (const GeneratedImage &m : op->result().images)
+            masks << m.image;
+        const QImage area = ai::areaFromMasks(masks, canvas, &objects);
+        if (empty) {
+            QVERIFY(area.isNull());
+            QCOMPARE(objects, 0);
+        } else {
+            QCOMPARE(objects, 1);
+            QCOMPARE(area.size(), canvas);
+            QCOMPARE(qGray(area.pixel(20, 20)), 255); // inside the box: 0-250 of 1000 across, 0-500 down
+            QCOMPARE(qGray(area.pixel(150, 20)), 0);
+            QCOMPARE(qGray(area.pixel(20, 80)), 0);
+        }
+        delete op;
+    }
+
+    // fal.ai.
+    MockHttpServer fal;
+    const QString base = fal.baseUrl().toString();
+    QJsonObject submitted;
+    fal.route("POST", QStringLiteral("/fal-ai/evf-sam"), [&](const MockRequest &req) {
+        submitted = req.json();
+        return MockResponse::json({{QStringLiteral("request_id"), QStringLiteral("e1")},
+                                   {QStringLiteral("status_url"), base + QStringLiteral("/fal-ai/evf-sam/requests/e1/status")},
+                                   {QStringLiteral("response_url"), base + QStringLiteral("/fal-ai/evf-sam/requests/e1")}});
+    });
+    fal.route("GET", QStringLiteral("/fal-ai/evf-sam/requests/e1/status"),
+              [](const MockRequest &) { return MockResponse::json({{QStringLiteral("status"), QStringLiteral("COMPLETED")}}); });
+    fal.route("GET", QStringLiteral("/fal-ai/evf-sam/requests/e1"), [](const MockRequest &) {
+        QImage mask(100, 50, QImage::Format_RGB32);
+        mask.fill(Qt::black);
+        QPainter(&mask).fillRect(QRect(50, 0, 50, 50), Qt::white);
+        return MockResponse::json({{QStringLiteral("image"), QJsonObject{{QStringLiteral("url"), img::toDataUrl(mask)}}}});
+    });
+    FalProvider f(FalProvider::describe(), QStringLiteral("f"), &m_http, nullptr);
+    f.configure({{QStringLiteral("url"), base}, {QStringLiteral("api_key"), QStringLiteral("secret")}});
+    QVERIFY(f.supportsUtility(Utility::FindArea));
+    {
+        ImageOperation *op = f.runUtility(Utility::FindArea, picture, {{QStringLiteral("what"), QStringLiteral("people")}});
+        op->setAutoDelete(false);
+        QTRY_VERIFY_WITH_TIMEOUT(op->isFinished(), 10000);
+        QVERIFY2(op->state() == Operation::State::Succeeded, qPrintable(op->errorString()));
+        QCOMPARE(submitted.value(QStringLiteral("prompt")).toString(), QStringLiteral("people"));
+        QVERIFY(submitted.value(QStringLiteral("mask_only")).toBool());
+        QVERIFY(submitted.value(QStringLiteral("image_url")).toString().startsWith(QStringLiteral("data:image/")));
+        QCOMPARE(op->result().images.size(), 1);
+        const QImage area = ai::areaFromMasks({op->result().images.first().image}, canvas);
+        QCOMPARE(qGray(area.pixel(150, 50)), 255); // the right half, scaled up to the picture
+        QCOMPARE(qGray(area.pixel(50, 50)), 0);
+        delete op;
+    }
+
+    // ComfyUI: no text-prompted template, no finding; with one, the words go to its prompt.
+    ComfyUiProvider c(ComfyUiProvider::describe(), QStringLiteral("c"), &m_http, nullptr);
+    MockHttpServer comfy;
+    c.configure({{QStringLiteral("url"), comfy.baseUrl().toString()}, {QStringLiteral("segment_workflow"), QStringLiteral("test_find")}});
+    const QString tplPath = ComfyUiProvider::workflowDirectory() + QStringLiteral("/test_find.json");
+    QFile::remove(tplPath);
+    QDir().mkpath(ComfyUiProvider::workflowDirectory());
+    {
+        QFile file(tplPath);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write(R"({"name": "find", "modes": ["segment_parts"], "output_kind": "mask", "outputs": {"6": "mask"},
+                       "bindings": {"init_image": {"node": "1", "input": "image"}, "prompt": {"node": "4", "input": "prompt"}},
+                       "workflow": {"1": {"class_type": "LoadImage", "inputs": {"image": "x.png"}},
+                                    "4": {"class_type": "Segment", "inputs": {"image": ["1", 0], "prompt": "p"}},
+                                    "6": {"class_type": "PreviewImage", "inputs": {"images": ["4", 0]}}}})");
+    }
+    QStringList prompts;
+    bool found = true;
+    comfy.route("POST", QStringLiteral("/upload/image"), [](const MockRequest &) {
+        return MockResponse::json({{QStringLiteral("name"), QStringLiteral("in.png")}, {QStringLiteral("subfolder"), QString()}, {QStringLiteral("type"), QStringLiteral("input")}});
+    });
+    comfy.route("POST", QStringLiteral("/prompt"), [&](const MockRequest &req) {
+        prompts << req.json().value(QStringLiteral("prompt")).toObject().value(QStringLiteral("4")).toObject()
+                       .value(QStringLiteral("inputs")).toObject().value(QStringLiteral("prompt")).toString();
+        return MockResponse::json({{QStringLiteral("prompt_id"), QStringLiteral("p%1").arg(prompts.size())}});
+    });
+    for (int i = 1; i <= 2; ++i) {
+        comfy.route("GET", QStringLiteral("/history/p%1").arg(i), [i](const MockRequest &) {
+            return MockResponse::json({{QStringLiteral("p%1").arg(i), QJsonObject{
+                {QStringLiteral("status"), QJsonObject{{QStringLiteral("status_str"), QStringLiteral("success")}}},
+                {QStringLiteral("outputs"), QJsonObject{{QStringLiteral("6"), QJsonObject{{QStringLiteral("images"), QJsonArray{
+                    QJsonObject{{QStringLiteral("filename"), QStringLiteral("m.png")}, {QStringLiteral("subfolder"), QString()},
+                                {QStringLiteral("type"), QStringLiteral("temp")}}}}}}}}}}});
+        });
+    }
+    comfy.route("GET", QStringLiteral("/view"), [&](const MockRequest &) {
+        QImage m(canvas, QImage::Format_RGB32);
+        m.fill(Qt::black);
+        if (found)
+            QPainter(&m).fillRect(QRect(0, 0, 100, 100), Qt::white);
+        MockResponse r;
+        r.contentType = "image/png";
+        r.body = img::encode(m);
+        return r;
+    });
+    QVERIFY(c.supportsUtility(Utility::FindArea));
+    for (bool there : {true, false}) {
+        found = there;
+        ImageOperation *op = c.runUtility(Utility::FindArea, picture, {{QStringLiteral("what"), QStringLiteral("the cup")}});
+        op->setAutoDelete(false);
+        QTRY_VERIFY_WITH_TIMEOUT(op->isFinished(), 15000);
+        QVERIFY2(op->state() == Operation::State::Succeeded, qPrintable(op->errorString()));
+        QCOMPARE(prompts.last(), QStringLiteral("the cup"));
+        QCOMPARE(op->result().images.size(), there ? 1 : 0); // nothing found is an answer, not a failure
+        if (there)
+            QCOMPARE(qGray(op->result().images.first().image.pixel(50, 50)), 255);
+        delete op;
+    }
+    QFile::remove(tplPath);
 }
 
 QTEST_MAIN(TestProvidersCloud)

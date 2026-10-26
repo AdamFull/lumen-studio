@@ -217,6 +217,9 @@ QString GenerationService::utilityUnavailable(Utility utility) const
     case Utility::SegmentParts:
         return tr("None of your image engines can split a picture into parts. Google Gemini and a Lumen part server can "
                   "(Settings → Providers).");
+    case Utility::FindArea:
+        return tr("None of your image engines can find objects by name. ComfyUI (with a Grounding DINO + SAM template), fal.ai "
+                  "and Google Gemini can (Settings → Providers).");
     }
     return {};
 }

@@ -258,4 +258,24 @@ QImage findObjects(GroundingDino &detector, Segmenter &segmenter, const QImage &
     return mask;
 }
 
+QImage areaFromMasks(const QList<QImage> &masks, const QSize &size, int *objects)
+{
+    QImage area = img::createMask(size);
+    int count = 0;
+    for (QImage m : masks) {
+        if (m.isNull())
+            continue;
+        if (m.size() != size)
+            m = m.scaled(size, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+        m = img::maskFromLuminance(m);
+        if (img::maskIsEmpty(m, 128))
+            continue;
+        area = img::combineMasks(area, m, img::MaskOp::Union);
+        ++count;
+    }
+    if (objects)
+        *objects = count;
+    return count ? area : QImage();
+}
+
 } // namespace lumen::ai

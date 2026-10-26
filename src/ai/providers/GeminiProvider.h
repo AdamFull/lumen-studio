@@ -39,6 +39,9 @@ public:
     // Segmentation (Gemini 2.5+ returns labelled boxes with mask PNGs). Exposed for tests.
     static QJsonObject buildSegmentationBody(const QImage &image, const QJsonArray &parts);
     static ImageResult parseSegmentation(const QByteArray &body, const QSize &canvas);
+    // Objects by name (Utility::FindArea): the same masks for what the words name; none is an answer.
+    static QJsonObject buildFindAreaBody(const QImage &image, const QString &what);
+    static ImageResult parseFoundArea(const QByteArray &body, const QSize &canvas);
 
     // Builds the multimodal prompt (instruction + ordered images) for a request. Exposed for tests.
     static QJsonObject buildBody(const ImageRequest &request, const QStringList &aspectRatios);

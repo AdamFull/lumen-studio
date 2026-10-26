@@ -1,6 +1,6 @@
 {
   "name": "Part segmentation (Grounding DINO + SAM)",
-  "description": "Text-prompted part masks for character slicing. Requires the comfyui_segment_anything custom nodes (storyicon) with the GroundingDINO SwinT and SAM ViT-H models. Lumen runs it once per requested part with the part's segmentation prompt.",
+  "description": "Text-prompted part masks for character slicing. Requires the comfyui_segment_anything custom nodes (storyicon) with the GroundingDINO SwinT and SAM ViT-H models. Lumen runs it once per requested part with the part's segmentation prompt, and once with the words to find objects by name (Select > By description, the Find area filter step).",
   "modes": ["segment_parts"],
   "output_kind": "mask",
   "outputs": {"6": "mask"},

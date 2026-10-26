@@ -405,7 +405,7 @@ ImageOperation *FalProvider::generate(const ImageRequest &r)
 
 bool FalProvider::supportsUtility(Utility u) const
 {
-    return u == Utility::Upscale || u == Utility::RemoveBackground;
+    return u == Utility::Upscale || u == Utility::RemoveBackground || u == Utility::FindArea;
 }
 
 ImageOperation *FalProvider::runUtility(Utility utility, const QImage &image, const QJsonObject &params)
@@ -420,9 +420,17 @@ ImageOperation *FalProvider::runUtility(Utility utility, const QImage &image, co
         return op;
     }
     const int scale = std::clamp(params.value(QStringLiteral("factor")).toInt(2), 1, 8);
-    runCall(op, [utility, image, scale] {
+    const QString what = params.value(QStringLiteral("what")).toString().trimmed();
+    runCall(op, [utility, image, scale, what] {
         Call call;
-        if (utility == Utility::Upscale) {
+        if (utility == Utility::FindArea) {
+            // EVF-SAM: the mask of what the words name, white on black (black when nothing is).
+            call.model = QStringLiteral("fal-ai/evf-sam");
+            call.input = {{QStringLiteral("image_url"), dataUrl(image, 2048)},
+                          {QStringLiteral("prompt"), what},
+                          {QStringLiteral("mask_only"), true},
+                          {QStringLiteral("fill_holes"), true}};
+        } else if (utility == Utility::Upscale) {
             call.model = QStringLiteral("fal-ai/esrgan");
             call.input = {{QStringLiteral("image_url"), dataUrl(image, 2048)}, {QStringLiteral("scale"), scale}};
         } else {

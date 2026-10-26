@@ -218,6 +218,12 @@ processor; when nothing like it is in the picture, Lumen says so and selects not
 editor, the step *Find area* does the same, for filters such as "find the cup → fill area with AI";
 like the AI steps, it runs only on **Run**.
 
+Until the models are downloaded, an image engine that finds objects does it instead: ComfyUI with a
+Grounding DINO + SAM template (the bundled *Part segmentation* template, which needs the
+comfyui_segment_anything nodes), fal.ai or Google Gemini. The dialog says which one ("found by
+Gemini"), the search shows in the Queue, and the download stays offered, to find them on this
+computer from then on.
+
 The selection is used by the prompt bar (§5), the filters (§8) and the transform and delete
 commands. Without one, the prompt bar and the filters work on the whole picture.
 

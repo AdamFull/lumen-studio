@@ -50,6 +50,7 @@ Studio::Studio(QObject *parent)
     connect(&m_models, &runtime::ModelLibrary::folderChanged, this,
             [this] { m_components.setRoots(paths::appData(), m_models.defaultFolder()); });
     m_smartSelect = new SmartSelect(&m_components, this);
+    m_smartSelect->setEngines(&m_generation);
     m_registry.load();
     // The AI steps of node filters run through this studio's engines; registered before any
     // filter is loaded (FilterCatalog), or filters with AI steps would not load.

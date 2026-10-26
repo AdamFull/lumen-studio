@@ -19,6 +19,11 @@ namespace lumen::runtime {
 class Components;
 }
 
+namespace lumen::ai {
+class GenerationService;
+class ImageProvider;
+}
+
 namespace lumen::ui {
 
 // Smart selection's engine (plan M18 §18.1): SAM 2.1 tiny through ONNX Runtime, both components
@@ -57,10 +62,18 @@ public:
         QImage mask;      // Grayscale8, the picture's size; null when nothing was found
         int objects = 0;  // how many were found
         QString error;    // why there is no mask, in plain words
+        QString foundBy;  // the image engine that found it; empty: the models on this computer
     };
-    // The area of the objects `description` names; fails with the reason in plain words (nothing
-    // found among them).
+    // The area of the objects `description` names, or why there is none (nothing like it found, no
+    // way to look): never a failed future. The models on this computer when they are there, else an
+    // image engine that can (FindArea: ComfyUI, fal.ai, Gemini) as a Queue job.
     QFuture<FoundArea> findObjects(const QImage &picture, const QString &description);
+    // Image engines to look with while the models are not downloaded.
+    void setEngines(ai::GenerationService *generation) { m_generation = generation; }
+    // The engine findObjects would use, when the models are not there.
+    ai::ImageProvider *objectsEngine() const;
+    // Objects by name can be found, here or by an engine.
+    bool canFindObjects() const { return objectsReady() || objectsEngine(); }
     // Tests: a detector of their own (with the segmenter of setSegmenter).
     using Detect = std::function<QList<ai::Detection>(const QImage &, const QString &)>;
     void setDetector(Detect detect) { m_fakeDetect = std::move(detect); }
@@ -78,6 +91,8 @@ private:
     QFuture<std::shared_ptr<ai::GroundingDino>> m_openingDetector;
     Detect m_fakeDetect;
     QList<QPointer<Job>> m_jobs;
+    ai::GenerationService *m_generation = nullptr;
+    QFuture<FoundArea> findWithEngine(ai::ImageProvider *engine, const QImage &picture, const QString &description);
 };
 
 } // namespace lumen::ui

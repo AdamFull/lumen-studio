@@ -4004,7 +4004,26 @@ Decisions (October 2026, with the user):
     models the ball selected and "a giraffe" not; the prompt bar; the node on a worker thread).
   * Not yet: a `FindArea` capability for the other engines (the next step); several phrases at
     once ("the cup and the plate" is searched as one phrase).
-- [ ] `FindArea` for ComfyUI (workflow template), fal.ai and Gemini, against mock servers.
+- [x] `FindArea` for ComfyUI (workflow template), fal.ai and Gemini, against mock servers.
+  * `ai::Utility::FindArea` (params `{"what"}`): the answer is masks, one per object or one for all,
+    at any size; `ai::areaFromMasks` scales and unites them, and none or only empty ones means
+    nothing was found, which is an answer, not a failure.
+  * Gemini: the segmentation request of the part slicing with "Give the segmentation masks for: …"
+    and an empty list allowed (`buildFindAreaBody`, `parseFoundArea`; the mask parsing is shared).
+    fal.ai: `fal-ai/evf-sam` (text-prompted SAM, `mask_only`, `fill_holes`). ComfyUI: the
+    segmentation template once with the words when it binds a prompt (the bundled Grounding DINO +
+    SAM template does); an empty mask there succeeds with no images.
+  * `SmartSelect::findObjects` uses the models on this computer when they are there, else
+    `objectsEngine()`, the engine for changes first (as for the filters' AI steps), as a Queue job
+    (`GenerationService::submitUtility`, not saved as an asset). `FoundArea::foundBy` names it;
+    the dialog says "found by Gemini" and keeps the download offered, the prompt bar and the *Find
+    area* node accept the engine too.
+  * Tests: `tst_providers_cloud findAreaEngines` (each engine against a mock: Gemini found and
+    nothing found, fal.ai's request and its mask scaled to the picture, ComfyUI's prompt and an
+    empty mask that succeeds); `tst_canvas selectObjectsByName` (no models and a Gemini engine: the
+    dialog finds the ball through it and says so; without the engine, nothing can find objects).
+  * Not yet: a choice between the engine and the models when both are there (the models win, they
+    are free and stay on this computer); ComfyUI's mask threshold is the template's.
 - [ ] Prompt rules per family; *Use my words as they are*; what was sent in the results' details.
 - [ ] LoRA suggestions; the picker for ComfyUI.
 - [ ] Planning with a vision model: `AgentRun` in the core, *Plan this change*, the proposal view.

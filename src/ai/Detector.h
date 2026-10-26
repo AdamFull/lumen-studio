@@ -69,4 +69,8 @@ QList<Detection> dinoDecode(const std::vector<float> &logits, const std::vector<
 QImage findObjects(GroundingDino &detector, Segmenter &segmenter, const QImage &picture, const QString &description, int *found = nullptr,
                    QString *error = nullptr, float threshold = 0.3f);
 
+// The area an image engine's FindArea gave (masks of any size, white on black or Grayscale8),
+// together at `size`. `objects` gets how many masks were not empty. Null when all are empty.
+QImage areaFromMasks(const QList<QImage> &masks, const QSize &size, int *objects = nullptr);
+
 } // namespace lumen::ai

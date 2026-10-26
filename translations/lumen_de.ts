@@ -84,7 +84,7 @@
         <translation>20–32 abwechslungsreiche Bilder eines Charakters, um seine LoRA zu trainieren.</translation>
     </message>
     <message>
-        <location filename="../src/ai/GenerationService.cpp" line="+421"/>
+        <location filename="../src/ai/GenerationService.cpp" line="+424"/>
         <source>The selection is empty - paint a mask or make a selection first.</source>
         <translation>Die Auswahl ist leer – malen Sie zuerst eine Maske oder erstellen Sie eine Auswahl.</translation>
     </message>
@@ -220,7 +220,7 @@
         <translation>Gemini hat kein Bild zurückgegeben: %1</translation>
     </message>
     <message>
-        <location line="+143"/>
+        <location line="+174"/>
         <source>Gemini returned no part masks. %1</source>
         <translation>Gemini hat keine Teilmasken zurückgegeben. %1</translation>
     </message>
@@ -1105,7 +1105,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="-320"/>
-        <location filename="../src/ui/Studio.cpp" line="+160"/>
+        <location filename="../src/ui/Studio.cpp" line="+161"/>
         <location line="+17"/>
         <source>Lumen is shutting down.</source>
         <translation>Lumen wird beendet.</translation>
@@ -1530,7 +1530,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Hochladen eines Bildes zu ComfyUI fehlgeschlagen: %1</translation>
     </message>
     <message>
-        <location line="+272"/>
+        <location line="+268"/>
+        <source>No ComfyUI template finds objects by name. Add a segmentation template with a &quot;prompt&quot; binding (mode &quot;segment_parts&quot;) to %1.</source>
+        <translation>Keine ComfyUI-Vorlage findet Objekte nach Namen. Legen Sie eine Segmentierungsvorlage mit einer „prompt“-Bindung (Modus „segment_parts“) in %1 ab.</translation>
+    </message>
+    <message>
+        <location line="+24"/>
         <source>No upscale model found in ComfyUI&apos;s models/upscale_models folder.</source>
         <translation>Kein Hochskalierungsmodell im Ordner models/upscale_models von ComfyUI gefunden.</translation>
     </message>
@@ -1560,7 +1565,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Wählen Sie die zu segmentierenden Teile aus.</translation>
     </message>
     <message>
-        <location line="+20"/>
+        <location line="+21"/>
         <source>None of the requested parts was found</source>
         <translation>Keines der angeforderten Teile wurde gefunden</translation>
     </message>
@@ -1988,7 +1993,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ai::GeminiChatProvider</name>
     <message>
-        <location filename="../src/ai/providers/GeminiProvider.cpp" line="-517"/>
+        <location filename="../src/ai/providers/GeminiProvider.cpp" line="-548"/>
         <source>Gemini models for chat, vision analysis and planning through the Gemini API.</source>
         <translation>Gemini-Modelle für Chat, Bildanalyse und Planung über die Gemini API.</translation>
     </message>
@@ -2103,17 +2108,22 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+103"/>
-        <location line="+145"/>
+        <location line="+186"/>
         <source>Gemini API key is not set. Add it in Settings → Providers.</source>
         <translation>Der Gemini-API-Schlüssel ist nicht festgelegt. Fügen Sie ihn unter Einstellungen → Anbieter hinzu.</translation>
     </message>
     <message>
-        <location line="-111"/>
+        <location line="-152"/>
         <source>%1 of %2 images</source>
         <translation>%1 von %2 Bildern</translation>
     </message>
     <message>
-        <location line="+123"/>
+        <location line="+165"/>
+        <source>Finding &quot;%1&quot; with Gemini...</source>
+        <translation>„%1“ wird mit Gemini gesucht...</translation>
+    </message>
+    <message>
+        <location line="+7"/>
         <source>Segmenting parts with Gemini...</source>
         <translation>Teile werden mit Gemini segmentiert...</translation>
     </message>
@@ -2131,18 +2141,18 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Der Generierungsdienst ist nicht mehr verfügbar</translation>
     </message>
     <message>
-        <location line="-204"/>
+        <location line="-207"/>
         <source>The image engine was removed while it was working.</source>
         <translation>Die Bild-Engine wurde entfernt, während sie arbeitete.</translation>
     </message>
     <message>
         <location line="+144"/>
-        <location line="+107"/>
+        <location line="+110"/>
         <source>There is no image engine. Set one up with Help → Set up AI…</source>
         <translation>Es gibt keine Bild-Engine. Richten Sie eine unter Hilfe → KI einrichten… ein.</translation>
     </message>
     <message>
-        <location line="-104"/>
+        <location line="-107"/>
         <source>None of your image engines can upscale. Give your local server an upscaler folder (Settings → Local servers), or add fal.ai or Stability AI (Settings → Providers).</source>
         <translation>Keine Ihrer Bild-Engines kann hochskalieren. Geben Sie Ihrem lokalen Server einen Ordner für Hochskalierer (Einstellungen → Lokale Server), oder fügen Sie fal.ai oder Stability AI hinzu (Einstellungen → Anbieter).</translation>
     </message>
@@ -2165,6 +2175,11 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <location line="+2"/>
         <source>None of your image engines can split a picture into parts. Google Gemini and a Lumen part server can (Settings → Providers).</source>
         <translation>Keine Ihrer Bild-Engines kann ein Bild in Teile zerlegen. Google Gemini und ein Lumen-Teile-Server können es (Einstellungen → Anbieter).</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>None of your image engines can find objects by name. ComfyUI (with a Grounding DINO + SAM template), fal.ai and Google Gemini can (Settings → Providers).</source>
+        <translation>Keine Ihrer Bild-Engines kann Objekte nach Namen finden. ComfyUI (mit einer Grounding-DINO-+-SAM-Vorlage), fal.ai und Google Gemini können es (Einstellungen → Anbieter).</translation>
     </message>
     <message>
         <location line="+111"/>
@@ -3104,6 +3119,11 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <source>Stable Diffusion WebUI cannot segment character parts.</source>
         <translation>Stable Diffusion WebUI kann keine Charakterteile segmentieren.</translation>
     </message>
+    <message>
+        <location line="+3"/>
+        <source>Stable Diffusion WebUI cannot find objects by name.</source>
+        <translation>Stable Diffusion WebUI kann keine Objekte nach Namen finden.</translation>
+    </message>
 </context>
 <context>
     <name>lumen::ai::Segmenter</name>
@@ -3202,7 +3222,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ai::Types</name>
     <message>
-        <location filename="../src/ai/Types.cpp" line="+120"/>
+        <location filename="../src/ai/Types.cpp" line="+121"/>
         <source>The server has no LoRA &quot;%1&quot;. Put the file into the server&apos;s LoRA folder.</source>
         <translation>Der Server hat keine LoRA „%1“. Legen Sie die Datei in den LoRA-Ordner des Servers.</translation>
     </message>
@@ -9821,11 +9841,11 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+2"/>
-        <source>Finding objects needs the detection models (about %1 MB, once): Select → By description… offers the download.</source>
-        <translation>Objekte finden braucht die Erkennungsmodelle (einmalig etwa %1 MB): Auswahl → Nach Beschreibung… bietet den Download an.</translation>
+        <source>Finding objects needs the detection models (about %1 MB, once), or an image engine that finds objects (ComfyUI, fal.ai, Google Gemini). Select → By description… offers the download.</source>
+        <translation>Objekte finden braucht die Erkennungsmodelle (einmalig etwa %1 MB) oder eine Bild-Engine, die Objekte findet (ComfyUI, fal.ai, Google Gemini). Auswahl → Nach Beschreibung… bietet den Download an.</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+17"/>
         <source>Find area</source>
         <translation>Bereich finden</translation>
     </message>
@@ -16335,13 +16355,8 @@ oder eines aus den Projektbildern ziehen</translation>
             <numerusform>%n Bilder in der KI-Registerkarte…</numerusform>
         </translation>
     </message>
-    <message>
-        <location line="+92"/>
-        <source>Selecting objects by name needs the detection models (about %1 MB, once). Select → By description… offers the download.</source>
-        <translation>Objekte nach Namen auszuwählen braucht die Erkennungsmodelle (einmalig etwa %1 MB). Auswahl → Nach Beschreibung… bietet den Download an.</translation>
-    </message>
     <message numerus="yes">
-        <location line="+19"/>
+        <location line="+113"/>
         <source>Selected %n object(s). Now say what should change there, or press Remove object.</source>
         <translation>
             <numerusform>%n Objekt ausgewählt. Sagen Sie jetzt, was sich dort ändern soll, oder drücken Sie Objekt entfernen.</numerusform>
@@ -16349,18 +16364,28 @@ oder eines aus den Projektbildern ziehen</translation>
         </translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+15"/>
         <source>Nothing like &quot;%1&quot; was found. Select → By description… has settings to find fainter or larger ones.</source>
         <translation>Nichts wie „%1“ gefunden. Auswahl → Nach Beschreibung… hat Einstellungen, um blassere oder größere zu finden.</translation>
     </message>
     <message>
-        <location line="-16"/>
-        <location line="+22"/>
+        <location line="-19"/>
+        <location line="+25"/>
         <source>Select: %1</source>
         <translation>Auswahl: %1</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="-41"/>
+        <source>Selecting objects by name needs the detection models (about %1 MB, once), or an image engine that finds objects: ComfyUI, fal.ai or Google Gemini. Select → By description… offers the download.</source>
+        <translation>Objekte nach Namen auszuwählen braucht die Erkennungsmodelle (einmalig etwa %1 MB) oder eine Bild-Engine, die Objekte findet: ComfyUI, fal.ai oder Google Gemini. Auswahl → Nach Beschreibung… bietet den Download an.</translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <source>Selected what %1 found. Now say what should change there, or press Remove object.</source>
+        <translation>Ausgewählt, was %1 gefunden hat. Sagen Sie jetzt, was sich dort ändern soll, oder drücken Sie Objekt entfernen.</translation>
+    </message>
+    <message>
+        <location line="+23"/>
         <source>Selected: %1 Now say what should change there, or press Remove object.</source>
         <translation>Ausgewählt: %1 Sagen Sie jetzt, was sich dort ändern soll, oder drücken Sie „Objekt entfernen“.</translation>
     </message>
@@ -16720,7 +16745,7 @@ oder eines aus den Projektbildern ziehen</translation>
 <context>
     <name>lumen::ui::SelectByDescriptionDialog</name>
     <message>
-        <location filename="../src/ui/dialogs/SelectByDescriptionDialog.cpp" line="+30"/>
+        <location filename="../src/ui/dialogs/SelectByDescriptionDialog.cpp" line="+31"/>
         <source>red</source>
         <translation>Rote</translation>
     </message>
@@ -16911,17 +16936,22 @@ oder eines aus den Projektbildern ziehen</translation>
         <translation>Auswählen</translation>
     </message>
     <message>
-        <location line="+49"/>
+        <location line="+52"/>
         <source>Say what to select, and Lumen finds it in the picture.</source>
         <translation>Sagen Sie, was ausgewählt werden soll, und Lumen findet es im Bild.</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+2"/>
+        <source>Objects: &quot;%1&quot;, found by %2. With the detection models, they are found on this computer instead.</source>
+        <translation>Objekte: „%1“, gefunden von %2. Mit den Erkennungsmodellen werden sie stattdessen auf diesem Computer gefunden.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
         <source>Objects: &quot;%1&quot;, found by a detection model on this computer.</source>
         <translation>Objekte: „%1“, gefunden von einem Erkennungsmodell auf diesem Computer.</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+3"/>
         <source>Download the detection models (about %1 MB, once)</source>
         <translation>Erkennungsmodelle herunterladen (einmalig etwa %1 MB)</translation>
     </message>
@@ -16956,12 +16986,17 @@ oder eines aus den Projektbildern ziehen</translation>
         <translation>Wird gesucht… (beim ersten Mal dauert es einige Sekunden)</translation>
     </message>
     <message numerus="yes">
-        <location line="+8"/>
+        <location line="+9"/>
         <source>Found %n object(s) (tinted).</source>
         <translation>
             <numerusform>%n Objekt gefunden (eingefärbt).</numerusform>
             <numerusform>%n Objekte gefunden (eingefärbt).</numerusform>
         </translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Found by %1 (tinted).</source>
+        <translation>Gefunden von %1 (eingefärbt).</translation>
     </message>
     <message>
         <location line="+12"/>
@@ -18556,19 +18591,30 @@ oder eines aus den Projektbildern ziehen</translation>
 <context>
     <name>lumen::ui::SmartSelect</name>
     <message>
-        <location filename="../src/ui/SmartSelect.cpp" line="+96"/>
+        <location filename="../src/ui/SmartSelect.cpp" line="+100"/>
         <source>Smart selection needs ONNX Runtime and SAM 2.1, which are not downloaded yet.</source>
         <translation>Die intelligente Auswahl braucht ONNX Runtime und SAM 2.1, die noch nicht heruntergeladen sind.</translation>
     </message>
     <message>
-        <location line="+49"/>
+        <location line="+51"/>
         <source>Finding objects by name needs the Grounding DINO model, which is not downloaded yet.</source>
         <translation>Objekte nach Namen zu finden braucht das Modell Grounding DINO, das noch nicht heruntergeladen ist.</translation>
     </message>
     <message>
         <location line="+50"/>
+        <location line="+52"/>
         <source>Nothing that looks like &quot;%1&quot; was found.</source>
         <translation>Nichts, das wie „%1“ aussieht, wurde gefunden.</translation>
+    </message>
+    <message>
+        <location line="-13"/>
+        <source>Find: %1</source>
+        <translation>Suchen: %1</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Looking for &quot;%1&quot; was cancelled.</source>
+        <translation>Die Suche nach „%1“ wurde abgebrochen.</translation>
     </message>
 </context>
 <context>

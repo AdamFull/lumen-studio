@@ -5504,6 +5504,42 @@ void TestCanvas::selectObjectsByName()
     QVERIFY(node && node->info().expensive);
     QVERIFY(node->unavailableReason({}).contains(QStringLiteral("150 MB")));
 
+    // Without the models, an image engine that finds objects does it (Gemini, against a mock).
+    {
+        MockHttpServer gemini;
+        int asked = 0;
+        gemini.route("POST", QStringLiteral("/v1beta/models/gemini-2.5-flash:generateContent"), [&](const MockRequest &) {
+            ++asked;
+            // The ball's box, 70-170 across 400 and 100-200 down 300, in thousandths.
+            const QString list = QStringLiteral("[{\"box_2d\": [333, 175, 667, 425], \"label\": \"ball\"}]");
+            return MockResponse::json({{QStringLiteral("candidates"), QJsonArray{QJsonObject{{QStringLiteral("content"), QJsonObject{
+                {QStringLiteral("parts"), QJsonArray{QJsonObject{{QStringLiteral("text"), list}}}}}}}}}});
+        });
+        ai::Provider *engine = f.studio.providers()->addProvider(
+            QStringLiteral("gemini_image"), QStringLiteral("Gemini"),
+            {{QStringLiteral("url"), gemini.baseUrl().toString() + QStringLiteral("/v1beta")}, {QStringLiteral("api_key"), QStringLiteral("k")}});
+        QVERIFY(engine);
+        QVERIFY(!finder->objectsReady());
+        QVERIFY(finder->canFindObjects());
+        QVERIFY(node->unavailableReason({}).isEmpty());
+        {
+            SelectByDescriptionDialog dlg(doc, f.window.get());
+            dlg.setObjectFinder(finder);
+            dlg.setWords(QStringLiteral("the ball"));
+            QVERIFY(dlg.findChild<QLabel *>(QStringLiteral("selectUnderstood"))->text().contains(QStringLiteral("found by Gemini")));
+            QVERIFY(!dlg.findChild<QPushButton *>(QStringLiteral("selectDownload"))->isHidden()); // still offered, to find them here
+            QTRY_VERIFY_WITH_TIMEOUT(!dlg.found().isNull(), 10000);
+            QCOMPARE(dlg.findChild<QLabel *>(QStringLiteral("selectResult"))->text(), QStringLiteral("Found by Gemini (tinted)."));
+            QVERIFY(dlg.apply());
+            QCOMPARE(qGray(doc->selection().pixel(120, 150)), 255);
+            QCOMPARE(qGray(doc->selection().pixel(350, 50)), 0);
+            doc->clearSelection();
+        }
+        QCOMPARE(asked, 1);
+        f.studio.providers()->removeProvider(engine->instanceId());
+        QVERIFY(!finder->canFindObjects());
+    }
+
     // With the models (stand-ins): a box around what the words name, cut out as a disk.
     auto segmenter = std::make_shared<FakeSegmenter>();
     finder->setSegmenter(segmenter);

@@ -187,7 +187,9 @@ struct ImageCapabilities
 //   result: one GeneratedImage per part, sized like the input image. info: {"label": tag or model label,
 //           "kind": "layer" (RGBA, possibly with completed hidden areas) | "mask" (Grayscale8),
 //           "order": back-to-front index (optional), "depth": 0 back .. 1 front (optional), "score": 0..1 (optional)}
-enum class Utility { Upscale, RemoveBackground, DetectPose, Caption, SegmentParts };
+// FindArea (plan M18 §18.1): params {"what": "the cup"}; the result is masks (one per object or one
+// for all, any size), which ai::areaFromMasks puts together. None, or only empty ones: nothing found.
+enum class Utility { Upscale, RemoveBackground, DetectPose, Caption, SegmentParts, FindArea };
 QString utilityName(Utility u);
 
 // ---- Chat / LLM ---------------------------------------------------------------------------------

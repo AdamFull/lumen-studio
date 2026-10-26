@@ -538,26 +538,13 @@ ImageOperation *GeminiImageProvider::generate(const ImageRequest &r)
 
 bool GeminiImageProvider::supportsUtility(Utility u) const
 {
-    return u == Utility::SegmentParts;
+    return u == Utility::SegmentParts || u == Utility::FindArea;
 }
 
-QJsonObject GeminiImageProvider::buildSegmentationBody(const QImage &image, const QJsonArray &parts)
+namespace {
+
+QJsonObject maskRequest(const QImage &image, const QString &instruction)
 {
-    QStringList names;
-    for (const QJsonValue &v : parts) {
-        const QJsonObject p = v.toObject();
-        const QString tag = p.value(QStringLiteral("tag")).toString();
-        const QString prompt = p.value(QStringLiteral("prompt")).toString();
-        names << (prompt.isEmpty() || prompt == tag ? tag : QStringLiteral("%1 (%2)").arg(tag, prompt));
-    }
-    const QString instruction =
-        QStringLiteral("This is a character illustration. Give the segmentation masks for these parts of the character: %1. "
-                       "Output a JSON list of segmentation masks where each entry contains the 2D bounding box in the key "
-                       "\"box_2d\", the segmentation mask in key \"mask\", and the text label in the key \"label\". The label "
-                       "must be exactly one of the part names before the parentheses. Return one entry per visible part "
-                       "(combine left and right sides into one mask) and skip parts that are not visible.")
-            .arg(names.isEmpty() ? QStringLiteral("hair, face, eyes, mouth, body, arms, legs, clothing, accessories")
-                                 : names.join(QStringLiteral(", ")));
     return QJsonObject{
         {QStringLiteral("contents"),
          QJsonArray{QJsonObject{{QStringLiteral("role"), QStringLiteral("user")},
@@ -568,7 +555,9 @@ QJsonObject GeminiImageProvider::buildSegmentationBody(const QImage &image, cons
                      {QStringLiteral("thinkingConfig"), QJsonObject{{QStringLiteral("thinkingBudget"), 0}}}}}};
 }
 
-ImageResult GeminiImageProvider::parseSegmentation(const QByteArray &body, const QSize &canvas)
+// The masks of Gemini's answer ({"box_2d", "mask", "label"} entries) on the canvas; `text` gets the
+// answer's text. Entries without a label are kept only when `labelled` is off.
+ImageResult parseMasks(const QByteArray &body, const QSize &canvas, bool labelled, QString *answer)
 {
     const QJsonObject o = QJsonDocument::fromJson(body).object();
     QString text;
@@ -576,6 +565,8 @@ ImageResult GeminiImageProvider::parseSegmentation(const QByteArray &body, const
         for (const QJsonValue &pv : cv.toObject().value(QStringLiteral("content")).toObject().value(QStringLiteral("parts")).toArray())
             text += pv.toObject().value(QStringLiteral("text")).toString();
     }
+    if (answer)
+        *answer = text;
     const QJsonValue parsed = json::extractJson(text);
     const QJsonArray entries = parsed.isArray() ? parsed.toArray() : parsed.toObject().value(QStringLiteral("masks")).toArray();
     ImageResult result;
@@ -584,7 +575,7 @@ ImageResult GeminiImageProvider::parseSegmentation(const QByteArray &body, const
         const QJsonObject e = v.toObject();
         const QJsonArray box = e.value(QStringLiteral("box_2d")).toArray();
         const QString label = e.value(QStringLiteral("label")).toString().section(QLatin1Char('('), 0, 0).trimmed();
-        if (box.size() != 4 || label.isEmpty())
+        if (box.size() != 4 || (labelled && label.isEmpty()))
             continue;
         const int y0 = int(std::floor(box[0].toDouble() / 1000.0 * canvas.height()));
         const int x0 = int(std::floor(box[1].toDouble() / 1000.0 * canvas.width()));
@@ -614,14 +605,64 @@ ImageResult GeminiImageProvider::parseSegmentation(const QByteArray &body, const
                              {QStringLiteral("order"), order++}};
         result.images.append(g);
     }
+    return result;
+}
+
+} // namespace
+
+QJsonObject GeminiImageProvider::buildSegmentationBody(const QImage &image, const QJsonArray &parts)
+{
+    QStringList names;
+    for (const QJsonValue &v : parts) {
+        const QJsonObject p = v.toObject();
+        const QString tag = p.value(QStringLiteral("tag")).toString();
+        const QString prompt = p.value(QStringLiteral("prompt")).toString();
+        names << (prompt.isEmpty() || prompt == tag ? tag : QStringLiteral("%1 (%2)").arg(tag, prompt));
+    }
+    const QString instruction =
+        QStringLiteral("This is a character illustration. Give the segmentation masks for these parts of the character: %1. "
+                       "Output a JSON list of segmentation masks where each entry contains the 2D bounding box in the key "
+                       "\"box_2d\", the segmentation mask in key \"mask\", and the text label in the key \"label\". The label "
+                       "must be exactly one of the part names before the parentheses. Return one entry per visible part "
+                       "(combine left and right sides into one mask) and skip parts that are not visible.")
+            .arg(names.isEmpty() ? QStringLiteral("hair, face, eyes, mouth, body, arms, legs, clothing, accessories")
+                                 : names.join(QStringLiteral(", ")));
+    return maskRequest(image, instruction);
+}
+
+QJsonObject GeminiImageProvider::buildFindAreaBody(const QImage &image, const QString &what)
+{
+    const QString instruction =
+        QStringLiteral("Give the segmentation masks for: %1. Output a JSON list of segmentation masks where each entry contains "
+                       "the 2D bounding box in the key \"box_2d\", the segmentation mask in key \"mask\", and the text label in "
+                       "the key \"label\". Return one entry per matching object, and an empty list if there is none in the "
+                       "picture.")
+            .arg(what);
+    return maskRequest(image, instruction);
+}
+
+ImageResult GeminiImageProvider::parseSegmentation(const QByteArray &body, const QSize &canvas)
+{
+    QString text;
+    ImageResult result = parseMasks(body, canvas, true, &text);
     if (result.images.isEmpty())
         throw ProviderError(QObject::tr("Gemini returned no part masks. %1").arg(text.left(200)));
     return result;
 }
 
+ImageResult GeminiImageProvider::parseFoundArea(const QByteArray &body, const QSize &canvas)
+{
+    QString text;
+    ImageResult result = parseMasks(body, canvas, false, &text);
+    // Nothing found is an answer: with its text, the request does not count as failed.
+    if (result.images.isEmpty())
+        result.text = text.trimmed().isEmpty() ? QStringLiteral("[]") : text;
+    return result;
+}
+
 ImageOperation *GeminiImageProvider::runUtility(Utility utility, const QImage &image, const QJsonObject &params)
 {
-    if (utility != Utility::SegmentParts)
+    if (utility != Utility::SegmentParts && utility != Utility::FindArea)
         return ImageProvider::runUtility(utility, image, params);
     auto *op = new ImageOperation(this);
     if (text(QStringLiteral("api_key")).isEmpty()) {
@@ -635,8 +676,16 @@ ImageOperation *GeminiImageProvider::runUtility(Utility utility, const QImage &i
     net::CallOptions opts;
     opts.timeoutMs = std::max(10, setting(QStringLiteral("timeout_s")).toInt()) * 1000;
     opts.maxRetries = 1;
-    const QJsonArray parts = params.value(QStringLiteral("parts")).toArray();
     const QSize canvas = image.size();
+    if (utility == Utility::FindArea) {
+        const QString what = params.value(QStringLiteral("what")).toString().trimmed();
+        op->reportProgress(-1.0, tr("Finding \"%1\" with Gemini...").arg(what));
+        runImageRequest(op, http(), geminiRequest(this, path),
+                        [image, what] { return Payload{json::compact(buildFindAreaBody(image, what))}; },
+                        [canvas](const HttpResponse &resp) { return parseFoundArea(resp.body, canvas); }, opts);
+        return op;
+    }
+    const QJsonArray parts = params.value(QStringLiteral("parts")).toArray();
     op->reportProgress(-1.0, tr("Segmenting parts with Gemini..."));
     runImageRequest(op, http(), geminiRequest(this, path),
                     [image, parts] { return Payload{json::compact(buildSegmentationBody(image, parts))}; },

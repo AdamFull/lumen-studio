@@ -1077,6 +1077,11 @@ bool ComfyUiProvider::supportsUtility(Utility u) const
 {
     if (u == Utility::SegmentParts)
         return segmentationTemplate().has_value();
+    if (u == Utility::FindArea) {
+        // A text-prompted segmentation template (Grounding DINO + SAM) finds objects by name too.
+        const std::optional<ComfyTemplate> t = segmentationTemplate();
+        return t && t->bindings.contains(QStringLiteral("prompt"));
+    }
     return u == Utility::Upscale || u == Utility::DetectPose;
 }
 
@@ -1084,6 +1089,21 @@ ImageOperation *ComfyUiProvider::runUtilityImpl(Utility utility, const QImage &i
 {
     if (utility == Utility::SegmentParts)
         return segmentParts(image, params);
+    if (utility == Utility::FindArea) {
+        // The segmentation template once, with the words as its prompt; nothing found is an answer.
+        const QString what = params.value(QStringLiteral("what")).toString().trimmed();
+        if (!supportsUtility(Utility::FindArea)) {
+            auto *op = new ImageOperation(this);
+            failLater(op, tr("No ComfyUI template finds objects by name. Add a segmentation template with a \"prompt\" binding "
+                             "(mode \"segment_parts\") to %1.")
+                              .arg(QDir::toNativeSeparators(workflowDirectory())));
+            return op;
+        }
+        QJsonObject find = params;
+        find.insert(QStringLiteral("parts"), QJsonArray{QJsonObject{{QStringLiteral("tag"), what}, {QStringLiteral("prompt"), what}}});
+        find.insert(QStringLiteral("none_found_ok"), true);
+        return segmentParts(image, find);
+    }
     auto *op = new ImageOperation(this);
     QPointer<ComfyUiProvider> self(this);
     if (utility == Utility::Upscale) {
@@ -1272,7 +1292,8 @@ ImageOperation *ComfyUiProvider::segmentParts(const QImage &image, const QJsonOb
         if (!state || !self || op->isFinished())
             return;
         if (state->index >= parts.size()) {
-            if (state->result.images.isEmpty()) {
+            const bool noneOk = state->failures.isEmpty() && params.value(QStringLiteral("none_found_ok")).toBool();
+            if (state->result.images.isEmpty() && !noneOk) {
                 op->fail(state->failures.isEmpty() ? tr("None of the requested parts was found") : state->failures.first());
             } else {
                 state->result.info.insert(QStringLiteral("failures"), json::toArray(state->failures));
