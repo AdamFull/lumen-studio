@@ -28,6 +28,7 @@ add_library(lumen_ui STATIC
     pages/EditorPage.h pages/EditorPage.cpp
     pages/StartScreen.h pages/StartScreen.cpp
     dialogs/NewFromPromptDialog.h dialogs/NewFromPromptDialog.cpp
+    dialogs/NewCanvasDialog.h dialogs/NewCanvasDialog.cpp
     dialogs/SettingsDialog.h dialogs/SettingsDialog.cpp
     dialogs/ShortcutsPage.h dialogs/ShortcutsPage.cpp
     dialogs/LocalServersPage.h dialogs/LocalServersPage.cpp

@@ -50,11 +50,15 @@ int main(int argc, char *argv[])
                                QStringLiteral("name"));
     QCommandLineOption imageOpt(QStringLiteral("image"), QStringLiteral("Open an image (or layered PSD) in the editor."), QStringLiteral("path"));
     QCommandLineOption sizeOpt(QStringLiteral("size"), QStringLiteral("Window size WxH (screenshot mode)."), QStringLiteral("size"));
-    QCommandLineOption sliceOpt(QStringLiteral("slice"), QStringLiteral("Start a part slicing session (Live2D) for this image."), QStringLiteral("path"));
+    QCommandLineOption sliceOpt(QStringLiteral("slice"),
+                                QStringLiteral("Start a part slicing session (Live2D) for this image (the Live2D parts plugin must be on)."),
+                                QStringLiteral("path"));
     QCommandLineOption sliceStepOpt(QStringLiteral("slice-step"),
                                     QStringLiteral("With --slice: open this step (1 source, 2 masks, 3 generate, 4 preview); 2+ segments with the skeleton."),
                                     QStringLiteral("step"));
-    QCommandLineOption cubismOpt(QStringLiteral("cubism"), QStringLiteral("Preview a Live2D Cubism model (.model3.json)."), QStringLiteral("path"));
+    QCommandLineOption cubismOpt(QStringLiteral("cubism"),
+                                 QStringLiteral("Preview a Live2D Cubism model (.model3.json) (the Live2D parts plugin must be on)."),
+                                 QStringLiteral("path"));
     QCommandLineOption toolOpt(QStringLiteral("tool"), QStringLiteral("Editor tool to select (e.g. transform, brush, crop)."), QStringLiteral("id"));
     parser.addOptions({projectOpt, screenshotOpt, pageOpt, imageOpt, sizeOpt, sliceOpt, sliceStepOpt, cubismOpt, toolOpt});
     parser.process(app);
@@ -123,7 +127,17 @@ int main(int argc, char *argv[])
         studio.openFile(QFileInfo(parser.value(imageOpt)).absoluteFilePath());
     if (parser.isSet(toolOpt))
         window.editor()->selectTool(parser.value(toolOpt));
-    if (parser.isSet(sliceOpt)) {
+    // Both are the Live2D parts plugin's: say so instead of doing nothing (or importing the file).
+    const bool parts = studio.hasPage(QStringLiteral("parts"));
+    if ((parser.isSet(sliceOpt) || parser.isSet(cubismOpt)) && !parts) {
+        qCWarning(lcApp) << "--slice and --cubism need the Live2D parts plugin, which is off";
+        QTimer::singleShot(1000, &studio, [&studio] {
+            studio.notify(QObject::tr("The Live2D parts plugin is off, so --slice and --cubism do nothing. Switch it on in Tools → "
+                                      "Plugins… and restart Lumen."),
+                          QStringLiteral("warning"));
+        });
+    }
+    if (parser.isSet(sliceOpt) && parts) {
         const QString file = QFileInfo(parser.value(sliceOpt)).absoluteFilePath();
         const int step = parser.value(sliceStepOpt).toInt();
         // The Parts window is built when it is first opened.
@@ -140,7 +154,7 @@ int main(int argc, char *argv[])
         else
             QObject::connect(&studio, &ui::Studio::projectOpened, &studio, start, Qt::SingleShotConnection);
     }
-    if (parser.isSet(cubismOpt)) {
+    if (parser.isSet(cubismOpt) && parts) {
         window.showPage(QStringLiteral("parts"));
         if (auto *parts = qobject_cast<ui::PartsPage *>(window.pageWidget(QStringLiteral("parts"))))
             parts->previewCubismModel(QFileInfo(parser.value(cubismOpt)).absoluteFilePath());

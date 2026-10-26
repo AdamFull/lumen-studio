@@ -348,7 +348,7 @@ void MaskBrushTool::release(CanvasView *view, const ToolEvent &)
         return;
     m_active = false;
     if (!m_dirty.isEmpty())
-        view->document()->commitSelectionPaint(m_dirty, m_before.copy(m_dirty), m_wasEmpty, m_subtract ? tr("Erase mask") : tr("Paint mask"));
+        view->document()->commitSelectionPaint(m_dirty, m_before.copy(m_dirty), m_wasEmpty, m_subtract ? tr("Erase from selection") : tr("Paint selection"));
     m_before = QImage();
 }
 
@@ -396,11 +396,10 @@ QWidget *MaskBrushTool::createOptions(QWidget *parent)
     EditorState *s = state();
     auto *size = addSlider(row, tr("Size"), 2, 1500, s->maskBrushSize(), 0, QStringLiteral(" px"), [s](double v) { s->setMaskBrushSize(v); });
     addSlider(row, tr("Hardness"), 0, 100, s->maskHardness() * 100, 0, QStringLiteral(" %"), [s](double v) { s->setMaskHardness(v / 100.0); });
-    auto *overlay = new QCheckBox(tr("Show mask"), row);
+    auto *overlay = new QCheckBox(tr("Tint the selection"), row);
     overlay->setChecked(s->showSelectionOverlay());
     QObject::connect(overlay, &QCheckBox::toggled, row, [s](bool v) { s->setShowSelectionOverlay(v); });
     row->layout()->addWidget(overlay);
-    row->layout()->addWidget(mutedLabel(tr("Alt / right button: erase"), row));
     static_cast<QHBoxLayout *>(row->layout())->addStretch();
     QObject::connect(s, &EditorState::changed, size, [s, size] {
         if (std::abs(size->value() - s->maskBrushSize()) > 0.5)

@@ -238,7 +238,7 @@ void ReferenceStrip::rebuild()
                 addImage(img);
             }
         });
-        menu->addAction(Icons::get(QStringLiteral("gallery")), tr("From library (drag images here)"), this, [this] {
+        menu->addAction(Icons::get(QStringLiteral("gallery")), tr("From project images (drag images here)"), this, [this] {
             m_studio->showPage(pages::Library);
         });
         add->setMenu(menu);

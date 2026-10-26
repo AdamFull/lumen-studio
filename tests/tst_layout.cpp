@@ -8,6 +8,7 @@
 #include "core/Settings.h"
 #include "doc/Project.h"
 #include "plugins/BuiltInPlugins.h"
+#include "plugins/characters/assistant/AssistantPanel.h"
 #include "pose/PosePresets.h"
 #include "pose/Skeleton.h"
 #include "runtime/ServerProfile.h"
@@ -15,10 +16,12 @@
 #include "ui/MainWindow.h"
 #include "ui/Studio.h"
 #include "ui/Theme.h"
+#include "ui/canvas/CanvasView.h"
 #include "ui/dialogs/LocalServersPage.h"
 #include "ui/dialogs/LocalSetupDialog.h"
 #include "ui/dialogs/ModelHubDialog.h"
 #include "ui/dialogs/NewFromPromptDialog.h"
+#include "ui/dialogs/NewCanvasDialog.h"
 #include "ui/dialogs/PoseEditDialog.h"
 #include "ui/dialogs/SettingsDialog.h"
 #include "ui/ext/Extension.h"
@@ -191,7 +194,10 @@ public:
             } else if (const auto *b = qobject_cast<QAbstractButton *>(w); b && !b->text().isEmpty()) {
                 const auto *tb = qobject_cast<const QToolButton *>(b);
                 const bool textShown = !tb || tb->toolButtonStyle() != Qt::ToolButtonIconOnly;
-                const int textWidth = b->fontMetrics().horizontalAdvance(b->text().remove(QLatin1Char('&')));
+                // The widest line (a tile's name may take two).
+                int textWidth = 0;
+                for (const QString &line : b->text().remove(QLatin1Char('&')).split(u'\n'))
+                    textWidth = std::max(textWidth, b->fontMetrics().horizontalAdvance(line));
                 if (textShown && (b->sizeHint().width() > b->width() + 2 || textWidth > b->width()))
                     add(QStringLiteral("text cut"), w, QStringLiteral("needs %1 px width, has %2").arg(b->sizeHint().width()).arg(b->width()));
             } else if (const auto *c = qobject_cast<QComboBox *>(w); c && !c->isEditable() && !c->currentText().isEmpty()) {
@@ -271,10 +277,13 @@ public:
         w->grab().save(QDir(m_shots).filePath(name.toLower() + QStringLiteral(".png")));
     }
 
+    // Lets pending layouts and the widgets' own short timers run (the prompt bar updates 30 ms after
+    // a change, the selection's outline 90 ms after), so a screenshot shows the state it is named after.
     static void settle()
     {
         QCoreApplication::sendPostedEvents(nullptr, QEvent::LayoutRequest);
-        QTest::qWait(30);
+        QTest::qWait(120);
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::LayoutRequest);
     }
 
     void setShotDir(const QString &dir) { m_shots = dir; }
@@ -482,11 +491,16 @@ void TestLayout::mainWindow()
         // assistant over it.
         doc::Document *doc = studio.openImageAsDocument(sampleImage(), QStringLiteral("Sample"));
         QVERIFY(!window.editor()->showsStartScreen());
+        PromptBar *bar = window.editor()->promptBar();
+        auto *generate = bar->findChild<QPushButton *>(QStringLiteral("promptGenerate"));
+        QTRY_COMPARE(generate->text(), QStringLiteral("Set up AI…"));
         auditWindow(QStringLiteral("Editor"));
         {
             ImageEngine engine(&studio);
-            PromptBar *bar = window.editor()->promptBar();
             QTRY_VERIFY(bar->plan().action == PromptAction::CannotEditImage);
+            // What the screenshot is named after, on screen (not only the plan).
+            QTRY_COMPARE(generate->text(), QStringLiteral("Make a variation"));
+            QTRY_VERIFY(bar->findChild<QPushButton *>(QStringLiteral("promptSelectArea"))->isVisible());
             auditWindow(QStringLiteral("Editor with an engine without edits"));
             QImage mask = img::createMask(doc->size());
             {
@@ -497,8 +511,12 @@ void TestLayout::mainWindow()
             }
             doc->applySelection(mask, QStringLiteral("Select"));
             QTRY_VERIFY(bar->plan().region);
+            QTRY_VERIFY(bar->findChild<QPushButton *>(QStringLiteral("promptRemove"))->isVisible());
             showResults(window, doc);
             QVERIFY(window.editor()->variantStrip()->isVisible());
+            // The strip takes some of the canvas's height; the picture stays whole.
+            QTRY_VERIFY(QRectF(window.editor()->canvas()->focusProxy()->rect())
+                            .contains(window.editor()->canvas()->mapFromDoc(QRectF(doc->bounds()))));
             auditWindow(QStringLiteral("Editor with results"));
             bar->showOptions();
             QWidget *popup = bar->optionsPopup();
@@ -513,13 +531,24 @@ void TestLayout::mainWindow()
             window.editor()->variantStrip()->discard();
             doc->clearSelection();
         }
+        QTRY_COMPARE(generate->text(), QStringLiteral("Set up AI…"));
+        QTRY_VERIFY(!bar->findChild<QPushButton *>(QStringLiteral("promptRemove"))->isVisible());
+        // The queue and the assistant lie over the editor, above the prompt bar (whose buttons they
+        // would hide).
+        auto clearOfBar = [&](QWidget *overlay, const QString &what) {
+            const int top = bar->mapTo(window.centralWidget(), QPoint(0, 0)).y();
+            QVERIFY2(overlay->geometry().bottom() < top,
+                     qPrintable(QStringLiteral("%1 at %2 reaches %3, the prompt bar starts at %4").arg(what, res).arg(overlay->geometry().bottom()).arg(top)));
+        };
         window.setQueueVisible(true);
         auditWindow(QStringLiteral("Editor with the queue"));
+        clearOfBar(window.queuePanel(), QStringLiteral("The queue"));
         window.setQueueVisible(false);
         QAction *assistant = actionNamed(&window, QStringLiteral("panel-assistant"));
         QVERIFY(assistant);
         assistant->setChecked(true);
         auditWindow(QStringLiteral("Editor with the assistant"));
+        clearOfBar(window.findChild<AssistantPanel *>(), QStringLiteral("The assistant"));
         assistant->setChecked(false);
 
         // The plugin pages, each in its window, at the same size.
@@ -667,6 +696,10 @@ void TestLayout::dialogs()
     {
         NewFromPromptDialog d(&studio);
         m_auditor.auditDialog(&d, QStringLiteral("New from prompt dialog"));
+    }
+    {
+        NewCanvasDialog d(&studio);
+        m_auditor.auditDialog(&d, QStringLiteral("New blank canvas dialog"));
     }
     {
         // With everything it can show: a pose ("New image with this pose") and the more options.

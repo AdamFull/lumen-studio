@@ -244,6 +244,7 @@ void CanvasView::setZoom(double zoom, const QPointF &anchor)
     const QPointF docAnchor = mapToDoc(anchor);
     m_zoom = zoom;
     m_pan = anchor - docAnchor * m_zoom;
+    m_fitted = false;
     clampPan();
     emit zoomChanged(m_zoom);
     emit viewChanged();
@@ -268,6 +269,7 @@ void CanvasView::fitToView()
         return;
     }
     m_fitPending = false;
+    m_fitted = true;
     const QSizeF avail = QSizeF(m_surface->size()) * 0.92;
     const QSize s = m_doc->size();
     m_zoom = std::clamp(std::min(avail.width() / s.width(), avail.height() / s.height()), kMinZoom, kMaxZoom);
@@ -285,6 +287,7 @@ void CanvasView::actualPixels()
 void CanvasView::panBy(const QPointF &delta)
 {
     m_pan += delta;
+    m_fitted = false;
     clampPan();
     emit viewChanged();
     updateAll();
@@ -314,7 +317,8 @@ void CanvasView::updateAll()
 void CanvasView::resizeEvent(QResizeEvent *e)
 {
     QWidget::resizeEvent(e);
-    if (m_fitPending)
+    // A fitted picture stays whole (e.g. when the results strip takes some of the height).
+    if (m_fitPending || m_fitted)
         QTimer::singleShot(0, this, &CanvasView::fitToView);
     emit viewChanged();
 }
@@ -703,6 +707,11 @@ void CanvasView::handleKey(QKeyEvent *e, bool press)
         return;
     }
     if (press && m_tool && m_tool->key(this, e)) {
+        e->accept();
+        return;
+    }
+    // The tool comes first (the move tool's arrows, the transform and crop tools' Enter and Esc).
+    if (press && m_keyFallback && m_keyFallback(e)) {
         e->accept();
         return;
     }

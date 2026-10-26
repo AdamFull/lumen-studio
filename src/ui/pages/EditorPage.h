@@ -50,6 +50,12 @@ public:
     StartScreen *startScreen() const { return m_start; }
     bool showsStartScreen() const;
     void selectTool(const QString &id);
+    // The editor's own commands by shortcut id ("undo", "select-all", "zoom-in"…), for the main
+    // window's menus: the same actions, so a customised key works in both.
+    QAction *editorAction(const QString &id) const;
+    // How far down (in `in`'s coordinates) panels laid over the editor may reach: above the results
+    // strip and the prompt bar while a document is open, so they hide neither.
+    int overlayBottom(const QWidget *in) const;
 
     // Actions also exposed through the main window menus.
     void newDocumentDialog();
@@ -61,7 +67,12 @@ public:
     void pasteAsNewDocument();
     void importAsLayer();
 
+signals:
+    // The prompt bar or the results strip moved, appeared or went (overlayBottom changed).
+    void bottomAreaChanged();
+
 protected:
+    bool eventFilter(QObject *watched, QEvent *event) override;
     void dragEnterEvent(QDragEnterEvent *e) override;
     void dropEvent(QDropEvent *e) override;
 
@@ -86,6 +97,7 @@ private:
     QWidget *m_options = nullptr;
     QList<Tool *> m_tools;
     QHash<QString, QAction *> m_toolActions;
+    QHash<QString, QAction *> m_actions; // by shortcut id without "editor."
     QActionGroup *m_toolGroup;
     LayersPanel *m_layers;
     AiPanel *m_ai;

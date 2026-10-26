@@ -30,16 +30,58 @@ constexpr int kMaxRecent = 12;
 constexpr int kMaxDocuments = 6;
 constexpr int kTileIcon = 112;
 
-// A thumbnail centred in a square, so every tile's name sits at the same height.
-QIcon tileIcon(const QPixmap &thumbnail)
+// A thumbnail centred in a square, so every tile's name sits at the same height. A document (it
+// keeps its layers) gets a small "Layers" badge in its corner.
+QIcon tileIcon(const QPixmap &thumbnail, bool document = false)
 {
     QPixmap square(kTileIcon, kTileIcon);
     square.fill(Qt::transparent);
     const QPixmap scaled = thumbnail.scaled(kTileIcon, kTileIcon, Qt::KeepAspectRatio, Qt::SmoothTransformation);
     QPainter p(&square);
     p.drawPixmap((kTileIcon - scaled.width()) / 2, (kTileIcon - scaled.height()) / 2, scaled);
+    if (document) {
+        const Palette &pal = Theme::palette();
+        QFont font = p.font();
+        font.setPointSizeF(7.5);
+        font.setBold(true);
+        p.setFont(font);
+        const QString text = StartScreen::tr("Layers");
+        const QRect badge(4, kTileIcon - 22, p.fontMetrics().horizontalAdvance(text) + 26, 18);
+        p.setRenderHint(QPainter::Antialiasing);
+        p.setPen(Qt::NoPen);
+        p.setBrush(pal.accent);
+        p.drawRoundedRect(badge, 5, 5);
+        p.drawPixmap(badge.left() + 4, badge.top() + 2, Icons::pixmap(QStringLiteral("layers"), 14, pal.accentText));
+        p.setPen(pal.accentText);
+        p.drawText(badge.adjusted(21, 0, -3, 0), Qt::AlignVCenter | Qt::AlignLeft, text);
+    }
     p.end();
     return QIcon(square);
+}
+
+// A name on two lines at most, shortened with "…" at the end of the second.
+QString twoLines(const QFontMetrics &fm, const QString &name, int width)
+{
+    if (fm.horizontalAdvance(name) <= width)
+        return name;
+    // The first line takes whole words while they fit (or as much of one long word as fits).
+    const QStringList words = name.split(u' ', Qt::SkipEmptyParts);
+    QString first;
+    int used = 0;
+    for (const QString &w : words) {
+        const QString next = first.isEmpty() ? w : first + u' ' + w;
+        if (fm.horizontalAdvance(next) > width)
+            break;
+        first = next;
+        ++used;
+    }
+    if (first.isEmpty()) {
+        int n = name.size();
+        while (n > 1 && fm.horizontalAdvance(name.left(n)) > width)
+            --n;
+        return name.left(n) + u'\n' + fm.elidedText(name.mid(n), Qt::ElideRight, width);
+    }
+    return first + u'\n' + fm.elidedText(words.mid(used).join(u' '), Qt::ElideRight, width);
 }
 
 QPushButton *actionButton(const QString &icon, const QString &text, const QString &tip, QWidget *parent)
@@ -213,12 +255,12 @@ void StartScreen::updateSetupCard()
     m_setupCard->setVisible(!imageEngineInUse(m_studio->providers()));
 }
 
-QToolButton *StartScreen::addTile(const QString &name, const QString &tooltip, const QPixmap &thumbnail)
+QToolButton *StartScreen::addTile(const QString &name, const QString &tooltip, const QPixmap &thumbnail, bool document)
 {
     auto *tile = new QToolButton(m_tilesHost);
     tile->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
     tile->setIconSize(QSize(kTileIcon, kTileIcon));
-    tile->setFixedSize(kTileIcon + 24, kTileIcon + 40);
+    tile->setFixedSize(kTileIcon + 24, kTileIcon + 40 + tile->fontMetrics().lineSpacing());
     tile->setAutoRaise(true);
     const QString shown = name.isEmpty() ? tr("Untitled") : name;
     // The name shortened to what the button has room for besides its padding (measured with a text
@@ -226,10 +268,10 @@ QToolButton *StartScreen::addTile(const QString &name, const QString &tooltip, c
     const QString wide(40, u'M');
     tile->setText(wide);
     const int padding = tile->sizeHint().width() - tile->fontMetrics().horizontalAdvance(wide);
-    tile->setText(tile->fontMetrics().elidedText(shown, Qt::ElideRight, tile->width() - padding - 2));
+    tile->setText(twoLines(tile->fontMetrics(), shown, tile->width() - padding - 2));
     tile->setAccessibleName(shown);
     tile->setToolTip(QStringLiteral("%1\n%2").arg(shown, tooltip));
-    tile->setIcon(thumbnail.isNull() ? Icons::get(QStringLiteral("image")) : tileIcon(thumbnail));
+    tile->setIcon(thumbnail.isNull() ? Icons::get(QStringLiteral("image")) : tileIcon(thumbnail, document));
     m_tiles->addWidget(tile);
     return tile;
 }
@@ -250,14 +292,18 @@ void StartScreen::rebuildRecent()
                                     .arg(d.size.width())
                                     .arg(d.size.height())
                                     .arg(QLocale().toString(d.modified, QLocale::ShortFormat));
-            QToolButton *tile = addTile(d.name, tip, QPixmap::fromImage(d.thumbnail));
+            QToolButton *tile = addTile(d.name, tip, QPixmap::fromImage(d.thumbnail), true);
             tile->setProperty("documentId", d.id);
             const QString id = d.id;
             connect(tile, &QToolButton::clicked, this, [this, id] { m_studio->openStoredDocument(id); });
         }
-        // Images, newest first; sliced character parts are intermediate results.
+        // Images, newest first; sliced character parts are intermediate results, and so are the
+        // results of a prompt run nobody kept (they wait in Browse project images).
         QList<doc::AssetInfo> images = project->assets();
-        images.removeIf([](const doc::AssetInfo &a) { return a.kind == doc::AssetKind::Part; });
+        images.removeIf([](const doc::AssetInfo &a) {
+            const bool unkept = a.metadata.contains(QStringLiteral("user_prompt")) && !a.metadata.value(QStringLiteral("kept")).toBool();
+            return a.kind == doc::AssetKind::Part || unkept;
+        });
         std::sort(images.begin(), images.end(), [](const doc::AssetInfo &a, const doc::AssetInfo &b) { return a.created > b.created; });
         for (const doc::AssetInfo &a : images.mid(0, kMaxRecent - int(m_tiles->count()))) {
             const QString tip = tr("%1 · %2 × %3 px · %4")

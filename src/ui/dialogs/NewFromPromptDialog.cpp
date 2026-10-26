@@ -109,15 +109,29 @@ NewFromPromptDialog::NewFromPromptDialog(Studio *studio, QWidget *parent)
     m_variants = new QSpinBox(this);
     m_variants->setRange(1, 4);
     m_variants->setValue(std::clamp(Settings::instance().value(kVariantsKey, 2).toInt(), 1, 4));
+    m_variants->setAccessibleName(tr("Images to make"));
     m_variants->setToolTip(tr("How many images to make. They are shown over the new document one at a time, and you keep the one you like."));
-    form->addRow(tr("Variants"), m_variants);
+    form->addRow(tr("Images to make"), m_variants);
     m_engine = new ProviderCombo(studio->providers(), ai::ProviderKind::Image, this);
     m_engine->setObjectName(QStringLiteral("imageEngine"));
     m_engine->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     form->addRow(tr("Image engine"), m_engine);
     v->addLayout(form);
-    m_engineNote = mutedLabel(QString(), this);
-    v->addWidget(m_engineNote);
+    // Without an engine nothing can be made: the way to one, right here.
+    m_noEngine = new QWidget(this);
+    auto *nh = new QHBoxLayout(m_noEngine);
+    nh->setContentsMargins(0, 0, 0, 0);
+    nh->addWidget(mutedLabel(tr("No image engine is set up yet."), m_noEngine), 1);
+    auto *setUp = new QPushButton(Icons::get(QStringLiteral("sparkles")), tr("Set up AI…"), m_noEngine);
+    setUp->setObjectName(QStringLiteral("newFromPromptSetUpAi"));
+    setUp->setToolTip(tr("Connect an image engine on this computer or online"));
+    Theme::setRole(setUp, QStringLiteral("primary"));
+    nh->addWidget(setUp);
+    v->addWidget(m_noEngine);
+    connect(setUp, &QPushButton::clicked, this, [this] {
+        reject();
+        emit setUpAiRequested();
+    });
 
     // A pose from the Poses plugin ("New image with this pose").
     m_poseBox = new QWidget(this);
@@ -311,11 +325,7 @@ void NewFromPromptDialog::updateUi()
         m_poseNote->setText(provider && !caps.poseControl
                                 ? tr("This engine cannot follow a pose; the pose is kept with the new document.")
                                 : tr("The image follows this pose."));
-    QString note;
-    if (!provider)
-        note = tr("No image engine is set up yet. Help → Set up AI… connects one on this computer or online.");
-    m_engineNote->setText(note);
-    m_engineNote->setVisible(!note.isEmpty());
+    m_noEngine->setVisible(!provider);
     m_create->setEnabled(provider && !m_prompt->text().trimmed().isEmpty());
 }
 
@@ -367,26 +377,29 @@ doc::Document *NewFromPromptDialog::create()
     doc::Document *doc = m_studio->newDocument(size, name);
     if (fitted)
         doc->setControlPose(fitted);
-    Job *job = m_studio->generation()->submit(spec);
+    // One job per image for engines that make one per request, like the prompt bar's runs.
+    const QList<Job *> jobs = m_studio->generation()->submitVariants(spec);
     if (isSignalConnected(QMetaMethod::fromSignal(&NewFromPromptDialog::generationStarted))) {
-        emit generationStarted(doc, job, name, r.batchCount);
+        emit generationStarted(doc, jobs, name, r.batchCount);
         return doc;
     }
     QPointer<doc::Document> target(doc);
     Studio *studio = m_studio;
-    connect(job, &Job::finished, studio, [studio, target, name](Job *j) {
-        if (j->state() == Job::State::Succeeded) {
-            if (!target)
-                return;
-            const ai::GenerationOutput out = ai::GenerationService::outputOf(j);
-            QJsonObject meta{{QStringLiteral("generated"), true}};
-            if (!out.assets.isEmpty())
-                meta.insert(QStringLiteral("asset"), out.assets.first().id);
-            AiPanel::addResultLayers(studio, target, out.images, name, meta);
-        } else if (j->state() == Job::State::Failed) {
-            studio->notify(j->errorString(), QStringLiteral("error"));
-        }
-    });
+    for (Job *job : jobs) {
+        connect(job, &Job::finished, studio, [studio, target, name](Job *j) {
+            if (j->state() == Job::State::Succeeded) {
+                if (!target)
+                    return;
+                const ai::GenerationOutput out = ai::GenerationService::outputOf(j);
+                QJsonObject meta{{QStringLiteral("generated"), true}};
+                if (!out.assets.isEmpty())
+                    meta.insert(QStringLiteral("asset"), out.assets.first().id);
+                AiPanel::addResultLayers(studio, target, out.images, name, meta);
+            } else if (j->state() == Job::State::Failed) {
+                studio->notify(j->errorString(), QStringLiteral("error"));
+            }
+        });
+    }
     return doc;
 }
 

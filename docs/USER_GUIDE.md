@@ -19,16 +19,19 @@ in portable mode.
 
 ## 2. First run: providers
 
-On the first start, the welcome dialog looks for local servers on their default ports (SD WebUI
-7860, Forge 7861, ComfyUI 8188 / 8000, llama.cpp 8080, Ollama 11434, LM Studio 1234, KoboldCpp
-5001, the Lumen part server 7870) and offers to add them. **Help → Set up AI…** (or *Set up AI*
-on the start screen) opens it again; **Edit → Settings… → Providers** (`Ctrl+,`) lists every
-provider.
+On the first start, **Set up AI** asks for an image engine: *Run on this computer…* (Lumen
+installs a model and runs it), *Use an online service…* (fal.ai, OpenAI, Gemini, Stability AI…, with
+your key), or an image server that is already running here, which it looks for on the default ports
+(SD WebUI 7860, Forge 7861, ComfyUI 8188 / 8000, the Lumen part server 7870) and offers to add.
+**Help → Set up AI…** (or *Set up AI* on the start screen, in the prompt bar and in the status bar)
+opens it again; **Edit → Settings… → Providers** (`Ctrl+,`) lists every provider, also the language
+models some plugins use (llama.cpp, Ollama, LM Studio and online ones). The editor needs none.
 
 * **SD WebUI / Forge**: start it with `--api`. Background removal needs the *rembg* extension; pose
   detection and pose control need *ControlNet*.
 * **ComfyUI**: Lumen builds standard workflows for text-to-image, image-to-image and inpainting.
-  Your own API-format workflows go in the folder opened by **Help → Open ComfyUI workflow folder**.
+  Your own API-format workflows go in the folder opened by *Open ComfyUI workflow folder* in the
+  ComfyUI provider's settings (Settings → Providers).
 * **Cloud providers**: paste the API key; **Test connection** checks it. Each provider has a
   *Parallel requests* limit that the job queue respects.
 
@@ -231,34 +234,42 @@ right (§5). The **AI** tab with every AI option opens from the prompt bar's ⋯
 
 * **Open image…** (`Ctrl+O`), **Paste from clipboard** (the copied picture as a new document),
   **New from prompt…** and **New blank canvas…** (`Ctrl+N`);
-* the project's recent documents (with their layers) and images; click one to open it;
-  **Browse project images…** shows all of them;
-* **Set up AI** while no image engine is set up yet (it opens the welcome dialog of §2);
+* the project's recent documents (marked *Layers*: they keep their layers) and images, without the
+  results of a run that were not kept; click one to open it; **Browse project images…** shows all
+  of them;
+* **Set up AI** while no image engine is set up yet (§2);
 * an image file dropped anywhere on it opens.
 
 **New from prompt** (**File → New from prompt…**, `Alt+2`) makes a new image from a description:
 write what you want, pick the shape (square, portrait or landscape ratios, or a custom width ×
-height) and how many variants to make (1 to 4), and click **Create** (`Ctrl+Enter`). Lumen makes a
+height) and how many images to make (1 to 4), and click **Create** (`Ctrl+Enter`). Lumen makes a
 document of that size and draws into it with the image engine. The variants are shown over the new
 document one at a time, as the prompt bar's results are (§6): ←/→ compares them and Enter keeps
 one as a layer. *More options* has the seed and, for models that take one, a negative prompt
 ("leave out"). Steps, guidance and the sampler follow the model. The shape and the number of
-variants are kept for the next time.
+images are kept for the next time. Without an image engine the dialog has a **Set up AI…** button.
 
 **Browse project images** (**File → Browse project images…**, `Alt+6`) opens every image of the
 project in a window of its own (§7).
 
 **The status bar** shows the project, the image engine in use ("FLUX.2 [klein] 4B on this
-computer" for a server Lumen runs, else the provider's name; "No image engine - Set up AI" without
-one; click it to change it in Settings → Providers), the local servers, the *Safe for work* shield
-and the jobs (click for the Queue).
+computer" for a server Lumen runs, else the provider's name, as in every engine list; click it to
+change it in Settings → Providers; "No image engine – Set up AI" without one, and a click sets one
+up), the local servers, **Safe for work** and the jobs (click for the Queue, which says when nothing
+is running). The Queue and the panels of plugins lie over the right of the editor, above the prompt
+bar, so they never hide it.
 
-**Menus.** *File*: new, open, paste, browse, save, export and projects. *Edit*: copy and paste,
-importing an image as a layer, **Settings…** (`Ctrl+,`). *View*: the Queue, the panels of plugins
-(the assistant), the theme. *AI*: what is not a description of a change: **Upscale** (2×, 3×,
-4×), **Remove background**, **Expand canvas…**, **Variation**, **Detect pose**, and **All AI
-options…** (§6). *Tools*: the tools of plugins (Create, Poses, Parts), each in a window of its own,
-and **Plugins…**. *Help*: **Set up AI…**, the models, log and ComfyUI workflow folders, *About*.
+**Menus.** *File*: new, open, paste, browse, **Save to project** (`Ctrl+S`: the open documents
+with their layers, in the project; **Export image…** writes a picture file), export and projects.
+*Edit*: **Undo** and **Redo**, copy and paste, importing an image as a layer, **Settings…**
+(`Ctrl+,`). *Select*: **Select all**, **Deselect**, **Invert selection**, **Delete selected
+pixels**. *View*: zoom in and out, fit to the window, actual pixels, the Queue, the panels of
+plugins (the assistant), the theme. *AI*: what is not a description of a change: **Upscale** (2×,
+3×, 4×), **Remove background**, **Expand canvas…**, **Variation**, **Detect pose** (with the Poses
+plugin), and **All AI options…** (§6). *Tools*: the tools of plugins (Create, Poses, Parts), each in
+a window of its own, and **Plugins…**. *Help*: **Set up AI…**, the models and log folders,
+*About*. The editor's commands in the menus are the same as their keys: a key changed in Settings →
+Shortcuts shows there too.
 
 ### Plugins
 
@@ -461,8 +472,11 @@ provider settings.
 Open images with **File → Open image…** (`Ctrl+O`), **File → Paste from clipboard**, the start
 screen, or drag them onto the window. PSD files open with their layers; **File → Export image…**
 (`Ctrl+Shift+E`) writes PNG, JPEG, WebP or a layered PSD, and **File → Save a copy to project
-images** (`Ctrl+Shift+S`) keeps the flattened picture with the project's images. Closing the last
-document shows the start screen again.
+images** (`Ctrl+Shift+S`) keeps the flattened picture with the project's images. **File → Save to
+project** (`Ctrl+S`) saves the documents with their layers in the project (this also happens on its
+own); it does not write over the file you opened, export it for that. Closing the last document
+shows the start screen again. A document opens with the rectangle selection, the start of changing
+an area with words.
 
 ### Tools
 
@@ -471,7 +485,7 @@ document shows the start screen again.
 | Move layer | `V` | arrow keys nudge (Shift = 10 px) |
 | Free transform | `T` | drag inside to move, a handle to scale (Shift keeps the aspect, Alt scales from the centre), outside the box to rotate (Shift snaps to 15°); Flip and ±90° buttons in the options bar. With a selection only the selected pixels move, and the selection follows. Enter applies, Esc reverts the whole transform |
 | Rectangle / ellipse / lasso selection | `M` / `Shift+M` / `L` | Shift adds, Alt subtracts, Shift+Alt intersects |
-| Mask brush | `Q` | paints the area to regenerate; Alt or the right button erases |
+| Selection brush | `Q` | paints over what should change (the selection the prompt bar uses); Alt or the right button takes it out of the selection; *Tint the selection* shows it |
 | Brush / eraser | `B` / `E` | `[` and `]` change the size; pen pressure is supported |
 | Fill | `G` | tolerance and sample-merged options |
 | Eyedropper | `I` | Alt+click picks the background colour |
@@ -502,46 +516,57 @@ place uses moves to the new action (the page tells you which one lost it); *Rese
 Under the canvas is the **prompt bar**: describe in your own words what you want, and press Enter
 (or click **Generate**). Its first line says what Generate does now:
 
-* **With a selection** (or a painted mask): "Changes the selected area". Only that area changes;
+* **With a selection** (drawn, or painted with the selection brush): "Changes the selected area". Only that area changes;
   the result is blended in through the selection with a soft edge and matched to the colours
   around it, so every pixel outside it stays exactly as it was.
   * With a model that edits from an instruction, describe the change ("colorize it", "replace the
     cup with a candle"); the area and its surroundings are edited as a whole and blended back.
   * With another model the area is painted anew: describe what should be there ("a red scarf").
-  * **Remove** fills the area from its surroundings, as if the object had never been there.
+  * **Remove object** fills the area from its surroundings, as if the object had never been there.
 * **Without a selection**: "Changes the whole image" with an edit model ("colorize this photo",
-  "make it night"). An engine that cannot edit from words says so and offers **Select an area**
-  or **Make a variation** (the whole image redrawn from your words, keeping its layout; the
-  strength in ⋯ says how much may change).
+  "make it night"). The model works on a copy of about one megapixel; the result comes back at the
+  picture's size with the picture's own fine detail wherever the model kept its shapes, so a
+  colorized photo stays as sharp as it was (where the model changed what is there, its result shows
+  as it made it). An engine that cannot edit from words says so: its main button is then **Make a
+  variation** (the whole image redrawn, keeping its layout, guided by your words if any; Enter does
+  it too; *How much may change* in ⋯), and **Select an area** picks the rectangle selection.
 * **On a blank canvas** (a new blank canvas, or a document from New from prompt): "Creates an
   image" of the canvas's size, from your description.
-* Without an image engine, it says so and offers **Set up AI…**.
+* Without an image engine, it says so, and the main button is **Set up AI…**.
 
-While a run goes, the bar shows its progress and Generate becomes **Cancel**.
+While a run goes, the bar shows its progress and Generate becomes **Cancel** (from the click on, so
+a second Enter does not start another run). A run that failed or was cancelled can be retried in
+the Queue; its results then come to the strip as well.
 
-**Choosing a result.** A run makes 1 to 4 results (2 at first; ⋯ → *Variants*). They appear in a
-strip above the bar, and the canvas shows the current one over the image without changing it.
-* `←`/`→` or a click on a thumbnail shows another one.
+**Choosing a result.** A run makes 1 to 4 results (2 at first; ⋯ → *Results per run*). They appear
+in a strip above the bar, and the canvas shows the current one over the image without changing it
+(a picture fitted into the window stays whole while the strip is there).
+* `←`/`→` or a click on a thumbnail shows another one. The keys work while the strip or the canvas
+  has the keyboard: when the results arrive while you type the next words, the keyboard stays in
+  the words (and Enter runs them); click a result to choose with the keys. On the canvas the tool
+  comes first: the move tool's arrows still nudge, the transform and crop tools' Enter and Esc
+  still apply and revert.
 * **Enter** or **Keep** adds it as a new layer on top, named after your words. A result of a
   selection covers only that area, so the original stays underneath; one Undo takes it away.
 * **Esc** or **Discard** drops them all; the image stays as it was.
 * Each document keeps its own results while you switch tabs, and every result is also saved with
-  the project's images (§7).
+  the project's images (§7). Generate again replaces the results that were not kept.
 
-**⋯ (more options)** has what most people never need, only where it applies: the strength (how much
-a painted area or a variation may change), steps (the model's choice unless you set them), the
-seed (random, or fixed to repeat a result), the number of results, what to leave out (a negative
-prompt, for models that take one), reference images, the document's control pose (with a pose
-ControlNet), the image engine, and **All AI options…**.
+**⋯ (more options)** has what most people never need, only where it applies: *How much may change*
+(in per cent, for a painted area or a variation), *Results per run*, what to leave out (a negative
+prompt, for models that take one), reference images (they are in the AI tab), the document's
+control pose (with a pose ControlNet), the image engine (unless you choose one, the runs follow
+the one in use, the default), under *Advanced* the steps (the model's choice unless you set them)
+and the seed (random, or fixed to repeat a result), and **All AI options…**.
 
 **The AI tab and the AI menu.** *All AI options…* opens the **AI** tab on the right (✕ on the tab
-closes it). It has the same options as ⋯ (they are shared), the project's character button, the
-reference images, and the settings of a selection's blending: *Context* (how much of the
-surroundings the model sees), *Blend edge* and colour matching. Its actions, also in the **AI**
-menu, are what is not a description of a change: **Variation**, **Expand canvas** (outpainting:
-choose the sides and how far), **Upscale** (2×, 3× or 4×, as a new document), **Remove
-background** (a cut-out layer) and **Detect pose** (the document's control pose). Variation and
-Expand use the words in the prompt bar, if any.
+closes it). It has the same options as ⋯ (they are shared), the project's character button (with
+the Characters plugin), the reference images, and the settings of a selection's blending:
+*Context* (how much of the surroundings the model sees), *Blend edge* and colour matching. Its
+actions, also in the **AI** menu, are what is not a description of a change: **Variation**,
+**Expand canvas** (choose the sides and how far), **Upscale** (2×, 3× or 4×, as a new document),
+**Remove background** (a cut-out layer) and, with the Poses plugin, **Detect pose** (the
+document's control pose). Variation and Expand use the words in the prompt bar, if any.
 
 **Instruction edits on your own computer.** With a model that edits from an instruction running
 in stable-diffusion.cpp (FLUX.2 [klein], FLUX.1 Kontext or Qwen-Image-Edit), the prompt bar edits
@@ -558,11 +583,14 @@ locally: "colorize it", "make it night", "replace the cup with a candle".
 **File → Browse project images…** (`Alt+6`, also on the start screen) shows every generated,
 imported and edited image of the project, in a window of its own.
 
-* Filter by kind, favourites or text; the inspector shows the prompt and all parameters.
+* Filter by kind (Poses and Parts with their plugins), favourites or text. The inspector shows the
+  picture, what can be done with it, the words it was made from, and under **Details** how it was
+  made in plain lines (engine and model, the kind of change, the size it was drawn at, steps,
+  seed, what was left out; their tooltip has the settings as other tools write them).
 * **Open in editor** (or a double-click) opens the image in the main window.
 * **Use as reference** adds it to the references in the editor's AI tab; **Reuse prompt** puts its
-  words into the prompt bar (with no document open, into New from prompt); **Re-run** opens New from
-  prompt with the image's prompt, negative prompt, size and seed.
+  words into the prompt bar (with no document open, into New from prompt); **Make another like
+  this** opens New from prompt with the image's words, negative prompt, size and seed.
 * Right-click selected images to open them in the editor, use them as references, slice them into
   parts (with the Live2D parts plugin), export them, or run **Remove background** / **Upscale 2×**
   on all of them at once. Each result becomes a new project image linked to its source.
@@ -609,7 +637,8 @@ LumenStudio [--project file.lumen] [--page generate|library|create|poses|parts]
 ```
 
 `--page generate` opens New from prompt, `--page library` Browse project images, and `create`,
-`poses` or `parts` the window of that plugin (when it is on).
+`poses` or `parts` the window of that plugin (when it is on). `--slice` and `--cubism` are the
+Live2D parts plugin's; while it is off they only say so.
 
 ## 11. Language, themes and accessibility
 
@@ -638,7 +667,8 @@ folder is then `<that folder>\models`.
 
 ## 13. Troubleshooting
 
-* **"No provider configured"**: add one in Settings → Providers, then use **Test connection**.
+* **"No image engine"**: set one up with **Help → Set up AI…**, or add one in Settings → Providers
+  and use **Test connection**.
 * **A local server is not found**: check that it is running and started with its API enabled
   (`--api` for SD WebUI, `--listen` when it runs on another machine).
 * **A cloud request fails**: the job card shows the server's message; check the key, your balance

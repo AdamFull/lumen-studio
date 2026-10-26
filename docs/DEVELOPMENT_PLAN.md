@@ -2043,8 +2043,10 @@ Survey of the code, the app log and user testing (October 2026):
   * **Character LoRA** is part of **Characters**: the dataset builder is built on director
     sessions and only opens from the Create page.
   * Still in the core until request decorators exist: the character library, the active character
-    and cast, `CharacterChip` and `CharacterLoraDialog` (the Generate page, the AI panel and the
-    Parts page use them), and `ai::Director` (the Generate page's prompt enhancer uses it).
+    and cast, `CharacterChip` and `CharacterLoraDialog` (the AI panel, while the Characters plugin
+    is on, and the Parts page use them), and `ai::Director`, for `sizeForAspect` (New from prompt,
+    the pose dialog) and the Characters plugin's director; it can move to the plugin once
+    `sizeForAspect` is a core helper.
   * The pose canvas and the pose dialog stay in the core (the director's shot cards use them); the
     Poses plugin has the page.
 
@@ -2248,13 +2250,18 @@ Survey of the code, the app log and user testing (October 2026):
     `PageFactory` / `corePages` and `GeneratePage` are gone.
   * Menus. *File*: New blank canvas… (`Ctrl+N`), New from prompt… (`Alt+2`), Open image…
     (`Ctrl+O`), Paste from clipboard (a new document; no key, `Ctrl+V` stays the editor's paste as
-    layer), Browse project images… (`Alt+6`), save all, export, *Save a copy to project images*
-    (was *Save image to library*, `Ctrl+Shift+S`), close document, projects and recent projects,
-    quit. *Edit* as before. *View*: Job queue (`Ctrl+Shift+Q`, checkable), one checkable action per
-    `PanelSpec` (the assistant, `Ctrl+Shift+A`), the generative toolbar, the theme. *Tools*: one
-    action per `PageSpec` (Create `Alt+1`, Poses `Alt+4`, Parts `Alt+5`) and *Plugins…* (Settings →
-    Plugins). *Help*: Set up AI… (the welcome `OnboardingDialog`, which offers the local setup;
-    the wizard of §17.5 replaces it), models, log and ComfyUI workflow folders, about. The actions
+    layer), Browse project images… (`Alt+6`), *Save to project* (`Ctrl+S`, was *Save all*), export,
+    *Save a copy to project images* (was *Save image to library*, `Ctrl+Shift+S`), close document,
+    projects and recent projects, quit. *Edit*: Undo, Redo, then as before. *Select*: Select all,
+    Deselect, Invert selection, Delete selected pixels. *View*: zoom in and out, fit, actual pixels,
+    Job queue (`Ctrl+Shift+Q`, checkable), one checkable action per `PanelSpec` (the assistant,
+    `Ctrl+Shift+A`), the theme. The editor's commands in the menus are its own shortcut actions
+    (`EditorPage::editorAction`), so customised keys show and work there. *Tools*: one action per
+    `PageSpec` (Create `Alt+1`, Poses `Alt+4`, Parts `Alt+5`) and *Plugins…* (Settings → Plugins).
+    *Help*: Set up AI… (`OnboardingDialog`, now "Set up an image engine": *Run on this computer…*
+    (the local setup), *Use an online service…*, the image servers found here; the wizard of §17.5
+    replaces it), models and log folders, about. The ComfyUI workflow folder is a button of the
+    ComfyUI provider's settings. Menu items end in "…". The actions
     that replace rail pages keep the rail's shortcut ids (`nav.sparkles`, `nav.gallery`,
     `nav.<icon>` of plugin pages), so customised keys carry over; `nav.brush` (`Alt+3`, *Go to
     Edit*) went, since the editor is the window. *File → Import images to library…* went: Browse
@@ -2265,7 +2272,8 @@ Survey of the code, the app log and user testing (October 2026):
     (`imageEngineInUse`); up to 6 saved documents (newest first, their thumbnails) and then the
     newest images (not sliced parts), 12 tiles at most, a click opens one
     (`openStoredDocument` / `openAssetInEditor`), rebuilt when it is seen after the project
-    changed; *Browse project images…*. An image file dropped on it opens (the editor page's drop
+    changed; *Browse project images…*. Results of prompt runs (`user_prompt`) show only once kept
+    (*Keep* marks the asset `kept`); documents carry a *Layers* badge; names take two lines. An image file dropped on it opens (the editor page's drop
     handling). Scrolls instead of setting the window's minimum height.
   * Plugin pages (`ext::PageSpec`) open in windows of their own (`PageWindow`, no parent and no
     `WA_QuitOnClose`, so a tool window can go behind the editor and does not keep Lumen running):
@@ -2286,8 +2294,11 @@ Survey of the code, the app log and user testing (October 2026):
     1–4; the image engine (`ProviderCombo`); *More options*: the negative prompt ("Leave out", only
     for models that take one) and the seed. The aspect and the variants are remembered
     (`newFromPrompt/*`). *Create* (`Ctrl+Enter`) makes a document of that size named after the
-    prompt and submits text-to-image with the prompt style's tags; steps, CFG and the sampler come
-    from the model preset and the provider (nothing is "chosen"). The results become layers
+    prompt and submits text-to-image with the prompt style's tags (one job per image for engines
+    without `batch`, `GenerationService::submitVariants`, as the prompt bar does); steps, CFG and
+    the sampler come from the model preset and the provider (nothing is "chosen"). Without an
+    engine it says so with a *Set up AI…* button (the dialog closes, Set up AI opens). "Variants"
+    reads *Images to make*. The results become layers
     through `AiPanel::addResultLayers` (now static and shared): scaled to the document, the first
     visible, the others hidden, one undo step. The prompt bar of the next step takes them over
     with its variants strip.
@@ -2326,15 +2337,22 @@ Survey of the code, the app log and user testing (October 2026):
     parent, so *Open in editor* brings the editor in front of it; size and place remembered), from
     File (`Alt+6`), the start screen and the reference strip's *From library*. Batch background
     removal and upscaling are unchanged. Its title label went (the window's title names it); the
-    texts that named the Generate page now name the AI panel and New from prompt.
+    texts that named the Generate page now name the AI panel and New from prompt. The inspector
+    has the actions under the preview (*Re-run* is *Make another like this*), the words, and a
+    folded *Details* of plain lines (`LibraryPage::detailsText`: engine and model, the kind of
+    change, the size drawn at, steps, seed, what was left out) in place of the raw parameters; the
+    *Poses* and *Parts* kinds show with their plugins.
   * Status bar: the project (`ElidedLabel`, "Project: My Studio", the path as tooltip); the image
     engine in plain words (`imageEngineInUse`: the default image provider when it is on, else the
     first one on; `imageEngineName`: "FLUX.2 [klein] 4B on this computer" for a server Lumen runs
-    with a preset, "<provider> on this computer" without one, else the provider's name; "No image
-    engine - Set up AI" without one; a click opens Settings → Providers); the local servers button
-    and the *Safe for work* shield as before; the jobs ("No jobs running", "1 running · 0 queued")
-    as a checkable button that opens the Queue popup above it (left of an open plugin panel), in
-    step with View → Job queue. The zoom stays in the editor's bottom row. The status bar has an
+    with a preset, "<provider> on this computer" without one, else the provider's name, as the
+    engine lists (`ProviderCombo`) name them; "No image engine – Set up AI" without one, and then a
+    click runs Set up AI, else Settings → Providers); the local servers button and *Safe for work*
+    (with its name) as before; the jobs ("No jobs running", "1 running · 0 queued") as a checkable
+    button that opens the Queue popup (left of an open plugin panel; "Nothing is running…" and its
+    buttons off while there is nothing to act on; as tall as its jobs), in step with View → Job
+    queue. The Queue and the plugins' panels end above the prompt bar and the results strip
+    (`EditorPage::overlayBottom`). The zoom stays in the editor's bottom row. The status bar has an
     8 px side margin (§17.9 item 9).
   * Found on the way: quitting did nothing when no document needed saving (the save future was
     already finished, so its continuation called `close()` inside the close event, where Qt ignores
@@ -2392,10 +2410,10 @@ Survey of the code, the app log and user testing (October 2026):
     (`ui/pages/PromptPlan`). With a selection: an instruction edit of the area (`GenMode::Edit`
     through the region pipeline) when the engine has `edit` and `regionEdit`, else inpainting
     (`inpaint`, or a cloud `edit`, which the pipeline inpaints), else img2img of the area. Without
-    one: an instruction edit of the whole image when the engine has `edit`, else "This image engine
-    cannot change the whole image from a description." with *Select an area* (the rectangle
-    selection tool) and *Make a variation* (img2img of the whole image at the variation strength,
-    for engines with img2img). On a blank canvas (`isBlankCanvas`: every layer empty or one flat
+    one: an instruction edit of the whole image when the engine has `edit`, else "This engine cannot
+    change the whole picture from words…" with *Select an area* (the rectangle selection tool), and
+    the main button and Enter make a variation (img2img of the whole image at the variation
+    strength, for engines with img2img). On a blank canvas (`isBlankCanvas`: every layer empty or one flat
     colour): text to image at `workingSize` (the canvas's shape at the engine's pixels, or its
     closest fixed size), scaled to the canvas. A selection wins over a blank canvas. The other
     cases: no engine (*Set up AI…*), an engine that only makes new images, a blank canvas and an
@@ -2409,10 +2427,11 @@ Survey of the code, the app log and user testing (October 2026):
     variants (1–4, remembered in `editor/ai/variants`), the negative prompt, the control pose
     switch, and the selection's context, blend edge and colour matching; also the bar's words
     (`promptChanged`), which the panel's Variation and Expand use. The *⋯* menu (a popup above its
-    button) shows only what applies: the strength when the request uses it, steps and seed when the
-    engine takes them, *Leave out* for models with a negative prompt, *References* (the count; it
-    opens the AI panel, where they are) when the engine takes some, the control pose with pose
-    control and a pose, the engine and *All AI options…*.
+    button) shows only what applies: *How much may change* (in per cent) when the request uses a
+    strength, *Results per run*, *Leave out* for models with a negative prompt, *References* (the
+    count; it opens the AI panel, where they are) when the engine takes some, the control pose with
+    pose control and a pose, the engine, steps and seed under *Advanced* when the engine takes them,
+    and *All AI options…*.
   * Requests: `AiPanel::submitPrompt(PromptRun)` builds them as the panel did (the prompt style,
     the negative prompt, the references, the OpenPose control, and the character of the panel's
     `CharacterChip` unless the run or the chip says no, as `CharacterUse::Edit`, `Region` or
@@ -2425,11 +2444,11 @@ Survey of the code, the app log and user testing (October 2026):
     selection's results show the engine's picture of the area). The canvas shows the current one over the
     document (`CanvasView::setPreview`: drawn above the composite, from a copy at the current zoom
     below 100 %, without the selection tint; cleared when another document is shown), so nothing
-    changes until one is kept. `←`/`→` (also while the canvas has the keyboard, through an event
-    filter on its surface) or a thumbnail pick one; *Keep* or Enter adds it as a layer on top
+    changes until one is kept. `←`/`→` (also while the canvas has the keyboard, after its tool) or a
+    thumbnail pick one; *Keep* or Enter adds it as a layer on top
     (`addLayer` at the top index: one undo step; the region pipeline's result is masked already);
     *Discard* or Esc drops them and stops what still runs. The strip takes the keyboard when results
-    arrive, unless the user types outside the editor. A new run replaces the results on show, or
+    arrive, unless the user is typing (a text field has it). A new run replaces the results on show, or
     joins a run that still goes; results go when their document changes its size or closes. While
     jobs run, the bar shows "Working on 2 results… <status>" and a progress bar, and Generate is
     *Cancel* (`VariantStrip::stop`). New from prompt hands its job to the strip
@@ -2458,7 +2477,8 @@ Survey of the code, the app log and user testing (October 2026):
     second: one layer on top named after the words, one undo step, no pixel of it outside the
     feathered selection and the picture unchanged wherever it is clear, gone with one undo; Esc on
     the canvas drops them; a held job shows *Cancel* and its progress and is cancelled; *Remove*
-    sends the instruction; results stay with their document); `promptBarNewImage` (a 768 × 512
+    sends the instruction; results stay with their document; the fitted canvas stays whole with the
+    strip; the strip has the keyboard after Enter in the words); `promptBarNewImage` (a 768 × 512
     blank canvas: text to image at the working size, the kept layer at the canvas's size, then the
     whole image); `promptBarWithoutEdits` (sd.cpp without a preset: the message, *Select an area*,
     *Make a variation* at the strength from ⋯; inpainting of a selection at the area strength,
@@ -2473,11 +2493,64 @@ Survey of the code, the app log and user testing (October 2026):
     without an engine (*Set up AI…*), with an engine without edits (its offers), with a selection and
     four results, the ⋯ menu and the AI panel, at the three sizes; `mainWindowFitsSmallScreen` checks
     the bar, the results, the ⋯ menu and the AI panel at 1280×720. Findings stay at 4.
+  * Review fixes (October 2026):
+    * Results that arrive no longer take the keyboard from a text field (the next words in the
+      prompt field, a layer's name, a number): typing stays there and Enter runs the new words. The
+      strip takes it from the canvas, the strip, a button or nothing. Its line names the keys only
+      while they work ("click one to compare" otherwise), says "Keep it (Enter) or discard it (Esc)"
+      for one result and "Generate again replaces these" for several.
+    * The canvas hands the results only the keys its tool does not use (`CanvasView::setKeyFallback`
+      in place of the strip's event filter): the move tool's arrows nudge, the transform and crop
+      tools' Enter and Esc apply and revert.
+    * A run counts as running from the click (`VariantStrip::expect`, the AI panel's
+      `PreparingHandler`): a second Enter or click while the character and the picture are read
+      started a second run; Cancel then stops the jobs when they come; a run that cannot be
+      submitted (its document closed) ends it.
+    * A job of the strip retried from the Queue joins its document's results again (they were
+      dropped after a failure or a cancel).
+    * A job whose engine is removed while it works fails ("The image engine was removed…"): the
+      provider's operation went without finishing, and the bar stayed on "Working on it…".
+    * The engine nobody chose follows the one in use: the combos of ⋯ and the AI panel set
+      `AiOptions::providerId` only on a choice of the user's (`activated`; choosing the one in use
+      leaves it empty), show the engine runs go to, and follow `rolesChanged`. Before, the combo's
+      reload pinned the first engine set up while the editor was open.
+    * A whole-image change comes back at the picture's size with its fine detail where the engine
+      kept its shapes (`GenerationSpec::detailSource`, `img::restoreDetail`: the detail the scaling
+      down removed is added to the result scaled up, weighted by how close the result's brightness
+      stays to the input's beyond a median shift, so a changed object leaves no ghost). A 12 MP photo
+      was replaced by a 1 MP result scaled up.
+    * The canvas stays fitted when the strip takes some of its height (`CanvasView::isFitted`,
+      until the user zooms or pans): the bottom of the picture was under the strip.
+    * The main button says what it does: *Set up AI…* without an engine, *Make a variation* (and
+      Enter) for an engine without edits, where Generate stayed off under words it invited; *Select
+      an area* is a bordered button; *Remove* is *Remove object*; the no-engine hint is "AI editing
+      needs an image engine…".
+    * ⋯: *How much may change* in per cent, *Results per run*, steps and seed under *Advanced*,
+      *References: Add in the AI panel…*. The AI panel's texts lost their technical terms
+      ("(inpainting)", "Remove BG", "OpenPose skeleton"), and its *Character* row and *Detect pose*
+      (also in the AI menu) show only with the Characters and Poses plugins.
+    * The mask brush is the *Selection brush* ("Paint over what should change…", *Tint the
+      selection*, history "Paint selection" / "Erase from selection"); documents open with the
+      rectangle selection. The tab bar draws no base line past the last tab.
+    * Tests (`tst_canvas`): `promptBarKeepsTyping` (typing survives results, Enter runs the words,
+      the tool's keys first, the line), `promptBarRuns` (two Enters make one run, Cancel and Retry
+      in the Queue, the engine removed mid-run), `promptBarEngine` (the first engine set up and a
+      new default are followed, a choice pins), `wholeImageKeepsDetail` (a 2400 × 1600 photo edited
+      at 1 MP by an echoing mock keeps its brightness pixel for pixel), `editorMenus`,
+      `newFromPromptEngines` (the *Set up AI…* button; three jobs for Stability), `recentAndDetails`;
+      `pluginsOff`, `pluginWindows` (the assistant above the bar), `shellStatusBar` (the click
+      without an engine, the empty Queue), `promptBarWithoutEdits`, `aiMenuAndPanel` and
+      `editorCharacter` (with the Characters plugin) updated. `tst_masks restoreDetail`.
+      `tst_layout`: `settle()` lets the bar's and the outline's timers run and the states are
+      checked on screen (the screenshots showed stale states), no overlay reaches the prompt bar,
+      the whole picture shows with results, the New blank canvas dialog (`NewCanvasDialog`, with
+      *Create*; Live2D sheet only with the parts plugin) is audited, and a button's text is measured
+      by its widest line. Findings stay at 4.
   * Not yet: prompt-bar actions of plugins (§17.7); the status bar names the default engine, not
-    one chosen in ⋯; a result is previewed whole (no before/after view); unkept results of a run are
-    dropped when the next run starts (they stay in the project's images); Remove's instruction for
+    one chosen in ⋯; a result is previewed whole (no before/after view); Remove's instruction for
     edit models names "the object in the middle", since the model does not see the selection; the
-    German translation of the new texts.
+    start screen lists the project's images, not files opened from disk, and a picture is saved
+    only by Export (no *Save over original*); the German translation of the new texts.
 - [ ] Setup wizard and Settings → AI (§17.5).
 - [x] Filter graph core and classic nodes; golden-image tests per node.
   * `src/filters` (`lumen_filters`, `lumen::filters`): on `lumen_core` (`ImageOps`, `Async`) and Qt
@@ -2684,6 +2757,14 @@ it; the four tall dialogs of item 8 remain.
 cannot edit the whole image, with a selection and four results, the prompt bar's ⋯ menu and the AI
 panel; no new findings. One-line text fields no longer show a scroll bar (item 9: `AutoTextEdit`
 measures its frame and padding).
+
+**Prompt bar review** (October 2026): what only the screenshots showed, fixed: the plugins' panels
+and the Queue covered the prompt bar's buttons (they end above it, and the audit checks it); the
+bottom of a fitted picture went under the results strip (it stays fitted); some screenshots showed
+the state before the bar's 30 ms update (`settle()` waits for it); the document tabs' base line ran
+past the last tab; the empty Queue was a 540 px box. The New blank canvas dialog is audited. A
+button's text is measured by its widest line (the start screen's names take two). Findings stay at
+4 (item 8).
 
 ---
 

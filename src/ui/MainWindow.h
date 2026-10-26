@@ -10,6 +10,7 @@
 class QAction;
 class QDialog;
 class QFrame;
+class QLabel;
 class QToolButton;
 class QVBoxLayout;
 
@@ -78,6 +79,8 @@ private:
     void buildStatusBar();
     void setPanelVisible(int index, bool show);
     void placePanels();
+    // The Queue's empty state and which of its buttons have something to act on.
+    void updateQueuePanel();
     void updateJobSummary();
     void updateDocumentActions();
     void updateEngine();
@@ -105,9 +108,13 @@ private:
     Toasts *m_toasts;
     QFrame *m_queuePanel = nullptr;
     QVBoxLayout *m_queueList = nullptr;
+    QWidget *m_queueScroll = nullptr;
+    QLabel *m_queueEmpty = nullptr;
+    QToolButton *m_cancelAll = nullptr;
+    QToolButton *m_clearFinished = nullptr;
     QAction *m_queueAction = nullptr;
     QToolButton *m_jobsButton = nullptr;
-    QList<QAction *> m_documentActions; // the AI menu's, which need a document
+    QList<QAction *> m_documentActions; // the AI menu's and the editor's, which need a document
     QToolButton *m_engineButton = nullptr;
     ElidedLabel *m_projectLabel = nullptr;
     QPointer<NewFromPromptDialog> m_newFromPrompt;

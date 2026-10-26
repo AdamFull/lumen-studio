@@ -25,6 +25,8 @@
 #include <QToolButton>
 #include <QVBoxLayout>
 
+#include <cmath>
+
 namespace lumen::ui {
 
 PromptBar::PromptBar(Studio *studio, AiOptions *options, AiPanel *ai, VariantStrip *strip, QWidget *parent)
@@ -41,7 +43,7 @@ PromptBar::PromptBar(Studio *studio, AiOptions *options, AiPanel *ai, VariantStr
     v->setContentsMargins(10, 6, 10, 8);
     v->setSpacing(4);
 
-    // What Generate does now, or why it cannot, with the ways out.
+    // What Generate does now, or why it cannot, with the way out.
     auto *hintRow = new QHBoxLayout;
     hintRow->setSpacing(6);
     m_icon = new QLabel(this);
@@ -57,22 +59,12 @@ PromptBar::PromptBar(Studio *studio, AiOptions *options, AiPanel *ai, VariantStr
     m_progress->setFixedSize(140, 6);
     m_progress->hide();
     hintRow->addWidget(m_progress);
-    auto offer = [this, hintRow](const QString &name, const QString &text, const QString &tip) {
-        auto *b = new QPushButton(text, this);
-        b->setObjectName(name);
-        b->setToolTip(tip);
-        b->setCursor(Qt::PointingHandCursor);
-        Theme::setRole(b, QStringLiteral("ghost"));
-        b->hide();
-        hintRow->addWidget(b);
-        return b;
-    };
-    m_setUp = offer(QStringLiteral("promptSetUpAi"), tr("Set up AI…"), tr("Connect an image engine on this computer or online"));
-    m_selectArea = offer(QStringLiteral("promptSelectArea"), tr("Select an area"),
-                         tr("Draw a selection around what should change; only that area is then changed (M)"));
-    m_variation = offer(QStringLiteral("promptVariation"), tr("Make a variation"),
-                        tr("Redraws the whole image from your words, keeping its layout. How much it may change is the "
-                           "strength in the ⋯ menu."));
+    // A button with a border, so it does not read as part of the hint.
+    m_selectArea = new QPushButton(Icons::get(QStringLiteral("select-rect")), tr("Select an area"), this);
+    m_selectArea->setObjectName(QStringLiteral("promptSelectArea"));
+    m_selectArea->setToolTip(tr("Draw a selection around what should change; only that area is then changed (M)"));
+    m_selectArea->hide();
+    hintRow->addWidget(m_selectArea);
     v->addLayout(hintRow);
 
     auto *row = new QHBoxLayout;
@@ -90,7 +82,7 @@ PromptBar::PromptBar(Studio *studio, AiOptions *options, AiPanel *ai, VariantStr
     m_generate->setMinimumHeight(36);
     Theme::setRole(m_generate, QStringLiteral("primary"));
     row->addWidget(m_generate, 0, Qt::AlignTop);
-    m_remove = new QPushButton(Icons::get(QStringLiteral("eraser")), tr("Remove"), this);
+    m_remove = new QPushButton(Icons::get(QStringLiteral("eraser")), tr("Remove object"), this);
     m_remove->setObjectName(QStringLiteral("promptRemove"));
     m_remove->setMinimumHeight(36);
     m_remove->setToolTip(tr("Remove what is in the selected area and fill it in from its surroundings"));
@@ -118,9 +110,7 @@ PromptBar::PromptBar(Studio *studio, AiOptions *options, AiPanel *ai, VariantStr
             generate();
     });
     connect(m_remove, &QPushButton::clicked, this, &PromptBar::remove);
-    connect(m_variation, &QPushButton::clicked, this, &PromptBar::variation);
     connect(m_selectArea, &QPushButton::clicked, this, &PromptBar::selectAreaRequested);
-    connect(m_setUp, &QPushButton::clicked, this, &PromptBar::setUpAiRequested);
     connect(m_more, &QToolButton::clicked, this, &PromptBar::showOptions);
     connect(m_options, &AiOptions::changed, this, [this] {
         if (m_popup->isVisible())
@@ -148,8 +138,35 @@ void PromptBar::buildOptions()
     m_form->setSpacing(8);
     m_form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
 
-    m_strength = new SliderField(tr("Strength"), 0.05, 1.0, m_options->regionStrength(), 2, QString(), m_popup);
+    // In per cent, from "a little" to "all of it".
+    m_strength = new SliderField(tr("How much may change"), 5, 100, m_options->regionStrength() * 100, 0, QStringLiteral(" %"), m_popup);
     m_form->addRow(m_strength);
+    m_variants = new QSpinBox(m_popup);
+    m_variants->setAccessibleName(tr("Results per run"));
+    m_variants->setRange(1, AiOptions::kMaxVariants);
+    m_variants->setToolTip(tr("How many results each run makes to choose from."));
+    m_form->addRow(tr("Results per run"), m_variants);
+    m_negative = new AutoTextEdit(m_popup, 1, 3);
+    m_negative->setAccessibleName(tr("Negative prompt"));
+    m_negative->setPlaceholderText(tr("Things that should not be in the result"));
+    m_form->addRow(tr("Leave out"), m_negative);
+    m_references = new QPushButton(m_popup);
+    m_references->setToolTip(tr("Pictures the engine follows for a character, a style or an object (in the AI panel)"));
+    m_form->addRow(tr("References"), m_references);
+    m_pose = new QCheckBox(tr("Follow the document's control pose"), m_popup);
+    m_form->addRow(m_pose);
+    m_engine = new ProviderCombo(m_studio->providers(), ai::ProviderKind::Image, m_popup);
+    m_engine->setObjectName(QStringLiteral("promptEngine"));
+    m_form->addRow(tr("Image engine"), m_engine);
+    // What changes a result in ways only experienced users ask for.
+    m_advanced = new QToolButton(m_popup);
+    m_advanced->setObjectName(QStringLiteral("promptAdvanced"));
+    m_advanced->setText(tr("Advanced"));
+    m_advanced->setCheckable(true);
+    m_advanced->setAutoRaise(true);
+    m_advanced->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    m_advanced->setArrowType(Qt::RightArrow);
+    m_form->addRow(m_advanced);
     m_steps = new QSpinBox(m_popup);
     m_steps->setAccessibleName(tr("Steps"));
     m_steps->setRange(0, 150);
@@ -167,33 +184,16 @@ void PromptBar::buildOptions()
     seedRow->addWidget(m_seed, 1);
     seedRow->addWidget(m_randomSeed);
     m_form->addRow(tr("Seed"), m_seedRow);
-    m_variants = new QSpinBox(m_popup);
-    m_variants->setAccessibleName(tr("Variants"));
-    m_variants->setRange(1, AiOptions::kMaxVariants);
-    m_variants->setToolTip(tr("How many results each run makes to choose from."));
-    m_form->addRow(tr("Variants"), m_variants);
-    m_negative = new AutoTextEdit(m_popup, 1, 3);
-    m_negative->setAccessibleName(tr("Negative prompt"));
-    m_negative->setPlaceholderText(tr("Things that should not be in the result"));
-    m_form->addRow(tr("Leave out"), m_negative);
-    m_references = new QPushButton(m_popup);
-    m_references->setToolTip(tr("Pictures the engine follows for a character, a style or an object (in the AI panel)"));
-    m_form->addRow(tr("References"), m_references);
-    m_pose = new QCheckBox(tr("Follow the document's control pose"), m_popup);
-    m_form->addRow(m_pose);
-    m_engine = new ProviderCombo(m_studio->providers(), ai::ProviderKind::Image, m_popup);
-    m_engine->setObjectName(QStringLiteral("promptEngine"));
-    m_form->addRow(tr("Image engine"), m_engine);
     m_allOptions = new QPushButton(Icons::get(QStringLiteral("adjust")), tr("All AI options…"), m_popup);
     m_allOptions->setToolTip(tr("The AI panel: every option, and the actions that are not a description (upscale, expand, "
                                 "remove background…)"));
     m_form->addRow(m_allOptions);
 
-    connect(m_strength, &SliderField::valueChanged, this, [this](double v) {
+    connect(m_strength, &SliderField::valueChanged, this, [this](double percent) {
         if (plan().action == PromptAction::CannotEditImage)
-            m_options->setVariationStrength(v);
+            m_options->setVariationStrength(percent / 100.0);
         else
-            m_options->setRegionStrength(v);
+            m_options->setRegionStrength(percent / 100.0);
     });
     connect(m_steps, &QSpinBox::valueChanged, m_options, &AiOptions::setSteps);
     connect(m_seed, &QSpinBox::valueChanged, this, [this](int seed) {
@@ -204,7 +204,18 @@ void PromptBar::buildOptions()
     connect(m_variants, &QSpinBox::valueChanged, m_options, &AiOptions::setVariants);
     connect(m_negative, &QPlainTextEdit::textChanged, this, [this] { m_options->setNegative(m_negative->text()); });
     connect(m_pose, &QCheckBox::toggled, m_options, &AiOptions::setUsePose);
-    connect(m_engine, &ProviderCombo::providerChanged, m_options, &AiOptions::setProviderId);
+    // Only a choice of the user's picks the engine (the combo also changes when engines come and
+    // go); choosing the one in use leaves it to follow the default.
+    connect(m_engine, &QComboBox::activated, this, [this] {
+        const ai::ImageProvider *inUse = imageEngineInUse(m_studio->providers());
+        const QString id = m_engine->providerId();
+        m_options->setProviderId(inUse && inUse->instanceId() == id ? QString() : id);
+    });
+    connect(m_advanced, &QToolButton::toggled, this, [this](bool on) {
+        m_advanced->setArrowType(on ? Qt::DownArrow : Qt::RightArrow);
+        updateOptions();
+        m_popup->adjustSize();
+    });
     connect(m_references, &QPushButton::clicked, this, [this] {
         m_popup->hide();
         emit allOptionsRequested();
@@ -280,6 +291,11 @@ void PromptBar::focusPrompt()
     m_prompt->moveCursor(QTextCursor::End);
 }
 
+bool PromptBar::offersVariation(const PromptPlan &p)
+{
+    return p.action == PromptAction::CannotEditImage && p.variation;
+}
+
 void PromptBar::updateUi()
 {
     m_update.stop();
@@ -287,10 +303,12 @@ void PromptBar::updateUi()
     const PromptPlan &p = m_plan;
     const bool running = m_strip->isRunning();
     QString hint;
+    QString tip;
     QString placeholder = tr("Describe the change, e.g. “colorize it” or “replace the cup with a candle”");
     switch (p.action) {
     case PromptAction::NoEngine:
-        hint = tr("No image engine is set up yet, so nothing can be drawn or changed.");
+        hint = tr("AI editing needs an image engine. Set one up to change this picture with words.");
+        placeholder = tr("Set up an image engine first (Set up AI…)");
         break;
     case PromptAction::EditArea:
         hint = tr("Changes the selected area. Describe the change; the rest of the image stays as it is.");
@@ -308,8 +326,12 @@ void PromptBar::updateUi()
         placeholder = tr("Describe the change, e.g. “colorize this photo” or “make it night”");
         break;
     case PromptAction::CannotEditImage:
-        hint = tr("This image engine cannot change the whole image from a description.");
-        placeholder = tr("Describe the image for a variation, or select an area to change");
+        hint = p.variation ? tr("This engine cannot change the whole picture from words: make a variation, or select an area to change.")
+                           : tr("This engine cannot change the whole picture from words: select an area to change.");
+        tip = tr("To change the whole picture from a description, use an engine with an edit model, such as FLUX.2 [klein] "
+                 "(Help → Set up AI…).");
+        placeholder = p.variation ? tr("Optional: words that guide the variation, e.g. “evening light”")
+                                  : tr("Select an area first, then describe what should be there");
         break;
     case PromptAction::NewImage:
         hint = tr("Creates an image of %1 × %2 px. Describe what it should show.").arg(m_doc->size().width()).arg(m_doc->size().height());
@@ -329,19 +351,37 @@ void PromptBar::updateUi()
         hint = pending > 1 ? tr("Working on %1 results…").arg(pending) : tr("Working on it…");
         if (!status.isEmpty())
             hint += u' ' + status;
+        tip.clear();
         m_progress->setRange(0, progress >= 0 ? 100 : 0);
         m_progress->setValue(progress >= 0 ? int(progress * 100) : 0);
     }
     m_hint->setFullText(hint);
+    if (!tip.isEmpty())
+        m_hint->setToolTip(hint + u'\n' + tip);
     m_progress->setVisible(running);
     m_prompt->setPlaceholderText(placeholder);
-    m_setUp->setVisible(!running && p.action == PromptAction::NoEngine);
     m_selectArea->setVisible(!running && p.action == PromptAction::CannotEditImage);
-    m_variation->setVisible(!running && p.action == PromptAction::CannotEditImage && p.variation);
 
-    m_generate->setText(running ? tr("Cancel") : tr("Generate"));
-    m_generate->setIcon(Icons::get(running ? QStringLiteral("stop") : QStringLiteral("sparkles")));
-    m_generate->setToolTip(running ? tr("Stop the run") : tr("Run it (Enter)"));
+    // The main button says what it does: Generate, Make a variation, Set up AI…, or Cancel.
+    QString text = tr("Generate");
+    QString icon = QStringLiteral("sparkles");
+    QString tooltip = tr("Run it (Enter)");
+    if (running) {
+        text = tr("Cancel");
+        icon = QStringLiteral("stop");
+        tooltip = tr("Stop the run");
+    } else if (p.action == PromptAction::NoEngine) {
+        text = tr("Set up AI…");
+        tooltip = tr("Connect an image engine on this computer or online");
+    } else if (offersVariation(p)) {
+        text = tr("Make a variation");
+        icon = QStringLiteral("variation");
+        tooltip = tr("Redraws the whole image, keeping its layout, guided by your words if any. How much it may change is in the ⋯ "
+                     "menu (Enter).");
+    }
+    m_generate->setText(text);
+    m_generate->setIcon(Icons::get(icon));
+    m_generate->setToolTip(tooltip);
     if (m_generate->property("role").toString() != (running ? QString() : QStringLiteral("primary")))
         Theme::setRole(m_generate, running ? QString() : QStringLiteral("primary"));
     updateGenerate();
@@ -353,8 +393,10 @@ void PromptBar::updateUi()
 
 void PromptBar::updateGenerate()
 {
-    // Words are needed except to cancel.
-    m_generate->setEnabled(m_strip->isRunning() || (m_plan.canRun() && !m_prompt->text().trimmed().isEmpty()));
+    // Words are needed except to cancel, to set up an engine and for a variation.
+    const bool words = !m_prompt->text().trimmed().isEmpty();
+    m_generate->setEnabled(m_strip->isRunning() || m_plan.action == PromptAction::NoEngine || offersVariation(m_plan)
+                           || (m_plan.canRun() && words));
 }
 
 void PromptBar::updateOptions()
@@ -364,10 +406,10 @@ void PromptBar::updateOptions()
     const ai::ImageCapabilities caps = provider ? provider->capabilities() : ai::ImageCapabilities();
     const bool variation = p.action == PromptAction::CannotEditImage;
     {
-        const QSignalBlocker b1(m_strength), b2(m_steps), b3(m_seed), b4(m_randomSeed), b5(m_variants), b6(m_pose);
-        m_strength->setValue(variation ? m_options->variationStrength() : m_options->regionStrength());
-        m_strength->setToolTip(variation ? tr("How much a variation may change the image: low keeps more of it.")
-                                         : tr("How much the selected area may change: low keeps more of what is there."));
+        const QSignalBlocker b1(m_strength), b2(m_steps), b3(m_seed), b4(m_randomSeed), b5(m_variants), b6(m_pose), b7(m_engine);
+        m_strength->setValue(std::round((variation ? m_options->variationStrength() : m_options->regionStrength()) * 100));
+        m_strength->setToolTip(variation ? tr("How much a variation may change the image: a little keeps more of it.")
+                                         : tr("How much the selected area may change: a little keeps more of what is there."));
         m_steps->setValue(m_options->steps());
         m_randomSeed->setChecked(m_options->seed() < 0);
         m_seed->setEnabled(m_options->seed() >= 0);
@@ -375,20 +417,21 @@ void PromptBar::updateOptions()
             m_seed->setValue(int(std::min<qint64>(m_options->seed(), m_seed->maximum())));
         m_variants->setValue(m_options->variants());
         m_pose->setChecked(m_options->usePose());
+        // The engine runs go to: the chosen one, else the one in use.
+        if (provider)
+            m_engine->setProviderId(provider->instanceId());
     }
     // Not blocked: the field fits its height to the text (setting the same words back changes nothing).
     if (m_negative->text() != m_options->negative())
         m_negative->setPlainText(m_options->negative());
-    if (!m_options->providerId().isEmpty()) {
-        const QSignalBlocker b(m_engine);
-        m_engine->setProviderId(m_options->providerId());
-    }
     const int refs = m_ai->references()->count();
-    m_references->setText(refs == 0 ? tr("Add…") : refs == 1 ? tr("1 picture…") : tr("%1 pictures…").arg(refs));
+    m_references->setText(refs == 0 ? tr("Add in the AI panel…") : tr("%n picture(s) in the AI panel…", nullptr, refs));
     // Only what the request uses and the engine takes.
     m_form->setRowVisible(m_strength, p.strength);
-    m_form->setRowVisible(m_steps, !provider || caps.steps);
-    m_form->setRowVisible(m_seedRow, !provider || caps.seed);
+    const bool advanced = m_advanced->isChecked();
+    m_form->setRowVisible(m_advanced, !provider || caps.steps || caps.seed);
+    m_form->setRowVisible(m_steps, advanced && (!provider || caps.steps));
+    m_form->setRowVisible(m_seedRow, advanced && (!provider || caps.seed));
     const bool negative = provider && caps.negativePrompt && ai::promptStyleFor(provider).supportsNegative;
     m_form->setRowVisible(m_negative, negative);
     m_form->setRowVisible(m_references, caps.maxReferences > 0);
@@ -438,6 +481,11 @@ void PromptBar::generate()
     const QString words = m_prompt->text().trimmed();
     if (p.action == PromptAction::NoEngine) {
         emit setUpAiRequested();
+        return;
+    }
+    // The engine cannot change the whole picture from words: what the main button offers instead.
+    if (offersVariation(p)) {
+        variation();
         return;
     }
     if (!p.canRun()) {

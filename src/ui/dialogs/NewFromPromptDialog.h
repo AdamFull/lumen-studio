@@ -49,8 +49,11 @@ public:
     doc::Document *create();
 
 signals:
-    // The new document and the job drawing `results` images into it; `name` is the result layer's.
-    void generationStarted(lumen::doc::Document *doc, lumen::Job *job, const QString &name, int results);
+    // The new document and the jobs drawing `results` images into it (one job per image for engines
+    // that make one per request); `name` is the result layer's.
+    void generationStarted(lumen::doc::Document *doc, const QList<lumen::Job *> &jobs, const QString &name, int results);
+    // "Set up AI…" while there is no image engine (the dialog closes first).
+    void setUpAiRequested();
 
 private:
     void updateUi();
@@ -67,7 +70,7 @@ private:
     QLabel *m_sizeLabel;
     QSpinBox *m_variants;
     ProviderCombo *m_engine;
-    QLabel *m_engineNote;
+    QWidget *m_noEngine;
     QToolButton *m_moreButton;
     QWidget *m_more;
     QWidget *m_negativeBox;

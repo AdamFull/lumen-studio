@@ -10,6 +10,8 @@
 #include <QTimer>
 #include <QWidget>
 
+#include <functional>
+
 namespace lumen::ui {
 
 class Tool;
@@ -67,6 +69,13 @@ public:
     void setPreview(const QImage &image);
     const QImage &preview() const { return m_preview; }
 
+    // Keys the tool does not use while the canvas has the keyboard (the results strip's ←/→, Enter
+    // and Esc); true when the fallback used the key.
+    void setKeyFallback(std::function<bool(QKeyEvent *)> fallback) { m_keyFallback = std::move(fallback); }
+    // Whether the whole document is fitted into the view; it stays fitted when the view changes size
+    // (the results strip appears, the window is resized) until the user zooms or pans.
+    bool isFitted() const { return m_fitted; }
+
     // Renders the surface into a widget painter (called by the drawing surface).
     void render(QPainter &p, const QRect &widgetRect);
 
@@ -103,6 +112,8 @@ private:
     double m_zoom = 1.0;
     QPointF m_pan;            // widget position of document origin
     bool m_fitPending = true;
+    bool m_fitted = false;
+    std::function<bool(QKeyEvent *)> m_keyFallback;
     bool m_spacePan = false;
     bool m_panning = false;
     QPointF m_lastPanPos;

@@ -164,6 +164,8 @@ MainWindow::MainWindow(Studio *studio, QWidget *parent)
     connect(start, &StartScreen::browseRequested, this, &MainWindow::browseProjectImages);
     connect(start, &StartScreen::setUpAiRequested, this, &MainWindow::setUpAi);
     connect(m_editor->promptBar(), &PromptBar::setUpAiRequested, this, &MainWindow::setUpAi);
+    // The panels laid over the editor stay above the prompt bar and its results.
+    connect(m_editor, &EditorPage::bottomAreaChanged, this, &MainWindow::placePanels);
 
     buildStatusBar();
     buildMenus();
@@ -181,6 +183,10 @@ MainWindow::MainWindow(Studio *studio, QWidget *parent)
     connect(studio->providers(), &ai::ProviderRegistry::providersChanged, this, &MainWindow::updateEngine);
     connect(studio->providers(), &ai::ProviderRegistry::rolesChanged, this, &MainWindow::updateEngine);
     connect(studio->jobs(), &JobQueue::countsChanged, this, &MainWindow::updateJobSummary);
+    connect(studio->jobs(), &JobQueue::countsChanged, this, [this] {
+        updateQueuePanel();
+        placePanels();
+    });
     connect(studio->jobs(), &JobQueue::jobAdded, this, [this](Job *job) {
         if (m_queueList) {
             auto *card = new JobCard(job, m_studio->jobs(), m_queuePanel);
@@ -213,6 +219,8 @@ MainWindow::MainWindow(Studio *studio, QWidget *parent)
 
 MainWindow::~MainWindow()
 {
+    // The editor's bar and strip hide while the window's children go; nothing to place by then.
+    disconnect(m_editor, nullptr, this, nullptr);
     // Windows of their own (no parent): their pages use the studio, which outlives this window.
     for (const QPointer<PageWindow> &w : std::as_const(m_windows))
         delete w.data();
@@ -227,13 +235,18 @@ void MainWindow::buildStatusBar()
     m_projectLabel->setProperty("role", QStringLiteral("muted"));
     statusBar()->addWidget(m_projectLabel, 1);
 
-    // The image engine in plain words; Settings → Providers changes it.
+    // The image engine in plain words; Settings → Providers changes it, Set up AI adds the first one.
     m_engineButton = new QToolButton(this);
     m_engineButton->setObjectName(QStringLiteral("imageEngine"));
     m_engineButton->setAutoRaise(true);
     m_engineButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
     m_engineButton->setAccessibleName(tr("Image engine"));
-    connect(m_engineButton, &QToolButton::clicked, this, [this] { openSettings(QStringLiteral("providers")); });
+    connect(m_engineButton, &QToolButton::clicked, this, [this] {
+        if (imageEngineInUse(m_studio->providers()))
+            openSettings(QStringLiteral("providers"));
+        else
+            setUpAi();
+    });
     statusBar()->addPermanentWidget(m_engineButton);
     statusBar()->addPermanentWidget(new ServerStatusButton(m_studio, [this] { openSettings(QStringLiteral("servers")); }, this));
 
@@ -243,6 +256,9 @@ void MainWindow::buildStatusBar()
     safe->setCheckable(true);
     safe->setAutoRaise(true);
     safe->setIcon(Icons::get(QStringLiteral("shield")));
+    safe->setText(tr("Safe for work"));
+    safe->setAccessibleName(tr("Safe for work"));
+    safe->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
     auto syncSafe = [safe] {
         const bool on = Settings::instance().value(QStringLiteral("generation/safeContent"), false).toBool();
         QSignalBlocker block(safe);
@@ -284,33 +300,39 @@ void MainWindow::buildMenus()
     };
 
     QMenu *file = menuBar()->addMenu(tr("&File"));
-    bind(file->addAction(Icons::get(QStringLiteral("plus")), tr("New blank canvas..."), QKeySequence::New, this, [this] {
+    bind(file->addAction(Icons::get(QStringLiteral("plus")), tr("New blank canvas…"), QKeySequence::New, this, [this] {
         showPage(pages::Editor);
         m_editor->newDocumentDialog();
     }), QStringLiteral("new-document"));
-    QAction *fromPrompt = file->addAction(Icons::get(QStringLiteral("sparkles")), tr("New from prompt..."), this, &MainWindow::newFromPrompt);
+    QAction *fromPrompt = file->addAction(Icons::get(QStringLiteral("sparkles")), tr("New from prompt…"), this, &MainWindow::newFromPrompt);
     fromPrompt->setObjectName(QStringLiteral("newFromPrompt"));
     bindPage(fromPrompt, QStringLiteral("sparkles"), tr("New from prompt"), QKeySequence(QStringLiteral("Alt+2")));
-    bind(file->addAction(Icons::get(QStringLiteral("image")), tr("Open image..."), QKeySequence::Open, this, &MainWindow::openImages), QStringLiteral("open-image"));
+    bind(file->addAction(Icons::get(QStringLiteral("image")), tr("Open image…"), QKeySequence::Open, this, &MainWindow::openImages), QStringLiteral("open-image"));
     bind(file->addAction(Icons::get(QStringLiteral("copy")), tr("Paste from clipboard"), this, [this] {
         showPage(pages::Editor);
         m_editor->pasteAsNewDocument();
     }), QStringLiteral("paste-new-document"));
-    QAction *browse = file->addAction(Icons::get(QStringLiteral("gallery")), tr("Browse project images..."), this, &MainWindow::browseProjectImages);
+    QAction *browse = file->addAction(Icons::get(QStringLiteral("gallery")), tr("Browse project images…"), this, &MainWindow::browseProjectImages);
     browse->setObjectName(QStringLiteral("browseProjectImages"));
     bindPage(browse, QStringLiteral("gallery"), tr("Browse project images"), QKeySequence(QStringLiteral("Alt+6")));
     file->addSeparator();
-    bind(file->addAction(Icons::get(QStringLiteral("save")), tr("Save all"), QKeySequence::Save, this, [this] {
-        m_studio->saveAll().then(this, [this] { m_studio->notify(tr("Project saved."), QStringLiteral("success")); });
-    }), QStringLiteral("save-all"));
-    bind(file->addAction(Icons::get(QStringLiteral("download")), tr("Export image..."), QKeySequence(QStringLiteral("Ctrl+Shift+E")), this,
+    // Documents live in the project (with their layers); a picture file is written by Export.
+    QAction *saveAll = file->addAction(Icons::get(QStringLiteral("save")), tr("Save to project"), QKeySequence::Save, this, [this] {
+        m_studio->saveAll().then(this, [this] {
+            m_studio->notify(tr("Saved to the project with their layers. File → Export image… writes a picture file."), QStringLiteral("success"));
+        });
+    });
+    saveAll->setToolTip(tr("Save the open documents, with their layers, in the project. Export image… writes a PNG, JPEG or PSD file."));
+    saveAll->setStatusTip(saveAll->toolTip());
+    bind(saveAll, QStringLiteral("save-all"));
+    bind(file->addAction(Icons::get(QStringLiteral("download")), tr("Export image…"), QKeySequence(QStringLiteral("Ctrl+Shift+E")), this,
                     [this] { m_editor->exportImage(); }), QStringLiteral("export-image"));
     bind(file->addAction(Icons::get(QStringLiteral("gallery")), tr("Save a copy to project images"), QKeySequence(QStringLiteral("Ctrl+Shift+S")), this,
                     [this] { m_editor->saveToLibrary(); }), QStringLiteral("save-to-library"));
     bind(file->addAction(tr("Close document"), QKeySequence::Close, this, [this] { m_studio->closeDocument(m_studio->activeDocument()); }), QStringLiteral("close-document"));
     file->addSeparator();
-    bind(file->addAction(Icons::get(QStringLiteral("folder")), tr("New project..."), this, &MainWindow::newProject), QStringLiteral("new-project"));
-    bind(file->addAction(Icons::get(QStringLiteral("folder")), tr("Open project..."), QKeySequence(QStringLiteral("Ctrl+Shift+O")), this, &MainWindow::openProject), QStringLiteral("open-project"));
+    bind(file->addAction(Icons::get(QStringLiteral("folder")), tr("New project…"), this, &MainWindow::newProject), QStringLiteral("new-project"));
+    bind(file->addAction(Icons::get(QStringLiteral("folder")), tr("Open project…"), QKeySequence(QStringLiteral("Ctrl+Shift+O")), this, &MainWindow::openProject), QStringLiteral("open-project"));
     QMenu *recent = file->addMenu(tr("Recent projects"));
     connect(recent, &QMenu::aboutToShow, this, [this, recent] {
         recent->clear();
@@ -326,19 +348,46 @@ void MainWindow::buildMenus()
     bind(file->addAction(tr("Quit"), QKeySequence::Quit, this, &QWidget::close), QStringLiteral("quit"));
 
     QMenu *edit = menuBar()->addMenu(tr("&Edit"));
+    // The editor's own commands: the same actions as its keys, so a key changed in Settings →
+    // Shortcuts shows and works here too.
+    auto editorAction = [this](QMenu *menu, const QString &id, const QString &icon = QString()) {
+        if (QAction *a = m_editor->editorAction(id)) {
+            if (!icon.isEmpty())
+                a->setIcon(Icons::get(icon));
+            a->setObjectName(QStringLiteral("editor-%1").arg(id));
+            menu->addAction(a);
+            m_documentActions << a;
+        }
+    };
+    editorAction(edit, QStringLiteral("undo"), QStringLiteral("undo"));
+    editorAction(edit, QStringLiteral("redo"), QStringLiteral("redo"));
+    edit->addSeparator();
     bind(edit->addAction(Icons::get(QStringLiteral("copy")), tr("Copy merged"), QKeySequence(QStringLiteral("Ctrl+Shift+C")), this, [this] { m_editor->copyMerged(); }), QStringLiteral("copy-merged"));
     bind(edit->addAction(tr("Paste as layer"), this, [this] {
         showPage(pages::Editor);
         m_editor->pasteAsLayer();
     }), QStringLiteral("paste-layer-menu"));
-    bind(edit->addAction(tr("Import image as layer..."), this, [this] {
+    bind(edit->addAction(tr("Import image as layer…"), this, [this] {
         showPage(pages::Editor);
         m_editor->importAsLayer();
     }), QStringLiteral("import-layer"));
     edit->addSeparator();
-    bind(edit->addAction(Icons::get(QStringLiteral("settings")), tr("Settings..."), QKeySequence(QStringLiteral("Ctrl+,")), this, [this] { openSettings(); }), QStringLiteral("settings"));
+    bind(edit->addAction(Icons::get(QStringLiteral("settings")), tr("Settings…"), QKeySequence(QStringLiteral("Ctrl+,")), this, [this] { openSettings(); }), QStringLiteral("settings"));
+
+    // Selecting is where changing a picture with words starts.
+    QMenu *select = menuBar()->addMenu(tr("&Select"));
+    editorAction(select, QStringLiteral("select-all"));
+    editorAction(select, QStringLiteral("deselect"));
+    editorAction(select, QStringLiteral("invert-selection"));
+    select->addSeparator();
+    editorAction(select, QStringLiteral("delete-pixels"), QStringLiteral("trash"));
 
     QMenu *view = menuBar()->addMenu(tr("&View"));
+    editorAction(view, QStringLiteral("zoom-in"), QStringLiteral("zoom-in"));
+    editorAction(view, QStringLiteral("zoom-out"), QStringLiteral("zoom-out"));
+    editorAction(view, QStringLiteral("fit"), QStringLiteral("fit"));
+    editorAction(view, QStringLiteral("actual-pixels"));
+    view->addSeparator();
     m_queueAction = view->addAction(Icons::get(QStringLiteral("queue")), tr("Job queue"));
     m_queueAction->setObjectName(QStringLiteral("jobQueue"));
     m_queueAction->setCheckable(true);
@@ -384,17 +433,19 @@ void MainWindow::buildMenus()
     }
     aiAction(aiMenu, QStringLiteral("ai-remove-background"), QStringLiteral("scissors"), tr("Remove background"),
              tr("Cut out the subject onto a transparent layer"), [this] { m_editor->aiPanel()->run(AiPanel::Mode::RemoveBackground); });
-    aiAction(aiMenu, QStringLiteral("ai-expand"), QStringLiteral("outpaint"), tr("Expand canvas..."),
+    aiAction(aiMenu, QStringLiteral("ai-expand"), QStringLiteral("outpaint"), tr("Expand canvas…"),
              tr("Make the canvas larger and let the image engine paint the new area"),
              [this] { m_editor->showAiPanel(AiPanel::Mode::Expand); });
     aiAction(aiMenu, QStringLiteral("ai-variation"), QStringLiteral("variation"), tr("Variation"),
              tr("Re-imagine the image (or the selection), keeping its layout; the words in the prompt bar guide it"),
              [this] { m_editor->aiPanel()->run(AiPanel::Mode::Variation); });
-    aiAction(aiMenu, QStringLiteral("ai-detect-pose"), QStringLiteral("person"), tr("Detect pose"),
-             tr("Find the people's pose in the image; it becomes the document's control pose"),
-             [this] { m_editor->aiPanel()->run(AiPanel::Mode::DetectPose); });
+    // Poses are the Poses plugin's: without it nothing shows or edits a detected pose.
+    if (m_studio->hasPage(QStringLiteral("poses")))
+        aiAction(aiMenu, QStringLiteral("ai-detect-pose"), QStringLiteral("person"), tr("Detect pose"),
+                 tr("Find the people's pose in the image; it becomes the document's control pose"),
+                 [this] { m_editor->aiPanel()->run(AiPanel::Mode::DetectPose); });
     aiMenu->addSeparator();
-    QAction *allOptions = aiMenu->addAction(Icons::get(QStringLiteral("adjust")), tr("All AI options..."), this, [this] { m_editor->showAiPanel(); });
+    QAction *allOptions = aiMenu->addAction(Icons::get(QStringLiteral("adjust")), tr("All AI options…"), this, [this] { m_editor->showAiPanel(); });
     allOptions->setObjectName(QStringLiteral("ai-all-options"));
     m_documentActions << allOptions;
     connect(m_studio, &Studio::documentsChanged, this, &MainWindow::updateDocumentActions);
@@ -412,12 +463,12 @@ void MainWindow::buildMenus()
     }
     if (!m_pageSpecs.isEmpty())
         tools->addSeparator();
-    QAction *plugins = tools->addAction(Icons::get(QStringLiteral("settings")), tr("Plugins..."), this, [this] { openSettings(QStringLiteral("plugins")); });
+    QAction *plugins = tools->addAction(Icons::get(QStringLiteral("settings")), tr("Plugins…"), this, [this] { openSettings(QStringLiteral("plugins")); });
     plugins->setToolTip(tr("Character creation, poses and Live2D parts are plugins: switch them on in Settings → Plugins"));
     plugins->setStatusTip(plugins->toolTip());
 
     QMenu *help = menuBar()->addMenu(tr("&Help"));
-    QAction *setup = help->addAction(Icons::get(QStringLiteral("sparkles")), tr("Set up AI..."), this, &MainWindow::setUpAi);
+    QAction *setup = help->addAction(Icons::get(QStringLiteral("sparkles")), tr("Set up AI…"), this, &MainWindow::setUpAi);
     setup->setObjectName(QStringLiteral("setUpAi"));
     help->addSeparator();
     QAction *models = help->addAction(Icons::get(QStringLiteral("folder")), tr("Open models folder"), this, [this] {
@@ -428,11 +479,6 @@ void MainWindow::buildMenus()
     models->setObjectName(QStringLiteral("openModelsFolder"));
     help->addAction(Icons::get(QStringLiteral("folder")), tr("Open log folder"), this, [] {
         QDesktopServices::openUrl(QUrl::fromLocalFile(paths::logs()));
-    });
-    help->addAction(Icons::get(QStringLiteral("folder")), tr("Open ComfyUI workflow folder"), this, [] {
-        const QString dir = paths::appData() + QStringLiteral("/workflows/comfyui");
-        QDir().mkpath(dir);
-        QDesktopServices::openUrl(QUrl::fromLocalFile(dir));
     });
     help->addSeparator();
     help->addAction(Icons::get(QStringLiteral("info")), tr("About Lumen Studio"), this, [this] {
@@ -510,9 +556,11 @@ NewFromPromptDialog *MainWindow::newFromPrompt()
         m_newFromPrompt->setAttribute(Qt::WA_DeleteOnClose);
         // Its results are chosen like the prompt bar's, in the strip above the bar.
         connect(m_newFromPrompt, &NewFromPromptDialog::generationStarted, this,
-                [this](doc::Document *doc, Job *job, const QString &name, int results) {
-                    m_editor->variantStrip()->track(doc, {job}, name, results);
+                [this](doc::Document *doc, const QList<Job *> &jobs, const QString &name, int results) {
+                    m_editor->variantStrip()->track(doc, jobs, name, results);
                 });
+        // After the dialog has closed: Set up AI is modal too.
+        connect(m_newFromPrompt, &NewFromPromptDialog::setUpAiRequested, this, [this] { QTimer::singleShot(0, this, &MainWindow::setUpAi); });
         m_newFromPrompt->open();
     }
     m_newFromPrompt->raise();
@@ -562,18 +610,23 @@ void MainWindow::setQueueVisible(bool show)
         Theme::setRole(title, QStringLiteral("heading"));
         head->addWidget(title);
         head->addStretch();
-        auto *clear = new QToolButton(m_queuePanel);
-        clear->setText(tr("Clear finished"));
-        connect(clear, &QToolButton::clicked, m_studio->jobs(), &JobQueue::clearFinished);
-        auto *cancelAll = new QToolButton(m_queuePanel);
-        cancelAll->setText(tr("Cancel all"));
-        connect(cancelAll, &QToolButton::clicked, m_studio->jobs(), &JobQueue::cancelAll);
+        m_clearFinished = new QToolButton(m_queuePanel);
+        m_clearFinished->setText(tr("Clear finished"));
+        connect(m_clearFinished, &QToolButton::clicked, m_studio->jobs(), &JobQueue::clearFinished);
+        m_cancelAll = new QToolButton(m_queuePanel);
+        m_cancelAll->setText(tr("Cancel all"));
+        connect(m_cancelAll, &QToolButton::clicked, m_studio->jobs(), &JobQueue::cancelAll);
+        auto *cancelAll = m_cancelAll;
+        auto *clear = m_clearFinished;
         auto *close = iconButton(QStringLiteral("close"), tr("Close"), m_queuePanel);
         connect(close, &QToolButton::clicked, this, [this] { setQueueVisible(false); });
         head->addWidget(cancelAll);
         head->addWidget(clear);
         head->addWidget(close);
         v->addLayout(head);
+        m_queueEmpty = mutedLabel(tr("Nothing is running. Generations, upscales and downloads appear here."), m_queuePanel);
+        m_queueEmpty->setObjectName(QStringLiteral("queueEmpty"));
+        v->addWidget(m_queueEmpty);
         auto *scroll = new QScrollArea(m_queuePanel);
         scroll->setWidgetResizable(true);
         auto *content = new QWidget(scroll);
@@ -583,6 +636,7 @@ void MainWindow::setQueueVisible(bool show)
         m_queueList->addStretch();
         scroll->setWidget(content);
         v->addWidget(scroll, 1);
+        m_queueScroll = scroll;
         const auto &jobs = m_studio->jobs()->jobs();
         for (Job *job : jobs) {
             auto *card = new JobCard(job, m_studio->jobs(), m_queuePanel);
@@ -603,7 +657,20 @@ void MainWindow::setQueueVisible(bool show)
     if (!m_queuePanel)
         return;
     m_queuePanel->setVisible(show);
+    updateQueuePanel();
     placePanels();
+}
+
+void MainWindow::updateQueuePanel()
+{
+    if (!m_queuePanel)
+        return;
+    const QList<Job *> &jobs = m_studio->jobs()->jobs();
+    const bool any = !jobs.isEmpty();
+    m_queueEmpty->setVisible(!any);
+    m_queueScroll->setVisible(any);
+    m_cancelAll->setEnabled(std::any_of(jobs.cbegin(), jobs.cend(), [](const Job *j) { return !j->isFinished(); }));
+    m_clearFinished->setEnabled(std::any_of(jobs.cbegin(), jobs.cend(), [](const Job *j) { return j->isFinished(); }));
 }
 
 QWidget *MainWindow::queuePanel() const
@@ -638,20 +705,23 @@ void MainWindow::setPanelVisible(int index, bool show)
 void MainWindow::placePanels()
 {
     const QSize area = centralWidget()->size();
+    // Above the prompt bar and the results strip, which they would hide (Generate, Keep, the zoom).
+    const int bottom = std::clamp(m_editor->overlayBottom(centralWidget()), std::min(area.height(), 160), area.height());
     const int width = std::min(460, std::max(320, area.width() / 3));
     int right = area.width() - 12; // the queue stays left of an open panel
     for (const Panel &panel : std::as_const(m_panels)) {
         if (!panel.widget || !panel.widget->isVisible())
             continue;
-        panel.widget->setGeometry(area.width() - width - 12, 12, width, area.height() - 24);
+        panel.widget->setGeometry(area.width() - width - 12, 12, width, bottom - 24);
         panel.widget->raise();
         right = area.width() - width - 24;
     }
-    // Above the jobs button of the status bar.
+    // Over the right side, as tall as its jobs (at most 540 px).
     if (m_queuePanel && m_queuePanel->isVisible()) {
         const int w = std::min(440, right - 12);
-        const int h = std::min(540, area.height() - 24);
-        m_queuePanel->setGeometry(right - w, area.height() - h - 12, w, h);
+        const int wanted = m_queueScroll->isVisible() ? 540 : m_queuePanel->layout()->minimumSize().height() + 24;
+        const int h = std::min(std::max(160, wanted), bottom - 24);
+        m_queuePanel->setGeometry(right - w, bottom - h - 12, w, h);
         m_queuePanel->raise();
     }
 }
@@ -676,10 +746,10 @@ void MainWindow::updateEngine()
 {
     const ai::ImageProvider *engine = imageEngineInUse(m_studio->providers());
     if (!engine) {
-        m_engineButton->setText(tr("No image engine - Set up AI"));
+        m_engineButton->setText(tr("No image engine – Set up AI"));
         m_engineButton->setIcon(QIcon(Icons::pixmap(QStringLiteral("warning"), 14, Theme::palette().warning)));
-        m_engineButton->setToolTip(tr("Nothing can draw or change images yet. Click to add an image engine in Settings → Providers, "
-                                      "or use Help → Set up AI."));
+        m_engineButton->setToolTip(tr("Nothing can draw or change images yet. Click to set up an image engine on this computer or "
+                                      "online."));
         return;
     }
     m_engineButton->setText(imageEngineName(engine));

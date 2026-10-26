@@ -51,16 +51,17 @@ public:
     void setPrompt(const QString &prompt, const QString &negative = QString());
     void focusPrompt();
 
-    // Generate (Enter in the words), Remove, "Make a variation" (offered when the engine cannot
-    // change the whole image from words) and Cancel.
+    // Generate (Enter in the words), Remove, "Make a variation" (what the main button and Enter do
+    // when the engine cannot change the whole image from words) and Cancel. Without an engine the
+    // main button and Enter ask for one (setUpAiRequested).
     void generate();
     void remove();
     void variation();
     void cancel();
 
-    // The ⋯ menu: strength (when the request uses it), steps, seed, variants, the negative prompt
-    // (models that take one), reference images, the control pose (with pose control), the engine,
-    // and "All AI options…".
+    // The ⋯ menu: how much may change (when the request uses it), results per run, the negative
+    // prompt (models that take one), reference images, the control pose (with pose control), the
+    // engine, steps and seed under "Advanced", and "All AI options…".
     QWidget *optionsPopup() const { return m_popup; }
     void showOptions();
 
@@ -79,6 +80,8 @@ private:
     void updateOptions();
     void updateGenerate();
     bool blank() const;
+    // The engine cannot change the whole image from words but can make a variation of it.
+    static bool offersVariation(const PromptPlan &p);
     void submit(const PromptPlan &plan, ai::GenMode mode, const QString &words, double strength, bool withCharacter, const QString &name);
 
     Studio *m_studio;
@@ -96,9 +99,7 @@ private:
     QLabel *m_icon;
     ElidedLabel *m_hint;
     QProgressBar *m_progress;
-    QPushButton *m_setUp;
     QPushButton *m_selectArea;
-    QPushButton *m_variation;
     AutoTextEdit *m_prompt;
     QPushButton *m_generate;
     QPushButton *m_remove;
@@ -116,6 +117,7 @@ private:
     QPushButton *m_references = nullptr;
     QCheckBox *m_pose = nullptr;
     ProviderCombo *m_engine = nullptr;
+    QToolButton *m_advanced = nullptr;
     QPushButton *m_allOptions = nullptr;
 };
 

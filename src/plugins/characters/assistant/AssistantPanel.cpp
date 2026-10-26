@@ -93,7 +93,7 @@ AssistantPanel::AssistantPanel(Studio *studio, QWidget *parent)
     auto *sv = new QVBoxLayout(m_suggestions);
     sv->setContentsMargins(0, 8, 0, 0);
     sv->addWidget(mutedLabel(tr("Ask in your own words. The assistant plans, generates, edits and poses for you; every image "
-                                "lands in the library."), m_suggestions));
+                                "lands in the project images."), m_suggestions));
     for (const QString &example : {tr("Plan three Live2D source images of my character from the reference images, then generate them"),
                                    tr("Generate a portrait of a fox knight in silver armour, 2:3"),
                                    tr("Remove the background of the newest image"),

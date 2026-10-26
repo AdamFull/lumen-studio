@@ -33,6 +33,9 @@ struct GenerationSpec
     QString providerId;     // empty = default image provider
     ImageRequest request;
     std::optional<RegionInput> region;
+    // Whole-image changes: the full-size picture the init image was scaled down from. The results
+    // come back at its size, with its fine detail where they kept its shapes (img::restoreDetail).
+    QImage detailSource;
     QString title;
     QJsonObject meta;       // extra metadata stored with assets (shot id, document id...)
     doc::AssetKind assetKind = doc::AssetKind::Generation;
@@ -77,6 +80,9 @@ public:
     doc::Project *project() const { return m_project; }
 
     Job *submit(const GenerationSpec &spec);
+    // `spec.request.batchCount` results: one job for engines that make several images per request,
+    // else one job per image (a fixed seed counts up, so the results differ).
+    QList<Job *> submitVariants(const GenerationSpec &spec);
     // Runs a generation inside an existing job (progress, previews, cancellation) and hands the
     // output to `onOutput` instead of storing assets. `used` carries the request values actually sent.
     using OutputHandler = std::function<void(Job *job, const GenerationSpec &used, GenerationOutput output)>;

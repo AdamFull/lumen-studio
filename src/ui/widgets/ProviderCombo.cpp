@@ -56,10 +56,14 @@ void ProviderCombo::reload()
     for (ai::Provider *p : m_registry->providers(m_kind)) {
         if (!m_registry->isEnabled(p->instanceId()))
             continue;
-        addItem(Icons::get(p->type().local ? QStringLiteral("server") : QStringLiteral("cloud")), p->displayName(), p->instanceId());
+        // Image engines by the name the status bar uses ("FLUX.2 [klein] 4B on this computer").
+        addItem(Icons::get(p->type().local ? QStringLiteral("server") : QStringLiteral("cloud")),
+                m_kind == ai::ProviderKind::Image ? imageEngineName(p) : p->displayName(), p->instanceId());
+        setItemData(count() - 1, p->displayName(), Qt::ToolTipRole);
     }
     if (count() == 0) {
-        addItem(Icons::get(QStringLiteral("warning")), tr("No provider configured"), QString());
+        addItem(Icons::get(QStringLiteral("warning")), m_kind == ai::ProviderKind::Image ? tr("No image engine") : tr("No language model"),
+                QString());
         setEnabled(false);
     } else {
         setEnabled(true);

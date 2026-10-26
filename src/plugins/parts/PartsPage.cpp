@@ -525,7 +525,7 @@ QWidget *PartsPage::buildSourcePanel()
     m_sourceThumb->setFixedSize(292, 220);
     m_sourceThumb->setAlignment(Qt::AlignCenter);
     m_sourceThumb->setObjectName(QStringLiteral("Card"));
-    m_sourceThumb->setText(tr("Drop an image here\nor drag one from the Library"));
+    m_sourceThumb->setText(tr("Drop an image here\nor drag one from Browse project images"));
     v->addWidget(m_sourceThumb, 0, Qt::AlignHCenter);
     m_sourceInfo = mutedLabel(QString(), w);
     v->addWidget(m_sourceInfo);
@@ -1321,7 +1321,7 @@ void PartsPage::refreshSourceInfo()
 {
     if (!m_set || !m_set->hasSource()) {
         m_sourceThumb->setPixmap(QPixmap());
-        m_sourceThumb->setText(tr("Drop an image here\nor drag one from the Library"));
+        m_sourceThumb->setText(tr("Drop an image here\nor drag one from Browse project images"));
         m_sourceInfo->clear();
         return;
     }

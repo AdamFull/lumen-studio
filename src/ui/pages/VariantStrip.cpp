@@ -3,12 +3,14 @@
 #include "ai/GenerationService.h"
 #include "core/ImageOps.h"
 #include "core/Job.h"
+#include "doc/Project.h"
 #include "ui/Icons.h"
 #include "ui/Studio.h"
 #include "ui/Theme.h"
 #include "ui/canvas/CanvasView.h"
 #include "ui/widgets/Controls.h"
 
+#include <QApplication>
 #include <QButtonGroup>
 #include <QHBoxLayout>
 #include <QKeyEvent>
@@ -47,6 +49,7 @@ VariantStrip::VariantStrip(Studio *studio, CanvasView *canvas, QWidget *parent)
     m_thumbs->setSpacing(4);
     h->addLayout(m_thumbs);
     m_label = new ElidedLabel(QString(), this);
+    m_label->setObjectName(QStringLiteral("variantLabel"));
     m_label->setProperty("role", QStringLiteral("muted"));
     h->addSpacing(6);
     h->addWidget(m_label, 1);
@@ -68,9 +71,11 @@ VariantStrip::VariantStrip(Studio *studio, CanvasView *canvas, QWidget *parent)
     });
     connect(m_keep, &QPushButton::clicked, this, &VariantStrip::keep);
     connect(m_discard, &QPushButton::clicked, this, &VariantStrip::discard);
-    // ←/→, Enter and Esc also work while the canvas has the keyboard.
-    if (QWidget *surface = canvas->focusProxy())
-        surface->installEventFilter(this);
+    // The line says which keys work, and they work only where the keyboard is.
+    connect(qApp, &QApplication::focusChanged, this, [this] {
+        if (isVisible())
+            m_label->setFullText(label());
+    });
     hide();
 }
 
@@ -86,16 +91,18 @@ const VariantStrip::Run *VariantStrip::shown() const
     return it == m_runs.cend() ? nullptr : &it.value();
 }
 
-void VariantStrip::setDocument(doc::Document *doc)
+bool VariantStrip::Run::has(const Job *job) const
 {
-    m_doc = doc;
-    rebuild();
+    return std::any_of(jobs.cbegin(), jobs.cend(), [job](const Tracked &t) { return t.job == job; });
 }
 
-void VariantStrip::track(doc::Document *doc, const QList<Job *> &jobs, const QString &name, int results)
+bool VariantStrip::running(const Run &run)
 {
-    if (!doc || jobs.isEmpty())
-        return;
+    return run.submitting > 0 || std::any_of(run.jobs.cbegin(), run.jobs.cend(), [](const Tracked &t) { return t.job && !t.job->isFinished(); });
+}
+
+VariantStrip::Run &VariantStrip::runFor(doc::Document *doc)
+{
     if (!m_runs.contains(doc)) {
         // Results no longer fit a document that changed its size, and go with a closed one.
         connect(doc, &QObject::destroyed, this, [this, doc] {
@@ -104,33 +111,93 @@ void VariantStrip::track(doc::Document *doc, const QList<Job *> &jobs, const QSt
         });
         connect(doc, &doc::Document::sizeChanged, this, [this, doc] { drop(doc); });
     }
-    Run &run = m_runs[doc];
-    const bool going = std::any_of(run.jobs.cbegin(), run.jobs.cend(), [](const QPointer<Job> &j) { return j && !j->isFinished(); });
-    if (!going)
+    return m_runs[doc];
+}
+
+void VariantStrip::setDocument(doc::Document *doc)
+{
+    m_doc = doc;
+    rebuild();
+}
+
+void VariantStrip::expect(doc::Document *doc)
+{
+    if (!doc)
+        return;
+    Run &run = runFor(doc);
+    // A new run replaces the results on show (Generate again), unless one is still going.
+    if (!running(run))
         run = Run();
-    run.expected += std::max(1, results);
-    QPointer<doc::Document> target(doc);
-    for (Job *job : jobs) {
-        run.jobs << job;
-        connect(job, &Job::finished, this, [this, target, name](Job *j) {
-            if (target)
-                finished(target, j, name);
-        });
-        connect(job, &Job::progressChanged, this, [this, target] {
-            if (target && target == m_doc)
-                emit stateChanged();
-        });
+    ++run.submitting;
+    rebuild();
+}
+
+void VariantStrip::track(doc::Document *doc, const QList<Job *> &jobs, const QString &name, int results)
+{
+    if (!doc)
+        return;
+    Run &run = runFor(doc);
+    const bool stopped = run.stopped;
+    if (run.submitting > 0)
+        --run.submitting;
+    else if (!running(run) && !jobs.isEmpty())
+        run = Run();
+    if (run.submitting == 0)
+        run.stopped = false;
+    if (jobs.isEmpty()) {
+        // An expected run that could not be submitted.
+        removeIfEmpty(doc);
+        rebuild();
+        return;
     }
+    // Each job makes its share (one each for engines that make one image per request).
+    const int each = std::max(1, results / int(jobs.size()));
+    for (Job *job : jobs) {
+        run.jobs << Tracked{job, each};
+        watch(doc, job, name, each);
+    }
+    if (stopped) {
+        for (Job *job : jobs)
+            job->cancel();
+    }
+    rebuild();
+}
+
+void VariantStrip::watch(doc::Document *doc, Job *job, const QString &name, int results)
+{
+    QPointer<doc::Document> target(doc);
+    connect(job, &Job::finished, this, [this, target, name](Job *j) {
+        if (target)
+            finished(target, j, name);
+    });
+    connect(job, &Job::progressChanged, this, [this, target] {
+        if (target && target == m_doc)
+            emit stateChanged();
+    });
+    // Retry in the Queue puts a failed or cancelled job back in the queue: its results come here again.
+    connect(job, &Job::stateChanged, this, [this, target, job, results](Job::State state) {
+        if (target && state == Job::State::Queued)
+            rejoin(target, job, results);
+    });
+}
+
+void VariantStrip::rejoin(doc::Document *doc, Job *job, int results)
+{
+    Run &run = runFor(doc);
+    if (run.has(job))
+        return;
+    // Joins what is on show: the user asked for these results again.
+    run.jobs << Tracked{job, results};
     rebuild();
 }
 
 void VariantStrip::finished(doc::Document *doc, Job *job, const QString &name)
 {
     auto it = m_runs.find(doc);
-    if (it == m_runs.end() || !it->jobs.contains(job))
+    if (it == m_runs.end() || !it->has(job))
         return;
     Run &run = it.value();
-    run.jobs.removeAll(job);
+    run.jobs.removeIf([job](const Tracked &t) { return t.job == job || !t.job; });
     const bool first = run.variants.isEmpty();
     if (job->state() == Job::State::Succeeded) {
         const ai::GenerationOutput out = ai::GenerationService::outputOf(job);
@@ -145,13 +212,21 @@ void VariantStrip::finished(doc::Document *doc, Job *job, const QString &name)
     } else if (job->state() == Job::State::Failed) {
         m_studio->notify(job->errorString(), QStringLiteral("error"));
     }
-    if (run.variants.isEmpty() && run.jobs.isEmpty()) {
-        m_runs.remove(doc);
-        disconnect(doc, nullptr, this, nullptr);
-    }
+    removeIfEmpty(doc);
     rebuild();
     if (first && doc == m_doc && count() > 0)
         emit resultsArrived();
+}
+
+void VariantStrip::removeIfEmpty(doc::Document *doc)
+{
+    auto it = m_runs.find(doc);
+    if (it == m_runs.end() || !it->variants.isEmpty() || it->submitting > 0)
+        return;
+    if (running(*it))
+        return;
+    m_runs.erase(it);
+    disconnect(doc, nullptr, this, nullptr);
 }
 
 void VariantStrip::addVariants(doc::Document *doc, const QList<QImage> &images, const QString &name, const QJsonObject &meta,
@@ -159,14 +234,7 @@ void VariantStrip::addVariants(doc::Document *doc, const QList<QImage> &images, 
 {
     if (!doc || images.isEmpty())
         return;
-    if (!m_runs.contains(doc)) {
-        connect(doc, &QObject::destroyed, this, [this, doc] {
-            m_runs.remove(doc);
-            rebuild();
-        });
-        connect(doc, &doc::Document::sizeChanged, this, [this, doc] { drop(doc); });
-    }
-    Run &run = m_runs[doc];
+    Run &run = runFor(doc);
     const bool first = run.variants.isEmpty();
     for (int i = 0; i < images.size(); ++i)
         run.variants << Variant{fitted(images[i], doc->size()), thumbs.value(i, images[i]), name, meta};
@@ -180,12 +248,19 @@ void VariantStrip::drop(doc::Document *doc)
     auto it = m_runs.find(doc);
     if (it == m_runs.end())
         return;
-    const QList<QPointer<Job>> jobs = it->jobs;
-    m_runs.erase(it);
-    disconnect(doc, nullptr, this, nullptr);
-    for (const QPointer<Job> &job : jobs) {
-        if (job && !job->isFinished())
-            job->cancel();
+    const QList<Tracked> jobs = it->jobs;
+    // A run still being prepared keeps its place, so that its jobs (they come later) are shown.
+    if (it->submitting > 0) {
+        const int submitting = it->submitting;
+        *it = Run();
+        it->submitting = submitting;
+    } else {
+        m_runs.erase(it);
+        disconnect(doc, nullptr, this, nullptr);
+    }
+    for (const Tracked &t : jobs) {
+        if (t.job && !t.job->isFinished())
+            t.job->cancel();
     }
     rebuild();
 }
@@ -226,7 +301,7 @@ QString VariantStrip::currentName() const
 bool VariantStrip::isRunning() const
 {
     const Run *run = shown();
-    return run && std::any_of(run->jobs.cbegin(), run->jobs.cend(), [](const QPointer<Job> &j) { return j && !j->isFinished(); });
+    return run && running(*run);
 }
 
 double VariantStrip::progress() const
@@ -236,9 +311,9 @@ double VariantStrip::progress() const
         return -1.0;
     double sum = 0;
     int known = 0;
-    for (const QPointer<Job> &j : run->jobs) {
-        if (j && !j->isFinished() && j->progress() >= 0) {
-            sum += j->progress();
+    for (const Tracked &t : run->jobs) {
+        if (t.job && !t.job->isFinished() && t.job->progress() >= 0) {
+            sum += t.job->progress();
             ++known;
         }
     }
@@ -248,7 +323,14 @@ double VariantStrip::progress() const
 int VariantStrip::pending() const
 {
     const Run *run = shown();
-    return run && isRunning() ? std::max(0, run->expected - int(run->variants.size())) : 0;
+    if (!run)
+        return 0;
+    int results = 0;
+    for (const Tracked &t : run->jobs) {
+        if (t.job && !t.job->isFinished())
+            results += t.results;
+    }
+    return results;
 }
 
 QString VariantStrip::status() const
@@ -256,11 +338,28 @@ QString VariantStrip::status() const
     const Run *run = shown();
     if (!run)
         return QString();
-    for (const QPointer<Job> &j : run->jobs) {
-        if (j && !j->isFinished())
-            return j->statusText();
+    for (const Tracked &t : run->jobs) {
+        if (t.job && !t.job->isFinished())
+            return t.job->statusText();
     }
     return QString();
+}
+
+QString VariantStrip::label() const
+{
+    const Run *run = shown();
+    const int n = run ? int(run->variants.size()) : 0;
+    if (n == 0)
+        return QString();
+    if (isRunning())
+        return tr("Result %1 of %2 · more on the way").arg(run->current + 1).arg(n);
+    // The keys work while the strip or the canvas has the keyboard, not while the user types.
+    QWidget *focus = QApplication::focusWidget();
+    const bool keys = !focus || focus == this || isAncestorOf(focus) || focus == m_canvas->focusProxy();
+    if (n == 1)
+        return keys ? tr("Keep it (Enter) or discard it (Esc)") : tr("Keep it or discard it");
+    return keys ? tr("Result %1 of %2 · ←/→ to compare · Generate again replaces these").arg(run->current + 1).arg(n)
+                : tr("Result %1 of %2 · click one to compare · Generate again replaces these").arg(run->current + 1).arg(n);
 }
 
 void VariantStrip::keep()
@@ -274,6 +373,13 @@ void VariantStrip::keep()
     // On top, so the layer looks as the preview did; one step in the history.
     const QUuid id = doc->addLayer(v.name, v.image, v.meta, doc->layerCount(), tr("Keep AI result"));
     doc->setActiveLayer(id);
+    // The project's images remember which results were kept (the start screen shows only those).
+    if (doc::Project *project = m_studio->project()) {
+        if (auto info = project->asset(v.meta.value(QStringLiteral("asset")).toString())) {
+            info->metadata.insert(QStringLiteral("kept"), true);
+            project->updateAsset(*info);
+        }
+    }
 }
 
 void VariantStrip::discard()
@@ -284,13 +390,15 @@ void VariantStrip::discard()
 
 void VariantStrip::stop()
 {
-    const Run *run = shown();
+    Run *run = shown();
     if (!run)
         return;
-    const QList<QPointer<Job>> jobs = run->jobs;
-    for (const QPointer<Job> &job : jobs) {
-        if (job && !job->isFinished())
-            job->cancel();
+    if (run->submitting > 0)
+        run->stopped = true;
+    const QList<Tracked> jobs = run->jobs;
+    for (const Tracked &t : jobs) {
+        if (t.job && !t.job->isFinished())
+            t.job->cancel();
     }
 }
 
@@ -321,13 +429,6 @@ void VariantStrip::keyPressEvent(QKeyEvent *e)
 {
     if (!handleKey(e))
         QFrame::keyPressEvent(e);
-}
-
-bool VariantStrip::eventFilter(QObject *watched, QEvent *event)
-{
-    if (event->type() == QEvent::KeyPress && handleKey(static_cast<QKeyEvent *>(event)))
-        return true;
-    return QFrame::eventFilter(watched, event);
 }
 
 void VariantStrip::rebuild()
@@ -365,9 +466,7 @@ void VariantStrip::refresh()
     if (show) {
         if (QAbstractButton *b = m_group->button(run->current))
             b->setChecked(true);
-        const QString text = isRunning() ? tr("Result %1 of %2 · more on the way").arg(run->current + 1).arg(run->variants.size())
-                                         : tr("Result %1 of %2 · ←/→ to compare").arg(run->current + 1).arg(run->variants.size());
-        m_label->setFullText(text);
+        m_label->setFullText(label());
     }
     if (m_canvas->document() == m_doc)
         m_canvas->setPreview(show ? run->variants.value(run->current).image : QImage());

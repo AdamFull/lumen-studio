@@ -17,7 +17,7 @@ The interface is available in English and German, with dark, light and high-cont
 Local back-ends (Stable Diffusion WebUI / Forge, ComfyUI, llama.cpp, Ollama, LM Studio) and cloud
 APIs (OpenAI, Gemini, Anthropic, Stability AI, fal.ai, OpenRouter) both work.
 
-The [user guide](docs/USER_GUIDE.md) explains every page, tool and shortcut. See
+The [user guide](docs/USER_GUIDE.md) explains every window, tool and shortcut. See
 [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md) for the architecture, the technology stack and the roadmap.
 
 ## Building (Windows, MinGW)
@@ -65,8 +65,8 @@ out of `tr()` on purpose.
 
 ## Character slicing for Live2D
 
-The **Parts** page (Alt+5) turns a finished character illustration into named, ordered layers for
-Live2D Cubism, in four steps:
+**Tools → Parts** (the Live2D parts plugin, switched on in Tools → Plugins…; `Alt+5`) turns a
+finished character illustration into named, ordered layers for Live2D Cubism, in four steps:
 
 1. **Source**: pick an image, optionally remove its background, and choose the part layout.
 2. **Masks**: segment automatically, then fix the masks.

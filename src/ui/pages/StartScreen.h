@@ -40,7 +40,7 @@ private:
     void rebuildRecent();
     void scheduleRebuild();
     void updateSetupCard();
-    QToolButton *addTile(const QString &name, const QString &tooltip, const QPixmap &thumbnail);
+    QToolButton *addTile(const QString &name, const QString &tooltip, const QPixmap &thumbnail, bool document = false);
 
     Studio *m_studio;
     ThumbnailCache *m_thumbs;

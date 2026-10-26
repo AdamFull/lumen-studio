@@ -11,6 +11,7 @@
 #include <functional>
 #include <optional>
 
+class QAbstractButton;
 class QButtonGroup;
 class QCheckBox;
 class QComboBox;
@@ -56,8 +57,12 @@ public:
         std::optional<Mode> action;           // recorded with the images
     };
     // Where the jobs of a prompt run go (the variants strip of the prompt bar), with the number of
-    // results they make. Without a handler their results become layers, the first visible.
+    // results they make; called once per run, with no jobs when the run could not be submitted.
+    // Without a handler their results become layers, the first visible.
     using ResultsHandler = std::function<void(doc::Document *doc, const QList<Job *> &jobs, const QString &name, int results)>;
+    // Told when a run starts being prepared (the character and the picture are read first), before
+    // the results handler gets its jobs.
+    using PreparingHandler = std::function<void(doc::Document *doc)>;
 
     AiPanel(Studio *studio, AiOptions *options, QWidget *parent = nullptr);
     void setDocument(doc::Document *doc);
@@ -70,7 +75,11 @@ public:
     // Submits a prompt run on the panel's document, with the project's character unless the run or
     // the character button says otherwise. The jobs go to the results handler.
     void submitPrompt(const PromptRun &run);
-    void setResultsHandler(ResultsHandler handler) { m_results = std::move(handler); }
+    void setResultsHandler(ResultsHandler handler, PreparingHandler preparing = {})
+    {
+        m_results = std::move(handler);
+        m_preparing = std::move(preparing);
+    }
     ReferenceStrip *references() const { return m_refs; }
     AiOptions *options() const { return m_options; }
 
@@ -82,7 +91,9 @@ public:
 private:
     void updateUi();
     void syncFromOptions();
+    // The picture of the panel's document (or of `doc`), flattened on a worker thread.
     void submitWithComposite(std::function<void(QImage composite)> fn);
+    void submitWithComposite(doc::Document *doc, std::function<void(QImage composite)> fn);
     // Adds the page's character (if any) to the request for this use, then continues with the
     // request and the metadata of what went in (empty without a character).
     void withCharacter(ai::ImageRequest request, ai::CharacterUse use, bool skip, std::function<void(ai::ImageRequest, QJsonObject)> then);
@@ -101,6 +112,10 @@ private:
     QPointer<doc::Document> m_doc;
     Mode m_mode = Mode::Variation;
     ResultsHandler m_results;
+    PreparingHandler m_preparing;
+    QWidget *m_characterRow = nullptr;
+    bool m_charactersOn = false; // the Characters plugin is on
+    QAbstractButton *m_detectPose = nullptr;
     ProviderCombo *m_provider;
     QButtonGroup *m_modes;
     QLabel *m_modeHint;

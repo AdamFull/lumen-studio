@@ -34,8 +34,12 @@ public:
 
     // The document whose results are shown (the editor's active one).
     void setDocument(doc::Document *doc);
+    // A run on `doc` is being prepared (its jobs come with track()): it counts as running from now
+    // on, so that a second Generate does not start another one, and the results on show go.
+    void expect(doc::Document *doc);
     // A run's jobs on `doc`, which make `results` images in all: the images of each one become
-    // results when it finishes.
+    // results when it finishes. No jobs: a run that was expected could not be submitted. A job
+    // retried from the Queue after it failed or was cancelled joins the document's results again.
     void track(doc::Document *doc, const QList<Job *> &jobs, const QString &name, int results);
     // Results to choose from, scaled to the document (`thumbs`: what the thumbnails show, else the
     // images). Also for tests and screenshots.
@@ -54,6 +58,8 @@ public:
     QString status() const;
     // How many results the running jobs are still making.
     int pending() const;
+    // The line next to the thumbnails.
+    QString label() const;
 
     // Adds the current result as a layer on top and drops the others (and stops what still runs).
     void keep();
@@ -61,6 +67,10 @@ public:
     void discard();
     // Stops the shown document's running jobs; the results so far stay.
     void stop();
+
+    // ←/→, Enter and Esc for the results; false when there are none or the key is another one. The
+    // canvas hands over the keys its tool does not use.
+    bool handleKey(QKeyEvent *e);
 
 signals:
     // The results or the jobs of the shown document changed, or the current result.
@@ -70,7 +80,6 @@ signals:
 
 protected:
     void keyPressEvent(QKeyEvent *e) override;
-    bool eventFilter(QObject *watched, QEvent *event) override;
 
 private:
     struct Variant
@@ -80,18 +89,30 @@ private:
         QString name;
         QJsonObject meta;
     };
+    struct Tracked
+    {
+        QPointer<Job> job;
+        int results = 1; // images it makes
+    };
     struct Run
     {
         QList<Variant> variants;
-        QList<QPointer<Job>> jobs;
-        int expected = 0; // results of the run, once its jobs are done
+        QList<Tracked> jobs;
         int current = 0;
+        int submitting = 0; // runs expected whose jobs have not come yet
+        bool stopped = false; // Cancel while one was being prepared: its jobs stop when they come
+        bool has(const Job *job) const;
     };
+    // The run of a document, made (and its document watched) when it has none.
+    Run &runFor(doc::Document *doc);
+    static bool running(const Run &run);
     Run *shown();
     const Run *shown() const;
     void drop(doc::Document *doc);
+    void watch(doc::Document *doc, Job *job, const QString &name, int results);
+    void rejoin(doc::Document *doc, Job *job, int results);
     void finished(doc::Document *doc, Job *job, const QString &name);
-    bool handleKey(QKeyEvent *e);
+    void removeIfEmpty(doc::Document *doc);
     void rebuild();
     void refresh();
 

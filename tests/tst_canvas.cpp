@@ -17,6 +17,7 @@
 #include "plugins/characters/director/ShotCard.h"
 #include "plugins/characters/CreatePage.h"
 #include "ui/dialogs/NewFromPromptDialog.h"
+#include "ui/dialogs/NewCanvasDialog.h"
 #include "ui/pages/AiOptions.h"
 #include "ui/pages/AiPanel.h"
 #include "ui/pages/EditorPage.h"
@@ -187,6 +188,13 @@ private slots:
     void promptBarNewImage();
     void promptBarWithoutEdits();
     void aiMenuAndPanel();
+    void promptBarKeepsTyping();
+    void promptBarRuns();
+    void promptBarEngine();
+    void wholeImageKeepsDetail();
+    void editorMenus();
+    void newFromPromptEngines();
+    void recentAndDetails();
 
 private:
     ToolEvent at(double x, double y, Qt::KeyboardModifiers mods = Qt::NoModifier) const
@@ -2192,6 +2200,8 @@ void TestCanvas::newFromPrompt()
 void TestCanvas::editorCharacter()
 {
     Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
+    // Characters are made by the Characters plugin; the AI panel draws one in while it is on.
+    PluginsOn plugins({QStringLiteral("characters")});
     MockHttpServer server;
     QList<QJsonObject> generations;
     server.route("GET", QStringLiteral("/sdcpp/v1/capabilities"), [](const MockRequest &) {
@@ -3321,7 +3331,17 @@ void TestCanvas::shellStatusBar()
 
     auto *engine = window.findChild<QToolButton *>(QStringLiteral("imageEngine"));
     QVERIFY(engine && engine->isVisible());
-    QCOMPARE(engine->text(), QStringLiteral("No image engine - Set up AI"));
+    QCOMPARE(engine->text(), QStringLiteral("No image engine – Set up AI"));
+    // Without one, a click starts setting one up (as the start screen's card and the prompt bar do).
+    QString title;
+    QTimer::singleShot(200, &window, [&title] {
+        if (auto *setup = qobject_cast<OnboardingDialog *>(QApplication::activeModalWidget())) {
+            title = setup->windowTitle();
+            setup->reject();
+        }
+    });
+    engine->click();
+    QCOMPARE(title, QStringLiteral("Set up AI"));
     // A provider by its name.
     const QVariantMap url{{QStringLiteral("url"), QStringLiteral("http://127.0.0.1:1")}};
     ai::Provider *workstation = studio.providers()->addProvider(QStringLiteral("sdcpp"), QStringLiteral("Workstation"), url);
@@ -3360,6 +3380,15 @@ void TestCanvas::shellStatusBar()
     QAction *queue = window.findChild<QAction *>(QStringLiteral("jobQueue"));
     QVERIFY(jobs && queue);
     QCOMPARE(jobs->text(), QStringLiteral("No jobs running"));
+    // An empty Queue says so, and its buttons have nothing to act on.
+    jobs->click();
+    QVERIFY(window.queuePanel() && window.queuePanel()->isVisible());
+    auto *empty = window.queuePanel()->findChild<QLabel *>(QStringLiteral("queueEmpty"));
+    QVERIFY(empty && empty->isVisible());
+    QVERIFY(!buttonNamed(window.queuePanel(), QStringLiteral("Cancel all"))->isEnabled());
+    QVERIFY(!buttonNamed(window.queuePanel(), QStringLiteral("Clear finished"))->isEnabled());
+    QVERIFY(window.queuePanel()->height() < 300); // as tall as what it shows
+    jobs->click();
     QPointer<Job> job = studio.jobs()->submit(QStringLiteral("Waiting job"), QStringLiteral("status-test"), [](Job *) {});
     QTRY_COMPARE(jobs->text(), QStringLiteral("1 running · 0 queued"));
     jobs->click();
@@ -3369,6 +3398,8 @@ void TestCanvas::shellStatusBar()
     QVERIFY(window.centralWidget()->rect().contains(panel->geometry()));
     QVERIFY(panel->geometry().right() > window.centralWidget()->width() / 2); // on the side of the button
     QCOMPARE(panel->findChildren<JobCard *>().size(), 1);
+    QVERIFY(!panel->findChild<QLabel *>(QStringLiteral("queueEmpty"))->isVisible());
+    QVERIFY(buttonNamed(panel, QStringLiteral("Cancel all"))->isEnabled());
     queue->trigger(); // View → Job queue (Ctrl+Shift+Q) closes it again
     QVERIFY(!panel->isVisible() && !jobs->isChecked());
     queue->trigger();
@@ -3404,7 +3435,7 @@ void TestCanvas::pluginWindows()
             if (!a->isSeparator())
                 names << a->text();
         }
-        QCOMPARE(names, (QStringList{QStringLiteral("Create"), QStringLiteral("Poses"), QStringLiteral("Parts"), QStringLiteral("Plugins...")}));
+        QCOMPARE(names, (QStringList{QStringLiteral("Create"), QStringLiteral("Poses"), QStringLiteral("Parts"), QStringLiteral("Plugins…")}));
         QCOMPARE(Shortcuts::instance().keys(QStringLiteral("nav.person")), QList<QKeySequence>{QKeySequence(QStringLiteral("Alt+4"))});
 
         QVERIFY(!window.pageWindow(QStringLiteral("poses")) && !window.pageWidget(QStringLiteral("poses")));
@@ -3456,6 +3487,17 @@ void TestCanvas::pluginWindows()
     auto *panel = window.findChild<AssistantPanel *>();
     QVERIFY(panel && panel->isVisible());
     QCOMPARE(panel->parentWidget(), window.centralWidget());
+    // With a document open it ends above the prompt bar and the results, which it would hide.
+    doc::Document *doc = studio.openImageAsDocument(content(), QStringLiteral("Under the assistant"));
+    window.editor()->variantStrip()->addVariants(doc, {content(), content()}, QStringLiteral("Two"));
+    QTRY_VERIFY(window.editor()->variantStrip()->isVisible());
+    const int strip = window.editor()->variantStrip()->mapTo(window.centralWidget(), QPoint(0, 0)).y();
+    QTRY_VERIFY2(panel->geometry().bottom() < strip, qPrintable(QStringLiteral("%1 >= %2").arg(panel->geometry().bottom()).arg(strip)));
+    window.editor()->variantStrip()->discard();
+    const int bar = window.editor()->promptBar()->mapTo(window.centralWidget(), QPoint(0, 0)).y();
+    QTRY_VERIFY(panel->geometry().bottom() < bar && panel->geometry().bottom() > bar - 40);
+    studio.closeDocument(doc);
+    QTRY_VERIFY(panel->geometry().bottom() > window.centralWidget()->height() - 40); // the start screen: the whole height
     emit panel->closeRequested();
     QVERIFY(!assistant->isChecked());
     QVERIFY(!panel->isVisible());
@@ -3515,6 +3557,31 @@ void TestCanvas::pluginsOff()
     for (QAction *a : window.findChildren<QAction *>())
         QVERIFY2(!a->objectName().startsWith(QLatin1String("tool-")), qPrintable(a->objectName()));
     QVERIFY(!window.findChild<AssistantPanel *>());
+    // Characters and poses are the plugins': no character in the AI panel, no Detect pose in it or in
+    // the AI menu, no Poses or Parts in Browse project images, no Live2D sheet for a new canvas.
+    QVERIFY(!window.findChild<QAction *>(QStringLiteral("ai-detect-pose")));
+    QVERIFY(!window.editor()->aiPanel()->findChild<CharacterChip *>()->isVisibleTo(window.editor()->aiPanel()));
+    for (QToolButton *b : window.editor()->aiPanel()->findChildren<QToolButton *>())
+        QVERIFY2(b->accessibleName() != QLatin1String("Detect pose") || !b->isVisibleTo(window.editor()->aiPanel()), "Detect pose");
+    {
+        LibraryPage library(&studio);
+        for (QToolButton *b : library.findChildren<QToolButton *>())
+            QVERIFY2(b->text() != QLatin1String("Poses") && b->text() != QLatin1String("Parts"), qPrintable(b->text()));
+        NewCanvasDialog canvas(&studio);
+        for (QComboBox *c : canvas.findChildren<QComboBox *>())
+            QVERIFY(c->findText(QStringLiteral("Live2D sheet 2048 × 3072")) < 0);
+    }
+    {
+        PluginsOn on;
+        Studio withPlugins;
+        LibraryPage library(&withPlugins);
+        QStringList chips;
+        for (QToolButton *b : library.findChildren<QToolButton *>())
+            chips << b->text();
+        QVERIFY(chips.contains(QStringLiteral("Poses")) && chips.contains(QStringLiteral("Parts")));
+        NewCanvasDialog canvas(&withPlugins);
+        QVERIFY(canvas.findChild<QComboBox *>()->findText(QStringLiteral("Live2D sheet 2048 × 3072")) >= 0);
+    }
     // A plugin page that is off opens nothing.
     studio.showPage(QStringLiteral("poses"));
     QVERIFY(!window.pageWindow(QStringLiteral("poses")));
@@ -3968,14 +4035,29 @@ namespace {
 
 // A stable-diffusion.cpp server: each generation answers with `batch_count` images of the size asked
 // for, one colour each (with a dark frame, so that no result is a flat colour). While `hold` is on,
-// jobs stay queued.
+// jobs stay queued. With `echo`, an edit answers with the picture it was sent, tinted warm and with
+// its brightness kept (a colorization that changes nothing else).
 struct MockSdCpp
 {
     MockHttpServer server;
     QList<QJsonObject> generations;
     QList<QColor> colors{QColor(255, 128, 0), QColor(0, 90, 200), QColor(40, 170, 60), QColor(200, 40, 160)};
     bool hold = false;
+    bool echo = false;
     int cancels = 0;
+
+    static QImage tinted(const QImage &source)
+    {
+        QImage im = source.convertToFormat(QImage::Format_ARGB32);
+        for (int y = 0; y < im.height(); ++y) {
+            auto *line = reinterpret_cast<QRgb *>(im.scanLine(y));
+            for (int x = 0; x < im.width(); ++x) {
+                const int l = qGray(line[x]);
+                line[x] = qRgb(std::min(255, l * 11 / 10), l, l * 8 / 10);
+            }
+        }
+        return im;
+    }
 
     MockSdCpp()
     {
@@ -3991,6 +4073,7 @@ struct MockSdCpp
                 const QJsonObject g = generations.value(n - 1);
                 const QSize size(g.value(QStringLiteral("width")).toInt(), g.value(QStringLiteral("height")).toInt());
                 QJsonArray images;
+                const QJsonArray refs = g.value(QStringLiteral("ref_images")).toArray();
                 for (int i = 0; i < std::max(1, g.value(QStringLiteral("batch_count")).toInt()); ++i) {
                     QImage im(size, QImage::Format_ARGB32);
                     im.fill(colors[i % colors.size()]);
@@ -3998,6 +4081,8 @@ struct MockSdCpp
                     p.setPen(QColor(20, 20, 20));
                     p.drawRect(im.rect().adjusted(0, 0, -1, -1));
                     p.end();
+                    if (echo && !refs.isEmpty())
+                        im = tinted(img::fromBase64(refs.first().toString().toLatin1()).scaled(size));
                     images.append(QJsonObject{{QStringLiteral("index"), i}, {QStringLiteral("b64_json"), QString::fromLatin1(img::encode(im).toBase64())}});
                 }
                 return MockResponse::json({{QStringLiteral("status"), QStringLiteral("completed")},
@@ -4169,6 +4254,12 @@ void TestCanvas::promptBarSelectionEdit()
     QVERIFY(strip->isVisible());
     QCOMPARE(doc->layerCount(), layers);
     QCOMPARE(doc->undoStack()->index(), steps);
+    // The strip takes some of the canvas's height; the fitted picture stays whole.
+    CanvasView *canvas = editor->canvas();
+    QVERIFY(canvas->isFitted());
+    QTRY_VERIFY(QRectF(canvas->focusProxy()->rect()).contains(canvas->mapFromDoc(QRectF(doc->bounds()))));
+    // Enter ran it from the words, but the user did not type on: the strip has the keyboard.
+    QTRY_COMPARE(QApplication::focusWidget(), strip);
     const QImage first = strip->currentImage();
     QCOMPARE(first.size(), doc->size());
     QCOMPARE(editor->canvas()->preview(), first);
@@ -4222,7 +4313,7 @@ void TestCanvas::promptBarSelectionEdit()
     generate->click();
     QTRY_VERIFY_WITH_TIMEOUT(strip->isRunning(), 10000);
     QTRY_COMPARE(generate->text(), QStringLiteral("Cancel"));
-    QVERIFY2(bar->hint().startsWith(QStringLiteral("Working on 2 results")), qPrintable(bar->hint()));
+    QTRY_VERIFY2(bar->hint().startsWith(QStringLiteral("Working on 2 results")), qPrintable(bar->hint()));
     QVERIFY(!remove->isEnabled());
     QTRY_COMPARE_WITH_TIMEOUT(f.sd.generations.size(), 3, 10000); // the job reached the server
     generate->click();
@@ -4298,25 +4389,26 @@ void TestCanvas::promptBarWithoutEdits()
     VariantStrip *strip = f.strip();
     QPushButton *generate = f.button(QStringLiteral("promptGenerate"));
     QPushButton *remove = f.button(QStringLiteral("promptRemove"));
-    QPushButton *variation = f.button(QStringLiteral("promptVariation"));
     QPushButton *selectArea = f.button(QStringLiteral("promptSelectArea"));
-    QVERIFY(generate && remove && variation && selectArea);
+    QVERIFY(generate && remove && selectArea);
     doc::Document *doc = f.studio.openImageAsDocument(detailedPhoto(QSize(800, 600)), QStringLiteral("Photo"));
     QTRY_VERIFY(bar->plan().action == PromptAction::CannotEditImage);
-    QVERIFY2(bar->hint().contains(QStringLiteral("cannot change the whole image from a description")), qPrintable(bar->hint()));
-    QVERIFY(variation->isVisible() && selectArea->isVisible());
+    QTRY_VERIFY2(bar->hint().contains(QStringLiteral("cannot change the whole picture from words")), qPrintable(bar->hint()));
+    QVERIFY(selectArea->isVisible());
+    // The main button says what it does instead, and needs no words.
+    QCOMPARE(generate->text(), QStringLiteral("Make a variation"));
+    QVERIFY(generate->isEnabled());
     f.words()->setPlainText(QStringLiteral("evening light"));
-    QTest::qWait(80);
-    QVERIFY(!generate->isEnabled());
+    QTRY_VERIFY(generate->isEnabled());
 
-    // The strength of a variation is in the ⋯ menu.
+    // How much a variation may change is in the ⋯ menu, in per cent.
     bar->showOptions();
     QWidget *popup = bar->optionsPopup();
     QVERIFY(popup->isVisible());
     auto *strength = popup->findChild<SliderField *>();
     QVERIFY(strength && strength->isVisibleTo(popup));
-    QCOMPARE(strength->value(), 0.45);
-    strength->findChild<QDoubleSpinBox *>()->setValue(0.3);
+    QCOMPARE(strength->value(), 45.0);
+    strength->findChild<QDoubleSpinBox *>()->setValue(30);
     QCOMPARE(editor->aiOptions()->variationStrength(), 0.3);
     QCOMPARE(editor->aiOptions()->regionStrength(), 0.75);
     // This model takes a negative prompt.
@@ -4328,7 +4420,8 @@ void TestCanvas::promptBarWithoutEdits()
     QVERIFY(negative && negative->isVisibleTo(popup));
     popup->hide();
 
-    variation->click();
+    // Enter in the words makes it, as the button does.
+    QTest::keyClick(f.words(), Qt::Key_Return);
     QTRY_COMPARE_WITH_TIMEOUT(strip->count(), 2, 10000);
     QJsonObject sent = f.sd.last();
     QVERIFY(sent.contains(QStringLiteral("init_image")) && !sent.contains(QStringLiteral("mask_image")));
@@ -4350,7 +4443,8 @@ void TestCanvas::promptBarWithoutEdits()
     doc->applySelection(mask, QStringLiteral("Select"));
     QTRY_VERIFY(bar->plan().action == PromptAction::InpaintArea);
     QTRY_VERIFY2(bar->hint().contains(QStringLiteral("Describe what should be there")), qPrintable(bar->hint()));
-    QVERIFY(!variation->isVisible());
+    QCOMPARE(generate->text(), QStringLiteral("Generate"));
+    QVERIFY(!selectArea->isVisible());
     f.words()->setPlainText(QStringLiteral("a red scarf"));
     QTRY_VERIFY(generate->isEnabled());
     const QImage before = doc->flattened();
@@ -4390,8 +4484,8 @@ void TestCanvas::aiMenuAndPanel()
     EditorPage *editor = f.editor();
     PromptBar *bar = f.bar();
     const QStringList names{QStringLiteral("ai-upscale-2"), QStringLiteral("ai-upscale-4"), QStringLiteral("ai-remove-background"),
-                            QStringLiteral("ai-expand"), QStringLiteral("ai-variation"), QStringLiteral("ai-detect-pose"),
-                            QStringLiteral("ai-all-options")};
+                            QStringLiteral("ai-expand"), QStringLiteral("ai-variation"), QStringLiteral("ai-all-options"),
+                            QStringLiteral("editor-undo"), QStringLiteral("editor-select-all"), QStringLiteral("editor-zoom-in")};
     auto action = [&f](const QString &name) { return f.window->findChild<QAction *>(name); };
     for (const QString &name : names) {
         QVERIFY2(action(name), qPrintable(name));
@@ -4420,12 +4514,16 @@ void TestCanvas::aiMenuAndPanel()
     };
     bar->showOptions();
     QWidget *popup = bar->optionsPopup();
-    QVERIFY(spin(popup, QStringLiteral("Variants")) && spin(editor->aiPanel(), QStringLiteral("Variants")));
-    spin(popup, QStringLiteral("Variants"))->setValue(3);
+    QVERIFY(spin(popup, QStringLiteral("Results per run")) && spin(editor->aiPanel(), QStringLiteral("Variants")));
+    spin(popup, QStringLiteral("Results per run"))->setValue(3);
     QCOMPARE(editor->aiOptions()->variants(), 3);
     QCOMPARE(spin(editor->aiPanel(), QStringLiteral("Variants"))->value(), 3);
     spin(editor->aiPanel(), QStringLiteral("Steps"))->setValue(8);
     QCOMPARE(spin(popup, QStringLiteral("Steps"))->value(), 8);
+    // Steps and the seed wait under Advanced.
+    QVERIFY(!spin(popup, QStringLiteral("Steps"))->isVisibleTo(popup) && !spin(popup, QStringLiteral("Seed"))->isVisibleTo(popup));
+    popup->findChild<QToolButton *>(QStringLiteral("promptAdvanced"))->click();
+    QVERIFY(spin(popup, QStringLiteral("Steps"))->isVisibleTo(popup) && spin(popup, QStringLiteral("Seed"))->isVisibleTo(popup));
     auto *engine = popup->findChild<ProviderCombo *>(QStringLiteral("promptEngine"));
     QVERIFY(engine && engine->currentText() == QLatin1String("Klein"));
     // Only what applies: FLUX.2 [klein] takes no negative prompt and an edit uses no strength; it
@@ -4435,7 +4533,7 @@ void TestCanvas::aiMenuAndPanel()
     QVERIFY(!popup->findChild<SliderField *>()->isVisibleTo(popup));
     QPushButton *references = nullptr;
     for (QPushButton *b : popup->findChildren<QPushButton *>()) {
-        if (b->text() == QStringLiteral("Add…"))
+        if (b->text() == QStringLiteral("Add in the AI panel…"))
             references = b;
     }
     QVERIFY(references && references->isVisibleTo(popup));
@@ -4455,6 +4553,377 @@ void TestCanvas::aiMenuAndPanel()
     QCOMPARE(sent.value(QStringLiteral("sample_params")).toObject().value(QStringLiteral("sample_steps")).toInt(), 8);
     QVERIFY(sent.value(QStringLiteral("prompt")).toString().contains(QStringLiteral("in autumn colours")));
     f.strip()->discard();
+}
+
+// Results that arrive while the user types the next words leave the keyboard in the words: what they
+// type stays there, Enter is theirs (it runs the new words), and the strip's line says to click a
+// result. From the canvas, the active tool has the first go at a key.
+void TestCanvas::promptBarKeepsTyping()
+{
+    PromptBarFixture f;
+    QVERIFY(f.setUp(true));
+    EditorPage *editor = f.editor();
+    VariantStrip *strip = f.strip();
+    AutoTextEdit *words = f.words();
+    doc::Document *doc = f.studio.openImageAsDocument(detailedPhoto(), QStringLiteral("Photo"));
+    QTRY_VERIFY(f.bar()->plan().action == PromptAction::EditImage);
+
+    f.sd.hold = true;
+    words->setPlainText(QStringLiteral("colorize it"));
+    QTest::keyClick(words, Qt::Key_Return);
+    QTRY_VERIFY_WITH_TIMEOUT(strip->isRunning(), 10000);
+    QTRY_COMPARE_WITH_TIMEOUT(f.sd.generations.size(), 1, 10000);
+    // The next words while it runs.
+    words->setFocus();
+    words->moveCursor(QTextCursor::End);
+    QTest::keyClicks(words, QStringLiteral(" and"));
+    const QString tool = editor->canvas()->tool()->id();
+    f.sd.hold = false;
+    QTRY_COMPARE_WITH_TIMEOUT(strip->count(), 2, 10000);
+    QCOMPARE(QApplication::focusWidget(), words);
+    QTest::keyClicks(words, QStringLiteral(" blue"));
+    QCOMPARE(words->toPlainText(), QStringLiteral("colorize it and blue"));
+    QCOMPARE(editor->canvas()->tool()->id(), tool); // no tool key went off
+    QVERIFY2(strip->label().contains(QStringLiteral("click one to compare")), qPrintable(strip->label()));
+    // Enter runs the new words (Generate again replaces the results), it does not keep one.
+    const int layers = doc->layerCount();
+    QTest::keyClick(words, Qt::Key_Return);
+    QTRY_COMPARE_WITH_TIMEOUT(f.sd.generations.size(), 2, 10000);
+    QCOMPARE(f.sd.last().value(QStringLiteral("prompt")).toString(), QStringLiteral("colorize it and blue"));
+    QCOMPARE(doc->layerCount(), layers);
+    QTRY_COMPARE_WITH_TIMEOUT(strip->count(), 2, 10000);
+    // Clicking a result hands the keyboard to the strip, whose line then names the keys.
+    strip->findChildren<QToolButton *>().first()->click();
+    QCOMPARE(QApplication::focusWidget(), strip);
+    QVERIFY2(strip->label().contains(QStringLiteral("←/→ to compare")), qPrintable(strip->label()));
+    strip->discard();
+
+    // On the canvas the tool comes first: the move tool's arrows nudge the layer, the selection tool
+    // leaves them to the results.
+    strip->addVariants(doc, {detailedPhoto(), detailedPhoto()}, QStringLiteral("Two"));
+    QWidget *surface = editor->canvas()->focusProxy();
+    editor->selectTool(QStringLiteral("move"));
+    surface->setFocus();
+    const QImage before = doc->layers().first()->image;
+    QTest::keyClick(surface, Qt::Key_Right);
+    QCOMPARE(strip->current(), 0);
+    QVERIFY(doc->layers().first()->image != before);
+    editor->selectTool(QStringLiteral("select-rect"));
+    QTest::keyClick(surface, Qt::Key_Right);
+    QCOMPARE(strip->current(), 1);
+    // One result: no keys to compare with.
+    strip->discard();
+    strip->addVariants(doc, {detailedPhoto()}, QStringLiteral("One"));
+    surface->setFocus();
+    QCOMPARE(strip->label(), QStringLiteral("Keep it (Enter) or discard it (Esc)"));
+    strip->discard();
+}
+
+// A run counts as running from the click: a second Enter does not start another. A run cancelled and
+// retried from the Queue brings its results to the editor; an engine removed while it works ends the
+// run with a message instead of keeping the bar busy.
+void TestCanvas::promptBarRuns()
+{
+    PromptBarFixture f;
+    QVERIFY(f.setUp(true));
+    VariantStrip *strip = f.strip();
+    PromptBar *bar = f.bar();
+    AutoTextEdit *words = f.words();
+    QPushButton *generate = f.button(QStringLiteral("promptGenerate"));
+    f.studio.openImageAsDocument(detailedPhoto(), QStringLiteral("Photo"));
+    QTRY_VERIFY(bar->plan().action == PromptAction::EditImage);
+
+    f.sd.hold = true;
+    words->setPlainText(QStringLiteral("make it night"));
+    QTest::keyClick(words, Qt::Key_Return);
+    QVERIFY(strip->isRunning()); // at once, before the jobs exist
+    QTest::keyClick(words, Qt::Key_Return);
+    QTRY_COMPARE_WITH_TIMEOUT(f.sd.generations.size(), 1, 10000);
+    QTest::qWait(150);
+    QCOMPARE(f.sd.generations.size(), 1);
+    int jobs = 0;
+    for (Job *j : f.studio.jobs()->jobs())
+        jobs += j->kind() == QLatin1String("generation") ? 1 : 0;
+    QCOMPARE(jobs, 1);
+
+    // Cancelled, then retried from the Queue: the results come to the strip.
+    QTRY_COMPARE(generate->text(), QStringLiteral("Cancel"));
+    generate->click();
+    QTRY_VERIFY_WITH_TIMEOUT(!strip->isRunning(), 10000);
+    Job *job = f.studio.jobs()->jobs().last();
+    QTRY_COMPARE(job->state(), Job::State::Cancelled);
+    QVERIFY(job->canRetry());
+    f.sd.hold = false;
+    f.studio.jobs()->retry(job);
+    QVERIFY(strip->isRunning());
+    QTRY_COMPARE_WITH_TIMEOUT(strip->count(), 2, 10000);
+    QVERIFY(!strip->isRunning());
+    strip->discard();
+
+    // The engine removed while it works.
+    f.sd.hold = true;
+    generate->click();
+    QTRY_COMPARE_WITH_TIMEOUT(f.sd.generations.size(), 3, 10000);
+    QVERIFY(strip->isRunning());
+    f.studio.providers()->removeProvider(f.provider->instanceId());
+    f.provider = nullptr;
+    QTRY_VERIFY_WITH_TIMEOUT(!strip->isRunning(), 5000);
+    QCOMPARE(f.studio.jobs()->jobs().last()->state(), Job::State::Failed);
+    QVERIFY(f.studio.jobs()->jobs().last()->errorString().contains(QStringLiteral("removed")));
+    QTRY_COMPARE(generate->text(), QStringLiteral("Set up AI…")); // no engine left
+    QVERIFY(generate->isEnabled());
+}
+
+// The engine nobody chose follows the one in use: the first one set up while the editor is open, then
+// the new default. Choosing one in ⋯ pins it.
+void TestCanvas::promptBarEngine()
+{
+    Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
+    Settings::instance().remove(QStringLiteral("editor/ai"));
+    QTemporaryDir dir;
+    Studio studio;
+    for (ai::Provider *p : studio.providers()->providers())
+        studio.providers()->removeProvider(p->instanceId());
+    auto cleanup = qScopeGuard([&] {
+        for (ai::Provider *p : studio.providers()->providers())
+            studio.providers()->removeProvider(p->instanceId());
+    });
+    studio.openProject(dir.filePath(QStringLiteral("engine.lumen")));
+    QTRY_VERIFY_WITH_TIMEOUT(studio.isProjectOpen(), 5000);
+    MainWindow window(&studio);
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    EditorPage *editor = window.editor();
+    AiOptions *options = editor->aiOptions();
+    studio.openImageAsDocument(detailedPhoto(QSize(320, 240)), QStringLiteral("Photo"));
+    PromptBar *bar = editor->promptBar();
+    QTRY_VERIFY(bar->plan().action == PromptAction::NoEngine);
+
+    const QVariantMap url{{QStringLiteral("url"), QStringLiteral("http://127.0.0.1:1")}};
+    ai::Provider *a = studio.providers()->addProvider(QStringLiteral("sdcpp"), QStringLiteral("A"), url);
+    QVERIFY(a);
+    QVERIFY(options->providerId().isEmpty()); // set up, not chosen
+    QCOMPARE(options->provider(studio.providers()), a);
+    ai::Provider *b = studio.providers()->addProvider(QStringLiteral("sdcpp"), QStringLiteral("B"), url);
+    studio.providers()->setDefaultImageProvider(b->instanceId());
+    QCOMPARE(options->provider(studio.providers()), b);
+    QCOMPARE(window.findChild<QToolButton *>(QStringLiteral("imageEngine"))->text(), QStringLiteral("B"));
+    // The pickers show the engine the runs go to.
+    bar->showOptions();
+    auto *engine = bar->optionsPopup()->findChild<ProviderCombo *>(QStringLiteral("promptEngine"));
+    QCOMPARE(engine->providerId(), b->instanceId());
+    QCOMPARE(editor->aiPanel()->findChild<ProviderCombo *>()->providerId(), b->instanceId());
+    // A choice of the user's pins it; choosing the one in use again follows the default.
+    engine->setCurrentIndex(engine->findData(a->instanceId()));
+    emit engine->activated(engine->currentIndex());
+    QCOMPARE(options->providerId(), a->instanceId());
+    QCOMPARE(editor->aiPanel()->findChild<ProviderCombo *>()->providerId(), a->instanceId());
+    engine->setCurrentIndex(engine->findData(b->instanceId()));
+    emit engine->activated(engine->currentIndex());
+    QVERIFY(options->providerId().isEmpty());
+    bar->optionsPopup()->hide();
+}
+
+// A change of the whole picture is made at the engine's size (about 1 MP); the result comes back at
+// the picture's size with its fine detail where the engine kept its shapes, so a colorized photo is as
+// sharp as it was.
+void TestCanvas::wholeImageKeepsDetail()
+{
+    PromptBarFixture f;
+    QVERIFY(f.setUp(true));
+    f.sd.echo = true;
+    // Grey stripes and pixel noise: detail that scaling to 1 MP takes away.
+    QImage photo(2400, 1600, QImage::Format_ARGB32_Premultiplied);
+    quint32 seed = 7;
+    for (int y = 0; y < photo.height(); ++y) {
+        auto *line = reinterpret_cast<QRgb *>(photo.scanLine(y));
+        for (int x = 0; x < photo.width(); ++x) {
+            seed = seed * 1664525u + 1013904223u;
+            const int l = std::clamp(90 + (x / 3 % 2) * 50 + int(seed >> 26) - 32, 0, 255);
+            line[x] = qRgb(l, l, l);
+        }
+    }
+    doc::Document *doc = f.studio.openImageAsDocument(photo, QStringLiteral("Old photo"));
+    QTRY_VERIFY(f.bar()->plan().action == PromptAction::EditImage);
+    f.words()->setPlainText(QStringLiteral("colorize this photo"));
+    QTest::keyClick(f.words(), Qt::Key_Return);
+    QTRY_COMPARE_WITH_TIMEOUT(f.strip()->count(), 2, 20000);
+    const QJsonObject sent = f.sd.last();
+    QVERIFY(sent.value(QStringLiteral("width")).toInt() < 1400); // made smaller
+    const QImage result = f.strip()->currentImage();
+    QCOMPARE(result.size(), doc->size());
+    // Its brightness is the photo's, pixel for pixel (the tint keeps it), and it has colour.
+    double error = 0;
+    for (int y = 0; y < photo.height(); y += 3) {
+        for (int x = 0; x < photo.width(); x += 3)
+            error += std::abs(qGray(result.pixel(x, y)) - qGray(photo.pixel(x, y)));
+    }
+    error /= double(photo.width() / 3) * (photo.height() / 3);
+    QVERIFY2(error < 6.0, qPrintable(QString::number(error)));
+    QVERIFY(qRed(result.pixel(1200, 800)) > qBlue(result.pixel(1200, 800)) + 10);
+    // The engine's picture scaled up alone has lost the stripes and the noise.
+    const QImage plain = img::scaled(MockSdCpp::tinted(img::scaled(photo, QSize(sent.value(QStringLiteral("width")).toInt(),
+                                                                                sent.value(QStringLiteral("height")).toInt()))),
+                                     photo.size());
+    double plainError = 0;
+    for (int y = 0; y < photo.height(); y += 3) {
+        for (int x = 0; x < photo.width(); x += 3)
+            plainError += std::abs(qGray(plain.pixel(x, y)) - qGray(photo.pixel(x, y)));
+    }
+    plainError /= double(photo.width() / 3) * (photo.height() / 3);
+    QVERIFY2(plainError > 2 * error, qPrintable(QStringLiteral("%1 %2").arg(plainError).arg(error)));
+    f.strip()->discard();
+}
+
+// The editor's own commands are in the menus as well (Edit: Undo, Redo; Select; View: the zoom), as
+// the same actions as their keys.
+void TestCanvas::editorMenus()
+{
+    Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
+    Studio studio;
+    MainWindow window(&studio);
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    auto menu = [&window](const QString &title) -> QMenu * {
+        for (QAction *a : window.menuBar()->actions()) {
+            if (a->text() == title)
+                return a->menu();
+        }
+        return nullptr;
+    };
+    auto texts = [](QMenu *m) {
+        QStringList list;
+        for (QAction *a : m->actions()) {
+            if (!a->isSeparator())
+                list << a->text();
+        }
+        return list;
+    };
+    QMenu *edit = menu(QStringLiteral("&Edit"));
+    QMenu *select = menu(QStringLiteral("&Select"));
+    QMenu *view = menu(QStringLiteral("&View"));
+    QVERIFY(edit && select && view);
+    QCOMPARE(texts(edit).mid(0, 2), (QStringList{QStringLiteral("Undo"), QStringLiteral("Redo")}));
+    QCOMPARE(texts(select), (QStringList{QStringLiteral("Select all"), QStringLiteral("Deselect"), QStringLiteral("Invert selection"),
+                                         QStringLiteral("Delete selected pixels")}));
+    QVERIFY(texts(view).contains(QStringLiteral("Zoom in")) && texts(view).contains(QStringLiteral("Fit to window")));
+    // The editor's own action: its key shows in the menu.
+    QAction *undo = window.findChild<QAction *>(QStringLiteral("editor-undo"));
+    QCOMPARE(undo, window.editor()->editorAction(QStringLiteral("undo")));
+    QCOMPARE(undo->shortcut(), QKeySequence(QStringLiteral("Ctrl+Z")));
+    QVERIFY(!undo->isEnabled()); // no document
+    doc::Document *doc = studio.newDocument(QSize(64, 48), QStringLiteral("Menus"));
+    QVERIFY(undo->isEnabled());
+    window.findChild<QAction *>(QStringLiteral("editor-select-all"))->trigger();
+    QVERIFY(doc->hasSelection());
+    window.findChild<QAction *>(QStringLiteral("editor-deselect"))->trigger();
+    QVERIFY(!doc->hasSelection());
+    undo->trigger();
+    QVERIFY(doc->hasSelection());
+    // Documents open with the rectangle selection, the start of a change with words.
+    QCOMPARE(window.editor()->canvas()->tool()->id(), QStringLiteral("select-rect"));
+    // File → Save to project says where it saves.
+    bool save = false;
+    for (QAction *a : menu(QStringLiteral("&File"))->actions())
+        save = save || (a->text() == QLatin1String("Save to project") && a->toolTip().contains(QStringLiteral("Export image")));
+    QVERIFY(save);
+}
+
+// New from prompt: without an engine the way to one is in the dialog; an engine that makes one image
+// per request gets one job per image.
+void TestCanvas::newFromPromptEngines()
+{
+    Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
+    QTemporaryDir dir;
+    Studio studio;
+    for (ai::Provider *p : studio.providers()->providers())
+        studio.providers()->removeProvider(p->instanceId());
+    auto cleanup = qScopeGuard([&] {
+        for (ai::Provider *p : studio.providers()->providers())
+            studio.providers()->removeProvider(p->instanceId());
+        Settings::instance().remove(QStringLiteral("newFromPrompt"));
+    });
+    studio.openProject(dir.filePath(QStringLiteral("engines.lumen")));
+    QTRY_VERIFY_WITH_TIMEOUT(studio.isProjectOpen(), 5000);
+    {
+        NewFromPromptDialog dialog(&studio);
+        dialog.show();
+        auto *setUp = dialog.findChild<QPushButton *>(QStringLiteral("newFromPromptSetUpAi"));
+        QVERIFY(setUp && setUp->isVisible());
+        QCOMPARE(dialog.findChild<ProviderCombo *>()->currentText(), QStringLiteral("No image engine"));
+        bool asked = false;
+        connect(&dialog, &NewFromPromptDialog::setUpAiRequested, &dialog, [&asked] { asked = true; });
+        setUp->click();
+        QVERIFY(asked && !dialog.isVisible());
+    }
+    // Stability AI makes one image per request.
+    ai::Provider *stability = studio.providers()->addProvider(QStringLiteral("stability"), QStringLiteral("Stability"),
+                                                              {{QStringLiteral("url"), QStringLiteral("http://127.0.0.1:1/v2beta")}});
+    QVERIFY(stability);
+    QVERIFY(!qobject_cast<ai::ImageProvider *>(stability)->capabilities().batch);
+    NewFromPromptDialog dialog(&studio);
+    QVERIFY(!dialog.findChild<QPushButton *>(QStringLiteral("newFromPromptSetUpAi"))->isVisibleTo(&dialog));
+    QList<Job *> jobs;
+    int results = 0;
+    connect(&dialog, &NewFromPromptDialog::generationStarted, &dialog,
+            [&](doc::Document *, const QList<Job *> &started, const QString &, int count) {
+                jobs = started;
+                results = count;
+            });
+    dialog.findChild<AutoTextEdit *>()->setPlainText(QStringLiteral("a red kite"));
+    for (QSpinBox *s : dialog.findChildren<QSpinBox *>()) {
+        if (s->accessibleName() == QLatin1String("Images to make"))
+            s->setValue(3);
+    }
+    QVERIFY(dialog.create());
+    QCOMPARE(jobs.size(), 3);
+    QCOMPARE(results, 3);
+    for (Job *j : jobs)
+        j->cancel();
+}
+
+// The start screen shows the results that were kept, not every one a run made; documents carry a
+// "Layers" badge. Browse project images tells how an image was made in plain lines.
+void TestCanvas::recentAndDetails()
+{
+    Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
+    QTemporaryDir dir;
+    Studio studio;
+    studio.openProject(dir.filePath(QStringLiteral("recent.lumen")));
+    QTRY_VERIFY_WITH_TIMEOUT(studio.isProjectOpen(), 5000);
+    const QJsonObject made{{QStringLiteral("user_prompt"), QStringLiteral("a red kite")}, {QStringLiteral("provider"), QStringLiteral("Klein")},
+                           {QStringLiteral("model"), QStringLiteral("flux-2-klein-4b.safetensors")}, {QStringLiteral("mode"), QStringLiteral("edit")},
+                           {QStringLiteral("width"), 1024}, {QStringLiteral("height"), 768}, {QStringLiteral("seed"), 42.0},
+                           {QStringLiteral("steps"), 4}, {QStringLiteral("negative_prompt"), QString()}};
+    auto kept = studio.project()->addAsset(content(), doc::AssetKind::Edit, QStringLiteral("Kept"), made);
+    auto dropped = studio.project()->addAsset(content(), doc::AssetKind::Edit, QStringLiteral("Dropped"), made);
+    QTRY_VERIFY_WITH_TIMEOUT(kept.isFinished() && dropped.isFinished(), 5000);
+    // Keep marks the result it adds.
+    doc::Document *doc = studio.newDocument(content().size(), QStringLiteral("Kite"));
+    MainWindow window(&studio);
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    window.editor()->variantStrip()->addVariants(doc, {content()}, QStringLiteral("a red kite"),
+                                                 QJsonObject{{QStringLiteral("asset"), kept.result().id}});
+    window.editor()->variantStrip()->keep();
+    QTRY_VERIFY(studio.project()->asset(kept.result().id)->metadata.value(QStringLiteral("kept")).toBool());
+    auto saved = studio.project()->saveDocument(doc);
+    QTRY_VERIFY_WITH_TIMEOUT(saved.isFinished(), 5000);
+    studio.closeDocument(doc);
+    StartScreen *start = window.editor()->startScreen();
+    QTRY_VERIFY(window.editor()->showsStartScreen());
+    QStringList names;
+    QTRY_VERIFY(!start->recentTiles().isEmpty());
+    for (QToolButton *t : start->recentTiles())
+        names << t->accessibleName();
+    QVERIFY2(names.contains(QStringLiteral("Kept")) && !names.contains(QStringLiteral("Dropped")), qPrintable(names.join(u',')));
+    QVERIFY(names.contains(QStringLiteral("Kite")));
+
+    const QString details = LibraryPage::detailsText(*studio.project()->asset(kept.result().id));
+    QVERIFY2(details.contains(QStringLiteral("Made with: Klein (flux-2-klein-4b.safetensors)")), qPrintable(details));
+    QVERIFY(details.contains(QStringLiteral("How: Changed from a description")));
+    QVERIFY(details.contains(QStringLiteral("Seed: 42")) && details.contains(QStringLiteral("Steps: 4")));
+    QVERIFY(!details.contains(u'{') && !details.contains(QStringLiteral("user_prompt")));
 }
 
 QTEST_MAIN(TestCanvas)

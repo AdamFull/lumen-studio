@@ -145,6 +145,24 @@ QImage compositeRegionResult(const QImage &generated, const RegionInput &region,
 
 // ---- service ------------------------------------------------------------------------------------
 
+namespace {
+
+// A provider's operations are its children: when it is removed mid-run they go without finishing,
+// and the job would wait for ever (the prompt bar would stay on "Working on it…").
+void endWithOperation(Job *job, Operation *op)
+{
+    if (!op)
+        return;
+    auto done = std::make_shared<bool>(op->isFinished());
+    QObject::connect(op, &Operation::finished, job, [done] { *done = true; });
+    QObject::connect(op, &QObject::destroyed, job, [job, done] {
+        if (!*done && !job->isFinished())
+            job->fail(GenerationService::tr("The image engine was removed while it was working."));
+    });
+}
+
+} // namespace
+
 GenerationService::GenerationService(ProviderRegistry *registry, JobQueue *queue, QObject *parent)
     : QObject(parent)
     , m_registry(registry)
@@ -224,6 +242,23 @@ Job *GenerationService::submit(const GenerationSpec &specIn)
     return job;
 }
 
+QList<Job *> GenerationService::submitVariants(const GenerationSpec &spec)
+{
+    ImageProvider *provider = spec.providerId.isEmpty() ? m_registry->defaultImageProvider() : m_registry->imageProvider(spec.providerId);
+    const int variants = std::max(1, spec.request.batchCount);
+    if (!provider || variants <= 1 || provider->capabilitiesFor(spec.request).batch)
+        return {submit(spec)};
+    QList<Job *> jobs;
+    for (int i = 0; i < variants; ++i) {
+        GenerationSpec one = spec;
+        one.request.batchCount = 1;
+        if (spec.request.seed >= 0)
+            one.request.seed = spec.request.seed + i;
+        jobs << submit(one);
+    }
+    return jobs;
+}
+
 QString GenerationService::groupFor(const QString &providerId) const
 {
     ImageProvider *provider = providerId.isEmpty() ? m_registry->defaultImageProvider() : m_registry->imageProvider(providerId);
@@ -264,6 +299,7 @@ void GenerationService::execute(Job *job, const GenerationSpec &specIn, OutputHa
             else
                 job->reportCancelled();
         });
+        endWithOperation(job, op);
         QObject::connect(op, &Operation::progress, job, [job](double f, const QString &s) { job->setProgress(f, s); });
         QObject::connect(op, &Operation::preview, job, [job](const QImage &img) { job->setPreview(img); });
         GenerationSpec used = spec;
@@ -281,7 +317,7 @@ void GenerationService::execute(Job *job, const GenerationSpec &specIn, OutputHa
             }
             const ImageResult result = op->result();
             job->metadata().insert(QStringLiteral("request"), request.describe());
-            if (!spec.region) {
+            if (!spec.region && spec.detailSource.isNull()) {
                 GenerationOutput out;
                 for (const GeneratedImage &g : result.images) {
                     out.images << g.image;
@@ -290,6 +326,24 @@ void GenerationService::execute(Job *job, const GenerationSpec &specIn, OutputHa
                 out.text = result.text;
                 out.info = result.info;
                 onOutput(job, spec, out);
+                return;
+            }
+            if (!spec.region) {
+                // A change of the whole picture made at the engine's size: back at the picture's size.
+                job->setProgress(-1.0, tr("Restoring detail..."));
+                const QImage source = spec.detailSource;
+                async::run([result, source] {
+                    GenerationOutput out;
+                    out.text = result.text;
+                    out.info = result.info;
+                    for (const GeneratedImage &g : result.images) {
+                        out.rawImages << g.image;
+                        out.images << img::restoreDetail(g.image, source);
+                    }
+                    return out;
+                }).then(job, [job, spec, onOutput](GenerationOutput out) {
+                    onOutput(job, spec, out);
+                }).onFailed(job, [job](const std::exception &e) { job->fail(describeException(e)); });
                 return;
             }
             job->setProgress(-1.0, tr("Blending result..."));
@@ -456,6 +510,7 @@ Job *GenerationService::submitUtilityImpl(const QString &providerId, Utility uti
                 else
                     job->reportCancelled();
             });
+            endWithOperation(job, op);
             QObject::connect(op, &Operation::progress, job, [job](double f, const QString &s) { job->setProgress(f, s); });
             QObject::connect(op, &Operation::finished, job, [self, job, op, guard, utility, title, saveAsset, sourceAssetId] {
                 if (op->state() == Operation::State::Cancelled) {
