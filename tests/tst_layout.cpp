@@ -1156,7 +1156,7 @@ void TestLayout::fileQuestions()
         studio.closeDocument(saved);
     }
     MainWindow window(&studio);
-    window.resize(kWindowSizes.first());
+    window.resize(windowSizes().first());
     window.show();
     QVERIFY(QTest::qWaitForWindowExposed(&window));
     QTRY_VERIFY(window.editor()->showsStartScreen());
