@@ -1,0 +1,47 @@
+{
+    "format": "lumen-filter",
+    "version": 1,
+    "name": "Black and white",
+    "description": "Removes the colours and keeps the brightness.",
+    "nodes": [
+        {
+            "id": "n1",
+            "type": "input",
+            "x": 0,
+            "y": 0
+        },
+        {
+            "id": "n2",
+            "type": "desaturate",
+            "x": 260,
+            "y": 0
+        },
+        {
+            "id": "n3",
+            "type": "output",
+            "x": 520,
+            "y": 0
+        }
+    ],
+    "links": [
+        {
+            "from": "n1",
+            "output": "image",
+            "to": "n2",
+            "input": "image"
+        },
+        {
+            "from": "n2",
+            "output": "image",
+            "to": "n3",
+            "input": "image"
+        }
+    ],
+    "published": [
+        {
+            "node": "n2",
+            "param": "method",
+            "label": "Brightness from"
+        }
+    ]
+}

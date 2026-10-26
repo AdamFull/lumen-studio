@@ -9,6 +9,7 @@
 #include <QMutex>
 #include <QStringList>
 
+#include <functional>
 #include <memory>
 
 namespace lumen::filters {
@@ -34,6 +35,10 @@ struct EvalOptions
     // node always runs at full resolution, on full-resolution inputs, and a preview at any scale
     // takes its result scaled down: a Run while previewing gives the result that applying uses.
     bool runExpensive = true;
+    // Called on a worker thread before each node that runs, with the number of nodes finished so
+    // far, the number that will run and the node's name, and once more when the evaluation ends
+    // well (done == total, no name). Nodes taken from the cache are not counted. For progress bars.
+    std::function<void(int done, int total, const QString &node)> progress;
 };
 
 struct EvalResult

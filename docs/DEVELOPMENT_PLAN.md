@@ -2354,7 +2354,101 @@ Survey of the code, the app log and user testing (October 2026):
     (next step); applying a result as one undo step onto a new layer; the AI nodes. The cache keeps
     one result per node and lane with no memory limit, the nodes of one evaluation run one after
     another, and each node uses one thread.
-- [ ] Node editor window, saved filters, the Filters panel.
+- [x] Node editor window, saved filters, the Filters panel.
+  * Filters folder: `paths::defaultFilters()`, `Documents\Lumen\Filters` next to the models folder;
+    with relocated data (`LUMEN_DATA_DIR`, the portable ZIP) or in Qt's test mode
+    `<data root>/filters`, as for the models. Not a setting yet (no *Move…*); the Filters panel
+    has *Open filters folder*.
+  * `ui/filters/FilterCatalog`: the built-in filters (`resources/filters/*.lumenfilter` as
+    `:/filters/builtin`, read-only; their names, descriptions and slider labels go through the
+    translation context `lumen::ui::BuiltInFilters`) and the saved ones (the folder is watched, so a
+    file put there by hand appears; one that does not load is listed with the reason). Create,
+    save (a built-in path saves a new file), duplicate (`<name> copy`, the way to edit a built-in
+    filter) and delete. Thumbnails: each classic filter on a drawn sample picture (sky, sun, hills, a
+    house) at 64 × 48, in the background; filters with AI steps and broken ones show an icon. One
+    catalog per Studio (`FilterCatalog::of`), so a save in the node editor refreshes every panel
+    (`changed`, `saved`).
+  * Built-in filters: Black and white, Warm tones, Cool tones, Sharpen, Soft focus, Film grain, Old
+    photo, each with published settings (Strength, Amount, Edge width, Softness, Grain, Brown tint
+    as sliders; *Brightness from* and *Grain* as lists). No vignette: there is no gradient node yet.
+    The AI ones come with the AI nodes.
+  * `EvalOptions::progress`: called on the worker thread before each node that runs (done, total,
+    name) and at the end; the panel shows "Blur (step 2 of 3)".
+  * `ui/filters/FilterRunner` (no widgets), the preview and *Apply* of the panel:
+    * Preview: the whole document at reduced resolution (the canvas's size, 512–2048 px on the
+      longest side) with the filter on the active layer, put together as *Apply* would (on a new
+      layer, or into the layer); the layers are scaled once and kept while their pixels stay the
+      same. `CanvasView::setPreview` shows it instead of the document's tiles (the selection's
+      outline stays, its tint goes). A change previews after 40 ms; a stale preview stops at its
+      next node. A graph with AI steps previews with `runExpensive` off, so nothing runs until *Run
+      AI steps* (`run()`: progress, *Cancel*), which runs them at full resolution; sliders after them
+      then preview live. A change while a step runs previews when it ends, instead of cutting it short.
+    * Apply: the filter at full resolution on the active layer, with the selection as the graph's
+      *Selection* input; the selection times the graph's own mask (the Output's *Where to apply*)
+      says where the result goes. On a worker, the result is masked into a new layer above
+      (transparent elsewhere, named after the filter, `meta.filter`) or mixed into the layer within
+      the mask's bounds (an alpha-locked layer keeps its alpha; a locked layer is refused). A result
+      of another size is stretched to the layer. One undo step ("Filter: …", `addLayer` or
+      `applyPixels`). The preview and *Apply* share one `Evaluator`, so *Apply* after *Run* reuses
+      the AI step. After *Apply* the preview stays off until a setting or the filter changes (it
+      would filter the new layer again).
+  * `ui/filters/FiltersPanel`, the *Filters* tab of the editor's right panel (`EditorPage` adds it
+    after History; its four tabs shorten their names instead of scrolling): the list (*Built in*,
+    *Your filters*, thumbnails, descriptions as tooltips); *New filter…*, *Edit…* (*Edit a copy…*
+    for a built-in one), *Duplicate*, *Delete* (saved ones, asked first), *Open filters folder*;
+    the chosen filter's published settings (`ParamField` with the published label and range);
+    *Preview on the canvas* (`filters/preview`), *Result on* a new layer or this layer
+    (`filters/target`), a line saying whether the selection or the whole layer changes, *Run AI
+    steps* when needed, *Apply*, progress with *Cancel*, the outcome or the reason in plain words.
+    The canvas shows the preview only while the tab is visible.
+  * Node editor (`ui/filters/NodeEditorWindow`, `NodeScene`, `GraphModel`, `ParamWidgets`), a
+    window of its own, owned by the main window:
+    * `GraphModel`: the graph and a `QUndoStack` of whole-graph steps (`change(text, edit,
+      mergeKey)`); slider drags and typing merge, a slider dragged back leaves no step.
+    * Items: the title in the category's colour, ports in their type's colour (hollow: an optional
+      input), the settings in short ("Radius: 8 px", five at most), a red or amber outline and
+      tooltip for a problem; links as curves in their type's colour, selectable. An item whose id
+      comes back with another type (another graph in the window) is made again.
+    * Dragging from port to port connects; while dragging, the port under the mouse rings green or
+      red. A refusal flashes the link red and the status bar says why (the type, with "Put a “Mask
+      from image” node between them."; a loop; two inputs or two outputs). Dragging a connected input
+      picks its link up; dropped on nothing, it is removed.
+    * *Add node* (Shift+A, or a right-click on an empty place): a popup list by category, searched
+      in names and descriptions; Enter adds the first match where the menu opened. Delete (key or
+      button), moving (one step), rubber-band selection, wheel zoom, middle button or Space to pan,
+      *Show all* (Home, at most 100 %).
+    * Side panel: the node's settings (`SliderField`, a list, `ColorSwatch`, `CurveEditor` with the
+      points as text; one driven by a connected input is disabled), each with a button that
+      publishes it (label and range asked; `validate()` checks the range); the preview of the
+      selected node's output (or the filter's result) on the active layer of the editor's document
+      (the sample picture without one) at 480 px, with errors in plain words ("“Invert” has nothing
+      connected to its “Image” input."), values as text, and *Run AI steps* / *Stop AI steps*; the
+      problems of `validate()` (a click selects the node); the filter's name, description and
+      published settings (click to select the node, ✕ to remove).
+    * *Save* (Ctrl+S; a filter without a file asks for a name), *Save as…*, undo and redo (Ctrl+Z,
+      Ctrl+Shift+Z). Closing with changes asks, also when the main window closes. A filter opens in
+      one window at most (`openFilter` raises it); the panel opens built-in filters as a copy.
+  * Tests: `tst_filters_ui` (new, 16 functions): the folder next to the models; every built-in
+    file parses, validates without a warning, publishes a setting and changes a picture, with
+    thumbnails; the catalog (create, copies, refusals, a file added by hand, a broken one,
+    delete); compositing through the selection; the node editor's model (add, connect, a wrong type
+    and a loop refused with their reasons, delete and undo, merged setting steps, the side panel
+    after undo, another graph in the same window); mouse drags (two inputs, a mask, an image into a
+    mask input refused, a link picked up and dropped, moving a node, the Delete key); publish and
+    undo, a range beyond the setting's, Save as, Save, reopen, the close question; the add-node
+    search; the node preview (unconnected, connected, the result, no output); AI steps on request
+    and Stop; a colour setting through Save; the window it belongs to closing; the curve editor
+    by mouse and text; the Filters panel (the list, published sliders and lists, a built-in filter
+    edited as a copy; the live preview through the selection, a slider, a hidden tab; Apply onto a
+    new layer: one undo step, pixels outside the selection unchanged, the original layer untouched;
+    onto the layer; a locked layer; Cancel of a waiting AI step with progress, nothing changed; an AI
+    filter previews after Run and Apply reuses it; New, Edit, Duplicate, Delete, the panel after a
+    save in the editor); the tab in the editor page. `tst_layout filterTools`: the node editor at
+    1280 × 720 and the panel at 300 × 600, no findings (the audit's 7 findings stay as they were).
+  * Not yet: the filters folder cannot be moved; slider values are not remembered between sessions;
+    the preview's resolution does not follow the zoom; the node editor has no copy and paste and
+    does not link a new node to the selected one; a result of another size is stretched to the layer
+    (a crop does not crop the document); the German translation of the new texts.
 - [ ] AI nodes.
 - [ ] Fix the layout checklist (§17.9); screenshots after; then the audit runs strict in CI.
 - [ ] User guide and README rewritten around the editor; plugins documented separately.

@@ -1,0 +1,74 @@
+{
+    "format": "lumen-filter",
+    "version": 1,
+    "name": "Cool tones",
+    "description": "Makes the colours cooler, like early morning light.",
+    "nodes": [
+        {
+            "id": "n1",
+            "type": "input",
+            "x": 0,
+            "y": 0
+        },
+        {
+            "id": "n2",
+            "type": "color-balance",
+            "x": 260,
+            "y": 160,
+            "params": {
+                "cyanRed": -25,
+                "yellowBlue": 40
+            }
+        },
+        {
+            "id": "n3",
+            "type": "blend",
+            "x": 520,
+            "y": 0,
+            "params": {
+                "opacity": 60
+            }
+        },
+        {
+            "id": "n4",
+            "type": "output",
+            "x": 780,
+            "y": 0
+        }
+    ],
+    "links": [
+        {
+            "from": "n1",
+            "output": "image",
+            "to": "n2",
+            "input": "image"
+        },
+        {
+            "from": "n1",
+            "output": "image",
+            "to": "n3",
+            "input": "base"
+        },
+        {
+            "from": "n2",
+            "output": "image",
+            "to": "n3",
+            "input": "top"
+        },
+        {
+            "from": "n3",
+            "output": "image",
+            "to": "n4",
+            "input": "image"
+        }
+    ],
+    "published": [
+        {
+            "node": "n3",
+            "param": "opacity",
+            "label": "Strength",
+            "min": 0,
+            "max": 100
+        }
+    ]
+}

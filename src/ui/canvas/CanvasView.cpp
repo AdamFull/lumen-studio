@@ -347,6 +347,14 @@ void CanvasView::scheduleContour()
     });
 }
 
+void CanvasView::setPreview(const QImage &image)
+{
+    if (image.isNull() && m_preview.isNull())
+        return;
+    m_preview = image;
+    updateAll();
+}
+
 // ---- rendering --------------------------------------------------------------------------------------
 
 void CanvasView::drawCheckerboard(QPainter &p, const QRectF &rect)
@@ -399,16 +407,20 @@ void CanvasView::render(QPainter &p, const QRect &widgetRect)
         const QPointF br = mapFromDoc(QPointF(docRect.right() + 1, docRect.bottom() + 1));
         return QRectF(QPointF(std::round(tl.x()), std::round(tl.y())), QPointF(std::round(br.x()), std::round(br.y())));
     };
-    for (int r = r0; r <= r1; ++r) {
-        for (int c = c0; c <= c1; ++c) {
-            const QImage &tile = tiles.tile(c, r, level);
-            if (!tile.isNull())
-                p.drawImage(snapped(tiles.tileRect(c, r)), tile);
+    if (!m_preview.isNull()) {
+        p.drawImage(docWidget, m_preview);
+    } else {
+        for (int r = r0; r <= r1; ++r) {
+            for (int c = c0; c <= c1; ++c) {
+                const QImage &tile = tiles.tile(c, r, level);
+                if (!tile.isNull())
+                    p.drawImage(snapped(tiles.tileRect(c, r)), tile);
+            }
         }
     }
 
     // Selection tint.
-    if (m_doc->hasSelection() && m_state->showSelectionOverlay()) {
+    if (m_doc->hasSelection() && m_state->showSelectionOverlay() && m_preview.isNull()) {
         const QImage &sel = m_doc->selection();
         const QColor tint = pal.accent;
         m_overlay.update(visibleDoc, level, [&sel, tint](QImage &target, const QRect &rect) {

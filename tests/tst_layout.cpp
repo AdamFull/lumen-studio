@@ -12,11 +12,16 @@
 #include "ui/MainWindow.h"
 #include "ui/Studio.h"
 #include "ui/Theme.h"
+#include "ui/canvas/CanvasView.h"
+#include "ui/canvas/EditorState.h"
 #include "ui/dialogs/LocalServersPage.h"
 #include "ui/dialogs/LocalSetupDialog.h"
 #include "ui/dialogs/ModelHubDialog.h"
 #include "ui/dialogs/PoseEditDialog.h"
 #include "ui/dialogs/SettingsDialog.h"
+#include "ui/filters/FilterCatalog.h"
+#include "ui/filters/FiltersPanel.h"
+#include "ui/filters/NodeEditorWindow.h"
 
 #include <QAbstractButton>
 #include <QAbstractScrollArea>
@@ -39,6 +44,7 @@
 #include <QTabWidget>
 #include <QTextDocumentFragment>
 #include <QToolButton>
+#include <QVBoxLayout>
 #include <QtTest>
 
 using namespace lumen;
@@ -321,6 +327,7 @@ private slots:
     void mainWindowFitsSmallScreen();
     void settingsDialog();
     void dialogs();
+    void filterTools();
 
 private:
     Auditor m_auditor;
@@ -495,6 +502,49 @@ void TestLayout::dialogs()
         pose::Pose pose;
         PoseEditDialog d(&studio, pose, std::nullopt, QString());
         m_auditor.auditDialog(&d, QStringLiteral("Pose edit dialog"));
+    }
+}
+
+// The node editor (a window of its own) at the smallest window size, with a node selected, and the
+// Filters panel at the editor's side-panel width with a filter's sliders shown (M17 §17.6).
+void TestLayout::filterTools()
+{
+    Studio studio;
+    studio.openImageAsDocument(sampleImage(), QStringLiteral("Sample"));
+    FilterCatalog *catalog = FilterCatalog::of(&studio);
+    const QString softFocus = QStringLiteral(":/filters/builtin/soft-focus.lumenfilter");
+    {
+        NodeEditorWindow editor(catalog);
+        editor.setAttribute(Qt::WA_DeleteOnClose, false);
+        editor.setGraph(*catalog->load(softFocus));
+        editor.resize(kWindowSizes.first());
+        editor.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&editor));
+        editor.frameAll();
+        editor.selectNode(QStringLiteral("n3")); // the blend: a list and a slider
+        QTRY_VERIFY(!editor.isPreviewPending());
+        Auditor::settle();
+        const QString surface = QStringLiteral("Node editor 1280x720");
+        m_auditor.audit(&editor, surface);
+        m_auditor.shoot(&editor, surface);
+    }
+    {
+        // The side panel's minimum width, about its height in a 1280×720 window.
+        EditorState state;
+        CanvasView canvas(&state);
+        QWidget host;
+        auto *layout = new QVBoxLayout(&host);
+        layout->setContentsMargins(0, 0, 0, 0);
+        auto *panel = new FiltersPanel(&studio, &canvas, &host, catalog);
+        layout->addWidget(panel);
+        panel->selectFilter(softFocus);
+        host.resize(300, 600);
+        host.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&host));
+        Auditor::settle();
+        const QString surface = QStringLiteral("Filters panel 300x600");
+        m_auditor.audit(&host, surface);
+        m_auditor.shoot(&host, surface);
     }
 }
 

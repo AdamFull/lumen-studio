@@ -62,6 +62,12 @@ public:
 
     void setCursorOverride(const QCursor &cursor);
 
+    // Shows `image` instead of the document's pixels, stretched over the document (a filter's
+    // preview at reduced resolution, M17 §17.6); the selection's outline stays, its tint goes so
+    // the colours read right. A null image shows the document again.
+    void setPreview(const QImage &image);
+    const QImage &preview() const { return m_preview; }
+
     // Renders the surface into a widget painter (called by the drawing surface).
     void render(QPainter &p, const QRect &widgetRect);
 
@@ -111,6 +117,7 @@ private:
     int m_antsOffset = 0;
     quint64 m_contourGeneration = 0;
     QPixmap m_checker;
+    QImage m_preview;
 };
 
 } // namespace lumen::ui

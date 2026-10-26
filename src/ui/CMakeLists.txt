@@ -36,6 +36,13 @@ add_library(lumen_ui STATIC
     pose/PoseCanvas.h pose/PoseCanvas.cpp
     pages/LibraryPage.h pages/LibraryPage.cpp
     pages/GeneratePage.h pages/GeneratePage.cpp
+    filters/GraphModel.h filters/GraphModel.cpp
+    filters/ParamWidgets.h filters/ParamWidgets.cpp
+    filters/FilterCatalog.h filters/FilterCatalog.cpp
+    filters/FilterRunner.h filters/FilterRunner.cpp
+    filters/NodeScene.h filters/NodeScene.cpp
+    filters/NodeEditorWindow.h filters/NodeEditorWindow.cpp
+    filters/FiltersPanel.h filters/FiltersPanel.cpp
 )
 target_include_directories(lumen_ui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
 target_link_libraries(lumen_ui PUBLIC lumen_ai lumen_runtime lumen_live2d lumen_doc lumen_pose lumen_filters lumen_core
@@ -51,3 +58,12 @@ foreach(source IN LISTS LUMEN_UI_SOURCES)
         message(FATAL_ERROR "src/ui/${source} includes a plugin header (${plugin_includes}); the core must not depend on plugins.")
     endif()
 endforeach()
+
+# Built-in filters (M17 §17.6), read-only, as :/filters/builtin/*.lumenfilter. After the check
+# above, which reads the sources and not the generated resource file.
+file(GLOB LUMEN_BUILTIN_FILTERS CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/resources/filters/*.lumenfilter")
+qt_add_resources(lumen_ui builtin_filters
+    PREFIX "/filters/builtin"
+    BASE "${PROJECT_SOURCE_DIR}/resources/filters"
+    FILES ${LUMEN_BUILTIN_FILTERS}
+)

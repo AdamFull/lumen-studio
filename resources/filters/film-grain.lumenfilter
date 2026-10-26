@@ -1,0 +1,58 @@
+{
+    "format": "lumen-filter",
+    "version": 1,
+    "name": "Film grain",
+    "description": "Adds the grain of photographic film.",
+    "nodes": [
+        {
+            "id": "n1",
+            "type": "input",
+            "x": 0,
+            "y": 0
+        },
+        {
+            "id": "n2",
+            "type": "noise",
+            "x": 260,
+            "y": 0,
+            "params": {
+                "amount": 8,
+                "type": "mono"
+            }
+        },
+        {
+            "id": "n3",
+            "type": "output",
+            "x": 520,
+            "y": 0
+        }
+    ],
+    "links": [
+        {
+            "from": "n1",
+            "output": "image",
+            "to": "n2",
+            "input": "image"
+        },
+        {
+            "from": "n2",
+            "output": "image",
+            "to": "n3",
+            "input": "image"
+        }
+    ],
+    "published": [
+        {
+            "node": "n2",
+            "param": "amount",
+            "label": "Amount",
+            "min": 0,
+            "max": 40
+        },
+        {
+            "node": "n2",
+            "param": "type",
+            "label": "Grain"
+        }
+    ]
+}

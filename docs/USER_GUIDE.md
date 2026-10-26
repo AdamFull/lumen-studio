@@ -463,6 +463,51 @@ place uses moves to the new action (the page tells you which one lost it); *Rese
 | Fit / 100 % / zoom in / zoom out | `Ctrl+0` / `Ctrl+1` / `Ctrl+=` / `Ctrl+-` |
 | Swap colours | `X` |
 
+### Filters
+
+The **Filters** tab on the right lists the built-in filters (*Black and white*, *Warm tones*,
+*Cool tones*, *Sharpen*, *Soft focus*, *Film grain*, *Old photo*) and, under *Your filters*, the ones
+you made, each with a small preview.
+
+* Click a filter to see its settings. With **Preview on the canvas** on, the picture shows the
+  filter while you move its sliders, at a lower resolution so it stays quick. Nothing changes yet.
+* **Apply** runs the filter on the active layer at full resolution. With a selection only the
+  selected area changes, without one the whole layer. **Result on**: *A new layer* (the default:
+  the result goes on a new layer above, named after the filter, and the original stays underneath)
+  or *This layer*. One **Undo** takes it back. While it works, a bar shows the step that runs, and
+  **Cancel** stops it without changing anything.
+* Filters with AI steps show their preview only after **Run AI steps**, because those take a while;
+  **Apply** then uses what the run made.
+
+### Building your own filters
+
+**New filter…** opens the node editor, a window of its own. A filter is a chain of nodes from
+**Input** (the layer, with the selection as a mask) to **Output** (the result; connect a mask to its
+*Where to apply* to limit where it goes).
+
+* **Add node** (`Shift+A`, or right-click on an empty place) lists the nodes by kind; type to
+  search and press `Enter` to add the first one found.
+* Drag from a node's output (on its right) to another node's input (on its left) to connect them.
+  The dots are coloured by what they carry (orange: a picture, grey: a mask). A link that does not
+  fit turns red and the bar at the bottom says why, for example that a *Mask from image* node
+  belongs between a picture and a mask input. Drag a link off an input to remove it.
+* Select a node to change its settings on the right: sliders, lists, colours, and a curve for
+  *Curves* (drag a point, click to add one, double-click or right-click to remove one). The preview
+  under them shows that node's result on your layer, and **Problems** says in plain words what keeps
+  the filter from working; click a problem to select its node.
+* The slider button next to a setting shows it in the Filters panel, with a label and range you
+  choose, so the filter can be adjusted there without opening the editor.
+* `Delete` removes what is selected, the wheel zooms, the middle button (or `Space` and drag) moves
+  around, **Show all** (`Home`) brings every node into view. **Undo** and **Redo** (`Ctrl+Z`,
+  `Ctrl+Shift+Z`) work inside the editor.
+* **Save** (`Ctrl+S`) and **Save as…** write the filter into the filters folder; the Filters panel
+  shows the change at once.
+
+**Edit…** opens one of your filters again. Built-in filters stay as they are: **Edit a copy…** makes
+your own copy first. **Duplicate** copies a filter, **Delete** removes one of yours, and the folder
+button opens the filters folder (`Documents\Lumen\Filters`). Filters are `.lumenfilter` files: one
+put into that folder appears in the list.
+
 ## 6. AI editing
 
 Make a selection or paint a mask, then either:
@@ -553,10 +598,11 @@ LumenStudio [--project file.lumen] [--page editor|generate|create|poses|parts|li
 | Cache (thumbnails) | `%LOCALAPPDATA%\Lumen\Lumen Studio\cache` | `userdata\cache` |
 | Projects | `Documents\Lumen Studio` | `userdata\projects` |
 | Models (downloads, trained LoRAs) | `Documents\Lumen\Models` (Settings → Models can move it) | `userdata\models` |
+| Filters you saved | `Documents\Lumen\Filters` | `userdatailters` |
 | API keys | Windows Credential Manager | Windows Credential Manager |
 
 The environment variable `LUMEN_DATA_DIR` overrides both (useful for separate profiles); the models
-folder is then `<that folder>\models`.
+and filters folders are then `<that folder>\models` and `<that folder>ilters`.
 
 ## 13. Troubleshooting
 

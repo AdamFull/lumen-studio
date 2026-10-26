@@ -1,0 +1,1064 @@
+// The node editor, saved filters and the Filters panel (M17 §17.6, plan 17.8 "Node editor window,
+// saved filters, the Filters panel"). Synthetic images and test node types only; nothing runs on
+// the GPU.
+
+#include "core/Async.h"
+#include "core/ImageOps.h"
+#include "core/Paths.h"
+#include "doc/Document.h"
+#include "filters/Ops.h"
+#include "filters/Registry.h"
+#include "ui/Studio.h"
+#include "ui/Theme.h"
+#include "ui/canvas/CanvasView.h"
+#include "ui/canvas/EditorState.h"
+#include "ui/filters/FilterCatalog.h"
+#include "ui/filters/FilterRunner.h"
+#include "ui/filters/FiltersPanel.h"
+#include "ui/filters/GraphModel.h"
+#include "ui/filters/NodeEditorWindow.h"
+#include "ui/filters/NodeScene.h"
+#include "ui/filters/ParamWidgets.h"
+#include "ui/pages/EditorPage.h"
+#include "ui/widgets/Controls.h"
+
+#include <QComboBox>
+#include <QDir>
+#include <QDoubleSpinBox>
+#include <QFile>
+#include <QJsonDocument>
+#include <QLineEdit>
+#include <QListWidget>
+#include <QPainter>
+#include <QPromise>
+#include <QPushButton>
+#include <QSignalSpy>
+#include <QTabWidget>
+#include <QTemporaryDir>
+#include <QToolButton>
+#include <QUndoStack>
+#include <QtTest>
+
+#include <atomic>
+
+using namespace lumen;
+using namespace lumen::ui;
+
+namespace {
+
+const QColor kRed(220, 30, 30);
+const QColor kBlue(30, 30, 220);
+
+// 64 × 48: the left half red, the right half blue.
+QImage twoColours()
+{
+    QImage im(64, 48, QImage::Format_ARGB32_Premultiplied);
+    QPainter p(&im);
+    p.fillRect(QRect(0, 0, 32, 48), kRed);
+    p.fillRect(QRect(32, 0, 32, 48), kBlue);
+    return im;
+}
+
+// The left 32 × 24 corner.
+QImage cornerSelection(const QSize &size)
+{
+    QImage m = img::createMask(size, 0);
+    QPainter p(&m);
+    p.fillRect(QRect(0, 0, 32, 24), Qt::white);
+    return m;
+}
+
+std::atomic<int> g_quickRuns{0};
+
+// An AI step stand-in that never finishes by itself: its future ends only when cancelled.
+void registerTestNodes()
+{
+    filters::NodeRegistry &r = filters::NodeRegistry::global();
+    if (r.contains(QStringLiteral("test-slow-ai")))
+        return;
+    filters::NodeTypeInfo slow;
+    slow.id = QStringLiteral("test-slow-ai");
+    slow.name = QStringLiteral("Slow AI step");
+    slow.category = filters::categories::Ai;
+    slow.inputs = {{QStringLiteral("image"), QStringLiteral("Image"), filters::PortType::Image}};
+    slow.outputs = {{QStringLiteral("image"), QStringLiteral("Image"), filters::PortType::Image}};
+    slow.expensive = true;
+    r.add(filters::makeNodeType(slow, [](const filters::NodeArgs &, filters::EvalContext &ctx) -> filters::NodeResult {
+        auto promise = std::make_shared<QPromise<filters::Values>>();
+        promise->start();
+        ctx.onCancel([promise] {
+            promise->future().cancel();
+            promise->finish();
+        });
+        return filters::NodeResult(promise->future());
+    }));
+
+    // An AI step stand-in that inverts on a worker and counts its runs.
+    filters::NodeTypeInfo quick = slow;
+    quick.id = QStringLiteral("test-quick-ai");
+    quick.name = QStringLiteral("Quick AI step");
+    r.add(filters::makeNodeType(quick, [](const filters::NodeArgs &a, filters::EvalContext &) -> filters::NodeResult {
+        ++g_quickRuns;
+        const QImage src = a.image(QStringLiteral("image"));
+        return filters::NodeResult(async::run([src] { return filters::Values{{QStringLiteral("image"), filters::ops::invert(src)}}; }));
+    }));
+
+    // A node with a colour setting (no classic node has one yet).
+    filters::NodeTypeInfo tint;
+    tint.id = QStringLiteral("test-tint");
+    tint.name = QStringLiteral("Tint");
+    tint.category = filters::categories::Color;
+    tint.inputs = slow.inputs;
+    tint.outputs = slow.outputs;
+    filters::ParamSpec colour;
+    colour.id = QStringLiteral("colour");
+    colour.label = QStringLiteral("Colour");
+    colour.type = filters::PortType::Color;
+    colour.defaultValue = QColor(255, 128, 0);
+    tint.params = {colour};
+    r.add(filters::makeNodeType(tint, [](const filters::NodeArgs &a, filters::EvalContext &) -> filters::NodeResult {
+        QImage out = a.image(QStringLiteral("image")).copy();
+        out.fill(a.color(QStringLiteral("colour")));
+        return filters::Values{{QStringLiteral("image"), out}};
+    }));
+}
+
+// input → <type> → output, as a saved filter.
+filters::Graph chain(const QString &type, const QString &name)
+{
+    filters::Graph g;
+    g.name = name;
+    const QString in = g.addNode(QStringLiteral("input"), QPointF(0, 0));
+    const QString mid = g.addNode(type, QPointF(260, 0));
+    const QString out = g.addNode(QStringLiteral("output"), QPointF(520, 0));
+    g.connect(in, QStringLiteral("image"), mid, QStringLiteral("image"));
+    g.connect(mid, QStringLiteral("image"), out, QStringLiteral("image"));
+    return g;
+}
+
+QPoint viewPoint(NodeEditorWindow &w, const QPointF &scenePos)
+{
+    return w.view()->mapFromScene(scenePos);
+}
+
+PortItem *portOf(NodeEditorWindow &w, const QString &node, const QString &port, bool output)
+{
+    NodeItem *item = w.scene()->nodeItem(node);
+    return item ? item->port(port, output) : nullptr;
+}
+
+void drag(QWidget *viewport, const QPoint &from, const QPoint &to)
+{
+    QTest::mousePress(viewport, Qt::LeftButton, Qt::NoModifier, from);
+    for (int i = 1; i <= 4; ++i)
+        QTest::mouseMove(viewport, from + (to - from) * i / 4);
+    QTest::mouseRelease(viewport, Qt::LeftButton, Qt::NoModifier, to);
+}
+
+bool sameOutside(const QImage &a, const QImage &b, const QImage &mask)
+{
+    for (int y = 0; y < a.height(); ++y) {
+        for (int x = 0; x < a.width(); ++x) {
+            if (qGray(mask.pixel(x, y)) == 0 && a.pixel(x, y) != b.pixel(x, y))
+                return false;
+        }
+    }
+    return true;
+}
+
+QString builtIn(const QString &id)
+{
+    return QStringLiteral(":/filters/builtin/%1.lumenfilter").arg(id);
+}
+
+} // namespace
+
+class TestFiltersUi : public QObject
+{
+    Q_OBJECT
+private slots:
+    void initTestCase();
+    void init();
+    void cleanup();
+    void filtersFolderDefault();
+    void builtInFiltersValidate();
+    void catalogSavesAndLists();
+    void composeThroughSelection();
+    void nodeEditorEditing();
+    void nodeEditorDragging();
+    void nodeEditorPublishSaveReopen();
+    void nodeEditorPreviewAndMenu();
+    void nodeEditorAiAndColour();
+    void curveEditor();
+    void panelListsAndSettings();
+    void panelPreviewAndApply();
+    void panelApplyOnLayerAndCancel();
+    void panelAiFilterRunsOnRequest();
+    void panelManagesFilters();
+    void editorFiltersTab();
+
+private:
+    std::unique_ptr<QTemporaryDir> m_dir;
+    std::unique_ptr<FilterCatalog> m_catalog;
+};
+
+void TestFiltersUi::initTestCase()
+{
+    QStandardPaths::setTestModeEnabled(true);
+    registerTestNodes();
+}
+
+void TestFiltersUi::init()
+{
+    m_dir = std::make_unique<QTemporaryDir>();
+    QVERIFY(m_dir->isValid());
+    m_catalog = std::make_unique<FilterCatalog>(m_dir->filePath(QStringLiteral("filters")));
+}
+
+void TestFiltersUi::cleanup()
+{
+    for (NodeEditorWindow *w : NodeEditorWindow::openWindows()) {
+        w->setSaveQuestion({});
+        delete w;
+    }
+    m_catalog.reset();
+    m_dir.reset();
+}
+
+void TestFiltersUi::filtersFolderDefault()
+{
+    // Next to the models folder: under the relocated data root here (LUMEN_DATA_DIR or test mode).
+    const QString filters = paths::defaultFilters();
+    QVERIFY(filters.endsWith(QStringLiteral("/filters")));
+    QCOMPARE(QFileInfo(filters).absolutePath(), QFileInfo(paths::defaultModels()).absolutePath());
+    Studio studio;
+    FilterCatalog *catalog = FilterCatalog::of(&studio);
+    QCOMPARE(catalog->folder(), QDir::cleanPath(filters));
+    QCOMPARE(FilterCatalog::of(&studio), catalog); // one per Studio
+}
+
+void TestFiltersUi::builtInFiltersValidate()
+{
+    const QStringList files = QDir(QStringLiteral(":/filters/builtin")).entryList({QStringLiteral("*.lumenfilter")});
+    QVERIFY2(files.size() >= 7, qPrintable(files.join(QLatin1Char(' '))));
+    for (const QString &file : files) {
+        const QString path = QStringLiteral(":/filters/builtin/") + file;
+        QString error;
+        const std::optional<filters::Graph> g = filters::Graph::load(path, filters::NodeRegistry::global(), &error);
+        QVERIFY2(g, qPrintable(file + QStringLiteral(": ") + error));
+        QVERIFY2(!g->name.isEmpty() && !g->description.isEmpty(), qPrintable(file));
+        for (const filters::Issue &issue : g->validate())
+            QVERIFY2(false, qPrintable(file + QStringLiteral(": ") + issue.message)); // no errors, no warnings
+        QVERIFY2(!g->published().isEmpty(), qPrintable(file + QStringLiteral(" publishes no setting")));
+        // Applied to a picture, every one changes it.
+        filters::Evaluator evaluator;
+        auto f = evaluator.evaluate(*g, {twoColours(), {}});
+        f.waitForFinished();
+        QVERIFY2(f.resultCount() == 1, qPrintable(file));
+        QCOMPARE(f.result().image.size(), QSize(64, 48));
+        QVERIFY2(f.result().image != img::normalized(twoColours()), qPrintable(file));
+    }
+    // The catalog lists them first, in their order, with thumbnails.
+    const QList<FilterCatalog::Entry> entries = m_catalog->entries();
+    QVERIFY(entries.size() >= 7);
+    QCOMPARE(entries.first().name, QStringLiteral("Black and white"));
+    QCOMPARE(entries.first().path, builtIn(QStringLiteral("black-and-white")));
+    for (const FilterCatalog::Entry &e : entries) {
+        QVERIFY(e.builtIn);
+        QVERIFY2(e.error.isEmpty(), qPrintable(e.error));
+        QVERIFY(!e.usesAi);
+    }
+    QSignalSpy ready(m_catalog.get(), &FilterCatalog::thumbnailReady);
+    QVERIFY(m_catalog->thumbnail(entries.first().path).isNull()); // computed in the background
+    QTRY_VERIFY(!m_catalog->thumbnail(entries.first().path).isNull());
+    QCOMPARE(m_catalog->thumbnail(entries.first().path).size(), FilterCatalog::thumbnailSize());
+    QVERIFY(ready.count() >= 1);
+    // Black and white: the thumbnail is grey.
+    const QImage thumb = m_catalog->thumbnail(entries.first().path);
+    const QRgb px = thumb.pixel(thumb.width() / 2, thumb.height() / 4);
+    QVERIFY(std::abs(qRed(px) - qBlue(px)) <= 2 && std::abs(qRed(px) - qGreen(px)) <= 2);
+}
+
+void TestFiltersUi::catalogSavesAndLists()
+{
+    QSignalSpy changed(m_catalog.get(), &FilterCatalog::changed);
+    const int builtIns = int(m_catalog->entries().size());
+    QString error;
+    const QString path = m_catalog->create(QStringLiteral("My: filter?"), &error);
+    QVERIFY2(!path.isEmpty(), qPrintable(error));
+    QVERIFY(path.startsWith(m_catalog->folder()));
+    QVERIFY(path.endsWith(QStringLiteral(".lumenfilter")));
+    QVERIFY(QFile::exists(path));
+    QVERIFY(changed.count() >= 1);
+    QList<FilterCatalog::Entry> entries = m_catalog->entries();
+    QCOMPARE(entries.size(), builtIns + 1);
+    QCOMPARE(entries.last().name, QStringLiteral("My: filter?"));
+    QVERIFY(!entries.last().builtIn);
+    const std::optional<filters::Graph> created = m_catalog->load(path);
+    QVERIFY(created && created->isValid());
+
+    // A built-in filter cannot be deleted, but copied.
+    QVERIFY(!m_catalog->remove(builtIn(QStringLiteral("sharpen")), &error));
+    QVERIFY(!error.isEmpty());
+    const QString copy = m_catalog->duplicate(builtIn(QStringLiteral("sharpen")), &error);
+    QVERIFY2(!copy.isEmpty(), qPrintable(error));
+    QCOMPARE(m_catalog->entry(copy)->name, QStringLiteral("Sharpen copy"));
+    QCOMPARE(m_catalog->load(copy)->published().size(), 2);
+    // Saving a built-in path makes a new file instead of writing into the resources.
+    filters::Graph g = *m_catalog->load(builtIn(QStringLiteral("film-grain")));
+    const QString saved = m_catalog->save(g, builtIn(QStringLiteral("film-grain")), &error);
+    QVERIFY(!saved.isEmpty() && !FilterCatalog::isBuiltIn(saved));
+    QCOMPARE(m_catalog->entries().size(), builtIns + 3);
+
+    // A file put into the folder by hand appears; one that does not load is listed with the reason.
+    QFile broken(QDir(m_catalog->folder()).filePath(QStringLiteral("broken.lumenfilter")));
+    QVERIFY(broken.open(QIODevice::WriteOnly));
+    broken.write(R"({"format": "lumen-filter", "version": 1, "name": "Broken", "nodes": [{"id": "a", "type": "no-such-node"}]})");
+    broken.close();
+    QTRY_VERIFY(m_catalog->entry(broken.fileName()).has_value()); // the folder is watched
+    QVERIFY(m_catalog->entry(broken.fileName())->error.contains(QStringLiteral("plugin")));
+
+    QVERIFY(m_catalog->remove(copy, &error));
+    QVERIFY(!QFile::exists(copy));
+    QVERIFY(!m_catalog->entry(copy));
+}
+
+void TestFiltersUi::composeThroughSelection()
+{
+    const QImage layer = img::normalized(twoColours());
+    QImage result(layer.size(), QImage::Format_ARGB32_Premultiplied);
+    result.fill(QColor(0, 200, 0));
+    const QImage where = cornerSelection(layer.size());
+
+    const FilterComposite onNew = composeFilterResult(layer, result, where, FilterRunner::Target::NewLayer, false);
+    QCOMPARE(onNew.rect, layer.rect());
+    QCOMPARE(QColor(onNew.pixels.pixel(5, 5)), QColor(0, 200, 0));
+    QCOMPARE(qAlpha(onNew.pixels.pixel(40, 30)), 0); // transparent outside the selection
+
+    const FilterComposite onLayer = composeFilterResult(layer, result, where, FilterRunner::Target::Layer, false);
+    QCOMPARE(onLayer.rect, QRect(0, 0, 32, 24)); // only what changes
+    QCOMPARE(QColor(onLayer.pixels.pixel(5, 5)), QColor(0, 200, 0));
+
+    // A half-transparent result keeps the opacity of an alpha-locked layer.
+    QImage clear(layer.size(), QImage::Format_ARGB32_Premultiplied);
+    clear.fill(QColor(0, 0, 0, 0));
+    const FilterComposite locked = composeFilterResult(layer, clear, {}, FilterRunner::Target::Layer, true);
+    QCOMPARE(qAlpha(locked.pixels.pixel(5, 5)), 255);
+
+    // A result of another size is stretched to the layer; masks multiply.
+    const QImage small = result.scaled(16, 12);
+    QCOMPARE(composeFilterResult(layer, small, {}, FilterRunner::Target::NewLayer, false).pixels.size(), layer.size());
+    QImage half = img::createMask(layer.size(), 128);
+    const QImage both = combinedMask(where, half, layer.size());
+    QCOMPARE(qGray(both.pixel(5, 5)), 128);
+    QCOMPARE(qGray(both.pixel(40, 30)), 0);
+    QVERIFY(combinedMask({}, {}, layer.size()).isNull());
+}
+
+void TestFiltersUi::nodeEditorEditing()
+{
+    NodeEditorWindow w(m_catalog.get());
+    w.setAttribute(Qt::WA_DeleteOnClose, false);
+    GraphModel *model = w.model();
+    QUndoStack *undo = model->undoStack();
+    QCOMPARE(model->graph().nodes().size(), 2); // a new filter: input → output
+    const QString in = model->graph().nodes().at(0).id;
+    const QString out = model->graph().outputNode();
+    QVERIFY(model->graph().isValid());
+
+    // Add.
+    const QString blur = w.addNode(QStringLiteral("gaussian-blur"));
+    QVERIFY(!blur.isEmpty());
+    QCOMPARE(model->graph().nodes().size(), 3);
+    QCOMPARE(w.selectedNode(), blur);
+    QVERIFY(w.scene()->nodeItem(blur));
+    QCOMPARE(undo->count(), 1);
+    undo->undo();
+    QCOMPARE(model->graph().nodes().size(), 2);
+    QVERIFY(!w.scene()->nodeItem(blur));
+    undo->redo();
+    QVERIFY(w.scene()->nodeItem(blur));
+
+    // Connect: input → blur → output (the output's old link is replaced).
+    QVERIFY(w.connectPorts(in, QStringLiteral("image"), blur, QStringLiteral("image")));
+    QVERIFY(w.connectPorts(blur, QStringLiteral("image"), out, QStringLiteral("image")));
+    QCOMPARE(model->graph().links().size(), 2);
+    QCOMPARE(model->graph().linkInto(out, QStringLiteral("image"))->fromNode, blur);
+    QCOMPARE(w.scene()->linkItems().size(), 2);
+    QVERIFY(model->graph().isValid());
+
+    // A wrong type is refused, with the reason, and changes nothing.
+    const QString invert = w.addNode(QStringLiteral("invert-mask"));
+    const int steps = undo->count();
+    const QList<filters::Link> links = model->graph().links();
+    QVERIFY(!w.connectPorts(blur, QStringLiteral("image"), invert, QStringLiteral("mask")));
+    QVERIFY2(w.message().contains(QStringLiteral("Mask from image")), qPrintable(w.message()));
+    QCOMPARE(model->graph().links(), links);
+    QCOMPARE(undo->count(), steps);
+    // A loop is refused.
+    const QString sharpen = w.addNode(QStringLiteral("sharpen"));
+    QVERIFY(w.connectPorts(blur, QStringLiteral("image"), sharpen, QStringLiteral("image")));
+    QVERIFY(!w.connectPorts(sharpen, QStringLiteral("image"), blur, QStringLiteral("image")));
+    QVERIFY2(w.message().contains(QStringLiteral("loop")), qPrintable(w.message()));
+    QVERIFY(w.deleteSelection()); // the sharpen node, selected when added
+    QVERIFY(!model->graph().node(sharpen));
+    // The selection fits the mask input.
+    QVERIFY(w.connectPorts(in, QStringLiteral("selection"), invert, QStringLiteral("mask")));
+
+    // An unconnected node is listed as a problem in plain words.
+    QVERIFY2(w.problems().join(QLatin1Char('\n')).contains(QStringLiteral("not connected to the output")),
+             qPrintable(w.problems().join(QLatin1Char('\n'))));
+
+    // Delete, as one step with its links; undo brings both back.
+    w.selectNode(invert);
+    const int before = int(model->graph().links().size());
+    QVERIFY(w.deleteSelection());
+    QVERIFY(!model->graph().node(invert));
+    QCOMPARE(model->graph().links().size(), before - 1);
+    undo->undo();
+    QVERIFY(model->graph().node(invert));
+    QCOMPARE(model->graph().links().size(), before);
+
+    // Settings: shown in short on the node; slider steps merge into one undo step.
+    const int stepsBefore = undo->index();
+    QVERIFY(w.setParam(blur, QStringLiteral("radius"), 10.0));
+    QVERIFY(w.setParam(blur, QStringLiteral("radius"), 12.0));
+    QCOMPARE(undo->index(), stepsBefore + 1);
+    QCOMPARE(model->graph().param(blur, QStringLiteral("radius")).toDouble(), 12.0);
+    QVERIFY2(w.scene()->nodeItem(blur)->summary().join(QLatin1Char(' ')).contains(QStringLiteral("12")),
+             qPrintable(w.scene()->nodeItem(blur)->summary().join(QLatin1Char(' '))));
+    undo->undo();
+    QCOMPARE(model->graph().param(blur, QStringLiteral("radius")).toDouble(), 4.0);
+    // The side panel follows undo.
+    w.selectNode(blur);
+    auto *field = w.findChild<ParamField *>(QStringLiteral("param:radius"));
+    QVERIFY(field);
+    QCOMPARE(field->value().toDouble(), 4.0);
+    undo->redo();
+    QCOMPARE(field->value().toDouble(), 12.0);
+    // A slider dragged back to where it was leaves no step.
+    const int stepsNow = undo->index();
+    QVERIFY(w.setParam(blur, QStringLiteral("radius"), 20.0));
+    QVERIFY(w.setParam(blur, QStringLiteral("radius"), 12.0));
+    QCOMPARE(undo->index(), stepsNow);
+
+    // Another filter in the same window: node ids repeat with other kinds of nodes.
+    w.setGraph(*m_catalog->load(builtIn(QStringLiteral("soft-focus"))));
+    QCOMPARE(w.scene()->nodeItem(QStringLiteral("n2"))->nodeType()->id(), QStringLiteral("gaussian-blur"));
+    QCOMPARE(w.scene()->linkItems().size(), 4);
+    QCOMPARE(undo->count(), 0);
+    QVERIFY(!w.isModified());
+    QVERIFY(w.problems().isEmpty());
+}
+
+void TestFiltersUi::nodeEditorDragging()
+{
+    NodeEditorWindow w(m_catalog.get());
+    w.setAttribute(Qt::WA_DeleteOnClose, false);
+    w.resize(1100, 700);
+    w.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&w));
+    GraphModel *model = w.model();
+    const QString in = model->graph().nodes().at(0).id;
+    const QString out = model->graph().outputNode();
+    const QString grow = w.addNode(QStringLiteral("grow-shrink-feather"), QPointF(180, 220));
+    w.frameAll();
+    QTest::qWait(20);
+    QWidget *viewport = w.view()->viewport();
+
+    // Port to port with the mouse: two inputs refuse.
+    PortItem *selection = portOf(w, in, QStringLiteral("selection"), true);
+    PortItem *maskIn = portOf(w, grow, QStringLiteral("mask"), false);
+    PortItem *where = portOf(w, out, QStringLiteral("mask"), false);
+    QVERIFY(selection && maskIn && where);
+    drag(viewport, viewPoint(w, maskIn->center()), viewPoint(w, where->center()));
+    QVERIFY2(w.message().contains(QStringLiteral("Both are inputs")), qPrintable(w.message()));
+    QCOMPARE(model->undoStack()->count(), 1);
+    // The selection (a mask) into the mask input connects.
+    drag(viewport, viewPoint(w, selection->center()), viewPoint(w, maskIn->center()));
+    QVERIFY(model->graph().linkInto(grow, QStringLiteral("mask")).has_value());
+    QCOMPARE(model->graph().linkInto(grow, QStringLiteral("mask"))->fromPort, QStringLiteral("selection"));
+
+    // An image into a mask input: refused, the reason in the status bar, nothing changes.
+    const int steps = model->undoStack()->count();
+    PortItem *image = portOf(w, in, QStringLiteral("image"), true);
+    drag(viewport, viewPoint(w, image->center()), viewPoint(w, maskIn->center()));
+    QCOMPARE(model->graph().linkInto(grow, QStringLiteral("mask"))->fromPort, QStringLiteral("selection"));
+    QCOMPARE(model->undoStack()->count(), steps);
+    QVERIFY2(w.message().contains(QStringLiteral("takes a mask")), qPrintable(w.message()));
+
+    // Picking a link up from an input and dropping it on nothing removes it.
+    drag(viewport, viewPoint(w, maskIn->center()), viewPoint(w, maskIn->center() + QPointF(-60, 120)));
+    QVERIFY(!model->graph().linkInto(grow, QStringLiteral("mask")).has_value());
+    QCOMPARE(model->undoStack()->count(), steps + 1);
+    model->undoStack()->undo();
+    QVERIFY(model->graph().linkInto(grow, QStringLiteral("mask")).has_value());
+
+    // Moving a node by its title is one undo step; links follow.
+    NodeItem *item = w.scene()->nodeItem(out);
+    const QPointF before = model->graph().node(out)->position;
+    const QPoint title = viewPoint(w, item->scenePos() + QPointF(60, 12));
+    drag(viewport, title, title + QPoint(40, 30));
+    const QPointF after = model->graph().node(out)->position;
+    QVERIFY2(after != before, "the node did not move");
+    QCOMPARE(model->undoStack()->undoText(), QStringLiteral("Move node"));
+    model->undoStack()->undo();
+    QCOMPARE(w.scene()->nodeItem(out)->pos(), before);
+
+    // Delete with the key, in the view.
+    w.selectNode(grow);
+    w.view()->setFocus();
+    QTest::keyClick(w.view(), Qt::Key_Delete);
+    QVERIFY(!model->graph().node(grow));
+    QVERIFY(w.view()->zoom() <= 1.0);
+}
+
+void TestFiltersUi::nodeEditorPublishSaveReopen()
+{
+    auto *w = new NodeEditorWindow(m_catalog.get());
+    GraphModel *model = w->model();
+    const QString in = model->graph().nodes().at(0).id;
+    const QString out = model->graph().outputNode();
+    const QString levels = w->addNode(QStringLiteral("levels"));
+    QVERIFY(w->connectPorts(in, QStringLiteral("image"), levels, QStringLiteral("image")));
+    QVERIFY(w->connectPorts(levels, QStringLiteral("image"), out, QStringLiteral("image")));
+
+    // Publish with a label and a range; the side panel's button shows it.
+    QVERIFY(w->publish(levels, QStringLiteral("gamma"), QStringLiteral("Midtones"), 0.5, 2.0));
+    QCOMPARE(model->graph().published().size(), 1);
+    QCOMPARE(model->graph().published().first().label, QStringLiteral("Midtones"));
+    w->selectNode(levels);
+    auto *button = w->findChild<QToolButton *>(QStringLiteral("publish:gamma"));
+    QVERIFY(button && button->isChecked());
+    QVERIFY(w->unpublish(levels, QStringLiteral("gamma")));
+    QVERIFY(model->graph().published().isEmpty());
+    QVERIFY(!button->isChecked());
+    model->undoStack()->undo();
+    QCOMPARE(model->graph().published().size(), 1);
+    QVERIFY(button->isChecked());
+    // A range beyond the setting's own is a problem.
+    QVERIFY(w->publish(levels, QStringLiteral("inBlack"), QStringLiteral("Black"), -10, 100));
+    QVERIFY(!model->graph().isValid());
+    model->undoStack()->undo();
+    QVERIFY(model->graph().isValid());
+
+    // Save as: a file in the filters folder, the catalog lists it, nothing left to save.
+    QVERIFY(w->isModified());
+    QSignalSpy saved(w, &NodeEditorWindow::saved);
+    QString error;
+    QVERIFY2(w->saveAs(QStringLiteral("Brighter"), &error), qPrintable(error));
+    const QString path = w->path();
+    QVERIFY(path.startsWith(m_catalog->folder()));
+    QVERIFY(QFile::exists(path));
+    QCOMPARE(saved.count(), 1);
+    QVERIFY(!w->isModified());
+    QCOMPARE(m_catalog->entry(path)->name, QStringLiteral("Brighter"));
+    QVERIFY(w->windowTitle().contains(QStringLiteral("Brighter")));
+
+    // A change, then Save into the same file.
+    QVERIFY(w->setParam(levels, QStringLiteral("gamma"), 1.6));
+    QVERIFY(w->isModified());
+    QVERIFY(w->save(&error));
+    QCOMPARE(w->path(), path);
+    QCOMPARE(m_catalog->load(path)->param(levels, QStringLiteral("gamma")).toDouble(), 1.6);
+
+    // Opening the same filter raises the window that has it; once closed, it opens again as saved.
+    QCOMPARE(NodeEditorWindow::openFilter(m_catalog.get(), path, nullptr), w);
+    const filters::Graph savedGraph = model->graph();
+    QVERIFY(w->close()); // nothing to save: no question
+    QTRY_VERIFY(NodeEditorWindow::openWindows().isEmpty());
+    NodeEditorWindow *again = NodeEditorWindow::openFilter(m_catalog.get(), path, nullptr, &error);
+    QVERIFY2(again, qPrintable(error));
+    QVERIFY(sameGraph(again->model()->graph(), savedGraph));
+    QCOMPARE(again->model()->graph().published().first().minimum, 0.5);
+    QVERIFY(!again->isModified());
+    QCOMPARE(again->model()->undoStack()->count(), 0);
+
+    // Built-in filters are not opened for editing.
+    QVERIFY(!NodeEditorWindow::openFilter(m_catalog.get(), builtIn(QStringLiteral("sharpen")), nullptr, &error));
+    QVERIFY(!error.isEmpty());
+
+    // Closing with changes asks; Cancel keeps the window open.
+    QVERIFY(again->setParam(levels, QStringLiteral("gamma"), 0.8));
+    int asked = 0;
+    again->setSaveQuestion([&](const QString &) {
+        ++asked;
+        return QMessageBox::Cancel;
+    });
+    QVERIFY(!again->close());
+    QCOMPARE(asked, 1);
+    again->setSaveQuestion([&](const QString &) { return QMessageBox::Discard; });
+    QVERIFY(again->close());
+}
+
+void TestFiltersUi::nodeEditorPreviewAndMenu()
+{
+    NodeEditorWindow w(m_catalog.get());
+    w.setAttribute(Qt::WA_DeleteOnClose, false);
+    w.setSource(img::normalized(twoColours()));
+    GraphModel *model = w.model();
+    const QString in = model->graph().nodes().at(0).id;
+    const QString out = model->graph().outputNode();
+
+    // The menu finds nodes by their plain names and descriptions, grouped by category.
+    NodeMenu *menu = w.nodeMenu();
+    menu->setFilter(QStringLiteral("blur"));
+    QVERIFY(menu->visibleTypes().contains(QStringLiteral("gaussian-blur")));
+    QVERIFY(!menu->visibleTypes().contains(QStringLiteral("invert")));
+    menu->setFilter(QStringLiteral("negative")); // Invert: "Turns the image into its negative."
+    QCOMPARE(menu->visibleTypes(), QStringList{QStringLiteral("invert")});
+    menu->setFilter({});
+    QVERIFY(menu->visibleTypes().size() >= 25);
+    // Enter in the search field adds the first match.
+    menu->setFilter(QStringLiteral("invert"));
+    QSignalSpy picked(menu, &NodeMenu::picked);
+    QTest::keyClick(menu->searchField(), Qt::Key_Return);
+    QCOMPARE(picked.count(), 1);
+    const QString invert = w.selectedNode();
+    QCOMPARE(model->graph().node(invert)->typeId(), QStringLiteral("invert"));
+
+    // Unconnected, the preview says what is missing.
+    QTRY_VERIFY(!w.isPreviewPending());
+    QVERIFY2(w.previewText().contains(QStringLiteral("nothing connected")), qPrintable(w.previewText()));
+    // Connected, it shows the node's result on the picture.
+    QVERIFY(w.connectPorts(in, QStringLiteral("image"), invert, QStringLiteral("image")));
+    QTRY_VERIFY(!w.isPreviewPending());
+    QVERIFY(!w.preview().isNull());
+    QCOMPARE(QColor(w.preview().pixel(4, 4)), QColor(255 - kRed.red(), 255 - kRed.green(), 255 - kRed.blue()));
+    // With nothing selected, the result of the filter (still the input: Invert is not connected to it).
+    w.selectNode({});
+    QTRY_VERIFY(!w.isPreviewPending());
+    QCOMPARE(QColor(w.preview().pixel(4, 4)), kRed);
+    QVERIFY(w.connectPorts(invert, QStringLiteral("image"), out, QStringLiteral("image")));
+    QTRY_VERIFY(!w.isPreviewPending());
+    QCOMPARE(QColor(w.preview().pixel(4, 4)), QColor(255 - kRed.red(), 255 - kRed.green(), 255 - kRed.blue()));
+
+    // A filter without an output says so.
+    w.selectNode(out);
+    QVERIFY(w.deleteSelection());
+    QVERIFY(w.problems().join(QLatin1Char('\n')).contains(QStringLiteral("no output")));
+}
+
+void TestFiltersUi::nodeEditorAiAndColour()
+{
+    QWidget owner;
+    auto *w = new NodeEditorWindow(m_catalog.get(), &owner);
+    w->setSource(img::normalized(twoColours()));
+    GraphModel *model = w->model();
+    QAction *run = nullptr;
+    for (QAction *a : w->findChildren<QAction *>()) {
+        if (a->text() == QStringLiteral("Run AI steps"))
+            run = a;
+    }
+    QVERIFY(run);
+    QVERIFY(!run->isVisible()); // no AI steps yet
+
+    // An AI step previews only when asked; then the preview shows its result.
+    const QString path = m_catalog->save(chain(QStringLiteral("test-quick-ai"), QStringLiteral("Quick")));
+    QVERIFY(w->open(path));
+    QVERIFY(run->isVisible());
+    g_quickRuns = 0;
+    QTRY_VERIFY(!w->isPreviewPending());
+    QVERIFY2(w->previewText().contains(QStringLiteral("AI steps")), qPrintable(w->previewText()));
+    QCOMPARE(g_quickRuns.load(), 0);
+    run->trigger();
+    QTRY_VERIFY(!w->isPreviewPending());
+    QCOMPARE(g_quickRuns.load(), 1);
+    QCOMPARE(QColor(w->preview().pixel(4, 4)), QColor(255 - kRed.red(), 255 - kRed.green(), 255 - kRed.blue()));
+
+    // A long one can be stopped; the button says so while it runs.
+    QVERIFY(w->open(m_catalog->save(chain(QStringLiteral("test-slow-ai"), QStringLiteral("Slow")))));
+    QTRY_VERIFY(!w->isPreviewPending());
+    run->trigger();
+    QTRY_COMPARE(run->text(), QStringLiteral("Stop AI steps"));
+    QVERIFY(w->isPreviewPending());
+    run->trigger();
+    QTRY_VERIFY(!w->isPreviewPending());
+    QCOMPARE(run->text(), QStringLiteral("Run AI steps"));
+    QVERIFY(w->previewText().contains(QStringLiteral("AI steps")) || w->previewText().contains(QStringLiteral("Stopped")));
+
+    // A colour setting: a swatch, kept through Save and open.
+    const QString tint = w->addNode(QStringLiteral("test-tint"));
+    auto *swatch = w->findChild<ParamField *>(QStringLiteral("param:colour"))->findChild<ColorSwatch *>();
+    QVERIFY(swatch);
+    QCOMPARE(swatch->color(), QColor(255, 128, 0));
+    swatch->setColor(QColor(10, 20, 30));
+    QCOMPARE(model->graph().param(tint, QStringLiteral("colour")).value<QColor>(), QColor(10, 20, 30));
+    QString error;
+    QVERIFY2(w->saveAs(QStringLiteral("Tinted"), &error), qPrintable(error));
+    QCOMPARE(m_catalog->load(w->path())->param(tint, QStringLiteral("colour")).value<QColor>(), QColor(10, 20, 30));
+
+    // The window it belongs to asks about unsaved changes when it closes.
+    QVERIFY(w->setParam(tint, QStringLiteral("colour"), QColor(Qt::white)));
+    int asked = 0;
+    w->setSaveQuestion([&](const QString &) {
+        ++asked;
+        return QMessageBox::Cancel;
+    });
+    QVERIFY(!owner.close());
+    QCOMPARE(asked, 1);
+    w->setSaveQuestion([&](const QString &) {
+        ++asked;
+        return QMessageBox::Discard;
+    });
+    QVERIFY(owner.close());
+    QCOMPARE(asked, 2);
+}
+
+void TestFiltersUi::curveEditor()
+{
+    filters::ParamSpec spec = filters::NodeRegistry::global().find(QStringLiteral("curves"))->info().params.first();
+    QCOMPARE(spec.editor, QStringLiteral("curve"));
+    ParamField field(spec, QStringLiteral("0 0, 255 255"));
+    field.resize(240, 320);
+    field.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&field));
+    auto *curve = field.findChild<CurveEditor *>();
+    QVERIFY(curve);
+    QCOMPARE(curve->points().size(), 2);
+    QSignalSpy changed(&field, &ParamField::valueChanged);
+    // A click in the middle, above the line, adds a point that lifts the midtones.
+    const QPoint middle(curve->width() / 2, curve->height() / 3);
+    QTest::mouseClick(curve, Qt::LeftButton, Qt::NoModifier, middle);
+    QCOMPARE(curve->points().size(), 3);
+    QVERIFY(changed.count() >= 1);
+    const QList<QPointF> points = filters::ops::parseCurve(field.value().toString());
+    QCOMPARE(points.size(), 3);
+    QVERIFY(points[1].y() > points[1].x());
+    // The text field follows; typing points moves the curve.
+    auto *text = field.findChild<QLineEdit *>();
+    QCOMPARE(text->text(), field.value().toString());
+    text->clear();
+    QTest::keyClicks(text, QStringLiteral("0 0, 64 128, 192 200, 255 255"));
+    QCOMPARE(curve->points().size(), 4);
+    // Right-click on a point removes it (the plot is the square in the middle, 6 px in).
+    const double side = std::min(curve->width(), curve->height()) - 12.0;
+    const QPointF at((curve->width() - side) / 2.0 + 64.0 / 255.0 * side, 6.0 + side - 128.0 / 255.0 * side);
+    QTest::mouseClick(curve, Qt::RightButton, Qt::NoModifier, at.toPoint());
+    QCOMPARE(curve->points().size(), 3);
+    QCOMPARE(curve->points().at(1), QPointF(192, 200));
+}
+
+void TestFiltersUi::panelListsAndSettings()
+{
+    Studio studio;
+    studio.openImageAsDocument(twoColours(), QStringLiteral("Two colours"));
+    EditorState state;
+    CanvasView canvas(&state);
+    FiltersPanel panel(&studio, &canvas, nullptr, m_catalog.get());
+
+    // Built-in filters first, under a heading; "Your filters" after them.
+    QListWidget *list = panel.list();
+    QCOMPARE(list->item(0)->text(), QStringLiteral("Built in"));
+    QCOMPARE(list->item(1)->text(), QStringLiteral("Black and white"));
+    QStringList texts;
+    for (int i = 0; i < list->count(); ++i)
+        texts << list->item(i)->text();
+    QVERIFY(texts.contains(QStringLiteral("Your filters")));
+    QVERIFY(texts.contains(QStringLiteral("Soft focus")));
+
+    // A saved filter appears when it is saved.
+    filters::Graph g = chain(QStringLiteral("levels"), QStringLiteral("Lift"));
+    g.publish({QStringLiteral("n2"), QStringLiteral("gamma"), QStringLiteral("Midtones"), 0.5, 2.0});
+    const QString path = m_catalog->save(g);
+    QVERIFY(!path.isEmpty());
+    QVERIFY(panel.selectFilter(path));
+    QCOMPARE(list->currentItem()->text(), QStringLiteral("Lift"));
+
+    // Its published setting as a slider with its label and range.
+    QCOMPARE(panel.fields().size(), 1);
+    ParamField *midtones = panel.field(QStringLiteral("Midtones"));
+    QVERIFY(midtones);
+    auto *spin = midtones->findChild<QDoubleSpinBox *>();
+    QVERIFY(spin);
+    QCOMPARE(spin->minimum(), 0.5);
+    QCOMPARE(spin->maximum(), 2.0);
+    QCOMPARE(spin->value(), 1.0);
+
+    // A built-in filter with a slider and a list.
+    QVERIFY(panel.selectFilter(builtIn(QStringLiteral("film-grain"))));
+    QCOMPARE(panel.fields().size(), 2);
+    QVERIFY(panel.field(QStringLiteral("Amount")));
+    auto *grain = panel.field(QStringLiteral("Grain"))->findChild<QComboBox *>();
+    QVERIFY(grain);
+    QCOMPARE(grain->currentData().toString(), QStringLiteral("mono"));
+    // Moving a setting changes the filter that is applied, not the saved one.
+    grain->setCurrentIndex(grain->findData(QStringLiteral("color")));
+    QCOMPARE(panel.runner()->graph()->param(QStringLiteral("n2"), QStringLiteral("type")).toString(), QStringLiteral("color"));
+    QCOMPARE(m_catalog->load(builtIn(QStringLiteral("film-grain")))->param(QStringLiteral("n2"), QStringLiteral("type")).toString(),
+             QStringLiteral("mono"));
+    // Built-in filters: edited as a copy, never deleted.
+    bool deleteEnabled = true;
+    for (QPushButton *b : panel.findChildren<QPushButton *>()) {
+        if (b->text() == QStringLiteral("Delete"))
+            deleteEnabled = b->isEnabled();
+        if (b->text().startsWith(QStringLiteral("Edit")))
+            QCOMPARE(b->text(), QStringLiteral("Edit a copy…"));
+    }
+    QVERIFY(!deleteEnabled);
+}
+
+void TestFiltersUi::panelPreviewAndApply()
+{
+    Studio studio;
+    doc::Document *doc = studio.openImageAsDocument(twoColours(), QStringLiteral("Two colours"));
+    EditorState state;
+    CanvasView canvas(&state);
+    canvas.setDocument(doc);
+    FiltersPanel panel(&studio, &canvas, nullptr, m_catalog.get());
+    panel.resize(320, 640);
+    panel.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&panel));
+
+    // A live preview on the canvas, through the selection.
+    doc->applySelection(cornerSelection(doc->size()), QStringLiteral("Select"));
+    QVERIFY(panel.selectFilter(builtIn(QStringLiteral("black-and-white"))));
+    QTRY_VERIFY(!canvas.preview().isNull());
+    QCOMPARE(canvas.preview().size(), doc->size()); // a small picture previews at its own size
+    const QColor grey = QColor(canvas.preview().pixel(4, 4));
+    QVERIFY(grey.red() == grey.green() && grey.green() == grey.blue());
+    QCOMPARE(QColor(canvas.preview().pixel(4, 40)), kRed); // outside the selection
+    QCOMPARE(doc->layerCount(), 1);                         // a preview changes nothing
+
+    // Moving a slider previews again.
+    QVERIFY(panel.selectFilter(builtIn(QStringLiteral("warm-tones"))));
+    QTRY_VERIFY(!canvas.preview().isNull() && QColor(canvas.preview().pixel(4, 4)) != kRed);
+    const QImage first = canvas.preview();
+    auto *strength = panel.field(QStringLiteral("Strength"))->findChild<QDoubleSpinBox *>();
+    strength->setValue(100);
+    QTRY_VERIFY(canvas.preview() != first && !canvas.preview().isNull());
+    // Hidden (another tab), the panel leaves the canvas alone.
+    panel.hide();
+    QVERIFY(canvas.preview().isNull());
+    panel.show();
+    QTRY_VERIFY(!canvas.preview().isNull());
+
+    // Apply: a new layer above, one undo step, nothing outside the selection changes.
+    QVERIFY(panel.selectFilter(builtIn(QStringLiteral("black-and-white"))));
+    const QImage before = doc->flattened();
+    const QUuid original = doc->activeLayerId();
+    const QImage originalPixels = doc->activeLayer()->image;
+    const int steps = doc->undoStack()->count();
+    QSignalSpy finished(panel.runner(), &FilterRunner::finished);
+    QVERIFY(panel.applySelected());
+    QVERIFY(finished.wait(5000));
+    QVERIFY2(finished.first().at(0).toBool(), qPrintable(finished.first().at(1).toString()));
+    QCOMPARE(doc->layerCount(), 2);
+    QCOMPARE(doc->undoStack()->count(), steps + 1);
+    QCOMPARE(doc->layerAt(1)->props.name, QStringLiteral("Black and white"));
+    QCOMPARE(doc->activeLayerId(), doc->layerAt(1)->id);
+    QCOMPARE(doc->findLayer(original)->image, originalPixels); // the original stays underneath
+    const QImage after = doc->flattened();
+    QVERIFY(sameOutside(before, after, doc->selection()));
+    const QColor applied(after.pixel(4, 4));
+    QVERIFY(applied != kRed && applied.red() == applied.green() && applied.green() == applied.blue());
+    QVERIFY(panel.statusText().contains(QStringLiteral("new layer")));
+    // After applying, the canvas shows the document again (a preview now would filter twice).
+    QVERIFY(canvas.preview().isNull());
+    // One undo takes it all back.
+    doc->undoStack()->undo();
+    QCOMPARE(doc->layerCount(), 1);
+    QCOMPARE(doc->flattened(), before);
+}
+
+void TestFiltersUi::panelApplyOnLayerAndCancel()
+{
+    Studio studio;
+    doc::Document *doc = studio.openImageAsDocument(twoColours(), QStringLiteral("Two colours"));
+    EditorState state;
+    CanvasView canvas(&state);
+    canvas.setDocument(doc);
+    FiltersPanel panel(&studio, &canvas, nullptr, m_catalog.get());
+    doc->applySelection(cornerSelection(doc->size()), QStringLiteral("Select"));
+
+    // On the layer itself: the same layer changes inside the selection only, as one undo step.
+    QComboBox *target = nullptr;
+    for (QComboBox *c : panel.findChildren<QComboBox *>()) {
+        if (c->accessibleName() == QStringLiteral("Put the result on"))
+            target = c;
+    }
+    QVERIFY(target);
+    target->setCurrentIndex(1);
+    QVERIFY(panel.selectFilter(builtIn(QStringLiteral("black-and-white"))));
+    const QImage before = doc->activeLayer()->image;
+    const int steps = doc->undoStack()->count();
+    QSignalSpy finished(panel.runner(), &FilterRunner::finished);
+    QVERIFY(panel.applySelected());
+    QVERIFY(finished.wait(5000));
+    QVERIFY(finished.first().at(0).toBool());
+    QCOMPARE(doc->layerCount(), 1);
+    QCOMPARE(doc->undoStack()->count(), steps + 1);
+    const QImage after = doc->activeLayer()->image;
+    QVERIFY(sameOutside(before, after, doc->selection()));
+    QVERIFY(QColor(after.pixel(4, 4)) != kRed);
+    doc->undoStack()->undo();
+    QCOMPARE(doc->activeLayer()->image, before);
+    // A locked layer is not changed; a new layer still can be made.
+    doc::LayerProps props = doc->activeLayer()->props;
+    props.locked = true;
+    doc->setLayerProps(doc->activeLayerId(), props);
+    QVERIFY(!panel.applySelected());
+    QVERIFY(panel.statusText().contains(QStringLiteral("locked")));
+    props.locked = false;
+    doc->setLayerProps(doc->activeLayerId(), props);
+    target->setCurrentIndex(0);
+
+    // Cancel: an AI step that waits for its job; the panel shows progress; nothing changes.
+    const QString slow = m_catalog->save(chain(QStringLiteral("test-slow-ai"), QStringLiteral("Slow")));
+    QVERIFY(panel.selectFilter(slow));
+    QVERIFY(panel.runner()->needsRun());
+    const int layers = doc->layerCount();
+    const int stepsBefore = doc->undoStack()->count();
+    QSignalSpy progress(panel.runner(), &FilterRunner::progress);
+    finished.clear();
+    QVERIFY(panel.applySelected());
+    QVERIFY(panel.runner()->isBusy());
+    QTRY_VERIFY(progress.count() >= 1);
+    QCOMPARE(progress.last().at(2).toString(), QStringLiteral("Slow AI step"));
+    QVERIFY(!panel.applySelected()); // one at a time
+    panel.cancel();
+    QTRY_VERIFY(finished.count() == 1);
+    QVERIFY(!finished.first().at(0).toBool());
+    QVERIFY(finished.first().at(1).toString().contains(QStringLiteral("Cancelled")));
+    QVERIFY(!panel.runner()->isBusy());
+    QCOMPARE(doc->layerCount(), layers);
+    QCOMPARE(doc->undoStack()->count(), stepsBefore);
+}
+
+void TestFiltersUi::panelAiFilterRunsOnRequest()
+{
+    Studio studio;
+    doc::Document *doc = studio.openImageAsDocument(twoColours(), QStringLiteral("Two colours"));
+    EditorState state;
+    CanvasView canvas(&state);
+    canvas.setDocument(doc);
+    FiltersPanel panel(&studio, &canvas, nullptr, m_catalog.get());
+    panel.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&panel));
+
+    // A filter with an AI step previews only after Run.
+    const QString path = m_catalog->save(chain(QStringLiteral("test-quick-ai"), QStringLiteral("Quick")));
+    QVERIFY(m_catalog->entry(path)->usesAi);
+    g_quickRuns = 0;
+    QVERIFY(panel.selectFilter(path));
+    QVERIFY(panel.runner()->needsRun());
+    QTest::qWait(150);
+    QVERIFY(canvas.preview().isNull());
+    QCOMPARE(g_quickRuns.load(), 0);
+    QPushButton *run = nullptr;
+    for (QPushButton *b : panel.findChildren<QPushButton *>()) {
+        if (b->text() == QStringLiteral("Run AI steps"))
+            run = b;
+    }
+    QVERIFY(run && run->isVisible());
+    QSignalSpy finished(panel.runner(), &FilterRunner::finished);
+    run->click();
+    QVERIFY(finished.wait(5000));
+    QVERIFY(finished.first().at(0).toBool());
+    QTRY_VERIFY(!canvas.preview().isNull());
+    QCOMPARE(g_quickRuns.load(), 1);
+    QVERIFY(!panel.runner()->needsRun());
+    // Applying uses what Run computed.
+    finished.clear();
+    QVERIFY(panel.applySelected());
+    QVERIFY(finished.wait(5000));
+    QVERIFY(finished.first().at(0).toBool());
+    QCOMPARE(g_quickRuns.load(), 1);
+    QCOMPARE(doc->layerCount(), 2);
+    QCOMPARE(QColor(doc->flattened().pixel(4, 4)), QColor(255 - kRed.red(), 255 - kRed.green(), 255 - kRed.blue()));
+}
+
+void TestFiltersUi::panelManagesFilters()
+{
+    Studio studio;
+    studio.openImageAsDocument(twoColours(), QStringLiteral("Two colours"));
+    EditorState state;
+    CanvasView canvas(&state);
+    FiltersPanel panel(&studio, &canvas, nullptr, m_catalog.get());
+
+    // New filter: a file and an editor window for it.
+    const QString created = panel.newFilter(QStringLiteral("Mine"));
+    QVERIFY(!created.isEmpty());
+    QCOMPARE(panel.currentPath(), created);
+    QCOMPARE(NodeEditorWindow::openWindows().size(), 1);
+    NodeEditorWindow *editor = NodeEditorWindow::openWindows().first();
+    QCOMPARE(editor->path(), created);
+
+    // Saving in the editor refreshes the panel, published settings included.
+    const QString in = editor->model()->graph().nodes().at(0).id;
+    const QString out = editor->model()->graph().outputNode();
+    const QString hue = editor->addNode(QStringLiteral("hue-saturation"));
+    QVERIFY(editor->connectPorts(in, QStringLiteral("image"), hue, QStringLiteral("image")));
+    QVERIFY(editor->connectPorts(hue, QStringLiteral("image"), out, QStringLiteral("image")));
+    QVERIFY(editor->publish(hue, QStringLiteral("hue"), QStringLiteral("Colour turn")));
+    QVERIFY(panel.fields().isEmpty());
+    QVERIFY(editor->save());
+    QTRY_COMPARE(panel.fields().size(), 1);
+    QVERIFY(panel.field(QStringLiteral("Colour turn")));
+
+    // Edit on a built-in filter edits a copy.
+    QVERIFY(panel.selectFilter(builtIn(QStringLiteral("old-photo"))));
+    NodeEditorWindow *copyEditor = panel.editSelected();
+    QVERIFY(copyEditor);
+    QVERIFY(!FilterCatalog::isBuiltIn(copyEditor->path()));
+    QCOMPARE(panel.currentPath(), copyEditor->path());
+    QCOMPARE(copyEditor->model()->graph().name, QStringLiteral("Old photo copy"));
+
+    // Duplicate, then Delete (asked first).
+    QVERIFY(panel.selectFilter(created));
+    const QString copy = panel.duplicateSelected();
+    QVERIFY(!copy.isEmpty());
+    QCOMPARE(panel.currentPath(), copy);
+    QString asked;
+    panel.setConfirm([&](const QString &question) {
+        asked = question;
+        return false;
+    });
+    QVERIFY(!panel.deleteSelected());
+    QVERIFY(QFile::exists(copy));
+    QVERIFY(asked.contains(QStringLiteral("Mine copy")));
+    panel.setConfirm([](const QString &) { return true; });
+    QVERIFY(panel.deleteSelected());
+    QVERIFY(!QFile::exists(copy));
+    QVERIFY(!m_catalog->entry(copy));
+    QVERIFY(panel.currentPath() != copy);
+}
+
+// The tab in the editor's right panel: it previews on the editor's canvas while it is shown.
+void TestFiltersUi::editorFiltersTab()
+{
+    Studio studio;
+    QImage picture = filterSampleImage(QSize(800, 600));
+    doc::Document *doc = studio.openImageAsDocument(picture, QStringLiteral("Sample"));
+    doc->applySelection(cornerSelection(doc->size()).scaled(doc->size()), QStringLiteral("Select"));
+    EditorPage page(&studio);
+    page.resize(1280, 700);
+    page.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&page));
+    auto *panel = page.findChild<FiltersPanel *>();
+    QVERIFY(panel);
+    QTabWidget *side = nullptr;
+    for (QTabWidget *t : page.findChildren<QTabWidget *>()) {
+        if (t->indexOf(panel) >= 0)
+            side = t;
+    }
+    QVERIFY(side);
+    QCOMPARE(side->tabText(side->indexOf(panel)), QStringLiteral("Filters"));
+    QVERIFY(panel->selectFilter(builtIn(QStringLiteral("old-photo"))));
+    QVERIFY(page.canvas()->preview().isNull()); // another tab is shown
+    side->setCurrentWidget(panel);
+    QTRY_VERIFY(!page.canvas()->preview().isNull());
+    // Reduced resolution: at most the preview size, and not more than the picture.
+    QVERIFY(page.canvas()->preview().width() <= doc->size().width());
+    const QString shots = qEnvironmentVariable("LUMEN_SCREENSHOT_DIR");
+    if (!shots.isEmpty()) {
+        QTest::qWait(50);
+        page.grab().save(QDir(shots).filePath(QStringLiteral("editor-filters-tab.png")));
+    }
+    side->setCurrentIndex(0);
+    QVERIFY(page.canvas()->preview().isNull());
+}
+
+QTEST_MAIN(TestFiltersUi)
+
+#include "tst_filters_ui.moc"

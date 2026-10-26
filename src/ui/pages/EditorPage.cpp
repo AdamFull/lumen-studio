@@ -14,6 +14,7 @@
 #include "ui/canvas/EditorState.h"
 #include "ui/canvas/Tools.h"
 #include "ui/canvas/TransformTool.h"
+#include "ui/filters/FiltersPanel.h"
 #include "ui/pages/AiPanel.h"
 #include "ui/widgets/Controls.h"
 #include "ui/widgets/LayersPanel.h"
@@ -193,6 +194,10 @@ EditorPage::EditorPage(Studio *studio, QWidget *parent)
     m_side->addTab(m_ai, Icons::get(QStringLiteral("sparkles")), tr("AI"));
     m_side->addTab(m_layers, Icons::get(QStringLiteral("layers")), tr("Layers"));
     m_side->addTab(m_history, Icons::get(QStringLiteral("history")), tr("History"));
+    m_side->addTab(new FiltersPanel(studio, m_canvas, m_side), Icons::get(QStringLiteral("adjust")), tr("Filters"));
+    // Four tabs share a narrow panel: they shorten their names rather than hide behind arrows.
+    m_side->setUsesScrollButtons(false);
+    m_side->setElideMode(Qt::ElideRight);
 
     splitter->addWidget(palette);
     splitter->addWidget(center);

@@ -20,6 +20,9 @@ QString defaultProjects();
 // writable data is relocated (LUMEN_DATA_DIR, the portable ZIP, Qt's test mode) it is
 // <data root>/models, so those stay self-contained.
 QString defaultModels();
+// Folder of the user's saved filters (.lumenfilter), next to the models folder:
+// <Documents>/Lumen/Filters, or <data root>/filters while data is relocated, as for the models.
+QString defaultFilters();
 // Directory with bundled read-only resources shipped next to the executable (optional).
 QString bundledData();
 

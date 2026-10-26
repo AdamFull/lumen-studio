@@ -260,6 +260,10 @@ public:
         // A preview that would have to run an expensive node stops before it runs anything.
         if (m_result.needsRun)
             return finishOk();
+        for (const Step &s : std::as_const(m_steps)) {
+            if (s.needed && !s.cached && !s.scaledCopy)
+                ++m_total;
+        }
         step();
     }
 
@@ -286,6 +290,8 @@ public:
                     continue;
                 }
                 m_result.evaluated.append(s.node);
+                if (m_options.progress)
+                    m_options.progress(m_ran, m_total, info.name);
                 EvalContext ctx(this, s.node, laneScale(s.lane));
                 const NodeResult result = node->type->evaluate(NodeArgs(inputsOf(s, info), s.params), ctx);
                 if (!result.isReady())
@@ -463,6 +469,8 @@ private:
     void accept(const Values &outputs)
     {
         const Step &s = m_steps.at(m_index);
+        if (!s.scaledCopy)
+            ++m_ran;
         m_cache->store(s.node, s.lane, s.key, outputs);
         m_outputs[s.lane].insert(s.node, outputs);
         ++m_index;
@@ -537,6 +545,8 @@ private:
         const Values output = outputs.value(m_graph.outputNode());
         m_result.image = output.value(QStringLiteral("image")).value<QImage>();
         m_result.mask = output.value(QStringLiteral("mask")).value<QImage>();
+        if (m_options.progress && !m_result.needsRun)
+            m_options.progress(m_total, m_total, QString());
         m_promise.addResult(m_result);
         m_promise.finish();
     }
@@ -565,6 +575,8 @@ private:
 
     QList<Step> m_steps;
     qsizetype m_index = 0;
+    int m_total = 0; // the steps that run (for EvalOptions::progress)
+    int m_ran = 0;
     std::array<QHash<QString, Values>, 2> m_outputs; // per lane: node id -> outputs
     EvalResult m_result;
     std::array<QImage, 2> m_source; // per lane

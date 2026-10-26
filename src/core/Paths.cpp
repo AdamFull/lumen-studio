@@ -70,6 +70,15 @@ QString defaultModels()
     return QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + QStringLiteral("/Lumen/Models");
 }
 
+QString defaultFilters()
+{
+    if (!overrideRoot().isEmpty())
+        return overrideRoot() + QStringLiteral("/filters");
+    if (QStandardPaths::isTestModeEnabled())
+        return appData() + QStringLiteral("/filters");
+    return QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + QStringLiteral("/Lumen/Filters");
+}
+
 QString bundledData()
 {
     return QCoreApplication::applicationDirPath() + QStringLiteral("/data");
