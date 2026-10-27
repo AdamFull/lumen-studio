@@ -200,7 +200,7 @@
         <translation>Claude hat diese Anfrage abgelehnt%1.</translation>
     </message>
     <message>
-        <location filename="../src/ai/providers/GeminiProvider.cpp" line="+452"/>
+        <location filename="../src/ai/providers/GeminiProvider.cpp" line="+472"/>
         <source>Gemini blocked the request (%1)</source>
         <translation>Gemini hat die Anfrage blockiert (%1)</translation>
     </message>
@@ -1267,19 +1267,19 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ai::CastGeneration</name>
     <message>
-        <location filename="../src/ai/CastGeneration.cpp" line="+226"/>
+        <location filename="../src/ai/CastGeneration.cpp" line="+254"/>
         <source>%1: %2</source>
         <translation>%1: %2</translation>
     </message>
     <message>
         <location line="+4"/>
-        <location line="+97"/>
+        <location line="+117"/>
         <location line="+73"/>
         <source>The generation service is no longer available</source>
         <translation>Der Generierungsdienst ist nicht mehr verfügbar</translation>
     </message>
     <message>
-        <location line="-165"/>
+        <location line="-185"/>
         <source>There is no image engine. Set one up with Help → Set up AI…</source>
         <translation>Es gibt keine Bild-Engine. Richten Sie eine unter Hilfe → KI einrichten… ein.</translation>
     </message>
@@ -1289,12 +1289,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Keine Charaktere zum Zeichnen.</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+8"/>
         <source>%1 cannot repaint a region, which drawing two characters needs.</source>
         <translation>%1 kann keinen Bereich neu malen, was zwei Charaktere in einem Bild erfordert.</translation>
     </message>
     <message>
-        <location line="+108"/>
+        <location line="+125"/>
         <source>Checking %1…</source>
         <translation>%1 wird geprüft…</translation>
     </message>
@@ -1310,7 +1310,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+3"/>
-        <location line="+11"/>
+        <location line="+12"/>
         <source>The provider returned no images</source>
         <translation>Der Anbieter hat keine Bilder zurückgegeben</translation>
     </message>
@@ -1320,7 +1320,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Die Szene wird gezeichnet (1 von %1)…</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="-1"/>
         <source>Drawing both in one pass…</source>
         <translation>Beide werden in einem Durchgang gezeichnet…</translation>
     </message>
