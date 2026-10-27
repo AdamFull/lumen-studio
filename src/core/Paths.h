@@ -33,4 +33,9 @@ bool ensure();
 // Compares the text only; the file need not exist.
 bool sameFile(const QString &a, const QString &b);
 
+// Moves a folder (or file) to `to`, trying again for up to a second: on Windows a virus scanner or
+// the indexer often holds files that were just written, and the move then fails for a moment.
+// Blocking; false when it still fails.
+bool moveWithRetry(const QString &from, const QString &to);
+
 } // namespace lumen::paths

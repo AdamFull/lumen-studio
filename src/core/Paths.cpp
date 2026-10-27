@@ -4,6 +4,7 @@
 #include <QDir>
 #include <QFile>
 #include <QStandardPaths>
+#include <QThread>
 
 namespace lumen::paths {
 
@@ -102,6 +103,16 @@ bool sameFile(const QString &a, const QString &b)
     if (a.isEmpty() || b.isEmpty())
         return false;
     return QDir::cleanPath(QDir::fromNativeSeparators(a)).compare(QDir::cleanPath(QDir::fromNativeSeparators(b)), cs) == 0;
+}
+
+bool moveWithRetry(const QString &from, const QString &to)
+{
+    for (int attempt = 0; attempt < 10; ++attempt) {
+        if (QDir().rename(from, to))
+            return true;
+        QThread::msleep(100);
+    }
+    return false;
 }
 
 } // namespace lumen::paths

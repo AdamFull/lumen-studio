@@ -4,6 +4,7 @@
 #include "core/Job.h"
 #include "core/JobQueue.h"
 #include "core/Log.h"
+#include "core/Paths.h"
 #include "net/HttpClient.h"
 #include "runtime/Download.h"
 #include "runtime/Zip.h"
@@ -476,7 +477,7 @@ private:
         progress(0.99, Text::tr("Finishing…"));
         const QString finalDir = target();
         QDir(finalDir).removeRecursively();
-        if (!QDir().rename(staging(), finalDir))
+        if (!paths::moveWithRetry(staging(), finalDir))
             return m_job->fail(Text::tr("Cannot move the new files into %1.").arg(QDir::toNativeSeparators(finalDir)));
         // uv's download cache (several GB) is not needed once the environment exists.
         QDir(QDir(tools()).filePath(QStringLiteral("uv-cache"))).removeRecursively();

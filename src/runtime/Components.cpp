@@ -2,6 +2,7 @@
 
 #include "core/Job.h"
 #include "core/JobQueue.h"
+#include "core/Paths.h"
 #include "net/HttpClient.h"
 #include "runtime/Download.h"
 #include "runtime/Zip.h"
@@ -126,7 +127,7 @@ private:
     {
         // The finished folder replaces any older one at once.
         QDir(m_folder).removeRecursively();
-        if (!QDir().rename(m_staging, m_folder))
+        if (!paths::moveWithRetry(m_staging, m_folder))
             return m_job->fail(QCoreApplication::translate("lumen::runtime::Components", "%1 could not be put in place at %2.").arg(m_spec.name, QDir::toNativeSeparators(m_folder)));
         m_job->succeed(m_folder);
         if (m_components)

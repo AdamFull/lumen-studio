@@ -517,7 +517,7 @@ private:
             QDir(staging).removeRecursively();
             return m_job->fail(Text::tr("%1 is in use; stop its server and try again.").arg(QDir::toNativeSeparators(finalDir)));
         }
-        if (!QDir().rename(staging, finalDir)) {
+        if (!paths::moveWithRetry(staging, finalDir)) {
             QDir(staging).removeRecursively();
             return m_job->fail(Text::tr("Cannot move the new files into %1.").arg(QDir::toNativeSeparators(finalDir)));
         }
