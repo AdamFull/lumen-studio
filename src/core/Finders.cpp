@@ -34,6 +34,25 @@ std::vector<uchar> luminance(const QImage &image, int *w, int *h)
     return out;
 }
 
+// The brightest (or darkest) channel of each pixel, over white where transparent. A black line over
+// saturated red differs little from it in luminance (red is dark there) but a lot in its brightest
+// channel; a white scratch over blue sky likewise in its darkest.
+std::vector<uchar> extremeChannel(const QImage &image, bool brightest)
+{
+    const QImage src = image.convertToFormat(QImage::Format_ARGB32);
+    std::vector<uchar> out(size_t(src.width()) * src.height());
+    for (int y = 0; y < src.height(); ++y) {
+        const auto *line = reinterpret_cast<const QRgb *>(src.constScanLine(y));
+        for (int x = 0; x < src.width(); ++x) {
+            const QRgb p = line[x];
+            const int a = qAlpha(p);
+            const int v = brightest ? std::max({qRed(p), qGreen(p), qBlue(p)}) : std::min({qRed(p), qGreen(p), qBlue(p)});
+            out[size_t(y) * src.width() + x] = uchar((v * a + 255 * (255 - a)) / 255);
+        }
+    }
+    return out;
+}
+
 // The maximum (or minimum) over a window of 2 r + 1 along one line, in O(n) with a monotonic queue.
 void runningExtreme(const uchar *in, uchar *out, int n, int stride, int r, bool max)
 {
@@ -222,10 +241,22 @@ QImage findStrokes(const QImage &image, const StrokeOptions &o)
     const std::vector<uchar> l = luminance(image, &w, &h);
     // A window just wider than the widest stroke (2 r + 1 > maxWidth), so wider shapes stay.
     const int r = std::max(1, std::max(1, o.maxWidth) / 2 + 1);
-    const std::vector<uchar> contrast = hat(l, w, h, r, o.dark);
-    std::vector<uchar> on(contrast.size());
-    for (size_t i = 0; i < on.size(); ++i)
-        on[i] = contrast[i] >= std::max(1, o.contrast);
+    const int threshold = std::max(1, o.contrast);
+    std::vector<uchar> on(l.size(), 0);
+    // In luminance, and in the brightest channel for dark strokes (the darkest for light ones): a
+    // black line over red is found by the second. In either, a stroke differs from its ground by the
+    // contrast, or it is at most half as bright as the ground (half as dark, for light strokes) and
+    // differs by a third of the contrast: a black line in a dark room.
+    for (const std::vector<uchar> &values : {l, extremeChannel(image, o.dark)}) {
+        const std::vector<uchar> ground = squareFilter(squareFilter(values, w, h, r, o.dark), w, h, r, !o.dark);
+        for (size_t i = 0; i < on.size(); ++i) {
+            const int v = o.dark ? values[i] : 255 - values[i];
+            const int g = o.dark ? ground[i] : 255 - ground[i];
+            const int diff = g - v;
+            if (diff >= threshold || (2 * v <= g && 3 * diff >= threshold))
+                on[i] = 1;
+        }
+    }
     std::vector<int> label;
     const std::vector<Piece> found = pieces(on, w, h, label);
     const int minLength = o.minLength > 0 ? o.minLength : 4 * std::max(1, o.maxWidth);

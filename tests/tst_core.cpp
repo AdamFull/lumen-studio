@@ -411,6 +411,26 @@ void TestCore::finders()
     img::StrokeOptions wide;
     wide.maxWidth = 16;
     QVERIFY(on(img::findStrokes(bands, wide), 150, 47));
+    // A black line over saturated red (little darker in luminance) and through a dark room (darker by
+    // less than the contrast, but a third as bright): both found, the red and the room's edges not.
+    QImage scene(400, 200, QImage::Format_ARGB32);
+    scene.fill(QColor(200, 200, 195));
+    {
+        QPainter p(&scene);
+        p.setRenderHint(QPainter::Antialiasing);
+        p.setPen(Qt::NoPen);
+        p.setBrush(QColor(130, 0, 5));
+        p.drawEllipse(QPoint(120, 100), 60, 60);
+        p.fillRect(QRect(260, 0, 140, 200), QColor(50, 44, 36));
+        p.setPen(QPen(QColor(15, 15, 15), 3));
+        p.drawLine(20, 100, 390, 100);
+    }
+    const QImage crossing = img::findStrokes(scene);
+    QVERIFY(on(crossing, 120, 100)); // over the red
+    QVERIFY(on(crossing, 330, 100)); // in the dark
+    QVERIFY(on(crossing, 40, 100));
+    QVERIFY(coverage(crossing, QRect(70, 140, 100, 30)) < 0.02);  // the red's lower edge
+    QVERIFY(coverage(crossing, QRect(250, 130, 20, 60)) < 0.02);  // the room's edge
 
     const QImage dust = img::findSpecks(drawing);
     // (The one at 120, 200 is 5 px from a line: the paper between them is not a light speck.)
