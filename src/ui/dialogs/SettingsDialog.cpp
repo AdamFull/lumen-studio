@@ -880,10 +880,7 @@ OnboardingDialog::OnboardingDialog(Studio *studio, QWidget *parent)
 
 void OnboardingDialog::detect()
 {
-    while (QLayoutItem *item = m_found->takeAt(0)) {
-        delete item->widget();
-        delete item;
-    }
+    clearLayout(m_found);
     m_status->setText(tr("Searching for local servers..."));
     QPointer<OnboardingDialog> self(this);
     m_studio->providers()->detectLocalServers().then(this, [self](QList<ai::DetectedServer> found) {

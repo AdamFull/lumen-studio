@@ -615,14 +615,7 @@ void NodeEditorWindow::updatePreviewTitle()
 
 void NodeEditorWindow::rebuildNodeSection()
 {
-    while (QLayoutItem *item = m_nodeLayout->takeAt(0)) {
-        if (QWidget *w = item->widget()) {
-            w->hide();
-            w->setParent(nullptr); // gone from the panel now; deleted once its signals are done
-            w->deleteLater();
-        }
-        delete item;
-    }
+    clearLayout(m_nodeLayout);
     m_fields.clear();
     m_publishButtons.clear();
     const filters::Node *node = m_model->graph().node(m_selected);
@@ -696,14 +689,7 @@ void NodeEditorWindow::updateFilterSection()
         m_name->setText(g.name);
     if (m_description->text() != g.description)
         m_description->setText(g.description);
-    while (QLayoutItem *item = m_publishedLayout->takeAt(0)) {
-        if (QWidget *w = item->widget()) {
-            w->hide();
-            w->setParent(nullptr);
-            w->deleteLater();
-        }
-        delete item;
-    }
+    clearLayout(m_publishedLayout);
     for (const filters::PublishedParam &p : g.published()) {
         const filters::Node *n = g.node(p.node);
         const filters::ParamSpec *spec = n && n->type ? n->type->info().param(p.param) : nullptr;

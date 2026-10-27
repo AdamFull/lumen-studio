@@ -81,23 +81,6 @@ QString familyText(const runtime::ModelInfo &i)
     return s;
 }
 
-// Removes and deletes everything in a layout, including nested layouts and their widgets (a nested
-// layout is its own layout item, so it must not be deleted twice).
-void clearLayout(QLayout *layout)
-{
-    while (QLayoutItem *item = layout->takeAt(0)) {
-        if (QWidget *w = item->widget()) {
-            delete w;
-            delete item;
-        } else if (QLayout *inner = item->layout()) {
-            clearLayout(inner);
-            delete inner;
-        } else {
-            delete item;
-        }
-    }
-}
-
 void revealInExplorer(const QString &path)
 {
 #ifdef Q_OS_WIN

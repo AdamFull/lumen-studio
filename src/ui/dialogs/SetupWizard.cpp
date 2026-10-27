@@ -1022,10 +1022,7 @@ void SetupWizard::detectServers()
     m_studio->providers()->detectLocalServers().then(this, [self, search](QList<ai::DetectedServer> found) {
         if (!self || search != self->m_serverSearch)
             return;
-        while (QLayoutItem *item = self->m_foundList->takeAt(0)) {
-            delete item->widget();
-            delete item;
-        }
+        clearLayout(self->m_foundList);
         // Image servers only: language model servers are set up elsewhere.
         static const QSet<QString> image{QStringLiteral("comfyui"), QStringLiteral("sdwebui"), QStringLiteral("sdcpp")};
         found.removeIf([](const ai::DetectedServer &s) { return !image.contains(s.typeId); });

@@ -368,12 +368,9 @@ QToolButton *StartScreen::addTile(FlowLayout *tiles, const QString &name, const 
 void StartScreen::rebuildRecent()
 {
     m_dirty = false;
-    for (FlowLayout *layout : {m_tiles, m_fileTiles}) {
-        while (QLayoutItem *item = layout->takeAt(0)) {
-            delete item->widget();
-            delete item;
-        }
-    }
+    // A tile's own menu (remove from the list) may have asked for this.
+    for (FlowLayout *layout : {m_tiles, m_fileTiles})
+        clearLayout(layout);
     // The files first, those that are still there (File → Open recent shows the others greyed).
     QStringList files;
     for (const QString &path : Settings::instance().recentFiles()) {

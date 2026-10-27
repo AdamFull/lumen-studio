@@ -137,10 +137,7 @@ void ShotCard::refresh()
 
 void ShotCard::refreshResults()
 {
-    while (QLayoutItem *item = m_results->takeAt(0)) {
-        delete item->widget();
-        delete item;
-    }
+    clearLayout(m_results); // a result's own button may have asked for this
     ShotState *s = m_session ? m_session->shot(m_id) : nullptr;
     if (!s)
         return;

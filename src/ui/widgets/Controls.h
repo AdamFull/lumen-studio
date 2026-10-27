@@ -109,6 +109,11 @@ private:
 
 // Small helpers to build consistent layouts.
 QLabel *sectionLabel(const QString &text, QWidget *parent = nullptr);
+// Takes everything out of `layout` (nested layouts too) except the last `keep` items (a stretch),
+// and deletes its widgets once control is back in the event loop. Rows are often rebuilt by a
+// signal of one of their own buttons or fields, which is still running then: deleting it at once
+// crashes. The widgets leave their parent at once, so they are neither shown nor found by findChild.
+void clearLayout(QLayout *layout, int keep = 0);
 QLabel *mutedLabel(const QString &text, QWidget *parent = nullptr);
 QToolButton *iconButton(const QString &icon, const QString &tooltip, QWidget *parent = nullptr, bool checkable = false);
 // Fits a label into `width` pixels at `pointSize` (labels of fixed-width text-under-icon buttons,

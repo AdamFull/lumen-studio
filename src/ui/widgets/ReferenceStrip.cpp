@@ -5,6 +5,7 @@
 #include "core/ImageOps.h"
 #include "ui/Icons.h"
 #include "ui/Studio.h"
+#include "ui/widgets/Controls.h"
 #include "ui/Theme.h"
 
 #include <QApplication>
@@ -144,10 +145,7 @@ void ReferenceStrip::browse()
 
 void ReferenceStrip::rebuild()
 {
-    while (QLayoutItem *item = m_items->takeAt(0)) {
-        delete item->widget();
-        delete item;
-    }
+    clearLayout(m_items); // a reference's remove button may have asked for this
     const int size = m_compact ? 56 : 84;
     for (int i = 0; i < m_refs.size(); ++i) {
         auto *tile = new QFrame(m_container);

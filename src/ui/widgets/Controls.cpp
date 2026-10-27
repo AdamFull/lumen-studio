@@ -3,6 +3,7 @@
 #include "ui/Icons.h"
 #include "ui/Theme.h"
 
+#include <QLayout>
 #include <QApplication>
 #include <QColorDialog>
 #include <QDoubleSpinBox>
@@ -375,6 +376,24 @@ QSize availableWindowSize(const QWidget *window)
 void resizeWithinScreen(QWidget *window, const QSize &preferred)
 {
     window->resize(preferred.boundedTo(availableWindowSize(window)).expandedTo(window->minimumSize()));
+}
+
+void clearLayout(QLayout *layout, int keep)
+{
+    while (layout->count() > keep) {
+        QLayoutItem *item = layout->takeAt(0);
+        if (QWidget *w = item->widget()) {
+            w->hide();
+            w->setParent(nullptr);
+            w->deleteLater();
+        } else if (QLayout *inner = item->layout()) {
+            clearLayout(inner);
+            // A nested layout is its own item: deleting it once is enough.
+            delete inner;
+            continue;
+        }
+        delete item;
+    }
 }
 
 } // namespace lumen::ui

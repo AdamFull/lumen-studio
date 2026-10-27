@@ -1,3 +1,4 @@
+#include "ui/widgets/Controls.h"
 #include "ui/widgets/LoraPicker.h"
 
 #include "ai/Provider.h"
@@ -127,16 +128,9 @@ void LoraPicker::enforceFit()
 
 void LoraPicker::rebuild()
 {
-    // A row's box or field usually sent the change that rebuilds them: it is still in its signal
-    // (a click goes on after the toggle), so the rows go later, out of sight and out of findChild.
-    while (QLayoutItem *item = m_rows->takeAt(0)) {
-        if (QWidget *w = item->widget()) {
-            w->hide();
-            w->setParent(nullptr);
-            w->deleteLater();
-        }
-        delete item;
-    }
+    // A row's box or field usually sent the change that rebuilds them (a click goes on after the
+    // toggle).
+    clearLayout(m_rows);
     const QList<ChosenLora> chosen = m_engineId.isEmpty() ? QList<ChosenLora>() : m_options->loras(m_engineId);
     for (int i = 0; i < chosen.size(); ++i) {
         const ChosenLora &l = chosen.at(i);

@@ -472,11 +472,7 @@ QWidget *CreatePage::bubble(const ChatEntry &e)
 
 void CreatePage::rebuildChat()
 {
-    while (m_chat->count() > 1) {
-        QLayoutItem *item = m_chat->takeAt(0);
-        delete item->widget();
-        delete item;
-    }
+    clearLayout(m_chat, 1); // the stretch stays
     if (!m_session)
         return;
     if (m_session->messages().isEmpty()) {
@@ -498,11 +494,9 @@ void CreatePage::refreshCharacter()
             m_studio->setActiveCharacter(library);
         m_seenLibraryCharacter = library;
     }
+    // A thumbnail's click (remove the reference) is what rebuilds them.
     auto *layout = static_cast<QHBoxLayout *>(m_refRow->layout());
-    while (QLayoutItem *item = layout->takeAt(0)) {
-        delete item->widget();
-        delete item;
-    }
+    clearLayout(layout);
     if (!m_session)
         return;
     for (const QString &id : m_session->references()) {

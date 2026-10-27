@@ -519,14 +519,7 @@ void FiltersPanel::updateAvailability()
 
 void FiltersPanel::rebuildSettings()
 {
-    while (QLayoutItem *item = m_settingsLayout->takeAt(0)) {
-        if (QWidget *w = item->widget()) {
-            w->hide();
-            w->setParent(nullptr); // gone from the panel now; deleted once its signals are done
-            w->deleteLater();
-        }
-        delete item;
-    }
+    clearLayout(m_settingsLayout);
     m_fields.clear();
     const std::optional<filters::Graph> &graph = m_runner->graph();
     if (!graph)

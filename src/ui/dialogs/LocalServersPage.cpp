@@ -1271,10 +1271,7 @@ void ServerProfileDialog::buildOptions()
     m_downloadMissing = nullptr;
     m_downloadRow = nullptr;
     for (QWidget *host : {m_optionsHost, m_advancedHost}) {
-        while (QLayoutItem *item = host->layout()->takeAt(0)) {
-            delete item->widget();
-            delete item;
-        }
+        clearLayout(host->layout());
     }
     updatePresetRow();
     auto *box = new QWidget(m_optionsHost);
