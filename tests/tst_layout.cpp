@@ -51,6 +51,7 @@
 #include "ui/filters/NodeEditorWindow.h"
 #include "ui/ext/Extension.h"
 #include "core/ImageOps.h"
+#include "pose/CastLayout.h"
 #include "ui/pages/EditorPage.h"
 #include "ui/pages/PromptBar.h"
 #include "ui/pages/StartScreen.h"
@@ -957,8 +958,16 @@ void TestLayout::dialogs()
     }
     {
         pose::Pose pose;
-        PoseEditDialog d(&studio, pose, std::nullopt, QString());
+        PoseEditDialog d(&studio, pose, {std::nullopt}, QString());
         m_auditor.auditDialog(&d, QStringLiteral("Pose edit dialog"));
+    }
+    {
+        // Two people of a planned shot (M16): the chips that choose whom a change is for.
+        const QList<pose::RigParams> rigs = pose::arrangePeople({pose::RigParams(), pose::RigParams()}, pose::Arrangement::SideBySide);
+        const pose::Pose pose = pose::solvePose(rigs, QSize(1216, 832));
+        PoseEditDialog d(&studio, pose, {rigs[0], rigs[1]}, QStringLiteral("Both at a café table, talking"),
+                         {QStringLiteral("Akane"), QStringLiteral("Bo")});
+        m_auditor.auditDialog(&d, QStringLiteral("Pose edit dialog (two people)"));
     }
     {
         NewFromPromptDialog d(&studio);

@@ -743,7 +743,7 @@
         <translation>Physikeinstellung %1 benötigt mindestens zwei Eckpunkte.</translation>
     </message>
     <message>
-        <location filename="../src/plugins/characters/CreatePage.cpp" line="+742"/>
+        <location filename="../src/plugins/characters/CreatePage.cpp" line="+736"/>
         <source>**Character sheet:** %1 — %2</source>
         <translation>**Charakterblatt:** %1 — %2</translation>
     </message>
@@ -1027,7 +1027,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Beim Malen werden niemals Hintergrundpixel außerhalb der Charaktersilhouette erfasst.</translation>
     </message>
     <message>
-        <location filename="../src/plugins/characters/assistant/AssistantTools.cpp" line="+92"/>
+        <location filename="../src/plugins/characters/assistant/AssistantTools.cpp" line="+94"/>
         <source>cancelled</source>
         <translation>abgebrochen</translation>
     </message>
@@ -1042,7 +1042,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Das Bild konnte nicht geladen werden.</translation>
     </message>
     <message>
-        <location line="+99"/>
+        <location line="+155"/>
         <location line="+52"/>
         <location line="+29"/>
         <source>No project is open.</source>
@@ -1059,8 +1059,8 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Es gibt keinen Charakter %1 in der Bibliothek; siehe list_characters.</translation>
     </message>
     <message>
-        <location line="+49"/>
-        <location line="+59"/>
+        <location line="+50"/>
+        <location line="+61"/>
         <source>There is no image engine. Set one up with Help → Set up AI…</source>
         <translation>Es gibt keine Bild-Engine. Richten Sie eine unter Hilfe → KI einrichten… ein.</translation>
     </message>
@@ -1105,7 +1105,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Die Regie ist nicht verfügbar.</translation>
     </message>
     <message>
-        <location line="-320"/>
+        <location line="-323"/>
         <location filename="../src/ui/Studio.cpp" line="+161"/>
         <location line="+17"/>
         <source>Lumen is shutting down.</source>
@@ -8033,7 +8033,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::ColorSwatch</name>
     <message>
-        <location filename="../src/ui/widgets/Controls.cpp" line="+124"/>
+        <location filename="../src/ui/widgets/Controls.cpp" line="+125"/>
         <source>Choose colour</source>
         <translation>Farbe wählen</translation>
     </message>
@@ -8041,7 +8041,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::CreatePage</name>
     <message>
-        <location filename="../src/plugins/characters/CreatePage.cpp" line="-956"/>
+        <location filename="../src/plugins/characters/CreatePage.cpp" line="-950"/>
         <source>Director</source>
         <translation>Regie</translation>
     </message>
@@ -8083,29 +8083,29 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+522"/>
+        <location line="+516"/>
         <source>Send</source>
         <translation>Senden</translation>
     </message>
     <message>
-        <location line="-504"/>
-        <location line="+1253"/>
+        <location line="-498"/>
+        <location line="+1247"/>
         <source>Character</source>
         <translation>Charakter</translation>
     </message>
     <message>
-        <location line="-1249"/>
+        <location line="-1243"/>
         <source>Edit sheet</source>
         <translation>Steckbrief bearbeiten</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+400"/>
+        <location line="+394"/>
         <source>Analyze references</source>
         <translation>Referenzen analysieren</translation>
     </message>
     <message>
-        <location line="-397"/>
+        <location line="-391"/>
         <source>Library</source>
         <translation>Bibliothek</translation>
     </message>
@@ -8136,12 +8136,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+7"/>
-        <location line="+385"/>
+        <location line="+379"/>
         <source>LoRA</source>
         <translation>LoRA</translation>
     </message>
     <message>
-        <location line="-382"/>
+        <location line="-376"/>
         <source>A LoRA keeps the character looking the same in every image</source>
         <translation>Eine LoRA hält das Aussehen des Charakters in jedem Bild gleich</translation>
     </message>
@@ -8157,12 +8157,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+21"/>
-        <location line="+434"/>
+        <location line="+428"/>
         <source>Shot plan</source>
         <translation>Aufnahmeplan</translation>
     </message>
     <message>
-        <location line="-426"/>
+        <location line="-420"/>
         <source>Generator</source>
         <translation>Generator</translation>
     </message>
@@ -8238,12 +8238,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Ungültiges JSON: %1</translation>
     </message>
     <message>
-        <location line="+172"/>
+        <location line="+168"/>
         <source>Start by attaching reference images of your character and describing the images you need.</source>
         <translation>Hängen Sie zunächst Referenzbilder Ihres Charakters an und beschreiben Sie die benötigten Bilder.</translation>
     </message>
     <message>
-        <location line="+32"/>
+        <location line="+30"/>
         <source>Reference — click to remove</source>
         <translation>Referenz – zum Entfernen klicken</translation>
     </message>
@@ -9584,12 +9584,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+456"/>
+        <location line="+449"/>
         <source>Edit…</source>
         <translation>Bearbeiten…</translation>
     </message>
     <message>
-        <location line="-455"/>
+        <location line="-448"/>
         <source>More: duplicate, delete, filters folder</source>
         <translation>Mehr: duplizieren, löschen, Filterordner</translation>
     </message>
@@ -9640,12 +9640,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+425"/>
+        <location line="+418"/>
         <source>The result goes on a new layer above, so the original stays underneath.</source>
         <translation>Das Ergebnis kommt auf eine neue Ebene darüber, sodass das Original darunter erhalten bleibt.</translation>
     </message>
     <message>
-        <location line="-424"/>
+        <location line="-417"/>
         <source>The result replaces the pixels of the layer (undo brings them back).</source>
         <translation>Das Ergebnis ersetzt die Pixel der Ebene (Rückgängig holt sie zurück).</translation>
     </message>
@@ -9767,7 +9767,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Dieser Filter kann nicht verwendet werden.</translation>
     </message>
     <message>
-        <location line="+54"/>
+        <location line="+47"/>
         <source>This filter has no settings to change here.</source>
         <translation>Dieser Filter hat hier keine Einstellungen zum Ändern.</translation>
     </message>
@@ -12131,7 +12131,7 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
 <context>
     <name>lumen::ui::LoraPicker</name>
     <message>
-        <location filename="../src/ui/widgets/LoraPicker.cpp" line="+41"/>
+        <location filename="../src/ui/widgets/LoraPicker.cpp" line="+42"/>
         <source>Add a LoRA…</source>
         <translation>LoRA hinzufügen…</translation>
     </message>
@@ -12151,7 +12151,7 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         <translation>Einstellungen → Lokale Server, wo der LoRA-Ordner des Servers gewählt wird</translation>
     </message>
     <message>
-        <location line="+98"/>
+        <location line="+91"/>
         <source>It is not in the server&apos;s LoRAs any more.</source>
         <translation>Er ist nicht mehr unter den LoRAs des Servers.</translation>
     </message>
@@ -13262,7 +13262,7 @@ Trotzdem herunterladen?</translation>
 <context>
     <name>lumen::ui::ModelsPage</name>
     <message>
-        <location filename="../src/ui/dialogs/ModelsPage.cpp" line="+167"/>
+        <location filename="../src/ui/dialogs/ModelsPage.cpp" line="+150"/>
         <source>No matching models in the library</source>
         <translation>Keine passenden Modelle in der Bibliothek</translation>
     </message>
@@ -13963,12 +13963,12 @@ Downloads und trainierte LoRAs kommen hierher, in Unterordner mit Namen wie bei 
     <message>
         <location line="+2"/>
         <location line="+185"/>
-        <location line="+586"/>
+        <location line="+572"/>
         <source>Run AI steps</source>
         <translation>KI-Schritte ausführen</translation>
     </message>
     <message>
-        <location line="-770"/>
+        <location line="-756"/>
         <source>AI steps take a while, so the preview runs them only when you ask. Applying the saved filter to the same layer from the Filters panel then uses what they made.</source>
         <translation>KI-Schritte dauern eine Weile, daher führt die Vorschau sie nur auf Wunsch aus. Wenn Sie den gespeicherten Filter dann im Filter-Bedienfeld auf dieselbe Ebene anwenden, wird verwendet, was sie erzeugt haben.</translation>
     </message>
@@ -14083,13 +14083,13 @@ Downloads und trainierte LoRAs kommen hierher, in Unterordner mit Namen wie bei 
     </message>
     <message>
         <location line="+12"/>
-        <location line="+188"/>
+        <location line="+181"/>
         <location line="+39"/>
         <source>Show “%1” in the Filters panel</source>
         <translation>„%1“ im Filter-Bedienfeld zeigen</translation>
     </message>
     <message>
-        <location line="-210"/>
+        <location line="-203"/>
         <source>Remove from the Filters panel</source>
         <translation>Aus dem Filter-Bedienfeld entfernen</translation>
     </message>
@@ -14111,12 +14111,12 @@ Downloads und trainierte LoRAs kommen hierher, in Unterordner mit Namen wie bei 
     </message>
     <message>
         <location line="+50"/>
-        <location line="+368"/>
+        <location line="+354"/>
         <source>Untitled filter</source>
         <translation>Unbenannter Filter</translation>
     </message>
     <message>
-        <location line="-367"/>
+        <location line="-353"/>
         <source>%1[*] — Filter editor</source>
         <translation>%1[*] — Filtereditor</translation>
     </message>
@@ -14131,7 +14131,7 @@ Downloads und trainierte LoRAs kommen hierher, in Unterordner mit Namen wie bei 
         <translation>Vorschau des Ergebnisses</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+16"/>
         <source>This node has no settings.</source>
         <translation>Dieser Knoten hat keine Einstellungen.</translation>
     </message>
@@ -14146,7 +14146,7 @@ Downloads und trainierte LoRAs kommen hierher, in Unterordner mit Namen wie bei 
         <translation>Im Filter-Bedienfeld gezeigt; klicken Sie, um es dort zu entfernen</translation>
     </message>
     <message>
-        <location line="+33"/>
+        <location line="+26"/>
         <source>%1 (%2). Click to select the node.</source>
         <translation>%1 (%2). Klicken Sie, um den Knoten auszuwählen.</translation>
     </message>
@@ -14349,12 +14349,12 @@ Klicken Sie, um den Knoten auszuwählen.</translation>
         <translation>fal.ai, OpenAI oder Gemini mit Ihrem Schlüssel, geprüft mit einem Testbild (der Einrichtungsassistent)</translation>
     </message>
     <message>
-        <location line="+31"/>
+        <location line="+28"/>
         <source>No local servers found. Start SD WebUI with --api, ComfyUI, llama-server, Ollama or LM Studio and search again — or use an online service.</source>
         <translation>Keine lokalen Server gefunden. Starten Sie SD WebUI mit --api, ComfyUI, llama-server, Ollama oder LM Studio und suchen Sie erneut – oder verwenden Sie einen Online-Dienst.</translation>
     </message>
     <message>
-        <location line="-30"/>
+        <location line="-27"/>
         <source>Set up local AI…</source>
         <translation>Lokale KI einrichten…</translation>
     </message>
@@ -14369,7 +14369,7 @@ Klicken Sie, um den Knoten auszuwählen.</translation>
         <translation>Schließen</translation>
     </message>
     <message>
-        <location line="+22"/>
+        <location line="+19"/>
         <source>Searching for local servers...</source>
         <translation>Lokale Server werden gesucht...</translation>
     </message>
@@ -15756,7 +15756,7 @@ oder eines aus den Projektbildern ziehen</translation>
 <context>
     <name>lumen::ui::PoseEditDialog</name>
     <message>
-        <location filename="../src/ui/dialogs/PoseEditDialog.cpp" line="+29"/>
+        <location filename="../src/ui/dialogs/PoseEditDialog.cpp" line="+34"/>
         <source>Edit pose</source>
         <translation>Pose bearbeiten</translation>
     </message>
@@ -15786,13 +15786,28 @@ oder eines aus den Projektbildern ziehen</translation>
         <translation>Vorlage</translation>
     </message>
     <message>
-        <location line="+29"/>
+        <location line="+25"/>
+        <source>Changes apply to:</source>
+        <translation>Änderungen gelten für:</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>The left person</source>
+        <translation>Die linke Person</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The right person</source>
+        <translation>Die rechte Person</translation>
+    </message>
+    <message>
+        <location line="+23"/>
         <source>Describe a change, e.g. &apos;raise the left hand to wave&apos;, &apos;turn a bit to the right&apos;</source>
         <translation>Beschreiben Sie eine Änderung, z. B. „linke Hand zum Winken heben“, „etwas nach rechts drehen“</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+34"/>
+        <location line="+40"/>
         <source>Apply</source>
         <translation>Anwenden</translation>
     </message>
@@ -16608,7 +16623,7 @@ oder eines aus den Projektbildern ziehen</translation>
 <context>
     <name>lumen::ui::ProviderForm</name>
     <message>
-        <location filename="../src/ui/dialogs/SettingsDialog.cpp" line="-789"/>
+        <location filename="../src/ui/dialogs/SettingsDialog.cpp" line="-786"/>
         <source>Documentation</source>
         <translation>Dokumentation</translation>
     </message>
@@ -16717,7 +16732,7 @@ oder eines aus den Projektbildern ziehen</translation>
 <context>
     <name>lumen::ui::ReferenceStrip</name>
     <message>
-        <location filename="../src/ui/widgets/ReferenceStrip.cpp" line="+140"/>
+        <location filename="../src/ui/widgets/ReferenceStrip.cpp" line="+141"/>
         <source>Add reference images</source>
         <translation>Referenzbilder hinzufügen</translation>
     </message>
@@ -16727,7 +16742,7 @@ oder eines aus den Projektbildern ziehen</translation>
         <translation>Bilder (*.png *.jpg *.jpeg *.webp *.bmp *.tif *.tiff)</translation>
     </message>
     <message>
-        <location line="+20"/>
+        <location line="+17"/>
         <source>Reference %1 (%2×%3)</source>
         <translation>Referenz %1 (%2×%3)</translation>
     </message>
@@ -17277,7 +17292,7 @@ oder eines aus den Projektbildern ziehen</translation>
 <context>
     <name>lumen::ui::ServerLogDialog</name>
     <message>
-        <location filename="../src/ui/dialogs/LocalServersPage.cpp" line="+1356"/>
+        <location filename="../src/ui/dialogs/LocalServersPage.cpp" line="+1353"/>
         <source>Server log — %1</source>
         <translation>Serverprotokoll – %1</translation>
     </message>
@@ -17315,7 +17330,7 @@ oder eines aus den Projektbildern ziehen</translation>
 <context>
     <name>lumen::ui::ServerProfileDialog</name>
     <message>
-        <location line="-1012"/>
+        <location line="-1009"/>
         <source>New server</source>
         <translation>Neuer Server</translation>
     </message>
@@ -17451,12 +17466,12 @@ oder eines aus den Projektbildern ziehen</translation>
         <translation>Im Leerlauf beenden</translation>
     </message>
     <message>
-        <location line="+883"/>
+        <location line="+880"/>
         <source>Download missing files (%1)</source>
         <translation>Fehlende Dateien herunterladen (%1)</translation>
     </message>
     <message>
-        <location line="-881"/>
+        <location line="-878"/>
         <location line="+3"/>
         <source>Command line</source>
         <translation>Befehlszeile</translation>
@@ -17467,17 +17482,17 @@ oder eines aus den Projektbildern ziehen</translation>
         <translation>Als Anbieter hinzufügen</translation>
     </message>
     <message>
-        <location line="+320"/>
+        <location line="+317"/>
         <source>%1 options</source>
         <translation>%1-Optionen</translation>
     </message>
     <message>
-        <location line="-305"/>
+        <location line="-302"/>
         <source>Advanced</source>
         <translation>Erweitert</translation>
     </message>
     <message>
-        <location line="+251"/>
+        <location line="+248"/>
         <source>Model</source>
         <translation>Modell</translation>
     </message>
@@ -17983,12 +17998,12 @@ oder eines aus den Projektbildern ziehen</translation>
     </message>
     <message>
         <location line="+52"/>
-        <location line="+951"/>
+        <location line="+948"/>
         <source>Back</source>
         <translation>Zurück</translation>
     </message>
     <message>
-        <location line="-935"/>
+        <location line="-932"/>
         <source>Lumen changes and creates images from what you describe. For that it needs an image engine: choose where it runs. You can change this later in Settings → AI.</source>
         <translation>Lumen ändert und erstellt Bilder nach Ihrer Beschreibung. Dafür braucht es eine Bild-Engine: Wählen Sie, wo sie läuft. Sie können das später unter Einstellungen → KI ändern.</translation>
     </message>
@@ -18351,12 +18366,12 @@ oder eines aus den Projektbildern ziehen</translation>
     </message>
     <message>
         <location line="+36"/>
-        <location line="+424"/>
+        <location line="+421"/>
         <source>Done</source>
         <translation>Fertig</translation>
     </message>
     <message>
-        <location line="-423"/>
+        <location line="-420"/>
         <source>Waiting</source>
         <translation>Wartet</translation>
     </message>
@@ -18451,12 +18466,12 @@ oder eines aus den Projektbildern ziehen</translation>
     </message>
     <message>
         <location line="+3"/>
-        <location line="+143"/>
+        <location line="+140"/>
         <source>%1 is connected</source>
         <translation>%1 ist verbunden</translation>
     </message>
     <message>
-        <location line="-142"/>
+        <location line="-139"/>
         <source>Lumen asks the service for a test image; this takes a few seconds.</source>
         <translation>Lumen fordert beim Dienst ein Testbild an; das dauert einige Sekunden.</translation>
     </message>
@@ -18491,7 +18506,7 @@ oder eines aus den Projektbildern ziehen</translation>
         <translation>Verbinden</translation>
     </message>
     <message>
-        <location line="+57"/>
+        <location line="+54"/>
         <source>Use it again</source>
         <translation>Wieder verwenden</translation>
     </message>
@@ -18692,7 +18707,7 @@ oder eines aus den Projektbildern ziehen</translation>
 <context>
     <name>lumen::ui::ShotCard</name>
     <message>
-        <location filename="../src/plugins/characters/director/ShotCard.cpp" line="+48"/>
+        <location filename="../src/plugins/characters/director/ShotCard.cpp" line="+51"/>
         <source>Edit the pose</source>
         <translation>Pose bearbeiten</translation>
     </message>
@@ -18722,7 +18737,7 @@ oder eines aus den Projektbildern ziehen</translation>
         <translation>Hintergrund: %1</translation>
     </message>
     <message>
-        <location line="+34"/>
+        <location line="+31"/>
         <source>Open in editor (right-click for more)</source>
         <translation>Im Editor öffnen (Rechtsklick für mehr)</translation>
     </message>
@@ -18932,7 +18947,7 @@ oder eines aus den Projektbildern ziehen</translation>
         <translation>Unbenannt</translation>
     </message>
     <message>
-        <location line="+31"/>
+        <location line="+28"/>
         <source>%1
 Changed %2</source>
         <translation>%1

@@ -1847,7 +1847,7 @@ strategy: both references with their names, one request.
     the other member, Cancel; re-run (cast order, a new document of the asset's size, the words).
   * Not yet: an arrangement choice (side by side, close, front and back) in the editor (the default
     is side by side); both characters in instruction edits (two references).
-- [ ] Director and Create page: cast in `PlanInput`, `people` in the shot schema, two-person poses
+- [x] Director and Create page: cast in `PlanInput`, `people` in the shot schema, two-person poses
   on the shot cards and in the pose editor, shots generated through `CastGeneration`. Tests:
   schema, prompts, a planned shot end to end with mocks.
   * Done (6a): the Create page's session designs one character, so the cast there is that
@@ -1866,8 +1866,17 @@ strategy: both references with their names, one request.
     `tst_canvas createPageCast` (Bo listed first is drawn on the left, both LoRAs only in their
     repaints, the asset's cast and arrangement, the shot card's two people, one request without the
     partner).
-  * Still open (6b): the pose editor for two people (an edited pose is kept per shot and already
-    has room for both), and the assistant's `generate_image` drawing the cast.
+  * Done (6b): `PoseEditDialog` takes a rig per person (nullopt once moved by hand) and, with two
+    people, names for chips (*Changes apply to:*) that follow the canvas's selected person; a
+    preset or a described change replaces that person only (`applyRig`), keeping its position and
+    scale; hand edits drop only that person's rig. `ShotCard::editPose` passes the arranged rigs of
+    a planned two-person shot and writes them back into `people` (and `pose`), else keeps the
+    edited pose. The assistant's `generate_image` with a cast of two runs `startCastGeneration`
+    per image (`submitCast`: each member's own reference, the Critic setting as the check) and
+    answers with the assets and the cast's names.
+  * Tests: `tst_canvas poseEditTwoPeople` (the chips, a preset for Bo only, his place kept, his rig
+    reported; a hand edit drops only his rig), `castInEditor` (the assistant: one image, three
+    requests, the cast in the answer and the asset); `tst_layout` audits the two-person dialog.
 - [ ] ComfyUI regional strategy: a graph with `CreateHookLora` → `ConditioningSetProperties`
   (mask per character) → combined conditioning, built per request like the standard graph.
   Contract test of the graph; the live step decides whether it becomes ComfyUI's default.

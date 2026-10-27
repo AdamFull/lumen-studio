@@ -1,5 +1,6 @@
 #include "plugins/characters/assistant/AssistantTools.h"
 
+#include "ai/CastGeneration.h"
 #include "ai/CharacterContext.h"
 #include "ai/Director.h"
 #include "ai/GenerationService.h"
@@ -7,6 +8,7 @@
 #include "core/ImageOps.h"
 #include "core/JobQueue.h"
 #include "core/JsonUtil.h"
+#include "core/Settings.h"
 #include "doc/CharacterLibrary.h"
 #include "ui/Studio.h"
 #include "ui/dialogs/CharacterLoraDialog.h"
@@ -215,6 +217,62 @@ QFuture<ToolResult> submitWithCharacter(Studio *studio, ai::ImageProvider *provi
         .unwrap();
 }
 
+// A new picture of the active cast of two (M16 §16.3): composed, then each character repainted in
+// its own region (ai::startCastGeneration), one job per image.
+QFuture<ToolResult> submitCast(Studio *studio, ai::ImageProvider *provider, const ai::GenerationSpec &spec)
+{
+    QPointer<Studio> s(studio);
+    QList<QFuture<ai::CharacterContext>> reads;
+    for (const QString &id : studio->activeCast())
+        reads << studio->characterContext(id);
+    const QString family = checkpointFamily(studio, provider);
+    return QtFuture::whenAll(reads.begin(), reads.end())
+        .then(studio, [s, spec, family](const QList<QFuture<ai::CharacterContext>> &done) -> QFuture<ToolResult> {
+            if (!s)
+                return fail(QStringLiteral("closed"));
+            ai::CastRequest cast;
+            QJsonArray names;
+            for (const QFuture<ai::CharacterContext> &f : done) {
+                try {
+                    if (!f.result().isEmpty()) {
+                        cast.cast << f.result();
+                        names.append(f.result().name);
+                    }
+                } catch (const std::exception &) {
+                    // A character whose pictures cannot be read is left out.
+                }
+            }
+            if (cast.cast.isEmpty())
+                return waitForJob(s, s->generation()->submit(spec));
+            cast.providerId = spec.providerId;
+            cast.scene = spec.request;
+            cast.scene.batchCount = 1;
+            cast.scene.references.clear(); // each character brings its own
+            cast.modelFamily = family;
+            cast.check = Settings::instance().value(QStringLiteral("director/critic"), false).toBool();
+            cast.title = spec.title;
+            cast.meta = spec.meta;
+            QList<QFuture<ToolResult>> waits;
+            for (int i = 0; i < std::max(1, spec.request.batchCount); ++i)
+                waits << waitForJob(s, ai::startCastGeneration(s->generation(), cast));
+            return QtFuture::whenAll(waits.begin(), waits.end()).then([names](const QList<QFuture<ToolResult>> &results) {
+                ToolResult r;
+                r.data.insert(QStringLiteral("cast"), names);
+                QStringList errors;
+                for (const QFuture<ToolResult> &f : results) {
+                    const ToolResult one = f.result();
+                    r.assetIds << one.assetIds;
+                    if (!one.error.isEmpty())
+                        errors << one.error;
+                }
+                if (r.assetIds.isEmpty() && !errors.isEmpty())
+                    r.error = errors.first();
+                return r;
+            });
+        })
+        .unwrap();
+}
+
 } // namespace
 
 ai::ToolSet assistantTools(Studio *studio)
@@ -328,8 +386,9 @@ ai::ToolSet assistantTools(Studio *studio)
               });
 
     tools.add(tool("generate_image", "Generates new images from a prompt with the default image provider. Waits until they are done. "
-                                     "The project's active character is drawn automatically (its LoRA, reference or description): "
-                                     "describe only the scene, pose and mood.",
+                                     "The project's active character is drawn automatically (its LoRA, reference or description), "
+                                     "and with a cast of two both, each in its own part of the image: describe only the "
+                                     "scene, pose and mood.",
                    schema({{QStringLiteral("prompt"), prop("string", "the image prompt, in English")},
                            {QStringLiteral("character"), prop("boolean", kCharacterParam)},
                            {QStringLiteral("negative_prompt"), prop("string", "optional things to avoid")},
@@ -367,6 +426,8 @@ ai::ToolSet assistantTools(Studio *studio)
                       }
                       spec.title = spec.request.prompt.left(60);
                       spec.meta.insert(QStringLiteral("assistant"), true);
+                      if (args.value(QStringLiteral("character")).toBool(true) && s->activeCast().size() > 1)
+                          return submitCast(s, provider, spec);
                       return submitWithCharacter(s, provider, spec, ai::CharacterUse::Full, args);
                   };
                   if (refIds.isEmpty() || !s->project())

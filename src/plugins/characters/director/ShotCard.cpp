@@ -3,6 +3,7 @@
 #include "ai/Director.h"
 #include "core/JsonUtil.h"
 #include "core/Settings.h"
+#include "pose/CastLayout.h"
 #include "pose/PoseRenderer.h"
 #include "ui/Icons.h"
 #include "ui/Studio.h"
@@ -18,6 +19,8 @@
 #include <QPushButton>
 #include <QToolButton>
 #include <QVBoxLayout>
+
+#include <algorithm>
 
 namespace lumen::ui {
 
@@ -198,15 +201,42 @@ void ShotCard::editPose()
     if (!s)
         return;
     const QSize size = ai::Director::sizeForAspect(s->aspect(), 1024 * 1024, 64);
-    const std::optional<pose::RigParams> rig = s->editedPose ? std::nullopt : std::optional<pose::RigParams>(s->rig());
-    PoseEditDialog dlg(m_studio, shotPose(*s, size), rig, s->shot.value(QStringLiteral("description")).toString(), this);
+    // A rig per person while the shot is as planned (both people, where they stand, M16).
+    const QJsonArray people = s->shot.value(QStringLiteral("people")).toArray();
+    QList<std::optional<pose::RigParams>> rigs;
+    QStringList names;
+    if (people.size() > 1) {
+        QList<pose::RigParams> planned;
+        for (const QJsonValue &p : people) {
+            planned << pose::RigParams::fromJson(p.toObject().value(QStringLiteral("pose")).toObject());
+            names << p.toObject().value(QStringLiteral("character")).toString();
+        }
+        const pose::Arrangement arrangement = pose::arrangementFromKey(s->shot.value(QStringLiteral("arrangement")).toString());
+        for (const pose::RigParams &r : pose::arrangePeople(planned.mid(0, 2), arrangement))
+            rigs << (s->editedPose ? std::nullopt : std::optional<pose::RigParams>(r));
+    } else {
+        rigs << (s->editedPose ? std::nullopt : std::optional<pose::RigParams>(s->rig()));
+    }
+    PoseEditDialog dlg(m_studio, shotPose(*s, size), rigs, s->shot.value(QStringLiteral("description")).toString(), names, this);
     if (dlg.exec() != QDialog::Accepted)
         return;
     s = m_session ? m_session->shot(m_id) : nullptr;
     if (!s)
         return;
-    if (dlg.rig()) {
-        s->shot.insert(QStringLiteral("pose"), dlg.rig()->toJson());
+    const QList<std::optional<pose::RigParams>> edited = dlg.rigs();
+    const bool planned = !edited.isEmpty() && std::all_of(edited.begin(), edited.end(), [](const auto &r) { return r.has_value(); });
+    if (planned) {
+        // Still rigs: the plan keeps them (and the director can revise them).
+        s->shot.insert(QStringLiteral("pose"), edited.first()->toJson());
+        if (people.size() > 1) {
+            QJsonArray updated = people;
+            for (int i = 0; i < std::min<int>(int(updated.size()), int(edited.size())); ++i) {
+                QJsonObject person = updated[i].toObject();
+                person.insert(QStringLiteral("pose"), edited[i]->toJson());
+                updated[i] = person;
+            }
+            s->shot.insert(QStringLiteral("people"), updated);
+        }
         s->editedPose.reset();
     } else {
         s->editedPose = dlg.pose();

@@ -16,6 +16,9 @@
 #include "plugins/characters/director/DirectorSession.h"
 #include "plugins/characters/director/ShotCard.h"
 #include "plugins/characters/CreatePage.h"
+#include "pose/CastLayout.h"
+#include "ui/pose/PoseCanvas.h"
+#include "ui/dialogs/PoseEditDialog.h"
 #include "ui/dialogs/NewFromPromptDialog.h"
 #include "ui/dialogs/NewCanvasDialog.h"
 #include "ui/filters/FilterRunner.h"
@@ -224,6 +227,7 @@ private slots:
     void planChange();
     void castInEditor();
     void createPageCast();
+    void poseEditTwoPeople();
     void promptBarWithoutEdits();
     void aiMenuAndPanel();
     void promptBarKeepsTyping();
@@ -7058,6 +7062,20 @@ void TestCanvas::castInEditor()
     QTest::qWait(300);
     QCOMPARE(generations.size(), before + 2);
 
+    // The assistant's generate_image draws both as well, one compose-and-refine job per image.
+    {
+        const int sent = int(generations.size());
+        QFuture<ai::ToolResult> drawn = assistantTools(&studio).run(QStringLiteral("generate_image"),
+                                                                    {{QStringLiteral("prompt"), QStringLiteral("at the beach")}});
+        QTRY_VERIFY_WITH_TIMEOUT(drawn.isFinished(), 20000);
+        const ai::ToolResult r = drawn.result();
+        QVERIFY2(r.error.isEmpty(), qPrintable(r.error));
+        QCOMPARE(r.assetIds.size(), 1);
+        QCOMPARE(int(generations.size()), sent + 3);
+        QCOMPARE(r.data.value(QStringLiteral("cast")).toArray().size(), 2);
+        QVERIFY(studio.project()->asset(r.assetIds.first())->metadata.contains(QStringLiteral("cast")));
+    }
+
     // "Make another like this": the cast comes back, in order, with the words, on a blank canvas.
     studio.setActiveCast({bo});
     MainWindow window(&studio);
@@ -7168,6 +7186,51 @@ void TestCanvas::createPageCast()
     QTRY_COMPARE_WITH_TIMEOUT(mock.generations.size(), 4, 20000);
     QTRY_COMPARE_WITH_TIMEOUT(session->shot(QStringLiteral("rain"))->results.size(), 2, 10000);
     QCOMPARE(mock.generations.size(), 4);
+}
+
+// The pose editor with two people (plan M16 §16.4): chips choose whom a preset is for; that person
+// changes and keeps where it stands, the other stays; a person moved by hand loses only its rig.
+void TestCanvas::poseEditTwoPeople()
+{
+    Studio studio;
+    const QList<pose::RigParams> rigs = pose::arrangePeople({pose::RigParams(), pose::RigParams()}, pose::Arrangement::SideBySide);
+    const pose::Pose start = pose::solvePose(rigs, QSize(1200, 800));
+    PoseEditDialog dlg(&studio, start, {rigs[0], rigs[1]}, QString(), {QStringLiteral("Akane"), QStringLiteral("Bo")});
+    const QList<QToolButton *> chips = dlg.findChildren<QToolButton *>(QStringLiteral("posePerson"));
+    QCOMPARE(chips.size(), 2);
+    QCOMPARE(chips[1]->text(), QStringLiteral("Bo"));
+    chips[1]->click();
+    auto *canvas = dlg.findChild<PoseCanvas *>();
+    QVERIFY(canvas);
+    QCOMPARE(canvas->selectedPerson(), 1);
+    // A preset other than standing straight.
+    QAction *preset = nullptr;
+    for (QPushButton *b : dlg.findChildren<QPushButton *>()) {
+        if (!b->menu())
+            continue;
+        for (QAction *category : b->menu()->actions()) {
+            if (!category->menu())
+                continue;
+            for (QAction *a : category->menu()->actions()) {
+                if (!preset && a->text().contains(QStringLiteral("wav"), Qt::CaseInsensitive))
+                    preset = a;
+            }
+        }
+    }
+    QVERIFY(preset);
+    preset->trigger();
+    const pose::Pose after = dlg.pose();
+    QCOMPARE(after.people.size(), 2);
+    QCOMPARE(after.people[0].body[pose::LWrist].pos, start.people[0].body[pose::LWrist].pos); // Akane as she was
+    QVERIFY(after.people[1].body[pose::RWrist].pos != start.people[1].body[pose::RWrist].pos ||
+            after.people[1].body[pose::LWrist].pos != start.people[1].body[pose::LWrist].pos); // Bo waves
+    QVERIFY(std::abs(after.people[1].body[pose::Neck].pos.x() - start.people[1].body[pose::Neck].pos.x()) < 40); // where he stood
+    QVERIFY(dlg.rigs().at(0).has_value() && dlg.rigs().at(1).has_value());
+    QCOMPARE(dlg.rigs().at(1)->positionX, rigs[1].positionX);
+    // Moved by hand: only that person's rig goes.
+    emit canvas->editFinished(after, after);
+    QVERIFY(dlg.rigs().at(0).has_value());
+    QVERIFY(!dlg.rigs().at(1).has_value());
 }
 
 QTEST_MAIN(TestCanvas)

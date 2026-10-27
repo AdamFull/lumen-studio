@@ -103,7 +103,9 @@ one alone when you ask for that): who stands left and who right, a pose for each
 and how they stand (side by side, close, or one in front). Each image is drawn like a two-character
 picture in the editor: the scene first, then each character repainted in its own part of the image
 with its LoRA. With the Critic on, each character is checked against its own look instead of the
-whole image being reviewed. **Remove the second character** goes back to one.
+whole image being reviewed. **Remove the second character** goes back to one. On a two-person
+shot, **Edit pose** shows both people: the chips above the canvas (or a click on a person) choose
+whom a preset or a described change is for, and that person keeps where it stands.
 
 **Critic.** With *Critic* on, a vision model reviews every result against the references, the
 character sheet and the planned pose and framing, and scores it out of 10. When no result of a shot
@@ -150,6 +152,8 @@ menu picks another character or none.
   instruction edit) use the first character.
 * **Make another like this** on a two-character image brings that cast back, opens a blank canvas of
   the image's size and puts its words in the prompt bar; press Enter to draw them again.
+* **The assistant** draws both too when you ask it for a picture while a cast of two is active
+  ("draw them at the beach").
 
 ### The assistant
 

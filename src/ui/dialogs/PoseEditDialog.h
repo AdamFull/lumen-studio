@@ -6,6 +6,7 @@
 
 #include <optional>
 
+class QButtonGroup;
 class QLineEdit;
 class QPushButton;
 
@@ -19,18 +20,25 @@ class PoseEditDialog : public QDialog
 {
     Q_OBJECT
 public:
-    PoseEditDialog(Studio *studio, const pose::Pose &pose, const std::optional<pose::RigParams> &rig, const QString &context,
-                   QWidget *parent = nullptr);
+    // `rigs`: the rig of each person in `pose` where it is known (a planned shot), else nullopt (a
+    // pose edited by hand). With two people (M16), `names` label the chips that choose whom a preset
+    // or a described change applies to; each keeps where it stands.
+    PoseEditDialog(Studio *studio, const pose::Pose &pose, const QList<std::optional<pose::RigParams>> &rigs, const QString &context,
+                   const QStringList &names = {}, QWidget *parent = nullptr);
     pose::Pose pose() const;
-    std::optional<pose::RigParams> rig() const { return m_rig; }
+    // Per person; nullopt once that person was moved by hand.
+    const QList<std::optional<pose::RigParams>> &rigs() const { return m_rigs; }
 
 private:
     void describe();
+    // Puts `rig` in place of person `index`, where that person stands.
+    void applyRig(int index, pose::RigParams rig);
     Studio *m_studio;
     PoseCanvas *m_canvas;
     QLineEdit *m_describe;
     QPushButton *m_describeBtn;
-    std::optional<pose::RigParams> m_rig;
+    QList<std::optional<pose::RigParams>> m_rigs;
+    QButtonGroup *m_people = nullptr;
     QString m_context;
 };
 
