@@ -4092,6 +4092,13 @@ Decisions (October 2026, with the user):
     crossed light parts). Seen on the picture: a short piece across the dark red apple and the end
     of one line at the right were not selected, so they stayed; faint traces show over the window.
     The finder's contrast over dark, busy areas is the next thing to improve.
+  * Fixed the same day: in luminance, saturated red is dark and the dark room was darker than the
+    line by less than the contrast. `findStrokes` now also looks in the brightest channel (the
+    darkest for light strokes) and takes a stroke at most half as bright as its ground with a
+    third of the contrast (`tst_core finders`: a black line over saturated red and through a dark
+    room). The live check again (94 s): 98 % of the line pixels selected, 1.6 % of the rest; near-
+    black on the whole lines 5431 → 207 pixels; on the picture the lines are gone, across the apple
+    too, with faint traces over the bright window.
   * Not yet: "the cup" with the detection models and replaced by klein and by SDXL (no SDXL model
     is set up here now); a klein 4B LoRA from the picker. The user's models moved to Lumen's models
     folder; the run used them read-only (`LUMEN_LIVE_MODEL_DIRS` = its `vae` and `text_encoders`).

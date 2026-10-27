@@ -1152,7 +1152,20 @@ void TestLive::kleinPromptBar()
             darkAfter += qGray(cleaned.pixel(x, y)) < 50 ? 1 : 0;
         }
     }
-    qInfo() << "remove after" << t.elapsed() << "ms; dark line pixels" << darkBefore << "->" << darkAfter;
+    // On the whole lines, over dark parts too: near-black left (the apple is darker than light
+    // ground, so a lower bar).
+    int blackBefore = 0, blackAfter = 0;
+    for (int y = 0; y < lines.height(); ++y) {
+        for (int x = 0; x < lines.width(); ++x) {
+            if (qGray(lines.pixel(x, y)) < 250)
+                continue;
+            const QColor was = scratched.pixelColor(x, y), now = cleaned.pixelColor(x, y);
+            blackBefore += std::max({was.red(), was.green(), was.blue()}) < 30 ? 1 : 0;
+            blackAfter += std::max({now.red(), now.green(), now.blue()}) < 30 ? 1 : 0;
+        }
+    }
+    qInfo() << "remove after" << t.elapsed() << "ms; dark line pixels" << darkBefore << "->" << darkAfter
+            << "; black on the whole lines" << blackBefore << "->" << blackAfter;
     QVERIFY2(darkBefore > 500, "the lines did not cross light parts of the picture");
     QVERIFY2(darkAfter < darkBefore * 0.3, qPrintable(QStringLiteral("%1 of %2 still dark").arg(darkAfter).arg(darkBefore)));
     strip->keep();
