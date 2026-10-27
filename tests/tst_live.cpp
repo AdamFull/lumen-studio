@@ -956,7 +956,8 @@ void TestLive::kleinEditServer()
 
 // The editor as the user meets it, with FLUX.2 klein through sd.cpp (plan M17 §17.8, the last
 // live check): a whole-image colorize from the prompt bar with nothing selected, then a new image
-// on a blank canvas. Same variables as kleinEditServer; one result per run to keep it short.
+// on a blank canvas, then (plan M18 §18.6) black lines drawn over it, selected by saying so and
+// removed. Same variables as kleinEditServer; one result per run to keep it short.
 void TestLive::kleinPromptBar()
 {
     const QString root = qEnvironmentVariable("LUMEN_LIVE_SD_RUNTIMES");
@@ -1095,6 +1096,65 @@ void TestLive::kleinPromptBar()
     mean /= n;
     const double spread = std::sqrt(std::max(0.0, sq / n - mean * mean));
     QVERIFY2(spread > 15, "the new image is nearly flat");
+    strip->keep();
+
+    // 3. Black lines over the new picture: "select: the black lines" finds them with the classic
+    // finder, and "remove the black lines" goes to klein as an instruction for the area.
+    QImage scratched = fresh.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+    QImage lines(scratched.size(), QImage::Format_Grayscale8);
+    lines.fill(0);
+    {
+        QPainter p(&scratched);
+        QPainter m(&lines);
+        p.setRenderHint(QPainter::Antialiasing);
+        p.setPen(QPen(QColor(15, 15, 15), 3));
+        m.setPen(QPen(Qt::white, 3));
+        for (const QLine &l : {QLine(60, 120, 960, 220), QLine(100, 650, 900, 420), QLine(300, 60, 420, 740)}) {
+            p.drawLine(l);
+            m.drawLine(l);
+        }
+    }
+    save(scratched, QStringLiteral("klein_bar_lines.png"));
+    doc::Document *drawing = studio.openImageAsDocument(scratched, QStringLiteral("Scratched"));
+    QVERIFY(drawing);
+    QTRY_COMPARE(bar->plan().action, ui::PromptAction::EditImage);
+    words->setPlainText(QStringLiteral("select: the black lines"));
+    QTest::keyClick(words, Qt::Key_Return);
+    QTRY_VERIFY_WITH_TIMEOUT(drawing->hasSelection(), 30000);
+    const QImage selected = drawing->selection();
+    save(selected, QStringLiteral("klein_bar_lines_selection.png"));
+    int onLine = 0, lineSelected = 0, offLine = 0, offSelected = 0;
+    for (int y = 0; y < lines.height(); y += 2) {
+        for (int x = 0; x < lines.width(); x += 2) {
+            const bool line = qGray(lines.pixel(x, y)) > 200;
+            const bool sel = qGray(selected.pixel(x, y)) > 128;
+            (line ? onLine : offLine) += 1;
+            (line ? lineSelected : offSelected) += sel ? 1 : 0;
+        }
+    }
+    qInfo() << "lines selected" << double(lineSelected) / onLine << "; the rest selected" << double(offSelected) / offLine;
+    QVERIFY2(double(lineSelected) / onLine > 0.8, "the lines were not selected");
+    QVERIFY2(double(offSelected) / offLine < 0.08, "too much besides the lines was selected");
+    t.restart();
+    words->setPlainText(QStringLiteral("remove the black lines"));
+    QTest::keyClick(words, Qt::Key_Return);
+    QTRY_VERIFY_WITH_TIMEOUT(strip->count() >= 1 && !strip->isRunning(), 900000);
+    const QImage cleaned = strip->currentImage();
+    save(cleaned, QStringLiteral("klein_bar_cleaned.png"));
+    QCOMPARE(cleaned.size(), scratched.size());
+    // Where a line crossed something light, it should be gone.
+    int darkBefore = 0, darkAfter = 0;
+    for (int y = 0; y < lines.height(); ++y) {
+        for (int x = 0; x < lines.width(); ++x) {
+            if (qGray(lines.pixel(x, y)) < 250 || qGray(fresh.pixel(x, y)) < 90)
+                continue;
+            darkBefore += qGray(scratched.pixel(x, y)) < 50 ? 1 : 0;
+            darkAfter += qGray(cleaned.pixel(x, y)) < 50 ? 1 : 0;
+        }
+    }
+    qInfo() << "remove after" << t.elapsed() << "ms; dark line pixels" << darkBefore << "->" << darkAfter;
+    QVERIFY2(darkBefore > 500, "the lines did not cross light parts of the picture");
+    QVERIFY2(darkAfter < darkBefore * 0.3, qPrintable(QStringLiteral("%1 of %2 still dark").arg(darkAfter).arg(darkBefore)));
     strip->keep();
     for (const QString &line : servers->log(profile.id)) {
         if (line.contains(QLatin1String("sampling completed")) || line.contains(QLatin1String("[E]")))

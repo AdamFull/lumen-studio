@@ -4084,6 +4084,19 @@ Decisions (October 2026, with the user):
 - [ ] Short live check (RTX 4060 8 GB): "remove the black lines" on a scanned drawing with a classic
   finder; "the cup" found and replaced with FLUX.2 [klein] and with SDXL; a klein 4B LoRA from the
   picker.
+  * Done (27 October 2026, `tst_live kleinPromptBar`, FLUX.2 [klein] 4B fp8 through sd.cpp, 79 s in
+    all with the server start; the M17 part of it passes too: colorize 40 s, new image 12 s): three
+    3 px black lines drawn over a generated photo, "select: the black lines" selected 87 % of the
+    line pixels and 1.1 % of the rest; "remove the black lines" (an instruction for the area) took
+    26 s and repainted the window, wall and table cleanly (no dark pixel left where the lines
+    crossed light parts). Seen on the picture: a short piece across the dark red apple and the end
+    of one line at the right were not selected, so they stayed; faint traces show over the window.
+    The finder's contrast over dark, busy areas is the next thing to improve.
+  * Not yet: "the cup" with the detection models and replaced by klein and by SDXL (no SDXL model
+    is set up here now); a klein 4B LoRA from the picker. The user's models moved to Lumen's models
+    folder; the run used them read-only (`LUMEN_LIVE_MODEL_DIRS` = its `vae` and `text_encoders`).
+  * QtTest's 5-minute limit per test stopped the first attempt while the model folder was scanned:
+    live runs set `QTEST_FUNCTION_TIMEOUT`.
 
 Acceptance:
 1. "Select the black lines" on a line-scratched photo selects the lines and nothing large; Fill area
