@@ -3624,7 +3624,7 @@ Survey of the code, the app log and user testing (October 2026):
     built-in guide is English); the Filters panel's button row and the AI tab's form do not count
     wrapped rows or a wide label column in their minimum sizes, so a longer translation could clip
     them again (German passes with shortened labels).
-- [ ] Short live check (RTX 4060 8 GB, FLUX.2 klein 4B through sd.cpp): one selection edit, one
+- [x] Short live check (RTX 4060 8 GB, FLUX.2 klein 4B through sd.cpp): one selection edit, one
   whole-image colorize, one new image. Everything before this step uses mock servers.
   * Done early for the selection edit (October 2026, `tst_live kleinEditServer`): the user's
     ComfyUI folder, the profile from the preset (`--diffusion-model`, `flux2-vae`, Qwen3 4B
@@ -3639,7 +3639,11 @@ Survey of the code, the app log and user testing (October 2026):
     difference around the ball fell from 5.5 to 4.1 per channel, the ball unchanged
     (`tst_masks edgeColorsRemoveDrift`). Left: light the model adds next to the new object, and a
     new shadow fading out at the selection's edge.
-  * Still to check: a whole-image colorize and a new image, with the new shell. Also once, briefly:
+  * Done 27 October 2026 (`tst_live kleinPromptBar`, klein 4B fp8 from Lumen's models folder):
+    the colorize from the prompt bar with nothing selected, 40–50 s with the server start
+    (saturation 0 → 0.18–0.26, brightness within 8 of the photo), and a new image on a blank
+    canvas, 12–13 s.
+  * Still to check, once, briefly:
     a server start on the Large tier with ComfyUI's mixed fp8 klein file at `weight_type=file`
     (if it fails, the flux2 preset's vram block sets `q8_0` for it), and FLUX.1 on the 8 GB tier's
     `q4_K`. Acceptance 2 and 3 are shown against mock servers only (`tst_runtime presetProfiles`,
