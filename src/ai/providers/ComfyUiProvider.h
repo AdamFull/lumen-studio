@@ -91,6 +91,7 @@ public:
     {
         QString init, mask, pose;
         QStringList references;
+        QStringList regions; // the masks of ImageRequest::regions
     };
     QJsonObject buildStandardGraph(const ImageRequest &request, const UploadedImages &images, bool hasIpAdapter) const;
     static QJsonObject applyTemplate(const ComfyTemplate &tpl, const ImageRequest &request, const UploadedImages &images);

@@ -54,6 +54,7 @@ private slots:
     void directorCritique();
     void directorDatasetPlan();
     void directorCast();
+    void castRegionalComfy();
     void loraCaptions();
     void identityChecklist();
     void characterContext();
@@ -1480,6 +1481,179 @@ void TestServices::directorCast()
     QVERIFY(!system.contains(QStringLiteral("fully restate")));
     QVERIFY(QJsonDocument(asked).toJson().contains("\"people\""));
     delete op;
+}
+
+// The regional strategy on ComfyUI (plan M16 §16.2): one graph draws both, each member's LoRA as a
+// hook on its own words, added to the scene's conditioning inside its mask; one sampling pass, the
+// masks uploaded with the pose, and the asset says how it was drawn.
+void TestServices::castRegionalComfy()
+{
+    MockHttpServer server;
+    QList<QJsonObject> graphs;
+    int uploads = 0;
+    server.route("GET", QStringLiteral("/object_info/LoraLoader"), [](const MockRequest &) {
+        return MockResponse::json({{QStringLiteral("LoraLoader"), QJsonObject{{QStringLiteral("input"), QJsonObject{{QStringLiteral("required"), QJsonObject{
+            {QStringLiteral("lora_name"), QJsonArray{QJsonArray{QStringLiteral("chars/lmn_aki.safetensors"), QStringLiteral("lmn_bo.safetensors")}}}}}}}}}});
+    });
+    server.route("GET", QStringLiteral("/object_info/ControlNetLoader"), [](const MockRequest &) {
+        return MockResponse::json({{QStringLiteral("ControlNetLoader"), QJsonObject{{QStringLiteral("input"), QJsonObject{{QStringLiteral("required"), QJsonObject{
+            {QStringLiteral("control_net_name"), QJsonArray{QJsonArray{QStringLiteral("openpose_xl.safetensors")}}}}}}}}}});
+    });
+    server.route("POST", QStringLiteral("/upload/image"), [&](const MockRequest &) {
+        ++uploads;
+        return MockResponse::json({{QStringLiteral("name"), QStringLiteral("u%1.png").arg(uploads)}, {QStringLiteral("subfolder"), QString()},
+                                   {QStringLiteral("type"), QStringLiteral("input")}});
+    });
+    server.route("POST", QStringLiteral("/prompt"), [&](const MockRequest &req) {
+        graphs << req.json().value(QStringLiteral("prompt")).toObject();
+        return MockResponse::json({{QStringLiteral("prompt_id"), QStringLiteral("p%1").arg(graphs.size())}});
+    });
+    for (int i = 1; i <= 4; ++i) {
+        server.route("GET", QStringLiteral("/history/p%1").arg(i), [i, &graphs](const MockRequest &) {
+            QString preview;
+            const QJsonObject g = graphs.value(i - 1);
+            for (auto it = g.begin(); it != g.end(); ++it) {
+                if (it.value().toObject().value(QStringLiteral("class_type")).toString() == QLatin1String("PreviewImage"))
+                    preview = it.key();
+            }
+            return MockResponse::json({{QStringLiteral("p%1").arg(i), QJsonObject{
+                {QStringLiteral("status"), QJsonObject{{QStringLiteral("status_str"), QStringLiteral("success")}}},
+                {QStringLiteral("outputs"), QJsonObject{{preview, QJsonObject{{QStringLiteral("images"), QJsonArray{
+                    QJsonObject{{QStringLiteral("filename"), QStringLiteral("out.png")}, {QStringLiteral("subfolder"), QString()},
+                                {QStringLiteral("type"), QStringLiteral("temp")}}}}}}}}}}});
+        });
+    }
+    server.route("GET", QStringLiteral("/view"), [](const MockRequest &) {
+        QImage m(640, 448, QImage::Format_RGB32);
+        m.fill(QColor(90, 120, 160));
+        MockResponse r;
+        r.contentType = "image/png";
+        r.body = img::encode(m);
+        return r;
+    });
+
+    QTemporaryDir dir;
+    doc::Project project;
+    auto opened = project.open(dir.filePath(QStringLiteral("regional.lumen")));
+    QTRY_VERIFY(opened.isFinished());
+    ProviderRegistry registry(&m_http);
+    registerBuiltInProviders(registry);
+    QFile::remove(registry.configPath());
+    auto cleanup = qScopeGuard([&] { QFile::remove(registry.configPath()); });
+    Provider *comfy = registry.addProvider(QStringLiteral("comfyui"), QStringLiteral("Comfy"),
+                                           {{QStringLiteral("url"), server.baseUrl().toString()},
+                                            {QStringLiteral("model"), QStringLiteral("waiIllustriousSDXL_v170.safetensors")}});
+    QVERIFY(comfy);
+    QVERIFY(qobject_cast<ImageProvider *>(comfy)->capabilities().regionalPrompts);
+    JobQueue queue;
+    GenerationService service(&registry, &queue);
+    service.setProject(&project);
+    auto character = [](const char *id, const char *name, const char *gender, const char *tags, const char *lora) {
+        CharacterContext c;
+        c.id = QLatin1String(id);
+        c.name = QLatin1String(name);
+        c.sheet = QJsonObject{{QStringLiteral("gender_presentation"), QLatin1String(gender)}, {QStringLiteral("tags"), QLatin1String(tags)}};
+        c.lora.file = QStringLiteral("C:/models/loras/%1.safetensors").arg(QLatin1String(lora));
+        c.lora.trigger = QLatin1String(lora);
+        c.lora.weight = 0.8;
+        c.lora.family = QStringLiteral("SDXL");
+        return c;
+    };
+    CastRequest request;
+    request.providerId = comfy->instanceId();
+    request.scene.prompt = QStringLiteral("sharing an umbrella in the rain");
+    request.scene.size = QSize(640, 448);
+    request.scene.seed = 100;
+    request.cast = {character("aki", "Aki", "female", "red hair, green eyes", "lmn_aki"),
+                    character("bo", "Bo", "male", "black hair, blue eyes", "lmn_bo")};
+    request.modelFamily = QStringLiteral("SDXL");
+    request.regional = true;
+    Job *job = startCastGeneration(&service, request);
+    QTRY_VERIFY_WITH_TIMEOUT(job->isFinished(), 20000);
+    QVERIFY2(job->state() == Job::State::Succeeded, qPrintable(job->errorString()));
+    QCOMPARE(graphs.size(), 1); // one pass
+    QCOMPARE(uploads, 3);       // the pose and two masks
+
+    const QJsonObject g = graphs.first();
+    auto nodes = [&g](const QString &type) {
+        QStringList ids;
+        for (auto it = g.begin(); it != g.end(); ++it) {
+            if (it.value().toObject().value(QStringLiteral("class_type")).toString() == type)
+                ids << it.key();
+        }
+        return ids;
+    };
+    auto input = [&g](const QString &id, const char *name) { return g.value(id).toObject().value(QStringLiteral("inputs")).toObject().value(QLatin1String(name)); };
+    auto from = [&](const QString &id, const char *name) { return input(id, name).toArray().at(0).toString(); };
+    // A hook LoRA per member, by ComfyUI's own name for the file.
+    const QStringList hooks = nodes(QStringLiteral("CreateHookLora"));
+    QCOMPARE(hooks.size(), 2);
+    QStringList loraNames;
+    for (const QString &h : hooks) {
+        loraNames << input(h, "lora_name").toString();
+        QCOMPARE(input(h, "strength_model").toDouble(), 0.8);
+        QCOMPARE(input(h, "strength_clip").toDouble(), 0.8);
+    }
+    loraNames.sort();
+    QCOMPARE(loraNames, (QStringList{QStringLiteral("chars/lmn_aki.safetensors"), QStringLiteral("lmn_bo.safetensors")}));
+    // Each member's words are encoded with a CLIP that carries its hook.
+    const QStringList clips = nodes(QStringLiteral("SetClipHooks"));
+    QCOMPARE(clips.size(), 2);
+    for (const QString &c : clips) {
+        QVERIFY(hooks.contains(from(c, "hooks")));
+        QVERIFY(input(c, "apply_to_conds").toBool());
+        QCOMPARE(g.value(from(c, "clip")).toObject().value(QStringLiteral("class_type")).toString(), QStringLiteral("CheckpointLoaderSimple"));
+    }
+    // Two masked combinations, chained from the scene's words to the sampler.
+    const QStringList combines = nodes(QStringLiteral("ConditioningSetPropertiesAndCombine"));
+    QCOMPARE(combines.size(), 2);
+    QString chain;
+    for (const QString &id : nodes(QStringLiteral("KSampler"))) {
+        QString positive = from(id, "positive");
+        // Past the pose ControlNet, if it comes after.
+        if (g.value(positive).toObject().value(QStringLiteral("class_type")).toString() == QLatin1String("ControlNetApplyAdvanced"))
+            positive = from(positive, "positive");
+        chain = positive;
+    }
+    QVERIFY(combines.contains(chain));
+    const QString first = from(chain, "cond");
+    QVERIFY(combines.contains(first));
+    const QString scene = from(first, "cond");
+    QCOMPARE(g.value(scene).toObject().value(QStringLiteral("class_type")).toString(), QStringLiteral("CLIPTextEncode"));
+    QVERIFY(input(scene, "text").toString().contains(QStringLiteral("on the left: red hair")));
+    QStringList regionWords;
+    for (const QString &c : {first, chain}) {
+        QCOMPARE(input(c, "set_cond_area").toString(), QStringLiteral("default"));
+        QCOMPARE(input(c, "strength").toDouble(), 1.0);
+        QVERIFY(hooks.contains(from(c, "hooks")));
+        const QString mask = from(c, "mask");
+        QCOMPARE(g.value(mask).toObject().value(QStringLiteral("class_type")).toString(), QStringLiteral("ImageToMask"));
+        QCOMPARE(g.value(from(mask, "image")).toObject().value(QStringLiteral("class_type")).toString(), QStringLiteral("LoadImage"));
+        const QString words = from(c, "cond_NEW");
+        QVERIFY(clips.contains(from(words, "clip")));
+        regionWords << input(words, "text").toString();
+    }
+    QVERIFY(regionWords[0].contains(QStringLiteral("lmn_aki")) || regionWords[1].contains(QStringLiteral("lmn_aki")));
+    QVERIFY(regionWords.join(u' ').contains(QStringLiteral("lmn_bo")));
+    for (const QString &w : regionWords)
+        QVERIFY2(!(w.contains(QStringLiteral("lmn_aki")) && w.contains(QStringLiteral("lmn_bo"))), qPrintable(w)); // each its own
+
+    // The asset says how it was drawn, with each member's region.
+    const GenerationOutput out = GenerationService::outputOf(job);
+    QCOMPARE(out.assets.size(), 1);
+    const QJsonObject cast = out.assets.first().metadata.value(QStringLiteral("cast")).toObject();
+    QCOMPARE(cast.value(QStringLiteral("strategy")).toString(), QStringLiteral("regional"));
+    QCOMPARE(cast.value(QStringLiteral("members")).toArray().size(), 2);
+    QCOMPARE(cast.value(QStringLiteral("members")).toArray()[0].toObject().value(QStringLiteral("region")).toArray().size(), 4);
+
+    // Off: compose, then refine (three passes).
+    graphs.clear();
+    request.regional = false;
+    job = startCastGeneration(&service, request);
+    QTRY_VERIFY_WITH_TIMEOUT(job->isFinished(), 20000);
+    QVERIFY2(job->state() == Job::State::Succeeded, qPrintable(job->errorString()));
+    QCOMPARE(graphs.size(), 3);
+    QVERIFY(!QJsonDocument(graphs.first()).toJson().contains("CreateHookLora"));
 }
 
 QTEST_MAIN(TestServices)

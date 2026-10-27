@@ -420,6 +420,8 @@ void AiPanel::submitCast(const PromptRun &run, ai::ImageProvider *provider)
     cast.modelFamily = checkpointFamily(m_studio, provider);
     // The check with the vision model goes with the Critic, as for the director's shots.
     cast.check = Settings::instance().value(QStringLiteral("director/critic"), false).toBool();
+    // One pass with regional prompts where the engine has them (ComfyUI); off until measured.
+    cast.regional = Settings::instance().value(QStringLiteral("generation/castRegional"), false).toBool();
     cast.title = run.prompt.isEmpty() ? run.name : run.prompt.left(60);
     cast.meta = QJsonObject{{QStringLiteral("document"), doc->id()}, {QStringLiteral("user_prompt"), run.prompt}};
     const int variants = m_options->variants();

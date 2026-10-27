@@ -28,6 +28,10 @@ struct CastRequest
     // the other member's, and repaint a member that fails, up to `maxRetries` times. Four vision
     // calls per image for two members: the pages switch it on with the Critic.
     bool check = false;
+    // Both in one pass when the engine takes regional prompts (ComfyUI's built-in graph): the scene
+    // everywhere, each member's words and LoRA in its region (M16 §16.2). Off, or an engine without
+    // them: compose, then refine. Which is better is for the live measurements to say.
+    bool regional = false;
     int maxRetries = 1;
     double minScore = 6.0;       // checklist identity a member needs against its own look
     QString title;

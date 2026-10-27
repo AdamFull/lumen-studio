@@ -279,10 +279,25 @@ Job *startCastGeneration(GenerationService *service, const CastRequest &requestI
         base.providerId = request.providerId;
         base.request = castBaseRequest(sized, pose, style, caps);
         base.title = request.title;
+        // One pass with a region per member, where the engine can.
+        const bool regional = sized.regional && caps.regionalPrompts && sized.cast.size() > 1;
+        if (regional) {
+            for (const pose::PersonRegion &r : regions) {
+                CharacterApplied applied;
+                const ImageRequest words = castRefineRequest(sized, r.person, pose, style, caps, &applied);
+                base.request.regions << RegionalPrompt{words.prompt, r.mask, words.loras};
+                QJsonObject m = state->members[r.person].toObject();
+                m.insert(QStringLiteral("applied"), applied.toJson(sized.cast[r.person]));
+                m.insert(QStringLiteral("region"), QJsonArray{r.box.x(), r.box.y(), r.box.width(), r.box.height()});
+                m.insert(QStringLiteral("seed"), double(base.request.seed));
+                state->members[r.person] = m;
+            }
+            state->refineQueue.clear();
+        }
         state->baseSpec = base;
         auto *director = new Director(self->registry(), job);
 
-        auto store = [self, job, state, sized, pose]() {
+        auto store = [self, job, state, sized, pose, regional]() {
             GenerationSpec spec = state->baseSpec;
             spec.title = sized.title;
             spec.saveAssets = sized.saveAssets;
@@ -290,6 +305,8 @@ Job *startCastGeneration(GenerationService *service, const CastRequest &requestI
             spec.meta.insert(QStringLiteral("user_prompt"), sized.scene.prompt);
             spec.meta.insert(QStringLiteral("cast"),
                              QJsonObject{{QStringLiteral("members"), state->members},
+                                         {QStringLiteral("strategy"), regional ? QStringLiteral("regional")
+                                                                               : QStringLiteral("compose_refine")},
                                          {QStringLiteral("arrangement"), pose::arrangementKey(sized.arrangement)},
                                          {QStringLiteral("refine_denoise"), sized.refineDenoise},
                                          {QStringLiteral("pose"), pose.toOpenPoseJson()}});
@@ -423,7 +440,7 @@ Job *startCastGeneration(GenerationService *service, const CastRequest &requestI
             });
         };
 
-        job->setProgress(-1.0, Text::tr("Drawing the scene (1 of %1)…").arg(stages));
+        job->setProgress(-1.0, regional ? Text::tr("Drawing both in one pass…") : Text::tr("Drawing the scene (1 of %1)…").arg(stages));
         self->execute(job, base, [state, refineNext](Job *job, const GenerationSpec &used, GenerationOutput out) {
             if (out.images.isEmpty())
                 return job->fail(Text::tr("The provider returned no images"));

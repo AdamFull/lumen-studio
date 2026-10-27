@@ -393,6 +393,7 @@ ImageCapabilities ComfyUiProvider::capabilities() const
     c.edit = false;
     c.poseControl = true;
     c.loras = true;
+    c.regionalPrompts = true; // the built-in graph's hook LoRAs and masked conditioning
     c.maxReferences = text(QStringLiteral("ipadapter_preset")) == QLatin1String("none") ? 0 : 4;
     const int native = setting(QStringLiteral("native_resolution")).toInt();
     c.nativePixels = qint64(native > 0 ? native : 1024) * (native > 0 ? native : 1024);
@@ -440,6 +441,40 @@ QJsonObject ComfyUiProvider::buildStandardGraph(const ImageRequest &r, const Upl
     const QString neg = g.add(QStringLiteral("CLIPTextEncode"), {{QStringLiteral("text"), r.negativePrompt}, {QStringLiteral("clip"), clip}});
     QJsonArray positive = ComfyGraph::link(pos, 0);
     QJsonArray negative = ComfyGraph::link(neg, 0);
+
+    // Regions (M16 §16.2): each one's LoRAs as hooks, its words encoded with them and added to the
+    // conditioning inside its mask, so one sampling pass draws every region with its own LoRA.
+    for (int i = 0; i < r.regions.size() && i < images.regions.size(); ++i) {
+        const RegionalPrompt &region = r.regions[i];
+        QJsonArray hooks;
+        for (const LoraRef &l : region.loras) {
+            QJsonObject in{{QStringLiteral("lora_name"), l.resolved.isEmpty() ? l.name : l.resolved},
+                           {QStringLiteral("strength_model"), l.weight},
+                           {QStringLiteral("strength_clip"), l.weight}};
+            if (!hooks.isEmpty())
+                in.insert(QStringLiteral("prev_hooks"), hooks);
+            hooks = ComfyGraph::link(g.add(QStringLiteral("CreateHookLora"), in), 0);
+        }
+        QJsonArray regionClip = clip;
+        if (!hooks.isEmpty())
+            regionClip = ComfyGraph::link(g.add(QStringLiteral("SetClipHooks"), {{QStringLiteral("clip"), clip},
+                                                                                 {QStringLiteral("apply_to_conds"), true},
+                                                                                 {QStringLiteral("schedule_clip"), false},
+                                                                                 {QStringLiteral("hooks"), hooks}}),
+                                          0);
+        const QString words = g.add(QStringLiteral("CLIPTextEncode"), {{QStringLiteral("text"), region.prompt}, {QStringLiteral("clip"), regionClip}});
+        const QString maskImg = g.add(QStringLiteral("LoadImage"), {{QStringLiteral("image"), images.regions[i]}});
+        const QString mask = g.add(QStringLiteral("ImageToMask"), {{QStringLiteral("image"), ComfyGraph::link(maskImg, 0)},
+                                                                   {QStringLiteral("channel"), QStringLiteral("red")}});
+        QJsonObject props{{QStringLiteral("cond"), positive},
+                          {QStringLiteral("cond_NEW"), ComfyGraph::link(words, 0)},
+                          {QStringLiteral("strength"), 1.0},
+                          {QStringLiteral("set_cond_area"), QStringLiteral("default")},
+                          {QStringLiteral("mask"), ComfyGraph::link(mask, 0)}};
+        if (!hooks.isEmpty())
+            props.insert(QStringLiteral("hooks"), hooks);
+        positive = ComfyGraph::link(g.add(QStringLiteral("ConditioningSetPropertiesAndCombine"), props), 0);
+    }
 
     if (!images.pose.isEmpty()) {
         QString cn = text(QStringLiteral("pose_controlnet"));
@@ -849,7 +884,12 @@ void ComfyUiProvider::runGraph(ImageOperation *op, std::function<QJsonObject(con
                         run->images.mask = name;
                     else if (key == QLatin1String("pose"))
                         run->images.pose = name;
-                    else {
+                    else if (key.startsWith(QLatin1String("region"))) {
+                        const int idx = key.mid(6).toInt();
+                        while (run->images.regions.size() <= idx)
+                            run->images.regions.append(QString());
+                        run->images.regions[idx] = name;
+                    } else {
                         const int idx = key.mid(3).toInt();
                         while (run->images.references.size() <= idx)
                             run->images.references.append(QString());
@@ -993,7 +1033,8 @@ QJsonObject ComfyUiProvider::insertLoras(QJsonObject graph, const QList<LoraRef>
 ImageOperation *ComfyUiProvider::generateImpl(const ImageRequest &r)
 {
     auto *op = new ImageOperation(this);
-    if (r.loras.isEmpty()) {
+    const bool regionLoras = std::any_of(r.regions.begin(), r.regions.end(), [](const RegionalPrompt &g) { return !g.loras.isEmpty(); });
+    if (r.loras.isEmpty() && !regionLoras) {
         generateInto(op, r);
         return op;
     }
@@ -1008,14 +1049,20 @@ ImageOperation *ComfyUiProvider::generateImpl(const ImageRequest &r)
                 available.append({QFileInfo(n).completeBaseName(), QDir::fromNativeSeparators(n)});
             ImageRequest req = r;
             QString error;
-            if (!resolveLoras(req.loras, available, &error)) {
-                op->fail(error);
-                return;
-            }
-            for (LoraRef &l : req.loras) {
-                for (const QString &n : names) {
-                    if (QDir::fromNativeSeparators(n) == l.resolved)
-                        l.resolved = n;
+            // The request's LoRAs and each region's, as ComfyUI names them.
+            QList<QList<LoraRef> *> lists{&req.loras};
+            for (RegionalPrompt &g : req.regions)
+                lists << &g.loras;
+            for (QList<LoraRef> *list : lists) {
+                if (!resolveLoras(*list, available, &error)) {
+                    op->fail(error);
+                    return;
+                }
+                for (LoraRef &l : *list) {
+                    for (const QString &n : names) {
+                        if (QDir::fromNativeSeparators(n) == l.resolved)
+                            l.resolved = n;
+                    }
                 }
             }
             self->generateInto(op, req);
@@ -1037,6 +1084,8 @@ void ComfyUiProvider::generateInto(ImageOperation *op, const ImageRequest &r)
     }
     for (int i = 0; i < r.references.size(); ++i)
         uploads.append({QStringLiteral("ref%1").arg(i), img::thumbnail(r.references[i].image, 1024)});
+    for (int i = 0; i < r.regions.size(); ++i)
+        uploads.append({QStringLiteral("region%1").arg(i), r.regions[i].mask.convertToFormat(QImage::Format_RGB32)});
 
     QPointer<ComfyUiProvider> self(this);
     if (auto tpl = templateFor(r)) {

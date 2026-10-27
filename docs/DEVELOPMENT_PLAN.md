@@ -1877,9 +1877,29 @@ strategy: both references with their names, one request.
   * Tests: `tst_canvas poseEditTwoPeople` (the chips, a preset for Bo only, his place kept, his rig
     reported; a hand edit drops only his rig), `castInEditor` (the assistant: one image, three
     requests, the cast in the answer and the asset); `tst_layout` audits the two-person dialog.
-- [ ] ComfyUI regional strategy: a graph with `CreateHookLora` → `ConditioningSetProperties`
+- [x] ComfyUI regional strategy: a graph with `CreateHookLora` → `ConditioningSetProperties`
   (mask per character) → combined conditioning, built per request like the standard graph.
   Contract test of the graph; the live step decides whether it becomes ComfyUI's default.
+  * The node inputs are taken from ComfyUI 0.18's `comfy_extras/nodes_hooks.py` (the user's
+    install, read only): `CreateHookLora` (lora_name, strength_model, strength_clip, prev_hooks),
+    `SetClipHooks` (clip, apply_to_conds, schedule_clip, hooks) and
+    `ConditioningSetPropertiesAndCombine` (cond, cond_NEW, strength, set_cond_area, mask, hooks),
+    all marked experimental there.
+  * `ImageRequest::regions` (`RegionalPrompt`: words, a mask at the request's size, LoRAs) and
+    `ImageCapabilities::regionalPrompts`, set by ComfyUI's built-in graph only. There each region's
+    LoRAs become chained hooks; its words are encoded with `SetClipHooks` (so the LoRA's text
+    weights apply) and joined to the scene's conditioning with its mask (uploaded like the others,
+    `ImageToMask` red) and hooks; the chain goes to the KSampler (and the pose ControlNet). The
+    regions' LoRAs are resolved to ComfyUI's names like the request's.
+  * `CastRequest::regional`: with an engine that takes regional prompts, one request — the base
+    request (both people's pose, both sides described) plus a region per member with its refine
+    words (subject, look, trigger) and LoRA in its region's mask; a failed check still repaints that
+    member. The asset's `cast.strategy` says `regional` or `compose_refine`. The pages read
+    `generation/castRegional` (off) until the live measurements choose a default.
+  * Test (`tst_services castRegionalComfy`, mock ComfyUI): one graph, the pose and two masks
+    uploaded, a hook per member by ComfyUI's file name at its weight, each member's words encoded
+    with its hooked CLIP and nothing of the other's, two masked combinations chained from the
+    scene's words to the sampler, the asset's strategy and regions; with it off, three passes.
 - [ ] Cloud multi-reference strategy (Gemini, OpenAI images): both references with their names in
   one edit request. Contract tests.
 - [ ] Live measurements (RTX 4060 8 GB, WAI-Illustrious, sd.cpp): Akane and a second trained

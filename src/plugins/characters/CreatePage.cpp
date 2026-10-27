@@ -1017,6 +1017,7 @@ void CreatePage::generateCastShot(const QString &shotId, int attempt, const QJso
                 cast.arrangement = pose::arrangementFromKey(shotJson.value(QStringLiteral("arrangement")).toString());
                 cast.modelFamily = family;
                 cast.check = check;
+                cast.regional = Settings::instance().value(QStringLiteral("generation/castRegional"), false).toBool();
                 cast.title = QObject::tr("Shot: %1").arg(shotJson.value(QStringLiteral("title")).toString());
                 cast.meta = QJsonObject{{QStringLiteral("director_session"), sessionId}, {QStringLiteral("shot"), shotId},
                                         {QStringLiteral("shot_title"), shotJson.value(QStringLiteral("title"))}};

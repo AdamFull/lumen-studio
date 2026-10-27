@@ -250,6 +250,7 @@ QFuture<ToolResult> submitCast(Studio *studio, ai::ImageProvider *provider, cons
             cast.scene.references.clear(); // each character brings its own
             cast.modelFamily = family;
             cast.check = Settings::instance().value(QStringLiteral("director/critic"), false).toBool();
+            cast.regional = Settings::instance().value(QStringLiteral("generation/castRegional"), false).toBool();
             cast.title = spec.title;
             cast.meta = spec.meta;
             QList<QFuture<ToolResult>> waits;

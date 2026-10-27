@@ -771,7 +771,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+63"/>
-        <location line="+125"/>
+        <location line="+126"/>
         <source>Shot: %1</source>
         <translation>Aufnahme: %1</translation>
     </message>
@@ -1042,7 +1042,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Das Bild konnte nicht geladen werden.</translation>
     </message>
     <message>
-        <location line="+155"/>
+        <location line="+156"/>
         <location line="+52"/>
         <location line="+29"/>
         <source>No project is open.</source>
@@ -1273,13 +1273,13 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+4"/>
-        <location line="+80"/>
+        <location line="+97"/>
         <location line="+73"/>
         <source>The generation service is no longer available</source>
         <translation>Der Generierungsdienst ist nicht mehr verfügbar</translation>
     </message>
     <message>
-        <location line="-148"/>
+        <location line="-165"/>
         <source>There is no image engine. Set one up with Help → Set up AI…</source>
         <translation>Es gibt keine Bild-Engine. Richten Sie eine unter Hilfe → KI einrichten… ein.</translation>
     </message>
@@ -1294,7 +1294,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>%1 kann keinen Bereich neu malen, was zwei Charaktere in einem Bild erfordert.</translation>
     </message>
     <message>
-        <location line="+91"/>
+        <location line="+108"/>
         <source>Checking %1…</source>
         <translation>%1 wird geprüft…</translation>
     </message>
@@ -1318,6 +1318,11 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <location line="-3"/>
         <source>Drawing the scene (1 of %1)…</source>
         <translation>Die Szene wird gezeichnet (1 von %1)…</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Drawing both in one pass…</source>
+        <translation>Beide werden in einem Durchgang gezeichnet…</translation>
     </message>
 </context>
 <context>
@@ -1461,12 +1466,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Verbunden – ComfyUI %1 %2</translation>
     </message>
     <message>
-        <location line="+192"/>
+        <location line="+193"/>
         <source>Select a checkpoint for ComfyUI in Settings → Providers.</source>
         <translation>Wählen Sie unter Einstellungen → Anbieter einen Checkpoint für ComfyUI aus.</translation>
     </message>
     <message>
-        <location line="+42"/>
+        <location line="+76"/>
         <source>Pose control needs an OpenPose ControlNet in ComfyUI&apos;s models/controlnet folder (e.g. controlnet-openpose-sdxl or xinsir union). Select it in the provider settings.</source>
         <translation>Die Posensteuerung benötigt ein OpenPose ControlNet im Ordner models/controlnet von ComfyUI (z. B. controlnet-openpose-sdxl oder xinsir union). Wählen Sie es in den Anbietereinstellungen aus.</translation>
     </message>
@@ -1531,7 +1536,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Hochladen eines Bildes zu ComfyUI fehlgeschlagen: %1</translation>
     </message>
     <message>
-        <location line="+268"/>
+        <location line="+282"/>
         <source>No ComfyUI template finds objects by name. Add a segmentation template with a &quot;prompt&quot; binding (mode &quot;segment_parts&quot;) to %1.</source>
         <translation>Keine ComfyUI-Vorlage findet Objekte nach Namen. Legen Sie eine Segmentierungsvorlage mit einer „prompt“-Bindung (Modus „segment_parts“) in %1 ab.</translation>
     </message>
@@ -6755,24 +6760,24 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+444"/>
+        <location line="+446"/>
         <source>Upscale</source>
         <translation>Hochskalieren</translation>
     </message>
     <message>
-        <location line="-443"/>
+        <location line="-445"/>
         <source>Cut out the subject onto a transparent layer.</source>
         <translation>Das Motiv auf eine transparente Ebene freistellen.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+444"/>
+        <location line="+446"/>
         <location line="+326"/>
         <source>Detect pose</source>
         <translation>Pose erkennen</translation>
     </message>
     <message>
-        <location line="-710"/>
+        <location line="-712"/>
         <source>Left</source>
         <translation>Links</translation>
     </message>
@@ -6823,13 +6828,13 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Farben an die Umgebung angleichen</translation>
     </message>
     <message>
-        <location line="+262"/>
+        <location line="+264"/>
         <source>Will use %1 for this action.</source>
         <translation>Für diese Aktion wird %1 verwendet.</translation>
     </message>
     <message>
-        <location line="-428"/>
-        <location line="+444"/>
+        <location line="-430"/>
+        <location line="+446"/>
         <location line="+309"/>
         <location line="+4"/>
         <source>Remove background</source>
@@ -6857,7 +6862,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>%1 Varianten wurden als Ebenen hinzugefügt – schalten Sie ihre Sichtbarkeit um, um sie zu vergleichen.</translation>
     </message>
     <message>
-        <location line="-561"/>
+        <location line="-563"/>
         <location line="+3"/>
         <source>Engine for changes</source>
         <translation>Engine für Änderungen</translation>
@@ -6909,12 +6914,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+20"/>
-        <location line="+355"/>
+        <location line="+357"/>
         <source>Make a variation</source>
         <translation>Eine Variation erstellen</translation>
     </message>
     <message>
-        <location line="-343"/>
+        <location line="-345"/>
         <source>These also apply to the prompt bar under the canvas.</source>
         <translation>Diese gelten auch für die Prompt-Leiste unter der Arbeitsfläche.</translation>
     </message>
@@ -6991,7 +6996,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Wie breit der Rand ist, über den ein Ergebnis in das Bild rund um die Auswahl übergeht.</translation>
     </message>
     <message>
-        <location line="+253"/>
+        <location line="+255"/>
         <source>It uses the words in the prompt bar under the canvas, if any.</source>
         <translation>Es verwendet die Worte in der Prompt-Leiste unter der Arbeitsfläche, falls vorhanden.</translation>
     </message>
@@ -8041,7 +8046,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::CreatePage</name>
     <message>
-        <location filename="../src/plugins/characters/CreatePage.cpp" line="-950"/>
+        <location filename="../src/plugins/characters/CreatePage.cpp" line="-951"/>
         <source>Director</source>
         <translation>Regie</translation>
     </message>
@@ -8089,12 +8094,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="-498"/>
-        <location line="+1247"/>
+        <location line="+1248"/>
         <source>Character</source>
         <translation>Charakter</translation>
     </message>
     <message>
-        <location line="-1243"/>
+        <location line="-1244"/>
         <source>Edit sheet</source>
         <translation>Steckbrief bearbeiten</translation>
     </message>
@@ -8375,12 +8380,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+19"/>
-        <location line="+473"/>
+        <location line="+474"/>
         <source>There is no image engine. Set one up with Help → Set up AI…</source>
         <translation>Es gibt keine Bild-Engine. Richten Sie eine unter Hilfe → KI einrichten… ein.</translation>
     </message>
     <message>
-        <location line="-453"/>
+        <location line="-454"/>
         <location line="+98"/>
         <source>Preparing…</source>
         <translation>Wird vorbereitet…</translation>
@@ -8396,7 +8401,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Die zweite Figur ist nicht mehr in der Bibliothek.</translation>
     </message>
     <message>
-        <location line="+54"/>
+        <location line="+55"/>
         <source>Save another character to the library first: Library → Save character to library…</source>
         <translation>Speichern Sie zuerst eine weitere Figur in der Bibliothek: Bibliothek → Figur in der Bibliothek speichern…</translation>
     </message>

@@ -70,6 +70,15 @@ struct LoraRef
 };
 
 // A LoRA a server offers: its name (file stem) and path relative to the server's LoRA folder.
+// A part of the picture with its own words and LoRAs (M16 §16.2, the regional strategy): an engine
+// with ImageCapabilities::regionalPrompts draws it in the same pass as the rest of the picture.
+struct RegionalPrompt
+{
+    QString prompt;
+    QImage mask;          // Grayscale8 at the request's size; white = the region
+    QList<LoraRef> loras;
+};
+
 struct ServerLora
 {
     QString name;
@@ -129,6 +138,7 @@ struct ImageRequest
     QList<ReferenceImage> references;
     QList<ControlInput> controls;
     QList<LoraRef> loras;
+    QList<RegionalPrompt> regions; // engines with regionalPrompts only
 
     bool transparentBackground = false;
     QString quality;        // provider-specific quality tier (e.g. OpenAI "high")
@@ -174,6 +184,7 @@ struct ImageCapabilities
     bool transparentBackground = false;
     bool qualityTiers = false;
     bool loras = false;            // LoRA files from the server's LoRA folder
+    bool regionalPrompts = false;  // ImageRequest::regions: words and LoRAs per region in one pass
     int sizeMultiple = 8;
     QList<QSize> fixedSizes;       // when non-empty only these sizes are accepted
     QStringList aspectRatios;      // providers that take aspect ratio instead of size
