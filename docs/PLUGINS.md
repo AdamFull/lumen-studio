@@ -146,7 +146,9 @@ menu picks another character or none.
   with its LoRA (or reference). This takes three runs of the image server per result. With the
   Critic on (Create page), each character's crop is checked by the vision model and repainted once
   when it looks like the other one or like neither. The image server must be able to paint an area
-  anew.
+  anew. Online services without LoRAs that take reference pictures (Google Gemini, OpenAI) draw
+  both in one request instead: each character's pictures go along with its name, and the words say
+  who stands where.
 * **An area of a two-character image.** When you change a selected area, Lumen asks which character
   it shows, with the one whose region it lies in already chosen. Other changes (a variation, an
   instruction edit) use the first character.

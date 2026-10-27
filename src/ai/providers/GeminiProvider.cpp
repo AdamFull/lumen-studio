@@ -78,9 +78,29 @@ QString referenceInstruction(const ImageRequest &r, int firstImageIndex, bool ha
             s << QString::number(i);
         return s.join(QStringLiteral(", "));
     };
-    if (!character.isEmpty())
+    // References of two characters (M16 §16.2), told apart by their labels (the characters' names).
+    QStringList names;
+    QHash<QString, QList<int>> byName;
+    {
+        int at = index - int(r.references.size());
+        for (const ReferenceImage &ref : r.references) {
+            if (ref.role == ReferenceRole::Character && !ref.label.isEmpty()) {
+                if (!names.contains(ref.label))
+                    names << ref.label;
+                byName[ref.label] << at;
+            }
+            ++at;
+        }
+    }
+    if (names.size() > 1) {
+        for (const QString &name : std::as_const(names))
+            lines << QStringLiteral("Image(s) %1 show %2.").arg(list(byName.value(name)), name);
+        lines << QStringLiteral("Each of them must look exactly like their own images: same face, hair style and color, eye color, "
+                                "body proportions, outfit, accessories and color palette. Do not mix their looks.");
+    } else if (!character.isEmpty()) {
         lines << QStringLiteral("Image(s) %1 show the character. Reproduce exactly this character: same face, hair style and color, "
                                 "eye color, body proportions, outfit, accessories and color palette.").arg(list(character));
+    }
     if (!style.isEmpty())
         lines << QStringLiteral("Image(s) %1 define the art style (rendering, line work, shading, palette) to follow.").arg(list(style));
     if (!other.isEmpty())

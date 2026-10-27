@@ -182,6 +182,34 @@ ImageRequest castBaseRequest(const CastRequest &request, const pose::Pose &pose,
     return r;
 }
 
+ImageRequest castReferenceRequest(const CastRequest &request, const pose::Pose &pose, const PromptStyle &style,
+                                  const ImageCapabilities &caps)
+{
+    ImageRequest r = castBaseRequest(request, pose, style, caps);
+    const int n = int(request.cast.size());
+    QStringList who;
+    for (int i = 0; i < n; ++i) {
+        const QString name = request.cast[i].name.isEmpty() ? QStringLiteral("person %1").arg(i + 1) : request.cast[i].name;
+        const QString where = side(request.arrangement, i, n);
+        who << (where.isEmpty() ? name : name + u' ' + where);
+    }
+    if (!who.isEmpty())
+        r.prompt += QStringLiteral(". %1, each exactly as in their reference images.").arg(who.join(QStringLiteral(" and ")));
+    // The references shared between the members, each labelled with its member's name.
+    const int each = n > 0 ? std::max(1, caps.maxReferences / n) : 0;
+    for (int i = 0; i < n; ++i) {
+        const CharacterContext &c = request.cast[i];
+        for (int j = 0; j < std::min<int>(each, int(c.references.size())); ++j) {
+            ReferenceImage ref;
+            ref.image = c.references[j];
+            ref.role = ReferenceRole::Character;
+            ref.label = c.name.isEmpty() ? QStringLiteral("person %1").arg(i + 1) : c.name;
+            r.references << ref;
+        }
+    }
+    return r;
+}
+
 ImageRequest castRefineRequest(const CastRequest &request, int index, const pose::Pose &pose, const PromptStyle &style,
                                const ImageCapabilities &caps, CharacterApplied *applied)
 {
@@ -240,7 +268,10 @@ Job *startCastGeneration(GenerationService *service, const CastRequest &requestI
             return;
         }
         const ImageCapabilities caps = provider->capabilities();
-        if (request.cast.size() > 1 && !caps.inpaint) {
+        // Engines without LoRAs that take several references (Gemini, OpenAI images) draw both in
+        // one request from their references and names (M16 §16.2).
+        const bool multiReference = request.cast.size() > 1 && !caps.loras && caps.maxReferences >= 2;
+        if (request.cast.size() > 1 && !caps.inpaint && !multiReference) {
             job->fail(Text::tr("%1 cannot repaint a region, which drawing two characters needs.").arg(provider->displayName()));
             return;
         }
@@ -248,6 +279,9 @@ Job *startCastGeneration(GenerationService *service, const CastRequest &requestI
         const QSize size = request.scene.size.isValid() ? request.scene.size : QSize(1216, 832);
         CastRequest sized = request;
         sized.scene.size = size;
+        // A member that fails its check is repainted, which needs an engine that repaints regions.
+        if (multiReference && !caps.inpaint)
+            sized.maxRetries = 0;
         const pose::Pose pose = castPose(sized, size);
         const QList<pose::PersonRegion> regions = pose::personRegions(pose, size);
         const int stages = 1 + int(regions.size());
@@ -280,8 +314,21 @@ Job *startCastGeneration(GenerationService *service, const CastRequest &requestI
         base.request = castBaseRequest(sized, pose, style, caps);
         base.title = request.title;
         // One pass with a region per member, where the engine can.
-        const bool regional = sized.regional && caps.regionalPrompts && sized.cast.size() > 1;
-        if (regional) {
+        const bool regional = !multiReference && sized.regional && caps.regionalPrompts && sized.cast.size() > 1;
+        if (multiReference) {
+            base.request = castReferenceRequest(sized, pose, style, caps);
+            for (const pose::PersonRegion &r : regions) {
+                const CharacterContext &c = sized.cast[r.person];
+                QJsonObject m = state->members[r.person].toObject();
+                m.insert(QStringLiteral("applied"), QJsonObject{{QStringLiteral("character"), c.id},
+                                                                {QStringLiteral("name"), c.name},
+                                                                {QStringLiteral("reference"), !c.references.isEmpty()}});
+                m.insert(QStringLiteral("region"), QJsonArray{r.box.x(), r.box.y(), r.box.width(), r.box.height()});
+                m.insert(QStringLiteral("seed"), double(base.request.seed));
+                state->members[r.person] = m;
+            }
+            state->refineQueue.clear();
+        } else if (regional) {
             for (const pose::PersonRegion &r : regions) {
                 CharacterApplied applied;
                 const ImageRequest words = castRefineRequest(sized, r.person, pose, style, caps, &applied);
@@ -297,7 +344,7 @@ Job *startCastGeneration(GenerationService *service, const CastRequest &requestI
         state->baseSpec = base;
         auto *director = new Director(self->registry(), job);
 
-        auto store = [self, job, state, sized, pose, regional]() {
+        auto store = [self, job, state, sized, pose, regional, multiReference]() {
             GenerationSpec spec = state->baseSpec;
             spec.title = sized.title;
             spec.saveAssets = sized.saveAssets;
@@ -305,8 +352,9 @@ Job *startCastGeneration(GenerationService *service, const CastRequest &requestI
             spec.meta.insert(QStringLiteral("user_prompt"), sized.scene.prompt);
             spec.meta.insert(QStringLiteral("cast"),
                              QJsonObject{{QStringLiteral("members"), state->members},
-                                         {QStringLiteral("strategy"), regional ? QStringLiteral("regional")
-                                                                               : QStringLiteral("compose_refine")},
+                                         {QStringLiteral("strategy"), multiReference ? QStringLiteral("multi_reference")
+                                                                      : regional       ? QStringLiteral("regional")
+                                                                                       : QStringLiteral("compose_refine")},
                                          {QStringLiteral("arrangement"), pose::arrangementKey(sized.arrangement)},
                                          {QStringLiteral("refine_denoise"), sized.refineDenoise},
                                          {QStringLiteral("pose"), pose.toOpenPoseJson()}});
@@ -440,7 +488,8 @@ Job *startCastGeneration(GenerationService *service, const CastRequest &requestI
             });
         };
 
-        job->setProgress(-1.0, regional ? Text::tr("Drawing both in one pass…") : Text::tr("Drawing the scene (1 of %1)…").arg(stages));
+        job->setProgress(-1.0, regional || multiReference ? Text::tr("Drawing both in one pass…")
+                                                         : Text::tr("Drawing the scene (1 of %1)…").arg(stages));
         self->execute(job, base, [state, refineNext](Job *job, const GenerationSpec &used, GenerationOutput out) {
             if (out.images.isEmpty())
                 return job->fail(Text::tr("The provider returned no images"));

@@ -52,6 +52,11 @@ pose::Pose castPose(const CastRequest &request, const QSize &size);
 // The base request: count tags, the scene, each member's appearance tied to its side; the whole
 // pose; no character LoRA or reference.
 ImageRequest castBaseRequest(const CastRequest &request, const pose::Pose &pose, const PromptStyle &style, const ImageCapabilities &caps);
+// The request of the multi-reference strategy, for engines without LoRAs that take several
+// reference images (Gemini, OpenAI images): the base request with who stands where by name ("Akane on
+// the left and Bo on the right") and each member's references, labelled with its name.
+ImageRequest castReferenceRequest(const CastRequest &request, const pose::Pose &pose, const PromptStyle &style,
+                                  const ImageCapabilities &caps);
 // The refine request of member `index` (its person in the pose): its subject and appearance, the
 // scene, then applyCharacter(Region) for its LoRA or reference; inpaint at `refineDenoise` with that
 // person's pose only. `applied` receives what went in.

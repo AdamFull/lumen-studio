@@ -1900,8 +1900,20 @@ strategy: both references with their names, one request.
     uploaded, a hook per member by ComfyUI's file name at its weight, each member's words encoded
     with its hooked CLIP and nothing of the other's, two masked combinations chained from the
     scene's words to the sampler, the asset's strategy and regions; with it off, three passes.
-- [ ] Cloud multi-reference strategy (Gemini, OpenAI images): both references with their names in
+- [x] Cloud multi-reference strategy (Gemini, OpenAI images): both references with their names in
   one edit request. Contract tests.
+  * `referenceInstruction` (shared by Gemini and OpenAI images): character references with two or
+    more different labels are named ("Image(s) 1, 2 show Akane. Image(s) 3 show Bo.") with "Do not
+    mix their looks"; one character keeps the old words.
+  * `castReferenceRequest`: the base request plus who stands where by name ("Akane on the left and
+    Bo on the right, each exactly as in their reference images") and each member's references
+    (`maxReferences` shared evenly), labelled with its name. `startCastGeneration` uses it on its
+    own for engines without LoRAs that take two or more references: one request, no repaint
+    (and no repaint retry after a failed check unless the engine inpaints); `cast.strategy` is
+    `multi_reference`. Such engines used to fail with "cannot repaint a region".
+  * Tests: `tst_providers_cloud referencesOfTwoCharacters` (the names and numbers, after an image to
+    edit, one character, Gemini's text part); `tst_services castMultiReference` (mock Gemini: one
+    request with both names and sides, the scene and six references; the asset's strategy).
 - [ ] Live measurements (RTX 4060 8 GB, WAI-Illustrious, sd.cpp): Akane and a second trained
   character, 8 scene prompts, same seeds. Compared: (a) both LoRAs on the whole image,
   (b) compose and refine, (c) on ComfyUI, regional. Per character: checklist identity on its

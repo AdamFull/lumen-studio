@@ -55,6 +55,7 @@ private slots:
     void directorDatasetPlan();
     void directorCast();
     void castRegionalComfy();
+    void castMultiReference();
     void loraCaptions();
     void identityChecklist();
     void characterContext();
@@ -1654,6 +1655,72 @@ void TestServices::castRegionalComfy()
     QVERIFY2(job->state() == Job::State::Succeeded, qPrintable(job->errorString()));
     QCOMPARE(graphs.size(), 3);
     QVERIFY(!QJsonDocument(graphs.first()).toJson().contains("CreateHookLora"));
+}
+
+// The multi-reference strategy (plan M16 §16.2): an engine without LoRAs that takes several
+// references (Gemini) draws both in one request from their references, named, and who stands where.
+void TestServices::castMultiReference()
+{
+    MockHttpServer server;
+    QList<QJsonObject> requests;
+    server.route("POST", QStringLiteral("/v1beta/models/gemini-2.5-flash-image:generateContent"), [&](const MockRequest &req) {
+        requests << req.json();
+        QImage out(640, 448, QImage::Format_RGB32);
+        out.fill(QColor(90, 120, 160));
+        const QJsonObject part{{QStringLiteral("inlineData"), QJsonObject{{QStringLiteral("mimeType"), QStringLiteral("image/png")},
+                                                                         {QStringLiteral("data"), QString::fromLatin1(img::encode(out).toBase64())}}}};
+        return MockResponse::json({{QStringLiteral("candidates"), QJsonArray{QJsonObject{
+            {QStringLiteral("content"), QJsonObject{{QStringLiteral("parts"), QJsonArray{part}}}},
+            {QStringLiteral("finishReason"), QStringLiteral("STOP")}}}}});
+    });
+    QTemporaryDir dir;
+    doc::Project project;
+    auto opened = project.open(dir.filePath(QStringLiteral("multi.lumen")));
+    QTRY_VERIFY(opened.isFinished());
+    ProviderRegistry registry(&m_http);
+    registerBuiltInProviders(registry);
+    QFile::remove(registry.configPath());
+    auto cleanup = qScopeGuard([&] { QFile::remove(registry.configPath()); });
+    Provider *gemini = registry.addProvider(QStringLiteral("gemini_image"), QStringLiteral("Gemini"),
+                                            {{QStringLiteral("url"), server.baseUrl().toString() + QStringLiteral("/v1beta")},
+                                             {QStringLiteral("api_key"), QStringLiteral("k")}});
+    QVERIFY(gemini);
+    JobQueue queue;
+    GenerationService service(&registry, &queue);
+    service.setProject(&project);
+    auto character = [](const char *id, const char *name, const char *tags, QColor colour) {
+        CharacterContext c;
+        c.id = QLatin1String(id);
+        c.name = QLatin1String(name);
+        c.sheet = QJsonObject{{QStringLiteral("tags"), QLatin1String(tags)}};
+        QImage ref(64, 96, QImage::Format_RGB32);
+        ref.fill(colour);
+        c.references = {ref, ref, ref};
+        return c;
+    };
+    CastRequest request;
+    request.providerId = gemini->instanceId();
+    request.scene.prompt = QStringLiteral("two friends at a café");
+    request.scene.size = QSize(640, 448);
+    request.cast = {character("aki", "Akane", "red hair, green eyes", Qt::red), character("bo", "Bo", "black hair, blue eyes", Qt::blue)};
+    Job *job = startCastGeneration(&service, request);
+    QTRY_VERIFY_WITH_TIMEOUT(job->isFinished(), 20000);
+    QVERIFY2(job->state() == Job::State::Succeeded, qPrintable(job->errorString()));
+    QCOMPARE(requests.size(), 1);
+    const QJsonArray parts = requests.first().value(QStringLiteral("contents")).toArray()[0].toObject().value(QStringLiteral("parts")).toArray();
+    const QString text = parts[0].toObject().value(QStringLiteral("text")).toString();
+    QVERIFY2(text.contains(QStringLiteral("Akane on the left and Bo on the right")), qPrintable(text));
+    QVERIFY(text.contains(QStringLiteral("show Akane")) && text.contains(QStringLiteral("show Bo")));
+    QVERIFY(text.contains(QStringLiteral("two friends at a café")));
+    int images = 0;
+    for (const QJsonValue &p : parts)
+        images += p.toObject().contains(QStringLiteral("inline_data")) ? 1 : 0;
+    QVERIFY2(images >= 6, qPrintable(QString::number(images))); // three references each (and the pose, where taken)
+    const GenerationOutput out = GenerationService::outputOf(job);
+    QCOMPARE(out.assets.size(), 1);
+    const QJsonObject cast = out.assets.first().metadata.value(QStringLiteral("cast")).toObject();
+    QCOMPARE(cast.value(QStringLiteral("strategy")).toString(), QStringLiteral("multi_reference"));
+    QCOMPARE(cast.value(QStringLiteral("members")).toArray().size(), 2);
 }
 
 QTEST_MAIN(TestServices)

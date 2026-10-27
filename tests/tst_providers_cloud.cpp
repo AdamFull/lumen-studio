@@ -52,6 +52,7 @@ private slots:
     void falErrorsAndCancel();
     void findAreaEngines();
     void comfyLoras();
+    void referencesOfTwoCharacters();
 
 private:
     net::HttpClient m_http;
@@ -714,6 +715,40 @@ void TestProvidersCloud::comfyLoras()
     QCOMPARE(loras[0].name, QStringLiteral("ink"));
     QCOMPARE(loras[0].path, QStringLiteral("styles/ink.safetensors"));
     QCOMPARE(loras[1].name, QStringLiteral("pixel"));
+}
+
+// References of two characters (plan M16 §16.2): the instruction says whom each image shows, by the
+// labels, and that their looks are not mixed; one character keeps the old words.
+void TestProvidersCloud::referencesOfTwoCharacters()
+{
+    ImageRequest r;
+    r.prompt = QStringLiteral("x");
+    auto ref = [](const QString &label) {
+        ReferenceImage ref;
+        ref.image = solid(Qt::red);
+        ref.role = ReferenceRole::Character;
+        ref.label = label;
+        return ref;
+    };
+    r.references = {ref(QStringLiteral("Akane")), ref(QStringLiteral("Akane")), ref(QStringLiteral("Bo"))};
+    QString text = referenceInstruction(r, 1, false, false);
+    QVERIFY2(text.contains(QStringLiteral("Image(s) 1, 2 show Akane.")), qPrintable(text));
+    QVERIFY(text.contains(QStringLiteral("Image(s) 3 show Bo.")));
+    QVERIFY(text.contains(QStringLiteral("Do not mix their looks.")));
+    // After the image to edit, the numbers move on.
+    r.mode = GenMode::Edit;
+    r.initImage = solid(Qt::white);
+    text = referenceInstruction(r, 1, true, false);
+    QVERIFY2(text.contains(QStringLiteral("Image(s) 2, 3 show Akane.")) && text.contains(QStringLiteral("Image(s) 4 show Bo.")), qPrintable(text));
+    // One character: as before.
+    r.references = {ref(QStringLiteral("Akane")), ref(QString())};
+    text = referenceInstruction(r, 1, true, false);
+    QVERIFY(text.contains(QStringLiteral("show the character")));
+    QVERIFY(!text.contains(QStringLiteral("show Akane")));
+    // The Gemini request carries the words in its text part.
+    r.references = {ref(QStringLiteral("Akane")), ref(QStringLiteral("Bo"))};
+    const QJsonObject body = GeminiImageProvider::buildBody(r, {QStringLiteral("1:1")});
+    QVERIFY(QJsonDocument(body).toJson().contains("show Bo"));
 }
 
 QTEST_MAIN(TestProvidersCloud)
