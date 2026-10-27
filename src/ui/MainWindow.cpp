@@ -39,6 +39,7 @@
 #include <QFileInfo>
 #include <QHBoxLayout>
 #include <QImageReader>
+#include <QJsonArray>
 #include <QLabel>
 #include <QMenuBar>
 #include <QMessageBox>
@@ -747,6 +748,29 @@ void MainWindow::rerun(const QString &assetId)
     const auto info = project ? project->asset(assetId) : std::nullopt;
     if (!info)
         return;
+    // A picture of two characters (M16): New from prompt draws none, so the editor makes another,
+    // with the cast it was made with, the words in the prompt bar and a blank canvas of its size.
+    const QJsonArray members = info->metadata.value(QStringLiteral("cast")).toObject().value(QStringLiteral("members")).toArray();
+    if (members.size() > 1 && m_studio->hasPage(QStringLiteral("create"))) {
+        QStringList cast;
+        for (const QJsonValue &m : members) {
+            const QString id = m.toObject().value(QStringLiteral("character")).toString();
+            if (m_studio->characters()->entry(id))
+                cast << id;
+        }
+        if (cast.size() > 1) {
+            m_studio->setActiveCast(cast);
+            const QJsonObject request = info->metadata.value(QStringLiteral("request")).toObject();
+            // The size of the picture as kept (the engine's own size is in its request).
+            const QSize size = info->size.isEmpty() ? QSize(1024, 1024) : info->size;
+            if (m_studio->newDocument(size, tr("New image"))) {
+                showPage(pages::Editor);
+                m_editor->promptBar()->setPrompt(info->metadata.value(QStringLiteral("user_prompt")).toString(),
+                                                 request.value(QStringLiteral("negative_prompt")).toString());
+            }
+            return;
+        }
+    }
     newFromPrompt()->fillFrom(*info);
 }
 

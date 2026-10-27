@@ -44,6 +44,10 @@ public:
     // stay, since images record the action they were made with.
     enum class Mode { Inpaint, Variation, Edit, Expand, Upscale, RemoveBackground, DetectPose };
 
+    // Which member of a cast of two a selected area shows (M16 §16.3): their names and the one to
+    // preselect; the index, or -1 when the user cancels. Tests replace it; default: a small chooser.
+    std::function<int(const QStringList &names, int preselected)> chooseCharacter;
+
     // A request of the prompt bar (or of the panel's Variation). The other values (steps, seed,
     // variants, negative prompt, control pose, the region's context and edge) come from the
     // options, the references from the panel.
@@ -106,8 +110,15 @@ private:
     void submitWithComposite(doc::Document *doc, std::function<void(QImage composite)> fn);
     // Adds the page's character (if any) to the request for this use on `provider`, then continues
     // with the request and the metadata of what went in (empty without a character).
+    // `where`: the selected area, for a cast of two: the user says which member it shows.
     void withCharacter(ai::ImageRequest request, ai::CharacterUse use, bool skip, ai::ImageProvider *provider,
-                       std::function<void(ai::ImageRequest, QJsonObject)> then);
+                       std::function<void(ai::ImageRequest, QJsonObject)> then, const QRect &where = QRect());
+    // The cast member whose region, in an image of the cast kept as a layer of the document,
+    // overlaps `where` most; -1 when there is none.
+    int castMemberAt(const QRect &where) const;
+    // A new picture with a cast of two (M16 §16.2): composed, then each character repainted in its
+    // region (ai::startCastGeneration), one job per result.
+    void submitCast(const PromptRun &run, ai::ImageProvider *provider);
     void trackJob(Job *job, std::function<void(doc::Document *, const ai::GenerationOutput &)> apply);
     void addResultLayers(doc::Document *doc, const QList<QImage> &images, const QString &name, const QJsonObject &meta)
     {

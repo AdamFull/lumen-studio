@@ -222,6 +222,7 @@ private slots:
     void smartSelection();
     void selectObjectsByName();
     void planChange();
+    void castInEditor();
     void promptBarWithoutEdits();
     void aiMenuAndPanel();
     void promptBarKeepsTyping();
@@ -6883,6 +6884,179 @@ void TestCanvas::filtersInTheShell()
     window->close();
     QTRY_VERIFY_WITH_TIMEOUT(!copy && !mine && !firstCopy, 5000);
     QVERIFY(!window->isVisible());
+}
+
+// Two characters in the editor (plan M16 step 5, after the M17 shell): with a cast of two in the AI
+// panel's chip, a new picture is composed and each character repainted in its region; a selected
+// area of it asks which character it shows (the one whose region it is in preselected); "Make
+// another like this" brings the cast back with the words, on a blank canvas.
+void TestCanvas::castInEditor()
+{
+    Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
+    Settings::instance().setValue(QStringLiteral("director/critic"), false);
+    PluginsOn plugins({QStringLiteral("characters")});
+    // Mock sd.cpp: an inpaint paints its mask red for Aki's LoRA and blue for Bo's.
+    MockHttpServer server;
+    QList<QJsonObject> generations;
+    QHash<QString, QImage> results;
+    server.route("GET", QStringLiteral("/sdcpp/v1/capabilities"), [](const MockRequest &) {
+        return MockResponse::json({{QStringLiteral("loras"), QJsonArray{QJsonObject{{QStringLiteral("name"), QStringLiteral("lmn_aki")},
+                                                                                    {QStringLiteral("path"), QStringLiteral("lmn_aki.safetensors")}},
+                                                                        QJsonObject{{QStringLiteral("name"), QStringLiteral("lmn_bo")},
+                                                                                    {QStringLiteral("path"), QStringLiteral("lmn_bo.safetensors")}}}}});
+    });
+    server.route("POST", QStringLiteral("/sdcpp/v1/img_gen"), [&](const MockRequest &req) {
+        const QJsonObject body = req.json();
+        generations << body;
+        QImage out(body.value(QStringLiteral("width")).toInt(), body.value(QStringLiteral("height")).toInt(), QImage::Format_ARGB32);
+        out.fill(QColor(128, 128, 128));
+        if (body.contains(QStringLiteral("mask_image"))) {
+            out = img::fromBase64(body.value(QStringLiteral("init_image")).toString().toLatin1()).convertToFormat(QImage::Format_ARGB32);
+            const QImage mask = img::fromBase64(body.value(QStringLiteral("mask_image")).toString().toLatin1()).convertToFormat(QImage::Format_Grayscale8);
+            const QString lora = body.value(QStringLiteral("lora")).toArray().first().toObject().value(QStringLiteral("path")).toString();
+            const QRgb colour = lora.contains(QStringLiteral("aki")) ? qRgb(255, 0, 0) : qRgb(0, 0, 255);
+            for (int y = 0; y < out.height(); ++y) {
+                auto *px = reinterpret_cast<QRgb *>(out.scanLine(y));
+                const uchar *m = mask.constScanLine(y);
+                for (int x = 0; x < out.width(); ++x)
+                    if (m[x] > 127)
+                        px[x] = colour;
+            }
+        }
+        const QString id = QStringLiteral("job_%1").arg(generations.size());
+        results.insert(id, out);
+        return MockResponse::json({{QStringLiteral("id"), id}}, 202);
+    });
+    for (int i = 1; i <= 16; ++i) {
+        const QString id = QStringLiteral("job_%1").arg(i);
+        server.route("GET", QStringLiteral("/sdcpp/v1/jobs/") + id, [&results, id](const MockRequest &) {
+            const QJsonArray images{QJsonObject{{QStringLiteral("index"), 0}, {QStringLiteral("b64_json"), QString::fromLatin1(img::encode(results.value(id)).toBase64())}}};
+            return MockResponse::json({{QStringLiteral("status"), QStringLiteral("completed")}, {QStringLiteral("result"), QJsonObject{{QStringLiteral("images"), images}}}});
+        });
+    }
+    QTemporaryDir dir;
+    Studio studio;
+    for (ai::Provider *p : studio.providers()->providers())
+        studio.providers()->removeProvider(p->instanceId());
+    ai::Provider *sd = studio.providers()->addProvider(QStringLiteral("sdcpp"), QStringLiteral("SD"),
+                                                       {{QStringLiteral("url"), server.baseUrl().toString()},
+                                                        {QStringLiteral("model"), QStringLiteral("waiIllustriousSDXL_v170.safetensors")},
+                                                        {QStringLiteral("control_net"), true}});
+    QVERIFY(sd);
+    qobject_cast<ai::SdCppProvider *>(sd)->pollIntervalMs = 20;
+    studio.openProject(dir.filePath(QStringLiteral("cast-editor.lumen")));
+    QTRY_VERIFY_WITH_TIMEOUT(studio.isProjectOpen(), 5000);
+    QImage ref(64, 96, QImage::Format_ARGB32);
+    ref.fill(Qt::red);
+    auto lora = [&dir](const char *name) {
+        return QJsonObject{{QStringLiteral("file"), dir.filePath(QLatin1String(name) + QStringLiteral(".safetensors"))},
+                           {QStringLiteral("trigger"), QLatin1String(name)},
+                           {QStringLiteral("weight"), 0.8},
+                           {QStringLiteral("family"), QStringLiteral("SDXL")}};
+    };
+    auto a = studio.characters()->save(QStringLiteral("Aki (cast editor)"), {{QStringLiteral("gender_presentation"), QStringLiteral("female")},
+                                                                             {QStringLiteral("tags"), QStringLiteral("red hair, green eyes")}},
+                                       {ref}, QString(), QString(), lora("lmn_aki"));
+    auto b = studio.characters()->save(QStringLiteral("Bo (cast editor)"), {{QStringLiteral("gender_presentation"), QStringLiteral("male")},
+                                                                            {QStringLiteral("tags"), QStringLiteral("black hair, blue eyes")}},
+                                       {ref}, QString(), QString(), lora("lmn_bo"));
+    QTRY_VERIFY(a.isFinished() && b.isFinished());
+    const QString aki = a.result().id, bo = b.result().id;
+    auto cleanup = qScopeGuard([&] {
+        Settings::instance().setValue(QStringLiteral("character/use/editor"), true);
+        Settings::instance().remove(QStringLiteral("editor/ai"));
+        studio.characters()->remove(aki);
+        studio.characters()->remove(bo);
+        for (ai::Provider *p : studio.providers()->providers())
+            studio.providers()->removeProvider(p->instanceId());
+    });
+    studio.setActiveCast({aki, bo});
+
+    AiOptions options;
+    options.setVariants(1);
+    AiPanel panel(&studio, &options);
+    auto *chip = panel.findChild<CharacterChip *>();
+    QVERIFY(chip);
+    chip->setUsedHere(true);
+    doc::Document *doc = studio.newDocument(QSize(512, 384), QStringLiteral("Cast editor test"));
+    panel.setDocument(doc);
+
+    // A new picture: the base without LoRAs, then one repaint per character with its own LoRA.
+    const QString words = QStringLiteral("sharing an umbrella in the rain");
+    panel.submitPrompt({.mode = ai::GenMode::TextToImage, .prompt = words, .withCharacter = true, .name = words});
+    QTRY_COMPARE_WITH_TIMEOUT(generations.size(), 3, 20000);
+    const QString basePrompt = generations[0].value(QStringLiteral("prompt")).toString();
+    QVERIFY2(basePrompt.contains(QStringLiteral("1boy, 1girl")) && basePrompt.contains(words), qPrintable(basePrompt));
+    QVERIFY(basePrompt.contains(QStringLiteral("on the left: red hair")) && basePrompt.contains(QStringLiteral("on the right: black hair")));
+    QVERIFY(generations[0].value(QStringLiteral("lora")).toArray().isEmpty());
+    QStringList refined;
+    for (int k = 1; k <= 2; ++k)
+        refined << generations[k].value(QStringLiteral("lora")).toArray().first().toObject().value(QStringLiteral("path")).toString();
+    refined.sort();
+    QCOMPARE(refined, (QStringList{QStringLiteral("lmn_aki.safetensors"), QStringLiteral("lmn_bo.safetensors")}));
+    // The result is a layer of the document, from an asset that records the cast.
+    QTRY_VERIFY_WITH_TIMEOUT(doc->layerCount() >= 2, 10000);
+    const doc::LayerPtr result = doc->layers().last();
+    const auto first = studio.project()->asset(result->meta.value(QStringLiteral("asset")).toString());
+    QVERIFY(first);
+    const QJsonObject cast = first->metadata.value(QStringLiteral("cast")).toObject();
+    QCOMPARE(cast.value(QStringLiteral("members")).toArray().size(), 2);
+    QCOMPARE(cast.value(QStringLiteral("members")).toArray()[1].toObject().value(QStringLiteral("character")).toString(), bo);
+    QCOMPARE(first->metadata.value(QStringLiteral("user_prompt")).toString(), words);
+    // Each character in its own half (the picture is scaled from the engine's size to the document's).
+    QCOMPARE(QColor(result->image.pixel(130, 250)).red() > 200, true);
+    QCOMPARE(QColor(result->image.pixel(380, 250)).blue() > 200, true);
+
+    // A selected area of it: which character? Bo's region is preselected for an area inside it.
+    const double scale = double(doc->size().width()) / first->size.width();
+    const QJsonArray boRegion = cast.value(QStringLiteral("members")).toArray()[1].toObject().value(QStringLiteral("region")).toArray();
+    const QRect boBox(int(boRegion[0].toInt() * scale), int(boRegion[1].toInt() * scale), int(boRegion[2].toInt() * scale),
+                      int(boRegion[3].toInt() * scale));
+    QImage mask = img::createMask(doc->size(), 0);
+    QPainter(&mask).fillRect(QRect(boBox.center() - QPoint(15, 15), QSize(30, 30)), Qt::white);
+    doc->setSelectionRaw(mask);
+    QStringList asked;
+    int preselected = -1;
+    int answer = -2; // -2: take the preselected one
+    panel.chooseCharacter = [&](const QStringList &names, int pre) {
+        asked = names;
+        preselected = pre;
+        return answer == -2 ? pre : answer;
+    };
+    auto fill = [&panel](const QString &w) {
+        panel.submitPrompt({.mode = ai::GenMode::Inpaint, .region = true, .prompt = w, .withCharacter = true, .name = w});
+    };
+    const int before = int(generations.size());
+    fill(QStringLiteral("a hand holding a cup"));
+    QTRY_COMPARE_WITH_TIMEOUT(generations.size(), before + 1, 10000);
+    QCOMPARE(asked, (QStringList{QStringLiteral("Aki (cast editor)"), QStringLiteral("Bo (cast editor)")}));
+    QCOMPARE(preselected, 1);
+    QVERIFY2(generations.last().value(QStringLiteral("prompt")).toString().contains(QStringLiteral("lmn_bo")),
+             qPrintable(generations.last().value(QStringLiteral("prompt")).toString()));
+    QCOMPARE(generations.last().value(QStringLiteral("lora")).toArray().first().toObject().value(QStringLiteral("path")).toString(),
+             QStringLiteral("lmn_bo.safetensors"));
+    // The user picks the other one; then cancels, and nothing is sent.
+    answer = 0;
+    fill(QStringLiteral("a hand holding a cup"));
+    QTRY_COMPARE_WITH_TIMEOUT(generations.size(), before + 2, 10000);
+    QVERIFY(generations.last().value(QStringLiteral("prompt")).toString().contains(QStringLiteral("lmn_aki")));
+    answer = -1;
+    fill(QStringLiteral("a hand holding a cup"));
+    QTest::qWait(300);
+    QCOMPARE(generations.size(), before + 2);
+
+    // "Make another like this": the cast comes back, in order, with the words, on a blank canvas.
+    studio.setActiveCast({bo});
+    MainWindow window(&studio);
+    window.resize(1400, 900);
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    const int documents = int(studio.documents().size());
+    studio.rerunAsset(first->id);
+    QCOMPARE(studio.activeCast(), (QStringList{aki, bo}));
+    QCOMPARE(int(studio.documents().size()), documents + 1);
+    QCOMPARE(studio.activeDocument()->size(), first->size);
+    QCOMPARE(window.editor()->promptBar()->prompt(), words);
 }
 
 QTEST_MAIN(TestCanvas)

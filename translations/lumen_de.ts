@@ -4906,7 +4906,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::runtime::Components</name>
     <message>
-        <location filename="../src/runtime/Components.cpp" line="+75"/>
+        <location filename="../src/runtime/Components.cpp" line="+76"/>
         <source>%1 of %2 MB</source>
         <translation>%1 von %2 MB</translation>
     </message>
@@ -6441,7 +6441,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::runtime::Trainer</name>
     <message>
-        <location filename="../src/runtime/Trainer.cpp" line="+128"/>
+        <location filename="../src/runtime/Trainer.cpp" line="+129"/>
         <source>Training needs an NVIDIA GPU with a current driver.</source>
         <translation>Das Training braucht eine NVIDIA-GPU mit aktuellem Treiber.</translation>
     </message>
@@ -6733,7 +6733,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::AiPanel</name>
     <message>
-        <location filename="../src/ui/pages/AiPanel.cpp" line="+93"/>
+        <location filename="../src/ui/pages/AiPanel.cpp" line="+103"/>
         <source>Action</source>
         <translation>Aktion</translation>
     </message>
@@ -6754,24 +6754,24 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+328"/>
+        <location line="+444"/>
         <source>Upscale</source>
         <translation>Hochskalieren</translation>
     </message>
     <message>
-        <location line="-327"/>
+        <location line="-443"/>
         <source>Cut out the subject onto a transparent layer.</source>
         <translation>Das Motiv auf eine transparente Ebene freistellen.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+328"/>
-        <location line="+321"/>
+        <location line="+444"/>
+        <location line="+326"/>
         <source>Detect pose</source>
         <translation>Pose erkennen</translation>
     </message>
     <message>
-        <location line="-589"/>
+        <location line="-710"/>
         <source>Left</source>
         <translation>Links</translation>
     </message>
@@ -6822,26 +6822,26 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Farben an die Umgebung angleichen</translation>
     </message>
     <message>
-        <location line="+146"/>
+        <location line="+262"/>
         <source>Will use %1 for this action.</source>
         <translation>Für diese Aktion wird %1 verwendet.</translation>
     </message>
     <message>
-        <location line="-312"/>
-        <location line="+328"/>
-        <location line="+304"/>
+        <location line="-428"/>
+        <location line="+444"/>
+        <location line="+309"/>
         <location line="+4"/>
         <source>Remove background</source>
         <translation>Hintergrund entfernen</translation>
     </message>
     <message>
-        <location line="-306"/>
-        <location line="+254"/>
+        <location line="-311"/>
+        <location line="+259"/>
         <source>Expand canvas</source>
         <translation>Arbeitsfläche erweitern</translation>
     </message>
     <message>
-        <location line="-198"/>
+        <location line="-203"/>
         <source>AI result: %1</source>
         <translation>KI-Ergebnis: %1</translation>
     </message>
@@ -6856,7 +6856,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>%1 Varianten wurden als Ebenen hinzugefügt – schalten Sie ihre Sichtbarkeit um, um sie zu vergleichen.</translation>
     </message>
     <message>
-        <location line="-439"/>
+        <location line="-561"/>
         <location line="+3"/>
         <source>Engine for changes</source>
         <translation>Engine für Änderungen</translation>
@@ -6867,7 +6867,17 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Charakter</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+7"/>
+        <source>Which character?</source>
+        <translation>Welcher Charakter?</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>The selected area shows:</source>
+        <translation>Der ausgewählte Bereich zeigt:</translation>
+    </message>
+    <message>
+        <location line="+14"/>
         <source>Make the canvas larger and let the image engine paint the new area.</source>
         <translation>Die Arbeitsfläche vergrößern und die Bild-Engine den neuen Bereich malen lassen.</translation>
     </message>
@@ -6898,12 +6908,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+20"/>
-        <location line="+239"/>
+        <location line="+355"/>
         <source>Make a variation</source>
         <translation>Eine Variation erstellen</translation>
     </message>
     <message>
-        <location line="-227"/>
+        <location line="-343"/>
         <source>These also apply to the prompt bar under the canvas.</source>
         <translation>Diese gelten auch für die Prompt-Leiste unter der Arbeitsfläche.</translation>
     </message>
@@ -6980,7 +6990,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Wie breit der Rand ist, über den ein Ergebnis in das Bild rund um die Auswahl übergeht.</translation>
     </message>
     <message>
-        <location line="+137"/>
+        <location line="+253"/>
         <source>It uses the words in the prompt bar under the canvas, if any.</source>
         <translation>Es verwendet die Worte in der Prompt-Leiste unter der Arbeitsfläche, falls vorhanden.</translation>
     </message>
@@ -6991,7 +7001,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+130"/>
-        <location line="+91"/>
+        <location line="+96"/>
         <source>Set up an image engine first: Help → Set up AI…</source>
         <translation>Richten Sie zuerst eine Bild-Engine ein: Hilfe → KI einrichten…</translation>
     </message>
@@ -12104,7 +12114,7 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         <translation>Einstellungen → Lokale Server, wo der LoRA-Ordner des Servers gewählt wird</translation>
     </message>
     <message>
-        <location line="+92"/>
+        <location line="+98"/>
         <source>It is not in the server&apos;s LoRAs any more.</source>
         <translation>Er ist nicht mehr unter den LoRAs des Servers.</translation>
     </message>
@@ -12214,7 +12224,7 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         <translation>Einen Charakter für Live2D in Teile zerlegen</translation>
     </message>
     <message>
-        <location filename="../src/ui/MainWindow.cpp" line="+308"/>
+        <location filename="../src/ui/MainWindow.cpp" line="+309"/>
         <source>General</source>
         <translation>Allgemein</translation>
     </message>
@@ -12255,18 +12265,18 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
     </message>
     <message>
         <location line="+9"/>
-        <location line="+790"/>
+        <location line="+813"/>
         <source>(none)</source>
         <translation>(keine)</translation>
     </message>
     <message>
-        <location line="-786"/>
-        <location line="+742"/>
+        <location line="-809"/>
+        <location line="+765"/>
         <source>Quit</source>
         <translation>Beenden</translation>
     </message>
     <message>
-        <location line="-740"/>
+        <location line="-763"/>
         <source>&amp;Edit</source>
         <translation>&amp;Bearbeiten</translation>
     </message>
@@ -12318,12 +12328,12 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
     </message>
     <message>
         <location line="-336"/>
-        <location line="+481"/>
+        <location line="+504"/>
         <source>Jobs</source>
         <translation>Aufträge</translation>
     </message>
     <message>
-        <location line="-698"/>
+        <location line="-721"/>
         <source>Project images — Lumen Studio</source>
         <translation>Projektbilder — Lumen Studio</translation>
     </message>
@@ -12658,7 +12668,12 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         <translation>Modellordner öffnen</translation>
     </message>
     <message>
-        <location line="+162"/>
+        <location line="+141"/>
+        <source>New image</source>
+        <translation>Neues Bild</translation>
+    </message>
+    <message>
+        <location line="+44"/>
         <source>Clear finished</source>
         <translation>Abgeschlossene entfernen</translation>
     </message>

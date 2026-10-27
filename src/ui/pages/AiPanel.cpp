@@ -1,11 +1,13 @@
 #include "ui/pages/AiPanel.h"
 
+#include "ai/CastGeneration.h"
 #include "ai/PromptRules.h"
 #include "ai/PromptStyle.h"
 #include "core/Async.h"
 #include "core/Error.h"
 #include "core/ImageOps.h"
 #include "core/JobQueue.h"
+#include "core/Settings.h"
 #include "pose/PoseRenderer.h"
 #include "ui/Icons.h"
 #include "ui/Studio.h"
@@ -25,6 +27,8 @@
 #include <QComboBox>
 #include <QGridLayout>
 #include <QHBoxLayout>
+#include <QInputDialog>
+#include <QJsonArray>
 #include <QLabel>
 #include <QPainter>
 #include <QPushButton>
@@ -87,6 +91,12 @@ AiPanel::AiPanel(Studio *studio, AiOptions *options, QWidget *parent)
     m_character = new CharacterChip(studio, QStringLiteral("editor"), m_characterRow);
     characterRow->addWidget(m_character);
     m_charactersOn = studio->hasPage(QStringLiteral("create"));
+    chooseCharacter = [this](const QStringList &names, int preselected) {
+        bool ok = false;
+        const QString name = QInputDialog::getItem(this, tr("Which character?"), tr("The selected area shows:"), names, preselected,
+                                                   false, &ok);
+        return ok ? int(names.indexOf(name)) : -1;
+    };
     m_characterRow->setVisible(m_charactersOn);
     v->addWidget(m_characterRow);
 
@@ -350,11 +360,127 @@ void AiPanel::setMode(Mode mode)
     updateUi();
 }
 
+int AiPanel::castMemberAt(const QRect &where) const
+{
+    doc::Project *project = m_studio->project();
+    const QStringList cast = m_character->castIds();
+    if (!m_doc || !project || where.isEmpty())
+        return -1;
+    int best = -1;
+    qint64 bestArea = 0;
+    for (const doc::LayerPtr &layer : m_doc->layers()) {
+        const auto info = project->asset(layer->meta.value(QStringLiteral("asset")).toString());
+        if (!info)
+            continue;
+        const QJsonObject meta = info->metadata;
+        // The regions are in the picture the engine made (the asset); the layer has the document's size.
+        if (info->size.isEmpty())
+            continue;
+        const double sx = double(m_doc->size().width()) / info->size.width();
+        const double sy = double(m_doc->size().height()) / info->size.height();
+        for (const QJsonValue &v : meta.value(QStringLiteral("cast")).toObject().value(QStringLiteral("members")).toArray()) {
+            const QJsonObject member = v.toObject();
+            const QJsonArray r = member.value(QStringLiteral("region")).toArray();
+            const QRect region(int(r.at(0).toInt() * sx), int(r.at(1).toInt() * sy), int(r.at(2).toInt() * sx),
+                               int(r.at(3).toInt() * sy));
+            const QRect overlap = region.intersected(where);
+            const qint64 area = qint64(overlap.width()) * overlap.height();
+            const int index = int(cast.indexOf(member.value(QStringLiteral("character")).toString()));
+            if (index >= 0 && !overlap.isEmpty() && area > bestArea) {
+                best = index;
+                bestArea = area;
+            }
+        }
+    }
+    return best;
+}
+
+void AiPanel::submitCast(const PromptRun &run, ai::ImageProvider *provider)
+{
+    QPointer<doc::Document> doc = m_doc;
+    if (m_preparing)
+        m_preparing(doc);
+    QPointer<AiPanel> self(this);
+    auto giveUp = [self, doc, name = run.name] {
+        if (self && self->m_results)
+            self->m_results(doc, {}, name, 0);
+    };
+    QList<QFuture<ai::CharacterContext>> reads;
+    for (const QString &id : m_character->castIds())
+        reads << m_studio->characterContext(id);
+    const QString providerId = provider->instanceId();
+    const ai::ImageCapabilities caps = provider->capabilities();
+    ai::CastRequest cast;
+    cast.providerId = providerId;
+    cast.scene = baseRequest(provider, run.prompt, ai::GenMode::TextToImage, false, run.literal, run.negative);
+    // The scene as the user wrote it: the pipeline writes each request for the model's family itself.
+    cast.scene.prompt = run.prompt;
+    cast.scene.negativePrompt = takesNegative(provider) ? run.negative.value_or(m_options->negative()).trimmed() : QString();
+    cast.scene.size = workingSize(doc->size(), caps);
+    cast.modelFamily = checkpointFamily(m_studio, provider);
+    // The check with the vision model goes with the Critic, as for the director's shots.
+    cast.check = Settings::instance().value(QStringLiteral("director/critic"), false).toBool();
+    cast.title = run.prompt.isEmpty() ? run.name : run.prompt.left(60);
+    cast.meta = QJsonObject{{QStringLiteral("document"), doc->id()}, {QStringLiteral("user_prompt"), run.prompt}};
+    const int variants = m_options->variants();
+    QtFuture::whenAll(reads.begin(), reads.end())
+        .then(this, [self, doc, cast, variants, giveUp, name = run.name](const QList<QFuture<ai::CharacterContext>> &done) mutable {
+            if (!self || !doc)
+                return giveUp();
+            for (const QFuture<ai::CharacterContext> &f : done) {
+                try {
+                    if (!f.result().isEmpty())
+                        cast.cast << f.result();
+                } catch (const std::exception &e) {
+                    self->m_studio->notify(describeException(e), QStringLiteral("warning"));
+                }
+            }
+            if (cast.cast.isEmpty())
+                return giveUp();
+            // One job per result, each with its own seed.
+            QList<Job *> jobs;
+            for (int i = 0; i < variants; ++i) {
+                ai::CastRequest one = cast;
+                if (one.scene.seed >= 0)
+                    one.scene.seed += 10007 * i;
+                one.scene.batchCount = 1;
+                if (Job *job = ai::startCastGeneration(self->m_studio->generation(), one))
+                    jobs << job;
+            }
+            if (self->m_results) {
+                self->m_results(doc, jobs, name, int(jobs.size()));
+                return;
+            }
+            for (Job *job : std::as_const(jobs)) {
+                self->trackJob(job, [self, name](doc::Document *d, const ai::GenerationOutput &out) {
+                    QJsonObject meta{{QStringLiteral("generated"), true}};
+                    if (!out.assets.isEmpty())
+                        meta.insert(QStringLiteral("asset"), out.assets.first().id);
+                    if (self)
+                        self->addResultLayers(d, out.images, name, meta);
+                });
+            }
+        });
+}
+
 void AiPanel::withCharacter(ai::ImageRequest request, ai::CharacterUse use, bool skip, ai::ImageProvider *provider,
-                            std::function<void(ai::ImageRequest, QJsonObject)> then)
+                            std::function<void(ai::ImageRequest, QJsonObject)> then, const QRect &where)
 {
     // Characters are the Characters plugin's: while it is off, none is drawn in.
-    const QString id = skip || !m_charactersOn ? QString() : m_character->characterId();
+    QString id = skip || !m_charactersOn ? QString() : m_character->characterId();
+    const QStringList cast = skip || !m_charactersOn ? QStringList() : m_character->castIds();
+    if (use == ai::CharacterUse::Region && cast.size() > 1 && !where.isEmpty()) {
+        // A selected area of a two-character picture shows one of them (M16 §16.3).
+        QStringList names;
+        for (const QString &c : cast) {
+            const auto entry = m_studio->characters()->entry(c);
+            names << (entry ? entry->name : c);
+        }
+        const int index = chooseCharacter(names, std::max(0, castMemberAt(where)));
+        if (index < 0)
+            return; // cancelled
+        id = cast.value(index);
+    }
     if (id.isEmpty() || !provider)
         return then(std::move(request), {});
     const ai::ImageCapabilities caps = provider->capabilities();
@@ -547,6 +673,11 @@ void AiPanel::submitPrompt(const PromptRun &run)
         m_studio->notify(tr("Set up an image engine first: Help → Set up AI…"), QStringLiteral("warning"));
         return;
     }
+    // A new picture with a cast of two: each character in its own region.
+    if (run.mode == ai::GenMode::TextToImage && run.withCharacter && m_charactersOn && m_character->castIds().size() > 1) {
+        submitCast(run, provider);
+        return;
+    }
     QPointer<doc::Document> doc = m_doc;
     if (m_preparing)
         m_preparing(doc);
@@ -618,7 +749,7 @@ void AiPanel::submitPrompt(const PromptRun &run)
                 });
             }
         });
-    });
+    }, region ? img::maskBounds(selection) : QRect());
 }
 
 void AiPanel::upscale(double factor)

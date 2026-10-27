@@ -1824,8 +1824,29 @@ strategy: both references with their names, one request.
     distinguishing sheet, a clean result (four checks), a swap of the first pass (only that
     member repainted with a new seed and checked again), a blend kept after one retry, and no
     vision model.
-- [ ] Generate page and *Re-run* with a cast of two; editor *Fill selection* with the character
+- [x] Generate page and *Re-run* with a cast of two; editor *Fill selection* with the character
   choice. Tests against the mock server.
+  * Since M17 there is no Generate page, and New from prompt draws no character (request
+    decorators, §17.7, are not built), so the step lives in the editor, where the AI panel's chip
+    holds the cast while the Characters plugin is on. The work parked in `git stash` (the
+    Generate page's half) is superseded; its *Fill selection* half was carried over.
+  * A new picture with a cast of two (`AiPanel::submitCast`, the prompt bar on a blank canvas):
+    `startCastGeneration` per result (seed + 10007 per extra result), the scene as the user wrote it
+    (the pipeline writes each request for the family itself), the user's own negative prompt,
+    `check` with the Critic setting (`director/critic`); the jobs go to the results strip.
+  * A selected area with a cast of two (`withCharacter(..., where)`): `chooseCharacter` (a small
+    chooser; tests replace it) with the member preselected whose region, in a kept two-character
+    image of the document (the layer's asset, scaled from its size to the document's), overlaps the
+    area most; Cancel sends nothing. Expand, variations and instruction edits use the first member.
+  * *Make another like this* on an asset with two members (`MainWindow::rerun`, the plugin on and
+    both still in the library): the cast in its order, a blank document of the asset's size, the
+    words and negative prompt in the prompt bar; otherwise New from prompt as before.
+  * Test (`tst_canvas castInEditor`, mock sd.cpp painting each LoRA's mask in its colour): the base
+    (count tags, both sides, no LoRA) and one repaint per LoRA, the layer and its asset's cast, each
+    colour on its side; the chooser's names and preselection, the chosen member's LoRA and trigger,
+    the other member, Cancel; re-run (cast order, a new document of the asset's size, the words).
+  * Not yet: an arrangement choice (side by side, close, front and back) in the editor (the default
+    is side by side); both characters in instruction edits (two references).
 - [ ] Director and Create page: cast in `PlanInput`, `people` in the shot schema, two-person poses
   on the shot cards and in the pose editor, shots generated through `CastGeneration`. Tests:
   schema, prompts, a planned shot end to end with mocks.

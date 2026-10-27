@@ -129,8 +129,19 @@ menu picks another character or none.
   struck through.
 * **Add a second character** makes a cast of two, shown as "Akane & Bo": the first stands on the
   left, the second on the right. *Swap left and right* changes the order, *Remove* takes one out, and
-  picking a character in the list makes it the only one again. Drawing both in one image is still
-  being built; until then the pages draw the first character.
+  picking a character in the list makes it the only one again.
+* **Both in one image.** With a cast of two, a new image on a blank canvas draws both, each keeping
+  its own look: first the scene with a pose per person and both described by their side ("on the
+  left: red hair…"), without the characters' LoRAs, then each character repainted in its own region
+  with its LoRA (or reference). This takes three runs of the image server per result. With the
+  Critic on (Create page), each character's crop is checked by the vision model and repainted once
+  when it looks like the other one or like neither. The image server must be able to paint an area
+  anew.
+* **An area of a two-character image.** When you change a selected area, Lumen asks which character
+  it shows, with the one whose region it lies in already chosen. Other changes (a variation, an
+  instruction edit) use the first character.
+* **Make another like this** on a two-character image brings that cast back, opens a blank canvas of
+  the image's size and puts its words in the prompt bar; press Enter to draw them again.
 
 ### The assistant
 
