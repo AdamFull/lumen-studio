@@ -27,6 +27,8 @@ struct PlanInput
 {
     QString request;          // user's description of what they need
     QJsonObject character;    // character sheet (may be empty)
+    // A second character's sheet (M16 §16.4): shots then show both, with a pose per person.
+    QJsonObject partner;
     QString purposeId = QStringLiteral("general");
     int count = 0;            // 0 = let the director decide (purpose default)
     QList<QImage> references; // sent to vision-capable models when no sheet is available
@@ -94,8 +96,10 @@ public:
     static QString appearanceTags(const QJsonObject &sheet);
 
     static QJsonObject characterSheetSchema();
-    static QJsonObject shotSchema();
-    static QJsonObject shotPlanSchema(int maxShots = 12);
+    // With `cast` (two characters), a shot also has "people" (per person: the character's name, its
+    // pose and what it does, left or front first) and "arrangement".
+    static QJsonObject shotSchema(bool cast = false);
+    static QJsonObject shotPlanSchema(int maxShots = 12, bool cast = false);
     // Plain-text summary of a character sheet (for prompts and UI).
     static QString describeCharacter(const QJsonObject &sheet);
 
@@ -107,6 +111,7 @@ public:
     // leaves the request alone) when the provider cannot use LoRAs.
     static bool applyCharacterLora(ImageRequest &request, const CharacterLora &lora, const ImageCapabilities &caps);
     // Pose for a shot (rig parameters → keypoints) on a canvas of the given size.
+    // One person from the shot's "pose", or with "people" of two, both, arranged as the shot says.
     static pose::Pose poseForShot(const QJsonObject &shot, const QSize &canvas);
 
 private:

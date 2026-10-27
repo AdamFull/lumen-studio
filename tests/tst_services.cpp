@@ -53,6 +53,7 @@ private slots:
     void utilityOnAssets();
     void directorCritique();
     void directorDatasetPlan();
+    void directorCast();
     void loraCaptions();
     void identityChecklist();
     void characterContext();
@@ -1403,6 +1404,82 @@ void TestServices::characterContext()
     r = request(QStringLiteral("smile"));
     QVERIFY(!applyCharacter(r, CharacterContext{}, local, CharacterUse::Full, tags).any());
     QCOMPARE(r.prompt, QStringLiteral("smile"));
+}
+
+// The director with two characters (plan M16 §16.4): shots list both people with a pose each and
+// how they stand; the request names both, asks for scene-only prompts and gives both sheets; the
+// shot's pose has both people, arranged.
+void TestServices::directorCast()
+{
+    QJsonObject rig = pose::RigParams().toJson();
+    rig.remove(QStringLiteral("include_hands"));
+    rig.remove(QStringLiteral("include_face"));
+    rig.remove(QStringLiteral("name"));
+    const QJsonObject shot{{QStringLiteral("id"), QStringLiteral("s1")},
+                           {QStringLiteral("title"), QStringLiteral("Café")},
+                           {QStringLiteral("description"), QStringLiteral("talking")},
+                           {QStringLiteral("aspect_ratio"), QStringLiteral("3:2")},
+                           {QStringLiteral("background"), QStringLiteral("café")},
+                           {QStringLiteral("pose"), rig},
+                           {QStringLiteral("prompt"), QStringLiteral("at a café table, warm light")},
+                           {QStringLiteral("negative_prompt"), QString()},
+                           {QStringLiteral("arrangement"), QStringLiteral("side_by_side")},
+                           {QStringLiteral("people"),
+                            QJsonArray{QJsonObject{{QStringLiteral("character"), QStringLiteral("Akane")}, {QStringLiteral("pose"), rig},
+                                                   {QStringLiteral("action"), QStringLiteral("raise 35, waving")}},
+                                       QJsonObject{{QStringLiteral("character"), QStringLiteral("Bo")}, {QStringLiteral("pose"), rig},
+                                                   {QStringLiteral("action"), QStringLiteral("drinking tea")}}}}};
+    const QJsonObject plan{{QStringLiteral("title"), QStringLiteral("t")}, {QStringLiteral("summary"), QStringLiteral("s")},
+                           {QStringLiteral("shots"), QJsonArray{shot}}};
+    QStringList errors;
+    QVERIFY2(json::SchemaValidator(Director::shotPlanSchema(3, true)).validate(plan, &errors), qPrintable(errors.join(u'\n')));
+    QVERIFY(json::SchemaValidator(json::toStrictSchema(Director::shotPlanSchema(3, true))).validate(plan));
+    QVERIFY(!Director::shotSchema().value(QStringLiteral("properties")).toObject().contains(QStringLiteral("people")));
+    // Rig numbers the model copies into an action are cleaned like the prompt's.
+    const QJsonObject clean = Director::sanitizePlan(plan);
+    const QString action = clean.value(QStringLiteral("shots")).toArray()[0].toObject().value(QStringLiteral("people")).toArray()[0]
+                               .toObject().value(QStringLiteral("action")).toString();
+    QVERIFY2(!action.contains(QStringLiteral("35")) && action.contains(QStringLiteral("waving")), qPrintable(action));
+
+    // Both people in the pose, the first on the left; one person without a partner.
+    const pose::Pose both = Director::poseForShot(shot, QSize(1200, 800));
+    QCOMPARE(both.people.size(), 2);
+    QVERIFY(both.people[0].body[pose::Neck].pos.x() < 600 && both.people[1].body[pose::Neck].pos.x() > 600);
+    QJsonObject alone = shot;
+    alone.remove(QStringLiteral("people"));
+    QCOMPARE(Director::poseForShot(alone, QSize(1200, 800)).people.size(), 1);
+
+    // The request.
+    MockHttpServer server;
+    QJsonObject asked;
+    server.route("POST", QStringLiteral("/v1/chat/completions"), [&](const MockRequest &req) {
+        asked = req.json();
+        return MockResponse::json({{QStringLiteral("choices"),
+                                    QJsonArray{QJsonObject{{QStringLiteral("message"),
+                                                            QJsonObject{{QStringLiteral("content"),
+                                                                         QString::fromUtf8(QJsonDocument(plan).toJson(QJsonDocument::Compact))}}},
+                                                           {QStringLiteral("finish_reason"), QStringLiteral("stop")}}}}});
+    });
+    ProviderRegistry registry(&m_http);
+    registerBuiltInProviders(registry);
+    QFile::remove(registry.configPath());
+    QVERIFY(registry.addProvider(QStringLiteral("llamacpp"), QStringLiteral("LLM"), {{QStringLiteral("url"), server.baseUrl().toString() + QStringLiteral("/v1")}}));
+    Director director(&registry);
+    PlanInput in;
+    in.request = QStringLiteral("the two of them at a café");
+    in.character = QJsonObject{{QStringLiteral("name"), QStringLiteral("Akane")}, {QStringLiteral("tags"), QStringLiteral("red hair")}};
+    in.partner = QJsonObject{{QStringLiteral("name"), QStringLiteral("Bo")}, {QStringLiteral("tags"), QStringLiteral("black hair")}};
+    in.count = 1;
+    StructuredChatOperation *op = director.planShots(in);
+    op->setAutoDelete(false);
+    QTRY_VERIFY_WITH_TIMEOUT(op->isFinished(), 5000);
+    QVERIFY2(op->state() == Operation::State::Succeeded, qPrintable(op->errorString()));
+    const QString system = asked.value(QStringLiteral("messages")).toArray()[0].toObject().value(QStringLiteral("content")).toString();
+    QVERIFY(system.contains(QStringLiteral("two characters, Akane and Bo")));
+    QVERIFY(system.contains(QStringLiteral("Character sheet of Bo")) && system.contains(QStringLiteral("black hair")));
+    QVERIFY(!system.contains(QStringLiteral("fully restate")));
+    QVERIFY(QJsonDocument(asked).toJson().contains("\"people\""));
+    delete op;
 }
 
 QTEST_MAIN(TestServices)

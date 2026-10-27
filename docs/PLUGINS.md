@@ -97,6 +97,14 @@ than switching between a vision and a text model.
 3. **Generate all** makes every shot (with pose control and the character reference when the image
    engine has them), or generate shots one by one.
 
+**Two characters.** **Library → Add a second character…** adds a character saved in the library to
+the session ("With Bo: the plan shows both"). The director then plans every shot with both (or
+one alone when you ask for that): who stands left and who right, a pose for each and what each does,
+and how they stand (side by side, close, or one in front). Each image is drawn like a two-character
+picture in the editor: the scene first, then each character repainted in its own part of the image
+with its LoRA. With the Critic on, each character is checked against its own look instead of the
+whole image being reviewed. **Remove the second character** goes back to one.
+
 **Critic.** With *Critic* on, a vision model reviews every result against the references, the
 character sheet and the planned pose and framing, and scores it out of 10. When no result of a shot
 reaches the minimum score, the shot is made again with the Critic's improved prompt, up to the

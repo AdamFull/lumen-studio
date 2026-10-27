@@ -4,7 +4,7 @@
 <context>
     <name>QObject</name>
     <message>
-        <location filename="../src/ai/Director.cpp" line="+62"/>
+        <location filename="../src/ai/Director.cpp" line="+63"/>
         <source>General illustrations</source>
         <translation>Illustrationen</translation>
     </message>
@@ -743,7 +743,7 @@
         <translation>Physikeinstellung %1 benötigt mindestens zwei Eckpunkte.</translation>
     </message>
     <message>
-        <location filename="../src/plugins/characters/CreatePage.cpp" line="+728"/>
+        <location filename="../src/plugins/characters/CreatePage.cpp" line="+742"/>
         <source>**Character sheet:** %1 — %2</source>
         <translation>**Charakterblatt:** %1 — %2</translation>
     </message>
@@ -755,7 +755,7 @@ Planning continues without a character sheet.</source>
 Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
-        <location line="+79"/>
+        <location line="+84"/>
         <source>Review and adjust the poses on the right, then press **Generate all** (or generate shots one by one).</source>
         <translation>Prüfen und passen Sie die Posen rechts an und klicken Sie dann auf **Alle generieren** (oder generieren Sie die Aufnahmen einzeln).</translation>
     </message>
@@ -770,7 +770,8 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Planung fehlgeschlagen: %1</translation>
     </message>
     <message>
-        <location line="+59"/>
+        <location line="+63"/>
+        <location line="+125"/>
         <source>Shot: %1</source>
         <translation>Aufnahme: %1</translation>
     </message>
@@ -1601,25 +1602,25 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ai::Director</name>
     <message>
-        <location filename="../src/ai/Director.cpp" line="+177"/>
-        <location line="+559"/>
+        <location filename="../src/ai/Director.cpp" line="+195"/>
+        <location line="+596"/>
         <source>The model assigned to &apos;Vision analysis&apos; (%1) cannot see images, so it cannot review results.</source>
         <translation>Das Modell für die Bildanalyse (%1) kann keine Bilder verarbeiten und daher keine Ergebnisse bewerten.</translation>
     </message>
     <message>
-        <location line="-557"/>
+        <location line="-594"/>
         <location line="+35"/>
-        <location line="+524"/>
+        <location line="+561"/>
         <source>No language model is configured for &apos;Vision analysis&apos;.</source>
         <translation>Für die Bildanalyse ist kein Sprachmodell konfiguriert.</translation>
     </message>
     <message>
-        <location line="-526"/>
+        <location line="-563"/>
         <source>The model assigned to &apos;Vision analysis&apos; (%1) cannot see images, so it cannot write captions.</source>
         <translation>Das Modell für „Bildanalyse“ (%1) kann keine Bilder sehen und daher keine Beschreibungen schreiben.</translation>
     </message>
     <message>
-        <location line="+104"/>
+        <location line="+113"/>
         <source>The model assigned to &apos;Vision analysis&apos; (%1) cannot see images. Choose a vision-capable model in Settings → Providers → Roles.</source>
         <translation>Das der &apos;Bildanalyse&apos; zugewiesene Modell (%1) kann keine Bilder sehen. Wählen Sie unter Einstellungen → Anbieter → Rollen ein bildfähiges Modell.</translation>
     </message>
@@ -8040,7 +8041,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::CreatePage</name>
     <message>
-        <location filename="../src/plugins/characters/CreatePage.cpp" line="-810"/>
+        <location filename="../src/plugins/characters/CreatePage.cpp" line="-956"/>
         <source>Director</source>
         <translation>Regie</translation>
     </message>
@@ -8051,12 +8052,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+296"/>
+        <location line="+302"/>
         <source>New session</source>
         <translation>Neue Sitzung</translation>
     </message>
     <message>
-        <location line="-272"/>
+        <location line="-278"/>
         <source>Describe what you need, e.g. &quot;3 images of my character for a Live2D avatar: neutral front A-pose, eyes closed and mouth open variants&quot;. Attach reference images above. Enter sends, Shift+Enter = new line.</source>
         <translation>Beschreiben Sie, was Sie benötigen, z. B. „3 Bilder meines Charakters für einen Live2D-Avatar: neutrale A-Pose von vorn, Varianten mit geschlossenen Augen und offenem Mund“. Hängen Sie oben Referenzbilder an. Eingabe sendet, Umschalt+Eingabe = neue Zeile.</translation>
     </message>
@@ -8082,29 +8083,29 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+510"/>
+        <location line="+522"/>
         <source>Send</source>
         <translation>Senden</translation>
     </message>
     <message>
-        <location line="-492"/>
-        <location line="+1116"/>
+        <location line="-504"/>
+        <location line="+1253"/>
         <source>Character</source>
         <translation>Charakter</translation>
     </message>
     <message>
-        <location line="-1112"/>
+        <location line="-1249"/>
         <source>Edit sheet</source>
         <translation>Steckbrief bearbeiten</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+388"/>
+        <location line="+400"/>
         <source>Analyze references</source>
         <translation>Referenzen analysieren</translation>
     </message>
     <message>
-        <location line="-385"/>
+        <location line="-397"/>
         <source>Library</source>
         <translation>Bibliothek</translation>
     </message>
@@ -8124,13 +8125,23 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Figur aus der Bibliothek laden…</translation>
     </message>
     <message>
-        <location line="+4"/>
-        <location line="+379"/>
+        <location line="+2"/>
+        <source>Add a second character…</source>
+        <translation>Zweite Figur hinzufügen…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Remove the second character</source>
+        <translation>Zweite Figur entfernen</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <location line="+385"/>
         <source>LoRA</source>
         <translation>LoRA</translation>
     </message>
     <message>
-        <location line="-376"/>
+        <location line="-382"/>
         <source>A LoRA keeps the character looking the same in every image</source>
         <translation>Eine LoRA hält das Aussehen des Charakters in jedem Bild gleich</translation>
     </message>
@@ -8146,12 +8157,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+21"/>
-        <location line="+428"/>
+        <location line="+434"/>
         <source>Shot plan</source>
         <translation>Aufnahmeplan</translation>
     </message>
     <message>
-        <location line="-420"/>
+        <location line="-426"/>
         <source>Generator</source>
         <translation>Generator</translation>
     </message>
@@ -8260,7 +8271,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         </translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+14"/>
+        <source>With &lt;b&gt;%1&lt;/b&gt;: the plan shows both.</source>
+        <translation>Mit &lt;b&gt;%1&lt;/b&gt;: der Plan zeigt beide.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
         <source>Re-analyze</source>
         <translation>Erneut analysieren</translation>
     </message>
@@ -8348,7 +8364,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Plan wird überarbeitet…</translation>
     </message>
     <message>
-        <location line="+27"/>
+        <location line="+32"/>
         <source>Generate them (two variants per shot work well), then add the results to the training set: Character → LoRA → Training set…</source>
         <translation>Erzeugen Sie sie (zwei Varianten pro Aufnahme funktionieren gut) und fügen Sie die Ergebnisse dann dem Trainingsset hinzu: Charakter → LoRA → Trainingsset…</translation>
     </message>
@@ -8359,22 +8375,43 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+19"/>
-        <location line="+353"/>
+        <location line="+473"/>
         <source>There is no image engine. Set one up with Help → Set up AI…</source>
         <translation>Es gibt keine Bild-Engine. Richten Sie eine unter Hilfe → KI einrichten… ein.</translation>
     </message>
     <message>
-        <location line="-337"/>
+        <location line="-453"/>
+        <location line="+98"/>
         <source>Preparing…</source>
         <translation>Wird vorbereitet…</translation>
     </message>
     <message>
-        <location line="+58"/>
+        <location line="-33"/>
         <source>Waiting for the other shots before the Critic reviews…</source>
         <translation>Wartet auf die anderen Aufnahmen, bevor der Kritiker prüft…</translation>
     </message>
     <message>
-        <location line="+63"/>
+        <location line="+61"/>
+        <source>The second character is no longer in the library.</source>
+        <translation>Die zweite Figur ist nicht mehr in der Bibliothek.</translation>
+    </message>
+    <message>
+        <location line="+54"/>
+        <source>Save another character to the library first: Library → Save character to library…</source>
+        <translation>Speichern Sie zuerst eine weitere Figur in der Bibliothek: Bibliothek → Figur in der Bibliothek speichern…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Add a second character</source>
+        <translation>Zweite Figur hinzufügen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Shots then show both, each keeping its own look:</source>
+        <translation>Die Aufnahmen zeigen dann beide, jede mit ihrem eigenen Aussehen:</translation>
+    </message>
+    <message>
+        <location line="+52"/>
         <source>Critic is reviewing…</source>
         <translation>Kritiker bewertet…</translation>
     </message>
@@ -8803,7 +8840,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::DirectorSession</name>
     <message>
-        <location filename="../src/plugins/characters/director/DirectorSession.cpp" line="+270"/>
+        <location filename="../src/plugins/characters/director/DirectorSession.cpp" line="+282"/>
         <source>Untitled session</source>
         <translation>Unbenannte Sitzung</translation>
     </message>

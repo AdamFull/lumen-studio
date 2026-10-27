@@ -68,6 +68,10 @@ public:
     // The character library entry the session's character was loaded from or saved to.
     QString libraryCharacter() const { return m_libraryCharacter; }
     void setLibraryCharacter(const QString &id);
+    // A second character for two-person shots (M16 §16.4): its id in the character library, which
+    // holds its sheet, LoRA and references; empty for none.
+    QString partner() const { return m_partner; }
+    void setPartner(const QString &libraryId);
 
     QString purpose() const { return m_purpose; }
     void setPurpose(const QString &p);
@@ -102,6 +106,7 @@ private:
     QJsonObject m_character;
     QJsonObject m_lora;
     QString m_libraryCharacter;
+    QString m_partner;
     QString m_purpose = QStringLiteral("general");
     QJsonObject m_plan;
     QList<ShotState> m_shots;

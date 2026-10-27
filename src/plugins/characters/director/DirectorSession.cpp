@@ -169,6 +169,15 @@ void DirectorSession::notifyShotChanged(const QString &id)
     emit shotChanged(id);
 }
 
+void DirectorSession::setPartner(const QString &libraryId)
+{
+    if (libraryId == m_partner)
+        return;
+    m_partner = libraryId;
+    saveSoon();
+    emit characterChanged();
+}
+
 QJsonObject DirectorSession::toJson() const
 {
     QJsonArray messages;
@@ -201,6 +210,8 @@ QJsonObject DirectorSession::toJson() const
         o.insert(QStringLiteral("character_lora"), m_lora);
     if (!m_libraryCharacter.isEmpty())
         o.insert(QStringLiteral("library_character"), m_libraryCharacter);
+    if (!m_partner.isEmpty())
+        o.insert(QStringLiteral("partner"), m_partner);
     return o;
 }
 
@@ -222,6 +233,7 @@ void DirectorSession::fromJson(const QString &id, const QJsonObject &o)
     m_character = o.value(QStringLiteral("character")).toObject();
     m_lora = o.value(QStringLiteral("character_lora")).toObject();
     m_libraryCharacter = o.value(QStringLiteral("library_character")).toString();
+    m_partner = o.value(QStringLiteral("partner")).toString();
     m_purpose = o.value(QStringLiteral("purpose")).toString(QStringLiteral("general"));
     m_created = QDateTime::fromString(o.value(QStringLiteral("created")).toString(), Qt::ISODate);
     m_shots.clear();

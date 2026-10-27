@@ -4,6 +4,7 @@
 #include "ai/ProviderUtil.h"
 #include "core/ImageOps.h"
 #include "core/JsonUtil.h"
+#include "pose/CastLayout.h"
 #include "pose/Anatomy.h"
 #include "pose/PoseRenderer.h"
 
@@ -144,9 +145,9 @@ QJsonObject Director::characterSheetSchema()
     });
 }
 
-QJsonObject Director::shotSchema()
+QJsonObject Director::shotSchema(bool cast)
 {
-    return object(QJsonObject{
+    QJsonObject props{
         {QStringLiteral("id"), str(QStringLiteral("short identifier, e.g. shot1"))},
         {QStringLiteral("title"), str()},
         {QStringLiteral("description"), str(QStringLiteral("what this image shows and why"))},
@@ -155,15 +156,33 @@ QJsonObject Director::shotSchema()
         {QStringLiteral("pose"), pose::rigParamsSchema()},
         {QStringLiteral("prompt"), str(QStringLiteral("complete positive prompt for the image model"))},
         {QStringLiteral("negative_prompt"), str()},
-    });
+    };
+    if (cast) {
+        const QJsonObject person = object(QJsonObject{
+            {QStringLiteral("character"), str(QStringLiteral("the character's name, exactly as given"))},
+            {QStringLiteral("pose"), pose::rigParamsSchema()},
+            {QStringLiteral("action"), str(QStringLiteral("what this person does, in a few words"))},
+        });
+        props.insert(QStringLiteral("people"), QJsonObject{{QStringLiteral("type"), QStringLiteral("array")},
+                                                           {QStringLiteral("minItems"), 1},
+                                                           {QStringLiteral("maxItems"), 2},
+                                                           {QStringLiteral("items"), person},
+                                                           {QStringLiteral("description"),
+                                                            QStringLiteral("who is in the shot, left (or front) first")}});
+        props.insert(QStringLiteral("arrangement"), enumOf({QStringLiteral("side_by_side"), QStringLiteral("close"),
+                                                            QStringLiteral("front_back")}));
+        props.insert(QStringLiteral("prompt"), str(QStringLiteral("the scene only: setting, action, mood, framing; not the "
+                                                                  "characters' looks, which are added per character")));
+    }
+    return object(props);
 }
 
-QJsonObject Director::shotPlanSchema(int maxShots)
+QJsonObject Director::shotPlanSchema(int maxShots, bool cast)
 {
     QJsonObject shots{{QStringLiteral("type"), QStringLiteral("array")},
                       {QStringLiteral("minItems"), 1},
                       {QStringLiteral("maxItems"), std::max(1, maxShots)},
-                      {QStringLiteral("items"), shotSchema()}};
+                      {QStringLiteral("items"), shotSchema(cast)}};
     return object(QJsonObject{{QStringLiteral("title"), str()}, {QStringLiteral("summary"), str()}, {QStringLiteral("shots"), shots}});
 }
 
@@ -351,6 +370,15 @@ QJsonObject Director::sanitizePlan(const QJsonObject &plan)
             if (shot.contains(k))
                 shot.insert(k, cleanPrompt(shot.value(k).toString()));
         }
+        if (shot.contains(QStringLiteral("people"))) {
+            QJsonArray people;
+            for (const QJsonValue &p : shot.value(QStringLiteral("people")).toArray()) {
+                QJsonObject person = p.toObject();
+                person.insert(QStringLiteral("action"), cleanPrompt(person.value(QStringLiteral("action")).toString()));
+                people.append(person);
+            }
+            shot.insert(QStringLiteral("people"), people);
+        }
         shots.append(shot);
     }
     out.insert(QStringLiteral("shots"), shots);
@@ -428,10 +456,11 @@ StructuredChatOperation *Director::planShots(const PlanInput &in)
     LlmProvider *provider = llm(LlmRole::Director, &model);
     const PurposeProfile purpose = purposeProfile(in.purposeId);
     const int count = in.count > 0 ? in.count : 0;
+    const bool cast = !in.partner.isEmpty();
     ChatRequest req;
     req.model = model;
     req.temperature = 0.5;
-    req.jsonSchema = shotPlanSchema(count > 0 ? count : 12);
+    req.jsonSchema = shotPlanSchema(count > 0 ? count : 12, cast);
     req.schemaName = QStringLiteral("shot_plan");
     QString system = QStringLiteral(
         "You are the art director of an AI image studio. You turn a user's request into a precise shot plan for an image "
@@ -446,8 +475,27 @@ StructuredChatOperation *Director::planShots(const PlanInput &in)
         "bend, twist, yaw, pitch, left_arm...) into prompt, description or negative_prompt: describe the pose in plain words, "
         "e.g. 'arms slightly away from the body, palms open'.")
         .arg(purpose.name, purpose.guidance, pose::rigParamsGuide(), in.style.describeForLlm());
-    if (!in.character.isEmpty())
+    if (cast) {
+        // Two characters (M16 §16.4): the looks are added per character, in its own region.
+        const QString first = in.character.value(QStringLiteral("name")).toString(QStringLiteral("the first character"));
+        const QString second = in.partner.value(QStringLiteral("name")).toString(QStringLiteral("the second character"));
+        system.replace(QStringLiteral("- Every prompt must fully restate the character's appearance (hair, eyes, outfit, colors, "
+                                      "distinctive features) because each image is generated independently.\n"),
+                       QString());
+        system.replace(QStringLiteral("- Keep the character identical across all shots.\n"), QString());
+        system += QStringLiteral(
+            "\n\nThis plan has two characters, %1 and %2. Every shot shows both unless the request asks for one alone. List "
+            "them in \"people\", the one on the left (or in front) first, each with its exact name, a pose with the rig "
+            "parameters and a short action; \"pose\" repeats the first person's pose. \"arrangement\" says how they stand: "
+            "side_by_side, close (touching, e.g. holding hands) or front_back. The prompt describes only the scene: setting, "
+            "what they do together, mood, framing and background. Never describe the characters' looks in it: they are added "
+            "for each character in its own part of the image.")
+                      .arg(first, second);
+        system += QStringLiteral("\n\nCharacter sheet of %1 (authoritative):\n%2\n\nCharacter sheet of %3 (authoritative):\n%4")
+                      .arg(first, pretty(in.character), second, pretty(in.partner));
+    } else if (!in.character.isEmpty()) {
         system += QStringLiteral("\n\nCharacter sheet (authoritative):\n") + pretty(in.character);
+    }
     req.messages << ChatMessage::system(system);
     QString user = in.request.trimmed();
     if (user.isEmpty())
@@ -519,6 +567,14 @@ QSize Director::sizeForAspect(const QString &aspect, qint64 pixels, int multiple
 
 pose::Pose Director::poseForShot(const QJsonObject &shot, const QSize &canvas)
 {
+    const QJsonArray people = shot.value(QStringLiteral("people")).toArray();
+    if (people.size() > 1) {
+        QList<pose::RigParams> rigs;
+        for (const QJsonValue &p : people)
+            rigs << pose::RigParams::fromJson(p.toObject().value(QStringLiteral("pose")).toObject());
+        const pose::Arrangement arrangement = pose::arrangementFromKey(shot.value(QStringLiteral("arrangement")).toString());
+        return pose::solvePose(pose::arrangePeople(rigs.mid(0, 2), arrangement), canvas);
+    }
     const pose::RigParams rig = pose::RigParams::fromJson(shot.value(QStringLiteral("pose")).toObject());
     return pose::solvePose({rig}, canvas);
 }

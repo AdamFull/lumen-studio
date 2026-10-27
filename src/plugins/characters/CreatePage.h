@@ -19,6 +19,10 @@ class QSpinBox;
 class QToolButton;
 class QVBoxLayout;
 
+namespace lumen {
+class Job;
+}
+
 namespace lumen::ui {
 
 class AutoTextEdit;
@@ -54,6 +58,12 @@ private:
     void shotFailed(const QString &shotId, const QString &error);
     // attempt > 0: a Critic retry with `shotOverride` (the shot with the critic's revised prompt).
     void generateShot(const QString &shotId, int attempt = 0, const QJsonObject &shotOverride = {});
+    // A shot of the session's character and its partner (M16 §16.4): the compose-and-refine
+    // pipeline (ai::startCastGeneration), one job per image; its check replaces the page's Critic.
+    void generateCastShot(const QString &shotId, int attempt, const QJsonObject &shotJson);
+    // A shot's job ended: its images become the shot's results; `critic` queues the Critic's review.
+    void shotJobFinished(Job *job, QPointer<DirectorSession> session, const QString &shotId, int attempt, const QJsonObject &shotJson,
+                         bool critic);
     // Critic: reviews new results of a shot and retries it while the best score is below the threshold.
     void critique(const QString &shotId, const QStringList &assetIds, int attempt, const QJsonObject &shotUsed);
     // `then` runs once the character is saved.
@@ -63,6 +73,8 @@ private:
     void openTrainingSet();
     void planTrainingShots();
     void loadCharacterFromLibrary();
+    // Add a second character…: one from the library joins the session's shots.
+    void choosePartner();
     void generateAll();
     void newSession();
     void loadSessions(const QString &select = QString());
@@ -93,6 +105,7 @@ private:
     QWidget *m_refRow;
     QPushButton *m_analyze;
     QToolButton *m_lora;
+    QAction *m_removePartner = nullptr;
     QPointer<QDialog> m_trainingSet;
     // The session's library character as last seen: a change makes it the project's active
     // character (the first session shown at startup leaves the restored one alone).

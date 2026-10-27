@@ -1850,6 +1850,24 @@ strategy: both references with their names, one request.
 - [ ] Director and Create page: cast in `PlanInput`, `people` in the shot schema, two-person poses
   on the shot cards and in the pose editor, shots generated through `CastGeneration`. Tests:
   schema, prompts, a planned shot end to end with mocks.
+  * Done (6a): the Create page's session designs one character, so the cast there is that
+    character and a **partner** from the library (`DirectorSession::partner`, saved as `partner`;
+    *Library → Add a second character…* / *Remove the second character*; the card says "With Bo").
+    `PlanInput::partner` (its sheet); with it `shotPlanSchema(n, true)` adds `people` (per person:
+    the exact name, a rig, an action; left or front first, one or two) and `arrangement`, and the
+    request names both, drops "restate the appearance in every prompt", asks for scene-only prompts
+    and gives both sheets. `sanitizePlan` cleans the actions. `poseForShot` arranges two people
+    (`arrangePeople`, the shot's arrangement), so shot cards draw both. A shot with two people and a
+    partner goes to `CreatePage::generateCastShot` (one `startCastGeneration` per image, the person
+    listed first first, the shot's arrangement and pose, the Critic switch as `CastRequest::check`
+    instead of the page's whole-image review); the job's end is shared (`shotJobFinished`).
+  * Tests: `tst_services directorCast` (the schema with people, strict too; the cleaned action; both
+    people placed left and right; one without people; the request's names, sheets and rules);
+    `tst_canvas createPageCast` (Bo listed first is drawn on the left, both LoRAs only in their
+    repaints, the asset's cast and arrangement, the shot card's two people, one request without the
+    partner).
+  * Still open (6b): the pose editor for two people (an edited pose is kept per shot and already
+    has room for both), and the assistant's `generate_image` drawing the cast.
 - [ ] ComfyUI regional strategy: a graph with `CreateHookLora` → `ConditioningSetProperties`
   (mask per character) → combined conditioning, built per request like the standard graph.
   Contract test of the graph; the live step decides whether it becomes ComfyUI's default.

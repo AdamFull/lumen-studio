@@ -1,11 +1,13 @@
 #include "plugins/characters/CreatePage.h"
 
+#include "ai/CastGeneration.h"
 #include "ai/CharacterContext.h"
 #include "ai/Director.h"
 #include "ai/GenerationService.h"
 #include "ai/PromptStyle.h"
 #include "core/Error.h"
 #include "core/Settings.h"
+#include "pose/CastLayout.h"
 #include "pose/Rig.h"
 #include "core/JsonUtil.h"
 #include "core/JobQueue.h"
@@ -148,6 +150,12 @@ CreatePage::CreatePage(Studio *studio, QWidget *parent)
     auto *libraryMenu = new QMenu(libraryButton);
     libraryMenu->addAction(Icons::get(QStringLiteral("download")), tr("Save character to library…"), this, [this] { saveCharacterToLibrary(); });
     libraryMenu->addAction(Icons::get(QStringLiteral("upload")), tr("Load character from library…"), this, &CreatePage::loadCharacterFromLibrary);
+    libraryMenu->addSeparator();
+    libraryMenu->addAction(Icons::get(QStringLiteral("person")), tr("Add a second character…"), this, &CreatePage::choosePartner);
+    m_removePartner = libraryMenu->addAction(tr("Remove the second character"), this, [this] {
+        if (m_session)
+            m_session->setPartner(QString());
+    });
     libraryButton->setMenu(libraryMenu);
     m_lora = new QToolButton(charCard);
     m_lora->setIcon(Icons::get(QStringLiteral("star")));
@@ -526,6 +534,12 @@ void CreatePage::refreshCharacter()
                                              c.value(QStringLiteral("description")).toString().left(400).toHtmlEscaped(),
                                              palette.join(QStringLiteral(", ")).toHtmlEscaped()));
     }
+    // The second character of two-person shots.
+    const auto partner = m_session->partner().isEmpty() ? std::nullopt : m_studio->characters()->entry(m_session->partner());
+    if (partner)
+        m_characterSummary->setText(m_characterSummary->text() + QStringLiteral("<br>")
+                                    + tr("With <b>%1</b>: the plan shows both.").arg(partner->name.toHtmlEscaped()));
+    m_removePartner->setEnabled(bool(partner));
     m_analyze->setText(c.isEmpty() ? tr("Analyze references") : tr("Re-analyze"));
 
     // The character's LoRA, and whether the selected generator can use it.
@@ -764,6 +778,11 @@ void CreatePage::plan(const QString &instruction, std::function<void(QString err
                          .arg(QString::fromUtf8(QJsonDocument(m_session->plan()).toJson(QJsonDocument::Compact)), instruction);
     }
     in.character = m_session->character();
+    if (const auto partner = m_session->partner().isEmpty() ? std::nullopt : m_studio->characters()->entry(m_session->partner())) {
+        in.partner = partner->sheet;
+        if (in.partner.value(QStringLiteral("name")).toString().isEmpty())
+            in.partner.insert(QStringLiteral("name"), partner->name);
+    }
     in.purposeId = m_purpose->currentData().toString();
     in.count = m_count->value();
     // A LoRA training set follows a fixed recipe; no language model needed.
@@ -847,6 +866,10 @@ void CreatePage::generateShot(const QString &shotId, int attempt, const QJsonObj
     const ai::ImageCapabilities caps = provider->capabilities();
     const ai::PromptStyle style = ai::promptStyleFor(provider);
     const QJsonObject shotJson = shotOverride.isEmpty() ? shot->shot : shotOverride;
+    if (!m_session->partner().isEmpty() && shotJson.value(QStringLiteral("people")).toArray().size() > 1) {
+        generateCastShot(shotId, attempt, shotJson);
+        return;
+    }
     const ShotState shotCopy = *shot;
     const int variants = m_variants->value();
     ai::CharacterContext character;
@@ -889,46 +912,162 @@ void CreatePage::generateShot(const QString &shotId, int attempt, const QJsonObj
                 card->setBusy(true, f >= 0 ? QStringLiteral("%1 — %2%").arg(status).arg(int(f * 100)) : status);
         });
         QObject::connect(job, &Job::finished, self, [self, session, shotId, attempt, shotJson](Job *j) {
-            if (!self)
-                return;
-            --self->m_generating;
-            self->m_running[shotId] = std::max(0, self->m_running.value(shotId) - 1);
-            ShotCard *card = self->m_cards.value(shotId);
-            if (card)
-                card->setBusy(self->m_running.value(shotId) > 0, QString());
-            if (j->state() == Job::State::Succeeded && session) {
-                const ai::GenerationOutput out = ai::GenerationService::outputOf(j);
-                QStringList added;
-                if (ShotState *s = session->shot(shotId)) {
-                    for (const doc::AssetInfo &a : out.assets) {
-                        if (!a.id.isEmpty()) {
-                            s->results.append(a.id);
-                            added << a.id;
-                        }
-                    }
-                    session->saveSoon();
-                }
-                if (card)
-                    card->refresh();
-                if (self->m_critic->isChecked() && !added.isEmpty() && session == self->m_session) {
-                    // Counts as running, so the shot is not reported as finished before its review.
-                    self->m_running[shotId]++;
-                    self->m_pendingCritiques.append({shotId, added, attempt, shotJson});
-                    if (ShotCard *c = self->m_cards.value(shotId))
-                        c->setBusy(true, tr("Waiting for the other shots before the Critic reviews…"));
-                }
-            } else if (j->state() == Job::State::Failed) {
-                if (card)
-                    card->setBusy(false, j->errorString());
-                self->m_studio->notify(j->errorString(), QStringLiteral("error"));
-                self->shotFailed(shotId, j->errorString());
-            }
-            if (self->m_running.value(shotId) == 0)
-                self->shotSettled(shotId);
-            if (self->m_generating == 0)
-                self->startPendingCritiques();
+            if (self)
+                self->shotJobFinished(j, session, shotId, attempt, shotJson, true);
         });
     });
+}
+
+void CreatePage::shotJobFinished(Job *job, QPointer<DirectorSession> session, const QString &shotId, int attempt,
+                                 const QJsonObject &shotJson, bool critic)
+{
+    --m_generating;
+    m_running[shotId] = std::max(0, m_running.value(shotId) - 1);
+    ShotCard *card = m_cards.value(shotId);
+    if (card)
+        card->setBusy(m_running.value(shotId) > 0, QString());
+    if (job->state() == Job::State::Succeeded && session) {
+        const ai::GenerationOutput out = ai::GenerationService::outputOf(job);
+        QStringList added;
+        if (ShotState *s = session->shot(shotId)) {
+            for (const doc::AssetInfo &a : out.assets) {
+                if (!a.id.isEmpty()) {
+                    s->results.append(a.id);
+                    added << a.id;
+                }
+            }
+            session->saveSoon();
+        }
+        if (card)
+            card->refresh();
+        if (critic && m_critic->isChecked() && !added.isEmpty() && session == m_session) {
+            // Counts as running, so the shot is not reported as finished before its review.
+            m_running[shotId]++;
+            m_pendingCritiques.append({shotId, added, attempt, shotJson});
+            if (ShotCard *c = m_cards.value(shotId))
+                c->setBusy(true, tr("Waiting for the other shots before the Critic reviews…"));
+        }
+    } else if (job->state() == Job::State::Failed) {
+        if (card)
+            card->setBusy(false, job->errorString());
+        m_studio->notify(job->errorString(), QStringLiteral("error"));
+        shotFailed(shotId, job->errorString());
+    }
+    if (m_running.value(shotId) == 0)
+        shotSettled(shotId);
+    if (m_generating == 0)
+        startPendingCritiques();
+}
+
+void CreatePage::generateCastShot(const QString &shotId, int attempt, const QJsonObject &shotJson)
+{
+    ShotState *shot = m_session->shot(shotId);
+    ai::ImageProvider *provider = m_provider->imageProvider();
+    if (!shot || !provider)
+        return;
+    const ai::ImageCapabilities caps = provider->capabilities();
+    const ShotState shotCopy = *shot;
+    const int variants = m_variants->value();
+    ai::CharacterContext first;
+    first.id = m_session->libraryCharacter();
+    first.sheet = m_session->character();
+    first.name = first.sheet.value(QStringLiteral("name")).toString();
+    first.lora = ai::CharacterLora::fromJson(m_session->characterLora());
+    const QString providerId = provider->instanceId();
+    const QString sessionId = m_session->id();
+    const QString family = checkpointFamily(m_studio, provider);
+    const bool check = m_critic->isChecked();
+    if (ShotCard *card = m_cards.value(shotId))
+        card->setBusy(true, tr("Preparing…"));
+    m_running[shotId]++;
+    QPointer<CreatePage> self(this);
+    QPointer<DirectorSession> session = m_session;
+    // Gave up before any job: the shot is not running any more.
+    auto giveUp = [self, shotId](const QString &why) {
+        if (!self)
+            return;
+        self->m_running[shotId] = std::max(0, self->m_running.value(shotId) - 1);
+        if (ShotCard *card = self->m_cards.value(shotId))
+            card->setBusy(false, why);
+        if (!why.isEmpty())
+            self->m_studio->notify(why, QStringLiteral("warning"));
+        if (self->m_running.value(shotId) == 0)
+            self->shotSettled(shotId);
+    };
+    const QFuture<ai::CharacterContext> partnerRead = m_studio->characterContext(m_session->partner());
+    loadReferenceImages([self, session, shotId, shotJson, shotCopy, caps, variants, providerId, sessionId, family, check, attempt, first,
+                         partnerRead, giveUp](QList<QImage> images) mutable {
+        if (!self || !session)
+            return;
+        first.references = images;
+        QFuture<ai::CharacterContext>(partnerRead)
+            .then(self, [self, session, shotId, shotJson, shotCopy, caps, variants, providerId, sessionId, family, check, attempt, first,
+                         giveUp](const ai::CharacterContext &partner) {
+                if (!self || !session)
+                    return;
+                if (partner.isEmpty())
+                    return giveUp(tr("The second character is no longer in the library."));
+                const QSize size = ai::Director::sizeForAspect(shotCopy.aspect(), caps.nativePixels, std::max(64, caps.sizeMultiple));
+                ai::CastRequest cast;
+                cast.providerId = providerId;
+                cast.scene.prompt = shotJson.value(QStringLiteral("prompt")).toString();
+                cast.scene.negativePrompt = shotJson.value(QStringLiteral("negative_prompt")).toString();
+                cast.scene.size = size;
+                cast.scene.batchCount = 1;
+                // Left (or front) first, as the plan lists them.
+                const QString lead = shotJson.value(QStringLiteral("people")).toArray().at(0).toObject().value(QStringLiteral("character")).toString();
+                const bool partnerFirst = !lead.isEmpty() && lead.compare(partner.name, Qt::CaseInsensitive) == 0
+                                          && lead.compare(first.name, Qt::CaseInsensitive) != 0;
+                cast.cast = partnerFirst ? QList<ai::CharacterContext>{partner, first} : QList<ai::CharacterContext>{first, partner};
+                cast.pose = ShotCard::shotPose(shotCopy, size);
+                cast.arrangement = pose::arrangementFromKey(shotJson.value(QStringLiteral("arrangement")).toString());
+                cast.modelFamily = family;
+                cast.check = check;
+                cast.title = QObject::tr("Shot: %1").arg(shotJson.value(QStringLiteral("title")).toString());
+                cast.meta = QJsonObject{{QStringLiteral("director_session"), sessionId}, {QStringLiteral("shot"), shotId},
+                                        {QStringLiteral("shot_title"), shotJson.value(QStringLiteral("title"))}};
+                if (attempt > 0)
+                    cast.meta.insert(QStringLiteral("critic_attempt"), attempt);
+                // One job per image; the shot runs until the last one ends.
+                self->m_running[shotId] += variants - 1;
+                for (int i = 0; i < variants; ++i) {
+                    Job *job = ai::startCastGeneration(self->m_studio->generation(), cast);
+                    ++self->m_generating;
+                    QObject::connect(job, &Job::progressChanged, self, [self, shotId](double f, const QString &status) {
+                        if (ShotCard *card = self->m_cards.value(shotId))
+                            card->setBusy(true, f >= 0 ? QStringLiteral("%1 — %2%").arg(status).arg(int(f * 100)) : status);
+                    });
+                    QObject::connect(job, &Job::finished, self, [self, session, shotId, attempt, shotJson](Job *j) {
+                        if (self)
+                            self->shotJobFinished(j, session, shotId, attempt, shotJson, false);
+                    });
+                }
+            })
+            .onFailed(self, [giveUp](const std::exception &e) { giveUp(describeException(e)); });
+    });
+}
+
+void CreatePage::choosePartner()
+{
+    if (!m_session)
+        newSession();
+    QStringList names;
+    QStringList ids;
+    for (const doc::CharacterEntry &e : m_studio->characters()->entries()) {
+        if (e.id == m_session->libraryCharacter())
+            continue;
+        names << e.name;
+        ids << e.id;
+    }
+    if (ids.isEmpty()) {
+        m_studio->notify(tr("Save another character to the library first: Library → Save character to library…"), QStringLiteral("warning"));
+        return;
+    }
+    bool ok = false;
+    const QString name = QInputDialog::getItem(this, tr("Add a second character"),
+                                               tr("Shots then show both, each keeping its own look:"), names, 0, false, &ok);
+    if (ok && names.contains(name))
+        m_session->setPartner(ids.at(names.indexOf(name)));
 }
 
 void CreatePage::startPendingRetries()
