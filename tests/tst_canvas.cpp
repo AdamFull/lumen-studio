@@ -4984,10 +4984,14 @@ void TestCanvas::loraPickerElsewhere()
     chosen.first().triggerWords = {QStringLiteral("inkstyle")};
     options->setLoras(f.provider->instanceId(), chosen);
     QTRY_VERIFY(picker->findChild<QDoubleSpinBox *>(QStringLiteral("loraWeight")));
+    // Typed and confirmed with Enter, as people do: the rows are rebuilt from the options, and the
+    // field that sent the change is one of them.
     auto *weight = picker->findChild<QDoubleSpinBox *>(QStringLiteral("loraWeight"));
-    weight->setValue(0.6);
-    emit weight->editingFinished();
-    QCOMPARE(options->loras(f.provider->instanceId()).first().weight, 0.6);
+    weight->setFocus();
+    weight->selectAll();
+    QTest::keyClicks(weight, QStringLiteral("0.6"));
+    QTest::keyClick(weight, Qt::Key_Return);
+    QTRY_COMPARE(options->loras(f.provider->instanceId()).first().weight, 0.6);
     f.bar()->optionsPopup()->hide();
 
     f.words()->setPlainText(QStringLiteral("a lighthouse"));
@@ -5002,10 +5006,11 @@ void TestCanvas::loraPickerElsewhere()
     f.strip()->discard();
 
     // Unticked: not sent.
+    QTRY_VERIFY(picker->findChild<QCheckBox *>(QStringLiteral("loraOn")));
     auto *on = picker->findChild<QCheckBox *>(QStringLiteral("loraOn"));
     QVERIFY(on && on->isChecked());
-    on->setChecked(false);
-    QVERIFY(!options->loras(f.provider->instanceId()).first().on);
+    on->click(); // a click, which goes on after the box is toggled
+    QTRY_VERIFY(!options->loras(f.provider->instanceId()).first().on);
     QTest::keyClick(f.words(), Qt::Key_Return);
     QTRY_COMPARE_WITH_TIMEOUT(f.strip()->count(), 2, 10000);
     sent = f.sd.last();
