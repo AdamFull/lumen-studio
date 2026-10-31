@@ -701,6 +701,8 @@ void AiPanel::submitPrompt(const PromptRun &run)
     ai::ImageRequest base = baseRequest(provider, run.prompt, mode, region, run.literal, run.negative);
     base.mode = mode;
     base.denoise = run.strength;
+    if (mode == ai::GenMode::Edit)
+        base.editStrength = run.strength;
     // A region gets the character's LoRA (or reference) only; the prompt describes the region.
     const ai::CharacterUse use = mode == ai::GenMode::Edit ? ai::CharacterUse::Edit : region ? ai::CharacterUse::Region : ai::CharacterUse::Full;
     withCharacter(base, use, !run.withCharacter, provider, [=, this](const ai::ImageRequest &req, const QJsonObject &character) {

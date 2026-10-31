@@ -228,6 +228,7 @@ private slots:
     void castInEditor();
     void createPageCast();
     void poseEditTwoPeople();
+    void editStrength();
     void promptBarWithoutEdits();
     void aiMenuAndPanel();
     void promptBarKeepsTyping();
@@ -5214,9 +5215,7 @@ void TestCanvas::runSettingsPerModel()
     f.bar()->findChild<QToolButton *>(QStringLiteral("promptMore"))->click();
     QTRY_VERIFY(popup->isVisible());
     RunSettingsEditor *settings = f.bar()->runSettings();
-    QVERIFY(settings && !settings->isVisibleTo(popup)); // under Advanced
-    popup->findChild<QToolButton *>(QStringLiteral("promptAdvanced"))->click();
-    QVERIFY(settings->isVisibleTo(popup));
+    QVERIFY(settings && settings->isVisibleTo(popup)); // in sight, not under Advanced
     auto byName = [](QWidget *root, const QString &name) -> QWidget * {
         for (QWidget *w : root->findChildren<QWidget *>()) {
             if (w->accessibleName() == name)
@@ -5228,8 +5227,10 @@ void TestCanvas::runSettingsPerModel()
     auto *steps = qobject_cast<QSpinBox *>(byName(settings, QStringLiteral("Steps")));
     QVERIFY(steps && steps->isVisibleTo(popup));
     QCOMPARE(steps->specialValueText(), QStringLiteral("Model's choice (4)"));
-    // Distilled: no CFG to set, and a note that says why.
-    QVERIFY(!byName(settings, QStringLiteral("Follow the words"))->isVisibleTo(popup));
+    // Distilled: CFG at the model's 1, still to be set, with a note on what a higher one costs.
+    auto *kleinCfg = qobject_cast<QDoubleSpinBox *>(byName(settings, QStringLiteral("Follow the words")));
+    QVERIFY(kleinCfg && kleinCfg->isVisibleTo(popup));
+    QCOMPARE(kleinCfg->specialValueText(), QStringLiteral("Model's choice (1)"));
     QVERIFY(settings->findChild<QLabel *>(QStringLiteral("runSettingsDistilled"))->isVisibleTo(popup));
     QVERIFY(!byName(settings, QStringLiteral("CLIP skip"))->isVisibleTo(popup));
     QVERIFY(!byName(settings, QStringLiteral("Guidance"))->isVisibleTo(popup));
@@ -5289,12 +5290,22 @@ void TestCanvas::runSettingsPerModel()
     QCOMPARE(r.cfg, 4.5);
     QCOMPARE(sdxl->buildPayload(r).value(QStringLiteral("clip_skip")).toInt(), 2);
     QVERIFY(options->runSettings(QStringLiteral("preset:flux2-klein-4b")).isEmpty());
-    // A value set for a model type does not reach one that does not take it (klein: no CFG).
+    // Klein's CFG can be raised, though it starts at the model's 1.
     ai::RunSettings forced;
-    forced.cfg = 7;
+    forced.cfg = 2;
     ai::ImageRequest kr;
     ai::applyRunSettings(kr, forced, ai::runSettingsFor(f.provider));
-    QVERIFY(!kr.cfgChosen);
+    QVERIFY(kr.cfgChosen);
+    QCOMPARE(kr.cfg, 2.0);
+    QCOMPARE(f.provider->buildPayload(kr).value(QStringLiteral("sample_params")).toObject().value(QStringLiteral("guidance")).toObject()
+                 .value(QStringLiteral("txt_cfg")).toDouble(),
+             2.0);
+    // A value set for a model type does not reach one that does not take it (SDXL: no distilled guidance).
+    ai::RunSettings foreign;
+    foreign.guidance = 3;
+    ai::ImageRequest sr;
+    ai::applyRunSettings(sr, foreign, spec);
+    QCOMPARE(sr.guidance, 0.0);
 
     // FLUX.1 dev: its guidance, the preset's value unless one is set.
     ai::ModelDefaults dev;
@@ -5309,7 +5320,7 @@ void TestCanvas::runSettingsPerModel()
     QVERIFY(flux1);
     auto removeFlux1 = qScopeGuard([&] { f.studio.providers()->removeProvider(flux1->instanceId()); });
     const ai::RunSettingsSpec devSpec = ai::runSettingsFor(flux1);
-    QVERIFY(devSpec.guidance && devSpec.distilled && !devSpec.cfg && !devSpec.clipSkip);
+    QVERIFY(devSpec.guidance && devSpec.distilled && devSpec.cfg && !devSpec.clipSkip);
     QCOMPARE(devSpec.modelGuidance, 3.5);
     ai::ImageRequest dr;
     QCOMPARE(flux1->buildPayload(dr).value(QStringLiteral("sample_params")).toObject().value(QStringLiteral("guidance")).toObject()
@@ -5932,17 +5943,17 @@ void TestCanvas::aiMenuAndPanel()
         if (side->isTabVisible(i) && side->widget(i) != editor->aiPanel())
             QVERIFY(!side->tabText(i).isEmpty() || !side->tabToolTip(i).isEmpty());
     }
-    // Steps and the seed wait under Advanced.
-    QVERIFY(!spin(popup, QStringLiteral("Steps"))->isVisibleTo(popup) && !spin(popup, QStringLiteral("Seed"))->isVisibleTo(popup));
+    // The model's settings are in sight; the seed waits under Advanced.
+    QVERIFY(spin(popup, QStringLiteral("Steps"))->isVisibleTo(popup) && !spin(popup, QStringLiteral("Seed"))->isVisibleTo(popup));
     popup->findChild<QToolButton *>(QStringLiteral("promptAdvanced"))->click();
-    QVERIFY(spin(popup, QStringLiteral("Steps"))->isVisibleTo(popup) && spin(popup, QStringLiteral("Seed"))->isVisibleTo(popup));
+    QVERIFY(spin(popup, QStringLiteral("Seed"))->isVisibleTo(popup));
     auto *engine = popup->findChild<ProviderCombo *>(QStringLiteral("promptEngine"));
     QVERIFY(engine && engine->currentText() == QLatin1String("Klein"));
-    // Only what applies: FLUX.2 [klein] takes no negative prompt and an edit uses no strength; it
-    // takes reference images.
+    // Only what applies: FLUX.2 [klein] takes no negative prompt; an edit takes how much may change,
+    // and reference images.
     for (AutoTextEdit *e : popup->findChildren<AutoTextEdit *>())
         QVERIFY(!e->isVisibleTo(popup));
-    QVERIFY(!popup->findChild<SliderField *>()->isVisibleTo(popup));
+    QVERIFY(popup->findChild<SliderField *>()->isVisibleTo(popup));
     QPushButton *references = nullptr;
     for (QPushButton *b : popup->findChildren<QPushButton *>()) {
         if (b->text() == QStringLiteral("Add in the AI tab…"))
@@ -7231,6 +7242,49 @@ void TestCanvas::poseEditTwoPeople()
     emit canvas->editFinished(after, after);
     QVERIFY(dlg.rigs().at(0).has_value());
     QVERIFY(!dlg.rigs().at(1).has_value());
+}
+
+// How much an instruction edit may change: for engines that take it the ⋯ menu offers it at 100 %,
+// which sends what it always did; below that the picture is also the starting point at that strength.
+void TestCanvas::editStrength()
+{
+    Settings::instance().remove(QStringLiteral("editor/ai/editStrength"));
+    auto cleanup = qScopeGuard([] { Settings::instance().remove(QStringLiteral("editor/ai/editStrength")); });
+    PromptBarFixture f;
+    QVERIFY(f.setUp(true));
+    f.studio.openImageAsDocument(detailedPhoto(), QStringLiteral("Photo"));
+    PromptBar *bar = f.bar();
+    QTRY_VERIFY(bar->plan().action == PromptAction::EditImage);
+    QVERIFY(bar->plan().strength);
+    bar->showOptions();
+    auto *strength = bar->optionsPopup()->findChild<SliderField *>();
+    QVERIFY(strength && strength->isVisibleTo(bar->optionsPopup()));
+    QCOMPARE(strength->value(), 100.0);
+    bar->optionsPopup()->hide();
+    f.words()->setPlainText(QStringLiteral("make it night"));
+    QTest::keyClick(f.words(), Qt::Key_Return);
+    QTRY_COMPARE_WITH_TIMEOUT(f.strip()->count(), 2, 10000);
+    QJsonObject sent = f.sd.last();
+    QVERIFY(!sent.value(QStringLiteral("ref_images")).toArray().isEmpty());
+    QVERIFY(!sent.contains(QStringLiteral("init_image")));
+    f.strip()->discard();
+
+    bar->showOptions();
+    strength->findChild<QDoubleSpinBox *>()->setValue(40);
+    QCOMPARE(f.editor()->aiOptions()->editStrength(), 0.4);
+    QCOMPARE(f.editor()->aiOptions()->regionStrength(), 0.75); // its own value
+    bar->optionsPopup()->hide();
+    QTest::keyClick(f.words(), Qt::Key_Return);
+    QTRY_COMPARE_WITH_TIMEOUT(f.strip()->count(), 2, 10000);
+    sent = f.sd.last();
+    QVERIFY(!sent.value(QStringLiteral("ref_images")).toArray().isEmpty());
+    QVERIFY(sent.contains(QStringLiteral("init_image")));
+    QCOMPARE(sent.value(QStringLiteral("strength")).toDouble(), 0.4);
+    QVERIFY(!sent.contains(QStringLiteral("mask_image")));
+    f.strip()->discard();
+    // Kept for the next session.
+    AiOptions next;
+    QCOMPARE(next.editStrength(), 0.4);
 }
 
 QTEST_MAIN(TestCanvas)

@@ -50,8 +50,8 @@ RunSettingsEditor::RunSettingsEditor(AiOptions *options, QWidget *parent)
     m_cfg->setToolTip(tr("How closely the image follows the description (CFG). Higher follows it more strictly but can look harsh; "
                          "lower is freer and softer."));
     m_form->addRow(tr("Follow the words"), m_cfg);
-    m_distilled = new QLabel(tr("This model is distilled: it runs at CFG 1, so how closely it follows the words is not set here "
-                                "(a higher CFG only makes it slower and burns the image)."),
+    m_distilled = new QLabel(tr("This model is distilled and made for CFG 1 (the model's choice). A higher CFG makes it slower and "
+                                "can burn the image; the klein base models do take it."),
                              this);
     m_distilled->setObjectName(QStringLiteral("runSettingsDistilled"));
     m_distilled->setWordWrap(true);

@@ -18,9 +18,10 @@ RunSettingsSpec runSettingsFor(const ImageProvider *provider)
     s.modelName = d.name;
     s.steps = caps.steps;
     s.modelSteps = style.steps;
-    // A model distilled to run without CFG (its preset says 1): there is nothing useful to set.
+    // A model distilled to run at CFG 1 (its preset says 1) starts there, but the value can be raised
+    // (the klein base models need it, and people tune it); the editor says what it costs.
     s.distilled = caps.cfg && d.isValid() && d.cfg > 0 && d.cfg <= 1.0;
-    s.cfg = caps.cfg && !s.distilled;
+    s.cfg = caps.cfg;
     s.modelCfg = style.cfg;
     s.guidance = d.guidance > 0;
     s.modelGuidance = d.guidance;

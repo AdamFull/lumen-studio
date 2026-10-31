@@ -214,7 +214,8 @@ objects: the Grounding DINO tiny model finds them and SAM 2.1 cuts each one out,
 without an image engine or a language model. The first time, the dialog offers to download the
 models once (about 350 MB with what Smart selection needs, less if that is already there); the
 prompt bar's "select: the cup" says where the download is. A search takes a few seconds on the
-processor; when nothing like it is in the picture, Lumen says so and selects nothing. In the filter
+processor; when nothing like it is in the picture, Lumen says so and selects nothing. Thin parts can
+be missed (an apple's stem): check the selection and add to it with the selection brush. In the filter
 editor, the step *Find area* does the same, for filters such as "find the cup → fill area with AI";
 like the AI steps, it runs only on **Run**.
 
@@ -287,7 +288,10 @@ as well.
 
 The **⋯** button next to Generate holds what most people never need, and only what applies:
 
-* **How much may change** (in per cent), when the area is painted anew or for a variation;
+* **How much may change** (in per cent; other programs call it *denoise* or *denoising strength*), for
+  an area painted anew, a variation and, on a local server, a change from a description. For a change
+  from a description it starts at 100 %, which lets the model redraw freely; lower keeps more of the
+  picture as it is;
 * **Results per run** (1–4);
 * **Leave out**: things that should not be in the result, for models that take this;
 * **LoRAs**: small add-ons to the model for a style, a character or a look (see below);
@@ -295,21 +299,21 @@ The **⋯** button next to Generate holds what most people never need, and only 
   in the AI tab);
 * the engine: *Engine for changes* on a picture, *Image engine* on a blank canvas. A choice here
   stays until you choose another engine for that use in Settings → AI or Set up AI;
-* **Advanced**: the settings the engine's model takes, each at *Model's choice* (with the model's own
-  value) until you change it, and *Seed* (random, or fixed to get the same result again). Only what
-  the model uses is shown:
+* the settings the engine's model takes, each at *Model's choice* (with the model's own value) until
+  you change it. Only what the model uses is shown:
   * *Steps*;
   * *Follow the words* (CFG): how closely the image follows the description. Distilled models such as
-    FLUX.2 [klein] and FLUX.1 run at CFG 1; for them a note says so instead, since a higher value
-    only makes them slower and burns the image (the klein *base* models do take it);
+    FLUX.2 [klein] and FLUX.1 are made for CFG 1 and start there; a note says that a higher value makes
+    them slower and can burn the image (the klein *base* models do take it);
   * *Guidance* for FLUX.1 dev (3.5 is usual), *Keep the picture* for edit models whose preset sets
     it, *Flow shift* for Qwen-Image;
   * *Sampler* and *Scheduler*;
   * *CLIP skip* for SD 1.5 and SDXL models (Pony and Illustrious usually want 2).
 
   The values are kept for each model type and are the same in the AI tab; *Back to the model's
-  choice* undoes them. Image models have no "temperature": the nearest is *Follow the words*.
-  *Use my words as they are* is there too (see below);
+  choice* undoes them. Image models have no "temperature": the nearest is *Follow the words*;
+* **Advanced**: *Seed* (random, or fixed to get the same result again) and *Use my words as they are*
+  (see below);
 * **Plan this change…**, when a language model that sees pictures is set up (Settings → Roles,
   *Vision analysis*): see below;
 * **All AI options…** opens the AI tab.

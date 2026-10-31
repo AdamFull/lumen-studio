@@ -165,6 +165,8 @@ ImageCapabilities SdCppProvider::capabilities() const
     const ModelDefaults d = modelDefaultsOf(this);
     c.edit = d.edit;
     c.regionEdit = d.edit;
+    // Below 1, an edit also starts from the picture at that strength (see buildPayload).
+    c.editStrength = d.edit;
     c.poseControl = setting(QStringLiteral("control_net")).toBool();
     // References: one for the IP-Adapter, else those the model takes itself (FLUX.2 ref_images).
     c.maxReferences = setting(QStringLiteral("ip_adapter")).toBool() ? 1 : d.references;
@@ -242,9 +244,12 @@ QJsonObject SdCppProvider::buildPayload(const ImageRequest &r) const
         }
         p.insert(QStringLiteral("ref_images"), refs);
     }
-    if (r.mode == GenMode::ImageToImage || r.mode == GenMode::Inpaint) {
-        p.insert(QStringLiteral("init_image"), toBase64Png(r.initImage));
-        p.insert(QStringLiteral("strength"), r.denoise);
+    // An edit with less than all of it to change also starts from the picture, at that strength:
+    // the model then keeps more of it (the reference image still says what to keep).
+    const bool editFromPicture = r.mode == GenMode::Edit && r.editStrength < 0.995 && !r.initImage.isNull();
+    if (r.mode == GenMode::ImageToImage || r.mode == GenMode::Inpaint || editFromPicture) {
+        p.insert(QStringLiteral("init_image"), toBase64Png(editFromPicture ? img::flatten(r.initImage, Qt::white) : r.initImage));
+        p.insert(QStringLiteral("strength"), editFromPicture ? r.editStrength : r.denoise);
         if (r.mode == GenMode::Inpaint && !r.mask.isNull())
             p.insert(QStringLiteral("mask_image"), toBase64Png(img::thresholdMask(r.mask, 1)));
     }

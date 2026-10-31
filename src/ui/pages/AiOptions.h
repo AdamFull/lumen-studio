@@ -65,6 +65,10 @@ public:
     // the whole image may (the denoising strength). Kept apart: a variation wants far less.
     double regionStrength() const { return m_regionStrength; }
     void setRegionStrength(double strength);
+    // How much an instruction edit may change, for engines that take it (1 = all of it, as the model
+    // likes; lower keeps more of the picture). Remembered.
+    double editStrength() const { return m_editStrength; }
+    void setEditStrength(double strength);
     double variationStrength() const { return m_variationStrength; }
     void setVariationStrength(double strength);
     // The settings chosen for a model (steps, how closely to follow the words, sampler…), kept by
@@ -123,6 +127,7 @@ private:
     QString m_providerId[2];   // new images, changes
     QString m_settingsEngine[2]; // what Settings → AI named for each use when last looked at
     double m_regionStrength = 0.75;
+    double m_editStrength = 1.0;
     double m_variationStrength = 0.45;
     qint64 m_seed = -1;
     int m_variants = 2;

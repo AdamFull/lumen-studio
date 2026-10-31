@@ -111,6 +111,8 @@ private:
     bool changesPicture() const;
     // The engine cannot change the whole image from words but can make a variation of it.
     static bool offersVariation(const PromptPlan &p);
+    // How much the plan's run may change: the area's, an edit's (1 unless set) or none (1).
+    double strengthFor(const PromptPlan &p) const;
     // `planned`: the words are a plan's, sent as they are with its negative prompt.
     void submit(const PromptPlan &plan, ai::GenMode mode, const QString &words, double strength, bool withCharacter, const QString &name,
                 const ai::ChangePlan *planned = nullptr);

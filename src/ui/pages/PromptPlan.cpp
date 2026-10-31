@@ -36,6 +36,7 @@ PromptPlan promptPlan(bool selection, bool blankCanvas, const ai::ImageCapabilit
         if (caps->edit && caps->regionEdit) {
             p.action = PromptAction::EditArea;
             p.mode = ai::GenMode::Edit;
+            p.strength = caps->editStrength;
         } else if (caps->inpaint || caps->edit) {
             // The region pipeline inpaints for engines that edit with a mask (cloud edit APIs).
             p.action = PromptAction::InpaintArea;
@@ -60,6 +61,7 @@ PromptPlan promptPlan(bool selection, bool blankCanvas, const ai::ImageCapabilit
     if (caps->edit) {
         p.action = PromptAction::EditImage;
         p.mode = ai::GenMode::Edit;
+        p.strength = caps->editStrength;
         return p;
     }
     p.action = PromptAction::CannotEditImage;

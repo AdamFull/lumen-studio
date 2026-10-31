@@ -4011,6 +4011,17 @@ Decisions (October 2026, with the user):
     and a chosen one in the request; a value a model does not take is not applied).
   * Not yet: ComfyUI templates take only the settings they bind; image guidance is offered only
     where a preset sets it (none does yet).
+  * Changed 31 October 2026, at the user's request ("Where is cfg scale and denoise setting???"): with
+    FLUX.2 [klein] neither showed. CFG is now offered for distilled models too, starting at the
+    model's 1 with a note on what a higher value costs, and the model's settings are in sight in ⋯,
+    not under *Advanced* (which keeps the seed and *Use my words as they are*). *How much may change*
+    also applies to the prompt bar's instruction edits on sd.cpp (`ImageCapabilities::editStrength`,
+    `ImageRequest::editStrength`, its own field so filters and the assistant keep sending plain edits,
+    `AiOptions::editStrength`, remembered, starting at 100 %): below that the request carries the
+    picture as `init_image` with `strength` as well as `ref_images`. Checked live with klein 4B:
+    "turn this into a snowy winter scene" differs from the picture by 48.7 at 100 % and by 5.6 at
+    35 %, which keeps it and adds a dusting of snow (`tst_live kleinPromptBar`, mocks in
+    `tst_canvas editStrength`).
 - [x] Classic finders (lines, specks, colour range) in `core/` with golden-image tests; *Select →
   By description…* with the rule-based parser; *Find lines* node.
   * `core/Finders`: `findStrokes` is a grayscale closing (an opening for light strokes) over a window
@@ -4183,9 +4194,13 @@ Decisions (October 2026, with the user):
     room). The live check again (94 s): 98 % of the line pixels selected, 1.6 % of the rest; near-
     black on the whole lines 5431 → 207 pixels; on the picture the lines are gone, across the apple
     too, with faint traces over the bright window.
-  * Not yet: "the cup" with the detection models and replaced by klein and by SDXL (no SDXL model
-    is set up here now); a klein 4B LoRA from the picker. The user's models moved to Lumen's models
-    folder; the run used them read-only (`LUMEN_LIVE_MODEL_DIRS` = its `vae` and `text_encoders`).
+  * Done 31 October 2026 (the same test, 194 s in all, the models read-only from Lumen's folder):
+    "the apple" found by Grounding DINO and SAM 2.1 in 2.9 s (one object) and replaced with a blue
+    cup by klein in 29 s, nothing painted outside; on the picture the cup is clean, but SAM left the
+    stem out of the mask, so it stayed in the air (thin parts can be missed; the guide says so).
+    A klein 4B LoRA from the picker (`AniEdit-Klein`; the picker told 2 of 10 files fit): 160 of
+    160 tensors applied, the same seed's image changed.
+  * Not yet: replacing with SDXL (no SDXL model is set up here now).
   * QtTest's 5-minute limit per test stopped the first attempt while the model folder was scanned:
     live runs set `QTEST_FUNCTION_TIMEOUT`.
 

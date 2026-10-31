@@ -260,7 +260,7 @@
         <translation>Warten auf den Server...</translation>
     </message>
     <message>
-        <location filename="../src/app/main.cpp" line="+135"/>
+        <location filename="../src/app/main.cpp" line="+147"/>
         <source>The Live2D parts plugin is off, so --slice and --cubism do nothing. Switch it on in Tools → Plugins… and restart Lumen.</source>
         <translation>Das Plugin „Live2D-Teile“ ist ausgeschaltet, daher bewirken --slice und --cubism nichts. Schalten Sie es unter Werkzeuge → Plugins… ein und starten Sie Lumen neu.</translation>
     </message>
@@ -2903,7 +2903,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Verbunden – Modell: %1</translation>
     </message>
     <message>
-        <location line="+198"/>
+        <location line="+203"/>
         <source>The model on this server does not edit images from an instruction (FLUX.2 [klein], FLUX.1 Kontext and Qwen-Image-Edit do); use inpainting or a variation instead.</source>
         <translation>Das Modell auf diesem Server bearbeitet keine Bilder nach einer Anweisung (FLUX.2 [klein], FLUX.1 Kontext und Qwen-Image-Edit können das); verwenden Sie stattdessen Inpainting oder eine Variation.</translation>
     </message>
@@ -6731,7 +6731,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::AiOptions</name>
     <message>
-        <location filename="../src/ui/pages/AiOptions.cpp" line="+28"/>
+        <location filename="../src/ui/pages/AiOptions.cpp" line="+29"/>
         <source>Lumen fits your words to the model: quality words its family expects, a usual &quot;leave out&quot; list, and for a model that fills an area, what should be there instead of the change (&quot;replace the cup with a candle&quot; becomes &quot;a candle&quot;). With this on, the model gets exactly what you typed.</source>
         <translation>Lumen passt Ihre Worte an das Modell an: Qualitätswörter, die seine Familie erwartet, eine übliche „Weglassen“-Liste und für ein Modell, das einen Bereich füllt, was dort stattdessen sein soll („replace the cup with a candle“ wird zu „a candle“). Ist dies an, bekommt das Modell genau, was Sie eingegeben haben.</translation>
     </message>
@@ -16259,12 +16259,12 @@ oder eines aus den Projektbildern ziehen</translation>
     </message>
     <message>
         <location line="+4"/>
-        <location line="+328"/>
+        <location line="+339"/>
         <source>Generate</source>
         <translation>Generieren</translation>
     </message>
     <message>
-        <location line="-323"/>
+        <location line="-334"/>
         <source>Remove object</source>
         <translation>Objekt entfernen</translation>
     </message>
@@ -16331,18 +16331,18 @@ oder eines aus den Projektbildern ziehen</translation>
     </message>
     <message>
         <location line="+4"/>
-        <location line="+284"/>
+        <location line="+295"/>
         <location line="+1"/>
         <source>Image engine</source>
         <translation>Bild-Engine</translation>
     </message>
     <message>
-        <location line="-281"/>
+        <location line="-288"/>
         <source>Advanced</source>
         <translation>Erweitert</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+6"/>
         <source>Use my words as they are</source>
         <translation>Meine Worte unverändert verwenden</translation>
     </message>
@@ -16383,7 +16383,7 @@ oder eines aus den Projektbildern ziehen</translation>
         <translation>Die KI-Registerkarte: alle Optionen und die Aktionen, die keine Beschreibung sind (Hochskalieren, Erweitern, Hintergrund entfernen…)</translation>
     </message>
     <message>
-        <location line="+140"/>
+        <location line="+150"/>
         <source>Describe the change, e.g. “colorize it” or “replace the cup with a candle”</source>
         <translation>Beschreiben Sie die Änderung, z. B. „färbe es ein“ oder „ersetze die Tasse durch eine Kerze“</translation>
     </message>
@@ -16525,12 +16525,17 @@ oder eines aus den Projektbildern ziehen</translation>
         <translation>Engine für Änderungen</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+8"/>
         <source>How much a variation may change the image: a little keeps more of it.</source>
         <translation>Wie stark eine Variation das Bild ändern darf: wenig behält mehr davon.</translation>
     </message>
     <message>
         <location line="+1"/>
+        <source>How much the change may redraw: 100 % lets the model redraw freely from your words; less keeps more of the picture as it is (it also starts from the picture).</source>
+        <translation>Wie viel die Änderung neu zeichnen darf: Bei 100 % zeichnet das Modell frei nach Ihren Worten; weniger behält mehr vom Bild, wie es ist (es geht dann auch vom Bild aus).</translation>
+    </message>
+    <message>
+        <location line="+2"/>
         <source>How much the selected area may change: a little keeps more of what is there.</source>
         <translation>Wie stark sich der ausgewählte Bereich ändern darf: wenig behält mehr vom Vorhandenen.</translation>
     </message>
@@ -16548,7 +16553,7 @@ oder eines aus den Projektbildern ziehen</translation>
         </translation>
     </message>
     <message numerus="yes">
-        <location line="+122"/>
+        <location line="+121"/>
         <source>Selected %n object(s). Now say what should change there, or press Remove object.</source>
         <translation>
             <numerusform>%n Objekt ausgewählt. Sagen Sie jetzt, was sich dort ändern soll, oder drücken Sie Objekt entfernen.</numerusform>
@@ -16841,8 +16846,8 @@ oder eines aus den Projektbildern ziehen</translation>
     </message>
     <message>
         <location line="+3"/>
-        <source>This model is distilled: it runs at CFG 1, so how closely it follows the words is not set here (a higher CFG only makes it slower and burns the image).</source>
-        <translation>Dieses Modell ist destilliert: Es läuft mit CFG 1, deshalb wird hier nicht eingestellt, wie genau es den Worten folgt (ein höherer CFG macht es nur langsamer und lässt das Bild ausbrennen).</translation>
+        <source>This model is distilled and made for CFG 1 (the model&apos;s choice). A higher CFG makes it slower and can burn the image; the klein base models do take it.</source>
+        <translation>Dieses Modell ist destilliert und für CFG 1 gemacht (die Wahl des Modells). Ein höherer CFG-Wert macht es langsamer und kann das Bild überzeichnen; die klein-Basismodelle vertragen ihn.</translation>
     </message>
     <message>
         <location line="+8"/>

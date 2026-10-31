@@ -177,6 +177,8 @@ QJsonObject ImageRequest::describe() const
         o.insert(QStringLiteral("flow_shift"), flowShift);
     if (clipSkip > 0)
         o.insert(QStringLiteral("clip_skip"), clipSkip);
+    if (editStrength < 1.0)
+        o.insert(QStringLiteral("edit_strength"), editStrength);
     if (!model.isEmpty())
         o.insert(QStringLiteral("model"), model);
     if (mode != GenMode::TextToImage)

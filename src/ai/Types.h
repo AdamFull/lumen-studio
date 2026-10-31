@@ -133,6 +133,8 @@ struct ImageRequest
     QImage initImage;
     QImage mask;            // Grayscale8, same size as initImage
     double denoise = 0.6;
+    // How much an instruction edit may change, for engines with editStrength; 1 = as the model likes.
+    double editStrength = 1.0;
     int maskBlur = 4;
 
     QList<ReferenceImage> references;
@@ -185,6 +187,7 @@ struct ImageCapabilities
     bool qualityTiers = false;
     bool loras = false;            // LoRA files from the server's LoRA folder
     bool regionalPrompts = false;  // ImageRequest::regions: words and LoRAs per region in one pass
+    bool editStrength = false;     // an instruction edit takes ImageRequest::denoise (how much may change)
     int sizeMultiple = 8;
     QList<QSize> fixedSizes;       // when non-empty only these sizes are accepted
     QStringList aspectRatios;      // providers that take aspect ratio instead of size

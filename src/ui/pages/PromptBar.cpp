@@ -178,6 +178,10 @@ void PromptBar::buildOptions()
     m_engine = new ProviderCombo(m_studio->providers(), ai::ProviderKind::Image, m_popup);
     m_engine->setObjectName(QStringLiteral("promptEngine"));
     m_form->addRow(tr("Image engine"), m_engine);
+    // The settings the engine's model takes (plan M18 §18.4), shared with the AI tab: always in
+    // sight, as people tune them (steps, CFG, sampler…).
+    m_settings = new RunSettingsEditor(m_options, m_popup);
+    m_form->addRow(m_settings);
     // What changes a result in ways only experienced users ask for.
     m_advanced = new QToolButton(m_popup);
     m_advanced->setObjectName(QStringLiteral("promptAdvanced"));
@@ -187,9 +191,6 @@ void PromptBar::buildOptions()
     m_advanced->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
     m_advanced->setArrowType(Qt::RightArrow);
     m_form->addRow(m_advanced);
-    // The settings the engine's model takes (plan M18 §18.4), shared with the AI tab.
-    m_settings = new RunSettingsEditor(m_options, m_popup);
-    m_form->addRow(m_settings);
     m_literal = new QCheckBox(tr("Use my words as they are"), m_popup);
     m_literal->setObjectName(QStringLiteral("promptLiteralWords"));
     m_literal->setToolTip(literalWordsHelp());
@@ -220,8 +221,11 @@ void PromptBar::buildOptions()
     m_form->addRow(m_allOptions);
 
     connect(m_strength, &SliderField::valueChanged, this, [this](double percent) {
-        if (plan().action == PromptAction::CannotEditImage)
+        const PromptPlan p = plan();
+        if (p.action == PromptAction::CannotEditImage)
             m_options->setVariationStrength(percent / 100.0);
+        else if (p.mode == ai::GenMode::Edit)
+            m_options->setEditStrength(percent / 100.0);
         else
             m_options->setRegionStrength(percent / 100.0);
     });
@@ -334,6 +338,13 @@ void PromptBar::focusPrompt()
 {
     m_prompt->setFocus();
     m_prompt->moveCursor(QTextCursor::End);
+}
+
+double PromptBar::strengthFor(const PromptPlan &p) const
+{
+    if (!p.strength)
+        return 1.0;
+    return p.mode == ai::GenMode::Edit ? m_options->editStrength() : m_options->regionStrength();
 }
 
 bool PromptBar::offersVariation(const PromptPlan &p)
@@ -465,8 +476,14 @@ void PromptBar::updateOptions()
     m_engine->setAccessibleName(changes ? tr("Engine for changes") : tr("Image engine"));
     {
         const QSignalBlocker b1(m_strength), b3(m_seed), b4(m_randomSeed), b5(m_variants), b6(m_pose), b7(m_engine), b8(m_literal);
-        m_strength->setValue(std::round((variation ? m_options->variationStrength() : m_options->regionStrength()) * 100));
+        const bool edit = p.mode == ai::GenMode::Edit;
+        m_strength->setValue(std::round((variation ? m_options->variationStrength()
+                                         : edit    ? m_options->editStrength()
+                                                   : m_options->regionStrength())
+                                        * 100));
         m_strength->setToolTip(variation ? tr("How much a variation may change the image: a little keeps more of it.")
+                               : edit    ? tr("How much the change may redraw: 100 % lets the model redraw freely from your words; "
+                                              "less keeps more of the picture as it is (it also starts from the picture).")
                                          : tr("How much the selected area may change: a little keeps more of what is there."));
         m_randomSeed->setChecked(m_options->seed() < 0);
         m_seed->setEnabled(m_options->seed() >= 0);
@@ -486,8 +503,7 @@ void PromptBar::updateOptions()
     m_form->setRowVisible(m_strength, p.strength);
     const bool advanced = m_advanced->isChecked();
     m_settings->setEngine(provider);
-    m_form->setRowVisible(m_advanced, !provider || caps.seed || m_settings->hasSettings());
-    m_form->setRowVisible(m_settings, advanced && m_settings->hasSettings());
+    m_form->setRowVisible(m_settings, m_settings->hasSettings());
     m_form->setRowVisible(m_seedRow, advanced && (!provider || caps.seed));
     m_form->setRowVisible(m_literal, advanced);
     const bool negative = provider && caps.negativePrompt && ai::promptStyleFor(provider).supportsNegative;
@@ -570,7 +586,7 @@ void PromptBar::generate()
         focusPrompt();
         return;
     }
-    submit(p, p.mode, words, p.strength ? m_options->regionStrength() : 1.0, true, words.simplified().left(40));
+    submit(p, p.mode, words, strengthFor(p), true, words.simplified().left(40));
 }
 
 void PromptBar::selectByWords(const QString &description, std::function<void()> then)
@@ -719,7 +735,7 @@ void PromptBar::runPlan(const ai::ChangePlan &plan)
             self->m_studio->notify(self->hint(), QStringLiteral("warning"));
             return;
         }
-        self->submit(p, p.mode, plan.prompt, p.strength ? self->m_options->regionStrength() : 1.0, true,
+        self->submit(p, p.mode, plan.prompt, self->strengthFor(p), true,
                      self->m_prompt->text().trimmed().simplified().left(40), &plan);
     };
     if (plan.select.isEmpty())

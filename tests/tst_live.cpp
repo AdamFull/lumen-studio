@@ -6,6 +6,7 @@
 //   LUMEN_LIVE_OUT=<folder>                   (optional; generated images are saved there)
 //   LUMEN_LIVE_REFERENCE=<image>              (vision tests: a character image to analyse)
 #include "ai/Agent.h"
+#include "ai/Detector.h"
 #include "ai/Director.h"
 #include "ai/Gate.h"
 #include "ai/LoraCaptions.h"
@@ -47,6 +48,7 @@
 #include "ui/pages/PromptBar.h"
 #include "ui/pages/PromptPlan.h"
 #include "ui/pages/VariantStrip.h"
+#include "ui/widgets/LoraPicker.h"
 #include "ui/pages/AiPanel.h"
 #include "ui/dialogs/CharacterLoraDialog.h"
 #include "plugins/parts/ExpressionCheck.h"
@@ -957,7 +959,9 @@ void TestLive::kleinEditServer()
 // The editor as the user meets it, with FLUX.2 klein through sd.cpp (plan M17 §17.8, the last
 // live check): a whole-image colorize from the prompt bar with nothing selected, then a new image
 // on a blank canvas, then (plan M18 §18.6) black lines drawn over it, selected by saying so and
-// removed. Same variables as kleinEditServer; one result per run to keep it short.
+// removed; how much an edit may change; with LUMEN_TEST_ORT, _GDINO and _SAM2 an object found by name
+// and replaced; with LUMEN_LIVE_LORA_DIR a LoRA from the picker (LUMEN_LIVE_KLEIN_LORA: its name
+// matches this). Same variables as kleinEditServer; one result per run to keep it short.
 void TestLive::kleinPromptBar()
 {
     const QString root = qEnvironmentVariable("LUMEN_LIVE_SD_RUNTIMES");
@@ -1004,6 +1008,9 @@ void TestLive::kleinPromptBar()
             profile.options.insert(it.key(), it.value());
     }
     profile.startupTimeoutSec = 300;
+    const QString loraDir = qEnvironmentVariable("LUMEN_LIVE_LORA_DIR");
+    if (!loraDir.isEmpty())
+        profile.options.insert(QStringLiteral("lora_dir"), loraDir);
     QVERIFY(runtime::checkSdProfile(lib, profile).isEmpty());
     servers->addProfile(profile);
     Provider *klein = studio.providers()->addProvider(QStringLiteral("sdcpp"), QStringLiteral("FLUX.2 klein"),
@@ -1169,8 +1176,156 @@ void TestLive::kleinPromptBar()
     QVERIFY2(darkBefore > 500, "the lines did not cross light parts of the picture");
     QVERIFY2(darkAfter < darkBefore * 0.3, qPrintable(QStringLiteral("%1 of %2 still dark").arg(darkAfter).arg(darkBefore)));
     strip->keep();
+
+    // 4. How much an edit may change: below 100 % sd-server gets the picture as its starting point
+    // as well as its reference, and the result stays closer to it. Same seed for both.
+    ui::AiOptions *aiOptions = window.editor()->aiOptions();
+    aiOptions->setSeed(1234);
+    doc::Document *winter = studio.openImageAsDocument(fresh, QStringLiteral("Strength"));
+    QVERIFY(winter);
+    QTRY_COMPARE(bar->plan().action, ui::PromptAction::EditImage);
+    QVERIFY(bar->plan().strength);
+    auto differs = [](const QImage &a, const QImage &b) {
+        double sum = 0;
+        int count = 0;
+        for (int y = 0; y < a.height(); y += 4) {
+            for (int x = 0; x < a.width(); x += 4, ++count) {
+                const QRgb p = a.pixel(x, y), q = b.pixel(x, y);
+                sum += std::abs(qRed(p) - qRed(q)) + std::abs(qGreen(p) - qGreen(q)) + std::abs(qBlue(p) - qBlue(q));
+            }
+        }
+        return sum / (3.0 * count);
+    };
+    auto editAt = [&](double strength) {
+        aiOptions->setEditStrength(strength);
+        words->setPlainText(QStringLiteral("turn this into a snowy winter scene"));
+        QTest::keyClick(words, Qt::Key_Return);
+        QTest::qWait(50);
+        if (!QTest::qWaitFor([strip] { return !strip->isRunning(); }, 600000))
+            return QImage();
+        const QImage out = strip->currentImage();
+        strip->discard();
+        return out;
+    };
+    t.restart();
+    const QImage whole = editAt(1.0);
+    QVERIFY2(!whole.isNull(), "the edit at 100 % gave nothing");
+    const QImage partly = editAt(0.35);
+    QVERIFY2(!partly.isNull(), "the edit at 35 % gave nothing");
+    save(whole, QStringLiteral("klein_bar_edit_100.png"));
+    save(partly, QStringLiteral("klein_bar_edit_35.png"));
+    qInfo() << "edits in" << t.elapsed() << "ms; difference from the picture at 100 %" << differs(whole, fresh) << ", at 35 %" << differs(partly, fresh);
+    QVERIFY2(differs(partly, fresh) < differs(whole, fresh), "35 % did not keep more of the picture than 100 %");
+    aiOptions->setEditStrength(1.0);
+
+    // 5. An object by name (plan M18 §18.1): the detection models find the apple, klein replaces it.
+    const QString ort = qEnvironmentVariable("LUMEN_TEST_ORT");
+    const QString dino = qEnvironmentVariable("LUMEN_TEST_GDINO");
+    const QString sam = qEnvironmentVariable("LUMEN_TEST_SAM2");
+    if (!ort.isEmpty() && !dino.isEmpty() && !sam.isEmpty()) {
+        QString error;
+        auto rt = OnnxRuntime::load(ort, &error);
+        QVERIFY2(rt, qPrintable(error));
+        auto detector = GroundingDino::open(rt, dino + QStringLiteral("/onnx/model_int8.onnx"), dino + QStringLiteral("/vocab.txt"), &error);
+        QVERIFY2(detector, qPrintable(error));
+        auto segmenter = Sam2Segmenter::open(rt, sam + QStringLiteral("/onnx/vision_encoder_int8.onnx"),
+                                             sam + QStringLiteral("/onnx/prompt_encoder_mask_decoder_int8.onnx"), &error);
+        QVERIFY2(segmenter, qPrintable(error));
+        int found = 0;
+        t.restart();
+        const QImage area = findObjects(*detector, *segmenter, fresh, QStringLiteral("the apple"), &found, &error);
+        QVERIFY2(!area.isNull(), qPrintable(error));
+        save(area, QStringLiteral("klein_bar_apple_mask.png"));
+        const QRect box = img::maskBounds(area, 128);
+        qInfo() << "found" << found << "object(s) in" << t.restart() << "ms, box" << box;
+        QVERIFY2(box.width() > 80 && box.width() < fresh.width() * 0.8, "the area does not look like one apple");
+        doc::Document *replaced = studio.openImageAsDocument(fresh, QStringLiteral("Apple"));
+        QVERIFY(replaced);
+        replaced->applySelection(area, QStringLiteral("Select: the apple"));
+        QTRY_COMPARE(bar->plan().action, ui::PromptAction::EditArea);
+        words->setPlainText(QStringLiteral("replace the apple with a blue ceramic cup"));
+        QTest::keyClick(words, Qt::Key_Return);
+        QTest::qWait(50);
+        QTRY_VERIFY_WITH_TIMEOUT(!strip->isRunning(), 600000);
+        const QImage cup = strip->currentImage();
+        QVERIFY2(!cup.isNull(), "the replacement gave nothing");
+        save(cup, QStringLiteral("klein_bar_apple_replaced.png"));
+        // More blue than red where the apple was; nothing painted far outside it.
+        QImage over = fresh.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+        QPainter(&over).drawImage(0, 0, cup);
+        save(over, QStringLiteral("klein_bar_apple_replaced_over.png"));
+        double before = 0, after = 0;
+        int inside = 0, outsidePainted = 0;
+        const QRect reach = box.adjusted(-60, -60, 60, 60);
+        for (int y = 0; y < area.height(); y += 2) {
+            for (int x = 0; x < area.width(); x += 2) {
+                if (qGray(area.pixel(x, y)) > 200) {
+                    before += qBlue(fresh.pixel(x, y)) - qRed(fresh.pixel(x, y));
+                    after += qBlue(over.pixel(x, y)) - qRed(over.pixel(x, y));
+                    ++inside;
+                } else if (!reach.contains(x, y) && qAlpha(cup.pixel(x, y)) > 0) {
+                    ++outsidePainted;
+                }
+            }
+        }
+        qInfo() << "replaced in" << t.elapsed() << "ms; blue minus red in the area" << before / inside << "->" << after / inside
+                << "; painted outside" << outsidePainted;
+        QVERIFY2(after > before + 30, "the area did not turn blue");
+        QCOMPARE(outsidePainted, 0);
+        strip->discard();
+    } else {
+        qInfo() << "objects by name not checked: LUMEN_TEST_ORT, LUMEN_TEST_GDINO and LUMEN_TEST_SAM2 are not set";
+    }
+
+    // 6. A LoRA from the picker (plan M18 §18.3): one made for this model changes the same seed's image.
+    if (!loraDir.isEmpty()) {
+        ui::LoraPicker *picker = bar->loraPicker();
+        doc::Document *withLora = studio.newDocument(QSize(1024, 768), QStringLiteral("LoRA"));
+        QVERIFY(withLora);
+        QTRY_COMPARE(bar->plan().action, ui::PromptAction::NewImage);
+        bar->showOptions();
+        QTRY_VERIFY_WITH_TIMEOUT(!picker->listing().loras.isEmpty() || !picker->listing().problem.isEmpty(), 60000);
+        bar->optionsPopup()->hide();
+        const QRegularExpression wanted(qEnvironmentVariable("LUMEN_LIVE_KLEIN_LORA", QStringLiteral(".")), QRegularExpression::CaseInsensitiveOption);
+        std::optional<ui::LoraChoice> choice;
+        for (const ui::LoraChoice &c : picker->listing().loras) {
+            qInfo().noquote() << "LoRA" << c.name << (c.mismatch.isEmpty() ? QStringLiteral("fits") : QStringLiteral("does not fit"));
+            if (!choice && c.mismatch.isEmpty() && wanted.match(c.name).hasMatch())
+                choice = c;
+        }
+        QVERIFY2(choice, "no LoRA in the folder fits this model");
+        auto newImage = [&] {
+            words->setPlainText(QStringLiteral("a red apple on a wooden table by a window, soft morning light, photo"));
+            QTest::keyClick(words, Qt::Key_Return);
+            QTest::qWait(50);
+            if (!QTest::qWaitFor([strip] { return !strip->isRunning(); }, 600000))
+                return QImage();
+            const QImage out = strip->currentImage();
+            strip->discard();
+            return out;
+        };
+        const QImage plain = newImage();
+        QVERIFY(!plain.isNull());
+        ui::ChosenLora chosen;
+        chosen.name = choice->name;
+        chosen.path = choice->path;
+        chosen.file = choice->file;
+        chosen.triggerWords = choice->info.triggerWords;
+        chosen.weight = 1.0;
+        aiOptions->setLoras(klein->instanceId(), {chosen});
+        t.restart();
+        const QImage styled = newImage();
+        aiOptions->setLoras(klein->instanceId(), {});
+        QVERIFY2(!styled.isNull(), "the image with the LoRA gave nothing");
+        save(plain, QStringLiteral("klein_bar_lora_without.png"));
+        save(styled, QStringLiteral("klein_bar_lora_with.png"));
+        qInfo().noquote() << "LoRA" << choice->name << "in" << t.elapsed() << "ms; difference from the same seed without it" << differs(styled, plain);
+        QVERIFY2(differs(styled, plain) > 1.0, "the LoRA changed nothing");
+    }
+    aiOptions->setSeed(-1);
+
     for (const QString &line : servers->log(profile.id)) {
-        if (line.contains(QLatin1String("sampling completed")) || line.contains(QLatin1String("[E]")))
+        if (line.contains(QLatin1String("sampling completed")) || line.contains(QLatin1String("[E]")) || line.contains(QLatin1String("lora"), Qt::CaseInsensitive))
             qInfo().noquote() << "sd:" << line.trimmed();
     }
     servers->stop(profile.id);

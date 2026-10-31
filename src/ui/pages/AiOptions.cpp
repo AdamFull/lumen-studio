@@ -17,6 +17,7 @@ namespace lumen::ui {
 namespace {
 const QString kVariantsKey = QStringLiteral("editor/ai/variants");
 const QString kLiteralKey = QStringLiteral("editor/ai/literal");
+const QString kEditStrengthKey = QStringLiteral("editor/ai/editStrength");
 // {engine id: [ChosenLora…]} as JSON.
 const QString kLorasKey = QStringLiteral("editor/ai/loras");
 // {RunSettingsSpec::key: RunSettings} as JSON.
@@ -59,6 +60,7 @@ AiOptions::AiOptions(QObject *parent)
 {
     m_variants = std::clamp(Settings::instance().value(kVariantsKey, m_variants).toInt(), 1, kMaxVariants);
     m_literalWords = Settings::instance().value(kLiteralKey, false).toBool();
+    m_editStrength = std::clamp(Settings::instance().value(kEditStrengthKey, 1.0).toDouble(), 0.05, 1.0);
     const QJsonObject saved = QJsonDocument::fromJson(Settings::instance().value(kLorasKey).toByteArray()).object();
     for (auto it = saved.begin(); it != saved.end(); ++it) {
         QList<ChosenLora> list;
@@ -192,6 +194,13 @@ void AiOptions::followSettings(const ai::ProviderRegistry *registry)
 void AiOptions::setRegionStrength(double strength)
 {
     set(m_regionStrength, std::clamp(strength, 0.05, 1.0));
+}
+
+void AiOptions::setEditStrength(double strength)
+{
+    const double value = std::clamp(strength, 0.05, 1.0);
+    Settings::instance().setValue(kEditStrengthKey, value);
+    set(m_editStrength, value);
 }
 
 void AiOptions::setVariationStrength(double strength)
