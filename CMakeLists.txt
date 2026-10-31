@@ -68,10 +68,30 @@ set(CPACK_NSIS_PACKAGE_NAME "Lumen Studio ${PROJECT_VERSION}")
 set(CPACK_NSIS_MUI_ICON "${CMAKE_CURRENT_SOURCE_DIR}/resources/app/lumen.ico")
 set(CPACK_NSIS_MUI_UNIICON "${CMAKE_CURRENT_SOURCE_DIR}/resources/app/lumen.ico")
 set(CPACK_NSIS_INSTALLED_ICON_NAME "LumenStudio.exe")
-set(CPACK_NSIS_MUI_FINISHPAGE_RUN "LumenStudio.exe")
+# No "Run" on the last page: started by the elevated installer, the program would run as
+# administrator, where Windows blocks dropping files on it from Explorer.
+# The executable is at the top of the install folder (CPack assumes bin\ for the shortcuts).
+set(CPACK_NSIS_EXECUTABLES_DIRECTORY ".")
+# Without a licence of its own, no page: CPack would show its placeholder text.
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
+    set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
+else()
+    set(CPACK_NSIS_IGNORE_LICENSE_PAGE ON)
+endif()
 set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL ON)
 set(CPACK_NSIS_CREATE_ICONS_EXTRA "CreateShortCut '$DESKTOP\\\\Lumen Studio.lnk' '$INSTDIR\\\\LumenStudio.exe'")
 set(CPACK_NSIS_DELETE_ICONS_EXTRA "Delete '$DESKTOP\\\\Lumen Studio.lnk'")
+# Double-clicking a project opens it. Uninstalling leaves the user's data and models in place.
+set(CPACK_NSIS_EXTRA_INSTALL_COMMANDS "
+    WriteRegStr HKCR '.lumen' '' 'LumenStudio.Project'
+    WriteRegStr HKCR 'LumenStudio.Project' '' 'Lumen Studio project'
+    WriteRegStr HKCR 'LumenStudio.Project\\\\DefaultIcon' '' '$INSTDIR\\\\LumenStudio.exe,0'
+    WriteRegStr HKCR 'LumenStudio.Project\\\\shell\\\\open\\\\command' '' '\\\"$INSTDIR\\\\LumenStudio.exe\\\" \\\"%1\\\"'
+")
+set(CPACK_NSIS_EXTRA_UNINSTALL_COMMANDS "
+    DeleteRegKey HKCR '.lumen'
+    DeleteRegKey HKCR 'LumenStudio.Project'
+")
 set(CPACK_ARCHIVE_COMPONENT_INSTALL OFF)
 include(CPack)
 

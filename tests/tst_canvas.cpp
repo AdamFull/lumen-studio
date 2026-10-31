@@ -186,6 +186,7 @@ private slots:
     void shortcutRegistry();
     void shortcutsHaveNoConflicts();
     void themeContrast();
+    void themeAnyFolderName();
     void accessibleNames();
     void fitLabelWraps();
     void criticRetriesShot();
@@ -557,6 +558,30 @@ void TestCanvas::shortcutsHaveNoConflicts()
     // The Generate page's Ctrl+Enter went with it; in the editor it runs the prompt bar.
     QCOMPARE(sc.keys(QStringLiteral("editor.ai-run")), QList<QKeySequence>{QKeySequence(QStringLiteral("Ctrl+Return"))});
     QVERIFY(!sc.contains(QStringLiteral("app.context-bar"))); // the floating toolbar went with the prompt bar
+}
+
+// The stylesheet names icon files in the user's cache folder, whatever the user is called. One
+// character it cannot parse would lose the styling of the whole program.
+void TestCanvas::themeAnyFolderName()
+{
+    const QString before = qApp->styleSheet();
+    const QString themeBefore = Theme::instance().name();
+    auto restore = qScopeGuard([&] {
+        Theme::instance().apply(*qApp, themeBefore);
+        qApp->setStyleSheet(before);
+    });
+    Theme::instance().apply(*qApp, QStringLiteral("dark"));
+    const QString css = qApp->styleSheet();
+    QVERIFY(css.contains(paths::cache()));
+
+    QTest::failOnWarning(QRegularExpression(QStringLiteral("Could not parse")));
+    for (const QString &name : {QStringLiteral("John Smith"), QStringLiteral("O'Brien (home)"),
+                                QStringLiteral("J\u00FCrgen M\u00FCller"), QStringLiteral("\u0410\u043D\u043D\u0430"),
+                                QStringLiteral("a,b;c{d}"), QStringLiteral("Tom & Jerry #1")}) {
+        qApp->setStyleSheet(QString(css).replace(paths::cache(), QStringLiteral("C:/Users/") + name + QStringLiteral("/cache")));
+        QCheckBox box; // a stylesheet is parsed when the first widget needs it
+        box.ensurePolished();
+    }
 }
 
 void TestCanvas::themeContrast()

@@ -252,18 +252,18 @@ QLineEdit:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled, QComboBox:disabl
 QPlainTextEdit, QTextEdit { padding: 6px; }
 QSpinBox, QDoubleSpinBox { padding-right: 18px; }
 QSpinBox::up-button, QDoubleSpinBox::up-button, QSpinBox::down-button, QDoubleSpinBox::down-button { width: 16px; border: none; background: transparent; }
-QSpinBox::up-arrow, QDoubleSpinBox::up-arrow { image: url(@upArrow); width: 10px; height: 10px; }
-QSpinBox::down-arrow, QDoubleSpinBox::down-arrow { image: url(@downArrow); width: 10px; height: 10px; }
+QSpinBox::up-arrow, QDoubleSpinBox::up-arrow { image: url("@upArrow"); width: 10px; height: 10px; }
+QSpinBox::down-arrow, QDoubleSpinBox::down-arrow { image: url("@downArrow"); width: 10px; height: 10px; }
 QComboBox { padding-right: 24px; }
 QComboBox::drop-down { border: none; width: 22px; }
-QComboBox::down-arrow { image: url(@downArrow); width: 12px; height: 12px; }
+QComboBox::down-arrow { image: url("@downArrow"); width: 12px; height: 12px; }
 QComboBox QAbstractItemView { background: @raised; border: 1px solid @borderStrong; border-radius: 8px; padding: 4px; selection-background-color: @accentSoft; selection-color: @text; }
 
 QCheckBox, QRadioButton { spacing: 7px; background: transparent; }
 QCheckBox::indicator, QRadioButton::indicator { width: 15px; height: 15px; border: 1px solid @borderStrong; background: @input; }
 QCheckBox::indicator { border-radius: 4px; }
 QRadioButton::indicator { border-radius: 8px; }
-QCheckBox::indicator:checked { background: @accent; border-color: @accent; image: url(@check); }
+QCheckBox::indicator:checked { background: @accent; border-color: @accent; image: url("@check"); }
 QRadioButton::indicator:checked { border-color: @accent; background: qradialgradient(cx: 0.5, cy: 0.5, radius: 0.5, fx: 0.5, fy: 0.5, stop: 0 @accent, stop: 0.5 @accent, stop: 0.62 @input, stop: 1 @input); }
 
 QSlider::groove:horizontal { height: 4px; background: @border; border-radius: 2px; }
@@ -287,7 +287,7 @@ QTabBar::tab:selected { color: @text; border-bottom-color: @accent; }
 QTabBar::tab:hover:!selected { color: @text; }
 QTabBar[role="documents"]::tab { background: @panel; border: 1px solid @border; border-bottom: none; border-top-left-radius: 7px; border-top-right-radius: 7px; padding: 6px 10px; }
 QTabBar[role="documents"]::tab:selected { background: @surface; color: @text; border-color: @borderStrong; }
-QTabBar::close-button { image: url(@close); subcontrol-position: right; }
+QTabBar::close-button { image: url("@close"); subcontrol-position: right; }
 QTabBar::close-button:hover { background: @raised; border-radius: 4px; }
 
 QSplitter::handle { background: @border; }

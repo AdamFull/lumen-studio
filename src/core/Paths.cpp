@@ -16,7 +16,7 @@ QString overrideRoot()
     static const QString root = [] {
         const QString env = qEnvironmentVariable("LUMEN_DATA_DIR");
         if (!env.isEmpty())
-            return env;
+            return QDir::fromNativeSeparators(env);
         if (QCoreApplication::instance() && isPortable())
             return QCoreApplication::applicationDirPath() + QStringLiteral("/userdata");
         return QString();

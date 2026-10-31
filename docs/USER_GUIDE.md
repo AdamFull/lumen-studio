@@ -31,7 +31,8 @@ Contents:
 ## 1. Installing
 
 * **Installer** (`LumenStudio-<version>-win64.exe`): installs to *Program Files* and adds Start-menu
-  and desktop shortcuts. Settings and data are stored per user (§14).
+  and desktop shortcuts, and double-clicking a `.lumen` project opens it. Settings and data are
+  stored per user (§14), and uninstalling leaves them and your models in place.
 * **Portable ZIP** (`LumenStudio-<version>-win64-portable.zip`): unzip anywhere (for example a USB
   drive) and run `LumenStudio.exe`. The `portable.txt` file next to the program keeps settings,
   logs, projects, models and filters in the `userdata` folder beside it. Delete `portable.txt` to use

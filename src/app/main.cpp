@@ -61,6 +61,8 @@ int main(int argc, char *argv[])
                                  QStringLiteral("path"));
     QCommandLineOption toolOpt(QStringLiteral("tool"), QStringLiteral("Editor tool to select (e.g. transform, brush, crop)."), QStringLiteral("id"));
     parser.addOptions({projectOpt, screenshotOpt, pageOpt, imageOpt, sizeOpt, sliceOpt, sliceStepOpt, cubismOpt, toolOpt});
+    // What Windows passes for a double-clicked file.
+    parser.addPositionalArgument(QStringLiteral("file"), QStringLiteral("A project (.lumen) or an image to open."), QStringLiteral("[file]"));
     parser.process(app);
 
     paths::ensure();
@@ -113,7 +115,15 @@ int main(int argc, char *argv[])
     ui::Studio studio;
     ui::MainWindow window(&studio);
 
-    const QString projectPath = parser.value(projectOpt);
+    QString projectPath = parser.value(projectOpt);
+    QString openedFile;
+    if (const QStringList files = parser.positionalArguments(); !files.isEmpty()) {
+        const QFileInfo file(files.first());
+        if (file.suffix().compare(QStringLiteral("lumen"), Qt::CaseInsensitive) == 0)
+            projectPath = file.absoluteFilePath();
+        else
+            openedFile = file.absoluteFilePath();
+    }
     if (!projectPath.isEmpty())
         studio.openProject(projectPath);
     else
@@ -125,6 +135,8 @@ int main(int argc, char *argv[])
         QTimer::singleShot(0, &window, [&window, page] { window.showPage(page); });
     if (parser.isSet(imageOpt))
         studio.openFile(QFileInfo(parser.value(imageOpt)).absoluteFilePath());
+    if (!openedFile.isEmpty())
+        studio.openFile(openedFile);
     if (parser.isSet(toolOpt))
         window.editor()->selectTool(parser.value(toolOpt));
     // Both are the Live2D parts plugin's: say so instead of doing nothing (or importing the file).
