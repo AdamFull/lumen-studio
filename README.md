@@ -80,7 +80,9 @@ set it writes `layout/layout-report.md` (`layout-150/` at 150 %) and a PNG of ev
 Qt and the MinGW runtime into `dist/LumenStudio-<version>-win64/`, checks that every DLL is there,
 starts the packaged program without Qt on PATH, and writes the NSIS installer, the portable ZIP and
 their SHA-256 checksums. The installer needs NSIS (`winget install NSIS.NSIS`); `--no-installer`
-skips it. The version is `project(VERSION …)` in `CMakeLists.txt`. Nothing is signed; without a code
+skips it. `scripts/package.ps1` does the same in PowerShell, without Git Bash
+(`powershell -ExecutionPolicy Bypass -File scripts\package.ps1`, `-NoInstaller` to skip the
+installer). The version is `project(VERSION …)` in `CMakeLists.txt`. Nothing is signed; without a code
 signing certificate, Windows SmartScreen warns about the download. `scripts/make-icon.py`
 regenerates the application icon. What is shipped under which licence is in
 [docs/THIRD_PARTY_NOTICES.md](docs/THIRD_PARTY_NOTICES.md).
