@@ -43,22 +43,7 @@ param(
 Set-StrictMode -Version 2
 $ErrorActionPreference = 'Stop'
 
-function Say([string]$Text) { Write-Host "`n== $Text" }
-function Die([string]$Text) { throw $Text }
-
-# Runs a program and stops when it fails. Its errors go to the console; in Windows PowerShell a
-# program that merely writes to stderr must not count as a failed command.
-function Invoke-Tool([string]$Exe, [string[]]$Arguments) {
-    $ErrorActionPreference = 'Continue'
-    & $Exe @Arguments
-    if ($LASTEXITCODE -ne 0) { Die "$(Split-Path -Leaf $Exe) failed (exit code $LASTEXITCODE)." }
-}
-
-function Find-Tool([string]$Name) {
-    $found = Get-Command $Name -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-    if (-not $found) { Die "$Name is not on PATH: adjust the tool folders in scripts\package.ps1." }
-    return $found.Source
-}
+. (Join-Path $PSScriptRoot 'toolchain.ps1')
 
 $root = Split-Path -Parent $PSScriptRoot
 $dist = Join-Path $root 'dist'
@@ -67,17 +52,12 @@ if (-not $BuildDir) {
 } elseif (-not [IO.Path]::IsPathRooted($BuildDir)) {
     $BuildDir = Join-Path (Get-Location).Path $BuildDir
 }
-if (-not $QtRoot) { $QtRoot = $env:QT_ROOT }
-if (-not $QtRoot) { $QtRoot = 'C:\Qt\6.9.2\mingw_64' }
+$QtRoot = Get-QtRoot $QtRoot
 
 $pathBefore = $env:PATH
 $exitCode = 0
 try {
-    # The toolchain: where it is on this machine (adjust to yours, like scripts/env.sh).
-    $vsTools = 'C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake'
-    $toolDirs = @('C:\Qt\Tools\mingw1310_64\bin', (Join-Path $QtRoot 'bin'),
-                  "$vsTools\CMake\bin", "$vsTools\Ninja", 'C:\Qt\Tools\CMake_64\bin', 'C:\Qt\Tools\Ninja')
-    $env:PATH = (@($toolDirs | Where-Object { Test-Path $_ }) + $env:PATH) -join ';'
+    Use-Toolchain $QtRoot
 
     $cmake = Find-Tool 'cmake'
     # Next to cmake: a "cpack" found on PATH can be Chocolatey's, another program.

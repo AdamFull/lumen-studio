@@ -82,7 +82,9 @@ starts the packaged program without Qt on PATH, and writes the NSIS installer, t
 their SHA-256 checksums. The installer needs NSIS (`winget install NSIS.NSIS`); `--no-installer`
 skips it. `scripts/package.ps1` does the same in PowerShell, without Git Bash
 (`powershell -ExecutionPolicy Bypass -File scripts\package.ps1`, `-NoInstaller` to skip the
-installer). The version is `project(VERSION …)` in `CMakeLists.txt`. Nothing is signed; without a code
+installer). `scripts/release.ps1 -Version 0.2.0` makes a release: it runs the tests, packages, and
+creates a draft on GitHub with the notes from `CHANGELOG.md`; users get it when you press Publish.
+The version is `project(VERSION …)` in `CMakeLists.txt`. Nothing is signed; without a code
 signing certificate, Windows SmartScreen warns about the download. `scripts/make-icon.py`
 regenerates the application icon. What is shipped under which licence is in
 [docs/THIRD_PARTY_NOTICES.md](docs/THIRD_PARTY_NOTICES.md).
