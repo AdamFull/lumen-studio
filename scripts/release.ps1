@@ -126,7 +126,7 @@ try {
     Write-Host "On main, in step with origin. Last release: $(if ($last) { $last } else { 'none' })."
 
     Say 'Release notes'
-    $text = if (Test-Path $changelog) { [IO.File]::ReadAllText($changelog) } else { "# Changelog`n" }
+    $text = if (Test-Path $changelog) { [IO.File]::ReadAllText($changelog) } else { "# Changelog`n`n" }
     $notes = Get-NotesSection $text $Version
     if (-not $notes) {
         $draft = New-NotesDraft $last
