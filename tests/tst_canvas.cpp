@@ -1977,8 +1977,11 @@ void TestCanvas::loraEvaluation()
     QTRY_VERIFY(studio.models()->entry(lora.file).has_value());
     QCOMPARE(studio.models()->entry(lora.file)->source.value(QStringLiteral("epoch")).toInt(), 3);
 
-    // A stopped test is not "finished": no recommendation to apply.
+    // A row can be deselected, and stays so.
     table->clearSelection();
+    QVERIFY(!table->selectionModel()->hasSelection());
+
+    // A stopped test is not "finished": no recommendation to apply.
     QTRY_VERIFY(test->isEnabled());
     test->click();
     QVERIFY(LoraEvaluation::running(characterId));

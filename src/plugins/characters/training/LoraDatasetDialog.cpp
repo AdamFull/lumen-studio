@@ -865,7 +865,8 @@ void LoraDatasetDialog::refreshEvaluation()
         if (!seen)
             rows.append({c.epoch, c.weight});
     }
-    const int selected = m_evalTable->currentRow();
+    // The table keeps a current row after its selection is cleared: only a selected row comes back.
+    const int selected = m_evalTable->selectionModel()->hasSelection() ? m_evalTable->currentRow() : -1;
     {
         QSignalBlocker block(m_evalTable);
         m_evalTable->setVisible(!rows.isEmpty());
