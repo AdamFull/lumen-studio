@@ -826,6 +826,13 @@ QWidget *SettingsDialog::buildGeneralTab()
     safe->setChecked(s.value(QStringLiteral("generation/safeContent"), false).toBool());
     connect(safe, &QCheckBox::toggled, this, [](bool v) { Settings::instance().setValue(QStringLiteral("generation/safeContent"), v); });
     form->addRow(QString(), safe);
+    auto *updates = new QCheckBox(tr("Check for updates at the start, once a day"), w);
+    updates->setObjectName(QStringLiteral("checkUpdatesSetting"));
+    updates->setToolTip(tr("Asks GitHub for the newest release, which shows GitHub your IP address and nothing else. "
+                           "Nothing is installed without a click. Help → Check for updates always works."));
+    updates->setChecked(s.value(QStringLiteral("updates/check"), true).toBool());
+    connect(updates, &QCheckBox::toggled, this, [](bool v) { Settings::instance().setValue(QStringLiteral("updates/check"), v); });
+    form->addRow(QString(), updates);
     return w;
 }
 

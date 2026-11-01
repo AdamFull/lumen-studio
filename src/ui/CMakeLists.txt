@@ -35,6 +35,7 @@ add_library(lumen_ui STATIC
     pages/StartScreen.h pages/StartScreen.cpp
     dialogs/NewFromPromptDialog.h dialogs/NewFromPromptDialog.cpp
     dialogs/PlanChangeDialog.h dialogs/PlanChangeDialog.cpp
+    dialogs/UpdateDialog.h dialogs/UpdateDialog.cpp
     dialogs/SelectByDescriptionDialog.h dialogs/SelectByDescriptionDialog.cpp
     dialogs/NewCanvasDialog.h dialogs/NewCanvasDialog.cpp
     dialogs/ImageSizeDialog.h dialogs/ImageSizeDialog.cpp

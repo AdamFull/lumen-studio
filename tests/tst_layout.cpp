@@ -45,6 +45,7 @@
 #include "ui/dialogs/PoseEditDialog.h"
 #include "ui/dialogs/SettingsDialog.h"
 #include "ui/dialogs/SetupWizard.h"
+#include "ui/dialogs/UpdateDialog.h"
 #include "ui/dialogs/UserGuideDialog.h"
 #include "ui/filters/FilterCatalog.h"
 #include "ui/filters/FiltersPanel.h"
@@ -1008,6 +1009,16 @@ void TestLayout::dialogs()
         plan.note = QStringLiteral("Select the red scarf and paint it blue, keeping its folds.");
         d.showPlan(plan);
         m_auditor.auditDialog(&d, QStringLiteral("Plan this change dialog"));
+    }
+    {
+        runtime::AppRelease release;
+        release.version = QStringLiteral("12.34.5");
+        release.notes = QStringLiteral("## What is new\n\n- Two characters in one image\n- Say what to change, Lumen finds it\n- A long line about "
+                                       "something that needs more room than one line has, to see that it wraps\n");
+        UpdateDialog update(release, true);
+        m_auditor.auditDialog(&update, QStringLiteral("Update dialog"));
+        UpdateDialog page(release, false);
+        m_auditor.auditDialog(&page, QStringLiteral("Update dialog (portable)"));
     }
     {
         ImageSizeDialog image(ImageSizeDialog::Kind::Image, QSize(4032, 3024));

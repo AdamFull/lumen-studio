@@ -335,6 +335,7 @@ before ticking a milestone.
 - [x] i18n (Qt Linguist: `qt_add_translations`, embedded .qm under `:/i18n`, Qt's own translations deployed, language setting, German translation with `scripts/check-translations.py` validation; prompts sent to models are deliberately not translatable), accessibility names (application-wide naming of interactive widgets on polish; a test walks every page), high-contrast check (high-contrast theme following the Windows colours, "auto" theme, WCAG contrast tests for every theme; dark accent and light status colours adjusted)
 - [x] Packaging (windeployqt via the CMake deploy API, NSIS installer through CPack, portable ZIP with a `portable.txt` marker → data in `userdata/`, exe icon and version info), user guide (`docs/USER_GUIDE.md`)
 - [x] Shipping script (`scripts/package.sh`: translations check, release build, deploy, every DLL present, a start without Qt on PATH, portable ZIP, installer, checksums), `.lumen` file association and opening a file from the command line, licences of what is shipped (`docs/THIRD_PARTY_NOTICES.md`), the stylesheet survives any user name
+- [x] Releases on GitHub (`scripts/release.ps1`: tests, packages and a draft release with its notes from `CHANGELOG.md`; nothing reaches users before Publish) and updates in the app (`runtime/AppUpdate`, `ui/dialogs/UpdateDialog`: a daily check that can be turned off, the installer checked against GitHub's SHA-256 and run only after a clean quit; the portable version opens the download page)
 
 ### M11 — Character part slicing for Live2D
 

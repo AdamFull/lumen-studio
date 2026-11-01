@@ -15,6 +15,7 @@
 #include "net/HttpClient.h"
 #include "plugins/BuiltInPlugins.h"
 #include "runtime/AiSetup.h"
+#include "runtime/AppUpdate.h"
 #include "runtime/ModelHub.h"
 #include "runtime/ModelLibrary.h"
 #include "runtime/ModelPresets.h"
@@ -29,6 +30,7 @@
 #include "ui/dialogs/NewFromPromptDialog.h"
 #include "ui/dialogs/SettingsDialog.h"
 #include "ui/dialogs/SetupWizard.h"
+#include "ui/dialogs/UpdateDialog.h"
 #include "ui/ext/Extension.h"
 #include "ui/pages/AiOptions.h"
 #include "ui/pages/AiPanel.h"
@@ -53,6 +55,7 @@
 #include <QMenu>
 #include <QPainter>
 #include <QPlainTextEdit>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QRadioButton>
 #include <QStandardPaths>
@@ -218,6 +221,8 @@ private slots:
     void pluginOffers();
     void entryPoints();
     void firstStartToSelectionEdit();
+    void updateDownload();
+    void updateRunsOnlyAfterQuit();
 
 private:
     // Leaves the test data folder as it found it: no providers, servers, adopted programs, added
@@ -1494,6 +1499,118 @@ void TestSetup::firstStartToSelectionEdit()
         QVERIFY(!qobject_cast<SettingsDialog *>(w) || !w->isVisible());
     for (const runtime::ServerProfile &p : studio.servers()->profiles())
         studio.servers()->stop(p.id);
+}
+
+void TestSetup::updateDownload()
+{
+    const QByteArray setup(4096, 'x');
+    MockHttpServer server;
+    server.route("GET", QStringLiteral("/setup.exe"), [setup](const MockRequest &) {
+        MockResponse r;
+        r.contentType = "application/octet-stream";
+        r.body = setup;
+        return r;
+    });
+    runtime::AppRelease release;
+    release.version = QStringLiteral("9.0.0");
+    release.notes = QStringLiteral("- Something new");
+    release.installer = QUrl(server.baseUrl().toString() + QStringLiteral("/setup.exe"));
+    release.installerSize = setup.size();
+    release.installerSha256 = QString::fromLatin1(QCryptographicHash::hash(setup, QCryptographicHash::Sha256).toHex());
+    QVERIFY(release.canInstall());
+    auto guard = qScopeGuard([] { runtime::removeOldInstallers(); });
+
+    // A file that is not what GitHub says it should be is not kept, and nothing is offered to run.
+    {
+        runtime::AppRelease wrong = release;
+        wrong.installerSha256 = QString(64, u'0');
+        UpdateDialog d(wrong, true);
+        d.show();
+        d.findChild<QPushButton *>(QStringLiteral("updateNow"))->click();
+        auto *button = d.findChild<QPushButton *>(QStringLiteral("updateNow"));
+        QTRY_VERIFY_WITH_TIMEOUT(button->isEnabled(), 30000);
+        QVERIFY(d.isVisible());
+        QVERIFY(d.installerPath().isEmpty());
+        QVERIFY(d.findChild<QLabel *>(QStringLiteral("updateStatus"))->text().contains(QLatin1String("did not work")));
+        QVERIFY(!QFile::exists(QDir(runtime::appUpdateFolder()).filePath(QStringLiteral("LumenStudio-9.0.0-win64.exe"))));
+    }
+    // The right one is ready to run.
+    {
+        UpdateDialog d(release, true);
+        d.show();
+        d.findChild<QPushButton *>(QStringLiteral("updateNow"))->click();
+        QTRY_VERIFY_WITH_TIMEOUT(!d.installerPath().isEmpty(), 10000);
+        QCOMPARE(d.result(), int(QDialog::Accepted));
+        QFile file(d.installerPath());
+        QVERIFY(file.open(QIODevice::ReadOnly));
+        QCOMPARE(file.readAll(), setup);
+    }
+    // Skip says so; Later does not.
+    {
+        UpdateDialog d(release, true);
+        d.show();
+        d.findChild<QPushButton *>(QStringLiteral("updateSkip"))->click();
+        QVERIFY(d.skipped());
+        QCOMPARE(d.result(), int(QDialog::Rejected));
+        UpdateDialog later(release, true);
+        later.show();
+        later.findChild<QPushButton *>(QStringLiteral("updateLater"))->click();
+        QVERIFY(!later.skipped());
+    }
+    // The portable version only points at the page: nothing to download.
+    {
+        UpdateDialog d(release, false);
+        QCOMPARE(d.findChild<QPushButton *>(QStringLiteral("updateNow"))->text(), UpdateDialog::tr("Open download page"));
+    }
+}
+
+// Running the installer ends Lumen, so a quit that was cancelled must not run it, then or later.
+void TestSetup::updateRunsOnlyAfterQuit()
+{
+    Studio studio;
+    reset(studio);
+    Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
+    QStringList launched;
+    auto launcher = [&launched](const QString &path) {
+        launched << path;
+        return true;
+    };
+    const QString installer = QStringLiteral("C:/nowhere/LumenStudio-9.0.0-win64.exe");
+    {
+        MainWindow window(&studio);
+        window.setInstallerLauncher(launcher);
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+
+        // A running job asks first; answering No cancels the quit.
+        Job *job = studio.jobs()->submit(QStringLiteral("Busy"), QStringLiteral("test"), [](Job *j) { j->setCancelHandler([j] { j->reportCancelled(); }); });
+        QTRY_VERIFY(studio.jobs()->activeCount() > 0);
+        QTimer::singleShot(100, &window, [] {
+            if (auto *box = qobject_cast<QMessageBox *>(QApplication::activeModalWidget()))
+                box->button(QMessageBox::No)->click();
+        });
+        window.installUpdateAndQuit(installer);
+        QTRY_VERIFY(!QApplication::activeModalWidget());
+        QVERIFY(window.isVisible());
+        QVERIFY(launched.isEmpty());
+        job->cancel();
+        QTRY_COMPARE(studio.jobs()->activeCount(), 0);
+
+        // An ordinary quit later runs nothing either.
+        window.close();
+        QTRY_VERIFY_WITH_TIMEOUT(!window.isVisible(), 10000);
+        QVERIFY(launched.isEmpty());
+    }
+    reset(studio);
+    {
+        MainWindow window(&studio);
+        window.setInstallerLauncher(launcher);
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        window.installUpdateAndQuit(installer);
+        QTRY_VERIFY_WITH_TIMEOUT(!window.isVisible(), 10000);
+        QCOMPARE(launched, QStringList{installer}); // once, when all is saved
+    }
 }
 
 QTEST_MAIN(TestSetup)

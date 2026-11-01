@@ -5,6 +5,7 @@
 #include "core/JobQueue.h"
 #include "core/Paths.h"
 #include "net/HttpClient.h"
+#include "runtime/AppUpdate.h"
 #include "runtime/Catalog.h"
 #include "runtime/Components.h"
 #include "runtime/Download.h"
@@ -255,6 +256,9 @@ private slots:
     void trainerAdopt();
     void trainerInstall();
     void loraTraining();
+    void appUpdateVersions();
+    void appUpdateRelease();
+    void appUpdateCheck();
 
 private:
     QTemporaryDir m_tmp;
@@ -4149,6 +4153,99 @@ void TestRuntime::presetProfiles()
     ServerProfile vaeAsModel;
     vaeAsModel.options = {{QStringLiteral("model"), native(flux2Vae)}};
     QVERIFY(messages(checkSdProfile(&lib, vaeAsModel)).first().contains(QLatin1String("not an image model")));
+}
+
+void TestRuntime::appUpdateVersions()
+{
+    QVERIFY(isNewerVersion(QStringLiteral("0.2.0"), QStringLiteral("0.1.0")));
+    QVERIFY(isNewerVersion(QStringLiteral("0.10.0"), QStringLiteral("0.9.1"))); // numbers, not text
+    QVERIFY(isNewerVersion(QStringLiteral("1.0.0"), QStringLiteral("0.99.99")));
+    QVERIFY(!isNewerVersion(QStringLiteral("0.1.0"), QStringLiteral("0.1.0")));
+    QVERIFY(!isNewerVersion(QStringLiteral("0.1.0"), QStringLiteral("0.2.0")));
+    QVERIFY(!isNewerVersion(QStringLiteral("nightly"), QStringLiteral("0.1.0")));
+    QVERIFY(!isNewerVersion(QString(), QStringLiteral("0.1.0")));
+    QVERIFY(!isNewerVersion(QStringLiteral("0.2.0-beta"), QStringLiteral("0.1.0")));
+}
+
+void TestRuntime::appUpdateRelease()
+{
+    const QByteArray digest = "sha256:ABCDEF0123";
+    auto release = [&](const QByteArray &tag, const QByteArray &name, const QByteArray &url, const QByteArray &sum) {
+        return QByteArray(R"({"tag_name":")") + tag + R"(","body":"- New things","html_url":"https://github.com/r/releases/tag/)" + tag
+               + R"(","assets":[{"name":"LumenStudio-0.2.0-win64-portable.zip","browser_download_url":"https://github.com/r/x.zip","size":5,"digest":"sha256:aa"},)"
+               + R"({"name":")" + name + R"(","browser_download_url":")" + url + R"(","size":1234,"digest":")" + sum + R"("}]})";
+    };
+    const QByteArray name = "LumenStudio-0.2.0-win64.exe";
+    const QByteArray https = "https://github.com/r/setup.exe";
+
+    AppRelease r = parseAppRelease(release("v0.2.0", name, https, digest));
+    QVERIFY(r.ok());
+    QCOMPARE(r.version, QStringLiteral("0.2.0"));
+    QCOMPARE(r.notes, QStringLiteral("- New things"));
+    QCOMPARE(r.page, QUrl(QStringLiteral("https://github.com/r/releases/tag/v0.2.0")));
+    QVERIFY(r.canInstall());
+    QCOMPARE(r.installer, QUrl(QString::fromUtf8(https))); // the installer, not the ZIP
+    QCOMPARE(r.installerSize, qint64(1234));
+    QCOMPARE(r.installerSha256, QStringLiteral("abcdef0123"));
+
+    // What could not be checked or comes the wrong way is never run: only the page is offered.
+    r = parseAppRelease(release("v0.2.0", name, https, ""));
+    QVERIFY(r.ok() && !r.canInstall());
+    r = parseAppRelease(release("v0.2.0", name, https, "md5:abc"));
+    QVERIFY(r.ok() && !r.canInstall());
+    r = parseAppRelease(release("v0.2.0", name, "http://github.com/r/setup.exe", digest));
+    QVERIFY(r.ok() && !r.canInstall());
+    r = parseAppRelease(release("v0.2.0", "Other-0.2.0-win64.exe", https, digest));
+    QVERIFY(r.ok() && !r.canInstall());
+    r = parseAppRelease(release("v0.2.0", "LumenStudio-0.1.0-win64.exe", https, digest)); // another version's file
+    QVERIFY(r.ok() && !r.canInstall());
+    QVERIFY(parseAppRelease(release("v0.2.0", name, "http://127.0.0.1/setup.exe", digest), false).canInstall());
+
+    QVERIFY(!parseAppRelease("not json").ok());
+    QVERIFY(!parseAppRelease(release("nightly", name, https, digest)).ok());
+}
+
+void TestRuntime::appUpdateCheck()
+{
+    MockHttpServer github;
+    int status = 404;
+    QByteArray body;
+    github.route("GET", QStringLiteral("/repos/AdamFull/lumen-studio/releases/latest"), [&](const MockRequest &) {
+        MockResponse r;
+        r.status = status;
+        r.contentType = "application/json";
+        r.body = body;
+        return r;
+    });
+    net::HttpClient http;
+    AppUpdateCheck check(&http);
+    check.setApiBase(github.baseUrl());
+    auto latest = [&]() -> AppRelease {
+        QFuture<AppRelease> f = check.latest();
+        if (!QTest::qWaitFor([&] { return f.isFinished(); }, 10000))
+            return {};
+        return f.result();
+    };
+
+    // Nothing published yet is no failure.
+    AppRelease r = latest();
+    QVERIFY(r.ok());
+    QVERIFY(r.version.isEmpty());
+    QVERIFY(!isNewerVersion(r.version, QStringLiteral("0.1.0")));
+
+    status = 200;
+    body = R"({"tag_name":"v9.0.0","body":"Notes","html_url":"https://github.com/x","assets":[{"name":"LumenStudio-9.0.0-win64.exe",)"
+           R"("browser_download_url":"http://127.0.0.1/setup.exe","size":3,"digest":"sha256:ff"}]})";
+    r = latest();
+    QVERIFY(r.ok());
+    QCOMPARE(r.version, QStringLiteral("9.0.0"));
+    QVERIFY(r.canInstall()); // a local server may use plain HTTP
+
+    status = 403;
+    body = "{}";
+    r = latest();
+    QVERIFY(!r.ok());
+    QVERIFY(r.error.contains(QLatin1String("limit")));
 }
 
 QTEST_MAIN(TestRuntime)

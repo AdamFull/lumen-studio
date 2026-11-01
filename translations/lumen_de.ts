@@ -2,6 +2,25 @@
 <!DOCTYPE TS>
 <TS version="2.1" language="de_DE">
 <context>
+    <name>AppUpdate</name>
+    <message>
+        <location filename="../src/runtime/AppUpdate.cpp" line="+47"/>
+        <location line="+8"/>
+        <source>Unexpected answer from GitHub.</source>
+        <translation>Unerwartete Antwort von GitHub.</translation>
+    </message>
+    <message>
+        <location line="+75"/>
+        <source>GitHub&apos;s hourly request limit is reached. Try again later.</source>
+        <translation>Das stündliche Anfragelimit von GitHub ist erreicht. Versuchen Sie es später erneut.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Cannot reach GitHub: %1</source>
+        <translation>GitHub ist nicht erreichbar: %1</translation>
+    </message>
+</context>
+<context>
     <name>QObject</name>
     <message>
         <location filename="../src/ai/Director.cpp" line="+63"/>
@@ -265,7 +284,7 @@
         <translation>Das Plugin „Live2D-Teile“ ist ausgeschaltet, daher bewirken --slice und --cubism nichts. Schalten Sie es unter Werkzeuge → Plugins… ein und starten Sie Lumen neu.</translation>
     </message>
     <message>
-        <location line="+49"/>
+        <location line="+50"/>
         <source>Lumen Studio did not close properly last time. Open documents were restored from the last autosave; a crash report may be in the log folder (Help → Open log folder).</source>
         <translation>Lumen Studio wurde beim letzten Mal nicht ordnungsgemäß beendet. Geöffnete Dokumente wurden aus der letzten automatischen Sicherung wiederhergestellt; ein Absturzbericht befindet sich möglicherweise im Protokollordner (Hilfe → Protokollordner öffnen).</translation>
     </message>
@@ -6772,12 +6791,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     <message>
         <location line="+1"/>
         <location line="+446"/>
-        <location line="+326"/>
+        <location line="+328"/>
         <source>Detect pose</source>
         <translation>Pose erkennen</translation>
     </message>
     <message>
-        <location line="-712"/>
+        <location line="-714"/>
         <source>Left</source>
         <translation>Links</translation>
     </message>
@@ -6835,19 +6854,19 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     <message>
         <location line="-430"/>
         <location line="+446"/>
-        <location line="+309"/>
+        <location line="+311"/>
         <location line="+4"/>
         <source>Remove background</source>
         <translation>Hintergrund entfernen</translation>
     </message>
     <message>
-        <location line="-311"/>
-        <location line="+259"/>
+        <location line="-313"/>
+        <location line="+261"/>
         <source>Expand canvas</source>
         <translation>Arbeitsfläche erweitern</translation>
     </message>
     <message>
-        <location line="-203"/>
+        <location line="-205"/>
         <source>AI result: %1</source>
         <translation>KI-Ergebnis: %1</translation>
     </message>
@@ -7007,7 +7026,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+130"/>
-        <location line="+96"/>
+        <location line="+98"/>
         <source>Set up an image engine first: Help → Set up AI…</source>
         <translation>Richten Sie zuerst eine Bild-Engine ein: Hilfe → KI einrichten…</translation>
     </message>
@@ -12266,12 +12285,12 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         <translation>Einen Charakter für Live2D in Teile zerlegen</translation>
     </message>
     <message>
-        <location filename="../src/ui/MainWindow.cpp" line="+309"/>
+        <location filename="../src/ui/MainWindow.cpp" line="+319"/>
         <source>General</source>
         <translation>Allgemein</translation>
     </message>
     <message>
-        <location line="-26"/>
+        <location line="-35"/>
         <source>Safe for work is on: nudity and explicit content are kept out of generated images. Click to turn it off.</source>
         <translation>Jugendfrei ist an: Nacktheit und explizite Inhalte werden aus erzeugten Bildern herausgehalten. Klicken zum Ausschalten.</translation>
     </message>
@@ -12291,7 +12310,7 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         <translation>Lassen Sie den Assistenten für Sie planen, generieren, bearbeiten und posieren</translation>
     </message>
     <message>
-        <location filename="../src/ui/MainWindow.cpp" line="+42"/>
+        <location filename="../src/ui/MainWindow.cpp" line="+51"/>
         <source>&amp;File</source>
         <translation>&amp;Datei</translation>
     </message>
@@ -12307,18 +12326,18 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
     </message>
     <message>
         <location line="+9"/>
-        <location line="+813"/>
+        <location line="+885"/>
         <source>(none)</source>
         <translation>(keine)</translation>
     </message>
     <message>
-        <location line="-809"/>
-        <location line="+765"/>
+        <location line="-881"/>
+        <location line="+835"/>
         <source>Quit</source>
         <translation>Beenden</translation>
     </message>
     <message>
-        <location line="-763"/>
+        <location line="-833"/>
         <source>&amp;Edit</source>
         <translation>&amp;Bearbeiten</translation>
     </message>
@@ -12358,7 +12377,7 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         <translation>ComfyUI-Workflow-Ordner öffnen</translation>
     </message>
     <message>
-        <location filename="../src/ui/MainWindow.cpp" line="+4"/>
+        <location filename="../src/ui/MainWindow.cpp" line="+6"/>
         <location line="+1"/>
         <source>About Lumen Studio</source>
         <translation>Über Lumen Studio</translation>
@@ -12369,13 +12388,13 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         <translation>&lt;h3&gt;Lumen Studio %1&lt;/h3&gt;&lt;p&gt;KI-gestützte Bildgenerierung und -bearbeitung.&lt;/p&gt;&lt;p&gt;Erstellt mit Qt %2.&lt;/p&gt;</translation>
     </message>
     <message>
-        <location line="-336"/>
-        <location line="+504"/>
+        <location line="-347"/>
+        <location line="+515"/>
         <source>Jobs</source>
         <translation>Aufträge</translation>
     </message>
     <message>
-        <location line="-721"/>
+        <location line="-732"/>
         <source>Project images — Lumen Studio</source>
         <translation>Projektbilder — Lumen Studio</translation>
     </message>
@@ -12405,7 +12424,7 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         <translation>Laufende und abgeschlossene Aufträge anzeigen (Strg+Umschalt+Q)</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+34"/>
         <source>New blank canvas…</source>
         <translation>Neue leere Arbeitsfläche…</translation>
     </message>
@@ -12710,7 +12729,14 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         <translation>Modellordner öffnen</translation>
     </message>
     <message>
-        <location line="+141"/>
+        <location line="+10"/>
+        <location line="+526"/>
+        <location line="+7"/>
+        <source>Check for updates</source>
+        <translation>Nach Updates suchen</translation>
+    </message>
+    <message>
+        <location line="-400"/>
         <source>New image</source>
         <translation>Neues Bild</translation>
     </message>
@@ -12808,7 +12834,22 @@ Die Modelle der früheren Version liegen in %2 (%n Dateien, %3). In den neuen Or
         <translation>Die Modelle werden verschoben — der Fortschritt wird in der Warteschlange angezeigt.</translation>
     </message>
     <message>
-        <location line="+129"/>
+        <location line="+83"/>
+        <source>You have the latest version, %1.</source>
+        <translation>Sie haben die neueste Version, %1.</translation>
+    </message>
+    <message>
+        <location line="+20"/>
+        <source>Update to %1</source>
+        <translation>Update auf %1</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Lumen Studio %1 is available: see what is new and install it</source>
+        <translation>Lumen Studio %1 ist verfügbar: sehen, was neu ist, und installieren</translation>
+    </message>
+    <message>
+        <location line="+95"/>
         <source>%1 is not there any more</source>
         <translation>%1 ist nicht mehr vorhanden</translation>
     </message>
@@ -12818,7 +12859,7 @@ Die Modelle der früheren Version liegen in %2 (%n Dateien, %3). In den neuen Or
         <translation>Liste leeren</translation>
     </message>
     <message>
-        <location line="-281"/>
+        <location line="-351"/>
         <source>%1 running · %2 queued</source>
         <translation>%1 laufend · %2 in Warteschlange</translation>
     </message>
@@ -12902,7 +12943,7 @@ Die Modelle der früheren Version liegen in %2 (%n Dateien, %3). In den neuen Or
         <translation>Die Cloud-GPU %1 konnte nicht heruntergefahren werden: %2. Stoppen Sie sie auf runpod.io.</translation>
     </message>
     <message numerus="yes">
-        <location line="+46"/>
+        <location line="+114"/>
         <source>%n job(s) are still running. Quit anyway?</source>
         <translation>
             <numerusform>%n Auftrag läuft noch. Trotzdem beenden?</numerusform>
@@ -12910,7 +12951,7 @@ Die Modelle der früheren Version liegen in %2 (%n Dateien, %3). In den neuen Or
         </translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+18"/>
         <source>Saving...</source>
         <translation>Wird gespeichert...</translation>
     </message>
@@ -14319,7 +14360,7 @@ Klicken Sie, um den Knoten auszuwählen.</translation>
 <context>
     <name>lumen::ui::OnboardingDialog</name>
     <message>
-        <location filename="../src/ui/dialogs/SettingsDialog.cpp" line="+622"/>
+        <location filename="../src/ui/dialogs/SettingsDialog.cpp" line="+629"/>
         <source>Find servers on this computer</source>
         <translation>Server auf diesem Computer finden</translation>
     </message>
@@ -16633,7 +16674,7 @@ oder eines aus den Projektbildern ziehen</translation>
 <context>
     <name>lumen::ui::ProviderForm</name>
     <message>
-        <location filename="../src/ui/dialogs/SettingsDialog.cpp" line="-786"/>
+        <location filename="../src/ui/dialogs/SettingsDialog.cpp" line="-793"/>
         <source>Documentation</source>
         <translation>Dokumentation</translation>
     </message>
@@ -17924,6 +17965,16 @@ oder eines aus den Projektbildern ziehen</translation>
         <source>Adds &quot;%1&quot; to the negative prompt of every image request where the model takes one. Also in the status bar (shield).</source>
         <translation>Fügt „%1“ dem Negativ-Prompt jeder Bildanfrage hinzu, wenn das Modell einen annimmt. Auch in der Statusleiste (Schild).</translation>
     </message>
+    <message>
+        <location line="+6"/>
+        <source>Check for updates at the start, once a day</source>
+        <translation>Beim Start nach Updates suchen, einmal am Tag</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Asks GitHub for the newest release, which shows GitHub your IP address and nothing else. Nothing is installed without a click. Help → Check for updates always works.</source>
+        <translation>Fragt GitHub nach der neuesten Version. GitHub sieht dabei Ihre IP-Adresse und sonst nichts. Ohne Ihren Klick wird nichts installiert. Hilfe → Nach Updates suchen funktioniert immer.</translation>
+    </message>
 </context>
 <context>
     <name>lumen::ui::SetupWizard</name>
@@ -19166,6 +19217,79 @@ Geändert %2</translation>
         <location filename="../src/ui/canvas/TransformTool.h" line="+35"/>
         <source>Free transform</source>
         <translation>Frei transformieren</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::ui::UpdateDialog</name>
+    <message>
+        <location filename="../src/ui/dialogs/UpdateDialog.cpp" line="+23"/>
+        <source>Update Lumen Studio</source>
+        <translation>Lumen Studio aktualisieren</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>&lt;b&gt;Lumen Studio %1 is available.&lt;/b&gt; You have %2.</source>
+        <translation>&lt;b&gt;Lumen Studio %1 ist verfügbar.&lt;/b&gt; Sie haben %2.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>What is new</source>
+        <translation>Was ist neu</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>This release has no notes.</source>
+        <translation>Zu dieser Version gibt es keine Hinweise.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Lumen Studio closes to install it, after asking about anything not saved. Your projects, settings and models stay.</source>
+        <translation>Lumen Studio wird zum Installieren geschlossen und fragt vorher nach allem, was nicht gespeichert ist. Ihre Projekte, Einstellungen und Modelle bleiben erhalten.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Download it from the release page. Your projects, settings and models stay.</source>
+        <translation>Laden Sie sie von der Release-Seite herunter. Ihre Projekte, Einstellungen und Modelle bleiben erhalten.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Download</source>
+        <translation>Download</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Update now</source>
+        <translation>Jetzt aktualisieren</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Open download page</source>
+        <translation>Download-Seite öffnen</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Skip this version</source>
+        <translation>Diese Version überspringen</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>No more reminders about %1. Help → Check for updates still finds it.</source>
+        <translation>Keine weiteren Hinweise auf %1. Hilfe → Nach Updates suchen findet sie weiterhin.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Later</source>
+        <translation>Später</translation>
+    </message>
+    <message>
+        <location line="+49"/>
+        <source>Downloading…</source>
+        <translation>Wird heruntergeladen…</translation>
+    </message>
+    <message>
+        <location line="+20"/>
+        <source>The download did not work: %1</source>
+        <translation>Der Download hat nicht funktioniert: %1</translation>
     </message>
 </context>
 <context>

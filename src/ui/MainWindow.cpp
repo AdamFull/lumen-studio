@@ -14,6 +14,7 @@
 #include "ui/dialogs/NewFromPromptDialog.h"
 #include "ui/dialogs/SettingsDialog.h"
 #include "ui/dialogs/SetupWizard.h"
+#include "ui/dialogs/UpdateDialog.h"
 #include "ui/dialogs/UserGuideDialog.h"
 #include "ui/filters/FiltersPanel.h"
 #include "ui/filters/NodeEditorWindow.h"
@@ -302,6 +303,15 @@ void MainWindow::buildStatusBar()
     m_jobsButton->setToolTip(tr("Show running and finished jobs (Ctrl+Shift+Q)"));
     connect(m_jobsButton, &QToolButton::toggled, this, &MainWindow::setQueueVisible);
     statusBar()->addPermanentWidget(m_jobsButton);
+
+    // Shown when the check at the start finds a new version.
+    m_updateButton = new QToolButton(this);
+    m_updateButton->setObjectName(QStringLiteral("updateAvailable"));
+    m_updateButton->setAutoRaise(true);
+    m_updateButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    m_updateButton->setIcon(Icons::get(QStringLiteral("sparkles")));
+    m_updateButton->hide();
+    statusBar()->addPermanentWidget(m_updateButton);
 }
 
 void MainWindow::buildMenus()
@@ -632,6 +642,8 @@ void MainWindow::buildMenus()
         QDesktopServices::openUrl(QUrl::fromLocalFile(paths::logs()));
     });
     help->addSeparator();
+    QAction *updates = help->addAction(Icons::get(QStringLiteral("sparkles")), tr("Check for updates"), this, [this] { checkForUpdates(true); });
+    updates->setObjectName(QStringLiteral("checkForUpdates"));
     help->addAction(Icons::get(QStringLiteral("info")), tr("About Lumen Studio"), this, [this] {
         QMessageBox::about(this, tr("About Lumen Studio"),
                            tr("<h3>Lumen Studio %1</h3><p>AI-assisted image generation and editing.</p>"
@@ -1138,10 +1150,78 @@ bool MainWindow::saveScreenshot(const QString &path)
     return shown->grab().save(path);
 }
 
+void MainWindow::checkForUpdates(bool asked)
+{
+    Settings &s = Settings::instance();
+    const QString lastCheck = QStringLiteral("updates/lastCheck");
+    if (!asked) {
+        runtime::removeOldInstallers();
+        if (!s.value(QStringLiteral("updates/check"), true).toBool())
+            return;
+        const QDateTime last = s.value(lastCheck).toDateTime();
+        if (last.isValid() && last.secsTo(QDateTime::currentDateTime()) < 24 * 3600)
+            return;
+    }
+    auto *check = new runtime::AppUpdateCheck(m_studio->http(), this);
+    check->latest().then(this, [this, check, asked, lastCheck](const runtime::AppRelease &release) {
+        check->deleteLater();
+        Settings &s = Settings::instance();
+        if (!release.ok()) {
+            if (asked)
+                QMessageBox::warning(this, tr("Check for updates"), release.error);
+            return;
+        }
+        s.setValue(lastCheck, QDateTime::currentDateTime());
+        const QString current = QApplication::applicationVersion();
+        if (!runtime::isNewerVersion(release.version, current)) {
+            if (asked)
+                QMessageBox::information(this, tr("Check for updates"), tr("You have the latest version, %1.").arg(current));
+            return;
+        }
+        auto offer = [this, release] {
+            UpdateDialog dialog(release, release.canInstall() && runtime::isInstalledCopy(), this);
+            const bool update = dialog.exec() == QDialog::Accepted;
+            if (dialog.skipped()) {
+                Settings::instance().setValue(QStringLiteral("updates/skipVersion"), release.version);
+                m_updateButton->hide();
+            }
+            if (update)
+                installUpdateAndQuit(dialog.installerPath());
+        };
+        if (asked) {
+            offer();
+            return;
+        }
+        if (s.value(QStringLiteral("updates/skipVersion")).toString() == release.version)
+            return;
+        // A click away, not in the way of what is being done.
+        m_updateButton->setText(tr("Update to %1").arg(release.version));
+        m_updateButton->setToolTip(tr("Lumen Studio %1 is available: see what is new and install it").arg(release.version));
+        m_updateButton->disconnect(this);
+        connect(m_updateButton, &QToolButton::clicked, this, offer);
+        m_updateButton->show();
+    });
+}
+
+void MainWindow::installUpdateAndQuit(const QString &installer)
+{
+    m_installerAfterQuit = installer;
+    close();
+}
+
 void MainWindow::closeEvent(QCloseEvent *e)
 {
     Settings::instance().setValue(QStringLiteral("ui/geometry"), saveGeometry());
     if (m_closing) {
+        // Everything is saved. The elevation prompt comes from Windows; the installer asks before
+        // it replaces anything, by when this program has gone.
+        if (!m_installerAfterQuit.isEmpty()) {
+            const bool started = m_launchInstaller ? m_launchInstaller(m_installerAfterQuit)
+                                                   : QDesktopServices::openUrl(QUrl::fromLocalFile(m_installerAfterQuit));
+            if (!started)
+                qCWarning(lcApp) << "Could not start the installer" << m_installerAfterQuit;
+            m_installerAfterQuit.clear();
+        }
         // The windows of plugin pages and of the project images close with the editor.
         for (const QPointer<PageWindow> &w : std::as_const(m_windows)) {
             if (w)
@@ -1171,12 +1251,14 @@ void MainWindow::closeEvent(QCloseEvent *e)
         const auto answer = QMessageBox::question(this, tr("Quit"), tr("%n job(s) are still running. Quit anyway?", nullptr, running));
         if (answer != QMessageBox::Yes) {
             m_quitting = false;
+            m_installerAfterQuit.clear();
             return;
         }
     }
     m_editor->files()->confirmQuit().then(this, [this](bool quit) {
         if (!quit) {
             m_quitting = false;
+            m_installerAfterQuit.clear();
             return;
         }
         m_studio->jobs()->cancelAll();

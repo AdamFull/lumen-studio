@@ -1,6 +1,7 @@
 add_library(lumen_runtime STATIC
     Zip.h Zip.cpp
     Download.h Download.cpp
+    AppUpdate.h AppUpdate.cpp
     Hardware.h Hardware.cpp
     Catalog.h Catalog.cpp
     RuntimeStore.h RuntimeStore.cpp

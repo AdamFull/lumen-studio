@@ -190,6 +190,7 @@ int main(int argc, char *argv[])
     if (!parser.isSet(screenshotOpt)) {
         QTimer::singleShot(3000, &window, &ui::MainWindow::checkLeftoverCloudPods);
         QTimer::singleShot(200, &window, [&window] { window.offerModelsFolderMove(); });
+        QTimer::singleShot(5000, &window, [&window] { window.checkForUpdates(false); });
     }
     if (session.previousSessionCrashed()) {
         QTimer::singleShot(1500, &studio, [&studio] {

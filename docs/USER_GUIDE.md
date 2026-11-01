@@ -38,6 +38,13 @@ Contents:
   logs, projects, models and filters in the `userdata` folder beside it. Delete `portable.txt` to use
   the per-user folders instead.
 
+**Updates.** Once a day at the start, Lumen asks GitHub for the newest release, which shows GitHub
+your IP address and nothing else; turn it off in *Settings → General*. When there is a new version,
+*Update to …* appears in the status bar, and *Help → Check for updates* asks at any time. *Update
+now* downloads the installer, checks its checksum, closes Lumen after asking about anything not saved
+and runs the installer, which Windows asks you to allow. The portable version opens the download page
+instead. Your projects, settings and models stay.
+
 Lumen never writes API keys into its own files: they are kept in the Windows Credential Manager, also
 in the portable version.
 

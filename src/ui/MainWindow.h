@@ -7,6 +7,8 @@
 #include <QMainWindow>
 #include <QPointer>
 
+#include <functional>
+
 class QAction;
 class QDialog;
 class QFrame;
@@ -68,6 +70,13 @@ public:
     // Cloud GPUs of earlier trainings that are still rented (after a crash or a failed shutdown):
     // offers to shut them down. Done once at start-up when a RunPod key is saved.
     void checkLeftoverCloudPods();
+    // At the start (quiet, at most once a day, and only if the setting allows) or from the Help menu.
+    void checkForUpdates(bool asked);
+    // Closes Lumen the usual way, with its questions, and runs the installer once all is saved.
+    // Cancelling a question keeps Lumen open and runs nothing.
+    void installUpdateAndQuit(const QString &installer);
+    // Tests replace what runs the installer.
+    void setInstallerLauncher(std::function<bool(const QString &)> launcher) { m_launchInstaller = std::move(launcher); }
     // Models in an earlier version's folder (Studio::legacyModelsFolder): asks once whether to move
     // them to the new models folder (ask replaces the question, for tests). Called at start-up by
     // main. Returns the move job, if any.
@@ -122,6 +131,7 @@ private:
     QToolButton *m_clearFinished = nullptr;
     QAction *m_queueAction = nullptr;
     QToolButton *m_jobsButton = nullptr;
+    QToolButton *m_updateButton = nullptr;
     QList<QAction *> m_documentActions; // the AI menu's and the editor's, which need a document
     // The AI menu's actions that need an engine that can do them, with their own tooltip.
     struct UtilityAction
@@ -139,6 +149,8 @@ private:
     QPointer<QWidget> m_lastOpened; // by showPage, for saveScreenshot
     bool m_quitting = false; // asked to close: the questions and saves are on their way
     bool m_closing = false;  // everything is saved: the next close event closes
+    QString m_installerAfterQuit;
+    std::function<bool(const QString &)> m_launchInstaller;
 };
 
 } // namespace lumen::ui
