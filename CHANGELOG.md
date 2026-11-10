@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.1 - 2026-11-10
+
+- **OpenAI's current image models.** OpenAI shut down `gpt-image-1`, Lumen's default, on 23 October 2026.
+  Lumen now uses GPT Image 2.6 Sunburst and moves a saved engine to it by itself, with a note. GPT
+  Image 2.6 Flare (faster) and 2.5 are there to choose, and results keep the picture's own shape
+  instead of one of three fixed sizes.
+- Google's newer Nano Banana models (2.1, 2, 2 Lite and Pro) can be chosen for Gemini.
+- Models a service has shut down are no longer offered, and saved ones move to their replacement.
+- Fixed: a row of the LoRA test results could not be deselected.
+
 ## 0.2.0 - 2026-11-01
 
 The first public release of Lumen Studio, a desktop image editor for Windows that changes pictures from

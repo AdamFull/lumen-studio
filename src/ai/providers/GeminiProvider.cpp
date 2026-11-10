@@ -1,5 +1,6 @@
 #include "ai/providers/GeminiProvider.h"
 
+#include "ai/OnlineCatalog.h"
 #include "ai/ProviderUtil.h"
 #include "core/Async.h"
 #include "core/ImageOps.h"
@@ -379,8 +380,7 @@ ProviderType GeminiImageProvider::describe()
     t.fields = {
         {QStringLiteral("url"), tr("Base URL"), F::Url, QStringLiteral("https://generativelanguage.googleapis.com/v1beta"), QString(), {}, 0, 0, true, true},
         {QStringLiteral("api_key"), tr("API key"), F::Secret, QString(), tr("From Google AI Studio."), {}, 0, 0, true},
-        {QStringLiteral("model"), tr("Model"), F::Model, QStringLiteral("gemini-2.5-flash-image"), QString(),
-         {QStringLiteral("gemini-2.5-flash-image")}},
+        {QStringLiteral("model"), tr("Model"), F::Model, online::defaultModel(t.id), QString(), online::modelIds(t.id)},
         {QStringLiteral("segment_model"), tr("Segmentation model"), F::Model, QStringLiteral("gemini-2.5-flash"),
          tr("Text model used to segment character parts (Live2D slicing)."),
          {QStringLiteral("gemini-2.5-flash"), QStringLiteral("gemini-2.5-pro")}, 0, 0, false, true},
@@ -404,15 +404,24 @@ QFuture<QStringList> GeminiImageProvider::listModels()
 {
     net::CallOptions opts;
     opts.timeoutMs = 15000;
-    return futureFromCall<QStringList>(http()->get(geminiRequest(this, QStringLiteral("/models?pageSize=200")), opts), [](net::HttpCall *call) {
+    return futureFromCall<QStringList>(http()->get(geminiRequest(this, QStringLiteral("/models?pageSize=200")), opts), [typeId = type().id](net::HttpCall *call) {
         QStringList out;
         for (const QJsonValue &v : call->json().value(QStringLiteral("models")).toArray()) {
             const QString name = v.toObject().value(QStringLiteral("name")).toString().mid(7);
-            if (name.contains(QLatin1String("image")))
+            if (name.contains(QLatin1String("image")) && online::replacement(typeId, name).isEmpty())
                 out << name;
         }
         return out;
     });
+}
+
+QString GeminiImageProvider::modelFor(const QString &requested) const
+{
+    QString model = requested.isEmpty() ? text(QStringLiteral("model")) : requested;
+    if (model.isEmpty())
+        model = online::defaultModel(type().id);
+    const QString next = online::replacement(type().id, model);
+    return next.isEmpty() ? model : next;
 }
 
 ImageCapabilities GeminiImageProvider::capabilities() const
@@ -503,7 +512,7 @@ ImageOperation *GeminiImageProvider::generate(const ImageRequest &r)
         failLater(op, tr("Gemini API key is not set. Add it in Settings → Providers."));
         return op;
     }
-    const QString path = u'/' + modelPath(r.model.isEmpty() ? text(QStringLiteral("model")) : r.model) + QStringLiteral(":generateContent");
+    const QString path = u'/' + modelPath(modelFor(r.model)) + QStringLiteral(":generateContent");
     net::CallOptions opts;
     opts.timeoutMs = std::max(10, setting(QStringLiteral("timeout_s")).toInt()) * 1000;
     opts.maxRetries = 1;

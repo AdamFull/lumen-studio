@@ -4224,6 +4224,103 @@ Risks and open questions:
   the model finder is first used.
 * Florence-2 would find and caption in one model but needs a text decoder loop; it is left for later.
 
+### M19 — Online image services and what they cost
+
+Goal: more online services to choose from, the ones Lumen has kept current, and the user always
+knowing what a run costs and what is left. Asked for by the user (10 November 2026): the OpenAI image
+API, Google's models, Grok, Qwen and others, aggregators like OpenRouter that offer many image models
+through one account, and a place that shows what was spent, the balance and the limits.
+
+What the services offer (read from their documentation, 10 November 2026):
+
+| Service | Images | Edit with a mask | Pictures sent along | Cost of a run, from the API | Balance, spend or limits, from the API |
+|---|---|---|---|---|---|
+| OpenAI (in Lumen) | `/v1/images/generations` and `/edits`; GPT Image 2.6 *Sunburst* (detail, accurate edits) and *Flare* (fast), 2.5 the same | yes | up to 16 | token counts (`usage`); prices from a table | none for a project key (the Costs API needs an admin key) |
+| Google Gemini (in Lumen) | `generateContent` (still supported; new projects are pointed to the Interactions API); Nano Banana 2.1, 2 (3.1 Flash Image), 2 Lite, Pro (3 Pro Image), Nano Banana (2.5 Flash Image, until March 2027 at the earliest) | no | up to 14 | token counts | none (the console only) |
+| xAI Grok Imagine | `/v1/images/generations` and `/edits`, OpenAI-like; `grok-imagine-image` (2 ¢), `grok-imagine-image-2.0` (4 ¢) | no | up to 5 | `usage.cost_in_usd_ticks` (10¹⁰ per dollar) | none found |
+| Alibaba Qwen-Image | Model Studio, per region with a workspace in the address; `qwen-image-3.0(-pro)`, 2.x | no | 1–3 (3.0), up to 10 (2.1) | per image, from a table | not with the API key |
+| OpenRouter | `/api/v1/images`, models from `/api/v1/images/models` (with each provider's prices) | no (OpenAI's *markup* only) | up to 16 | `usage.cost` in dollars | `/api/v1/key`: limit, what is left of it, spent today, this week, this month (a normal key); the credit balance needs a management key |
+| fal.ai (in Lumen) | queue API, any endpoint | per model | per model | `/v1/models/pricing` | `/v1/account/billing?expand=credits` (a key allowed to read billing) |
+| Stability AI (in Lumen) | its own models | yes | — | — | `/v1/user/balance` (credits, 1 = 1 ¢) |
+| Others | Runware and WaveSpeed (aggregators with a balance API), Together (OpenAI-like images, no balance), Replicate (no billing API), Black Forest Labs (credits API) | | | | |
+
+Already out of date in Lumen 0.2.0: OpenAI's `gpt-image-1`, its default, was shut down on 23 October
+2026 (`gpt-image-1-mini` and `gpt-image-1.5` follow on 1 December 2026, `gpt-image-2` on 10 February
+2027); Google's Imagen is shut down and `gemini-2.5-flash` (the chat default) is rerouted to
+`gemini-3.5-flash-lite` from 1 December 2026.
+
+Decisions (proposed, 10 November 2026):
+* **Models come from the service** where it lists them. What the APIs do not say ships with Lumen in a
+  small catalogue (`resources/providers/online.json`): the replacement for each retired model id
+  (saved settings move on by themselves, with a note saying so), how many pictures a model takes,
+  free sizes, and prices for estimates. Lumen's updates keep it current.
+* **Lumen keeps its own record of costs**: each run's cost from the service when it reports one, else
+  an estimate from the catalogue, shown as "about". It is on the result, and added up per service,
+  per day and per month.
+* **Usage page** (Settings): per online service, the balance and limits where the service has an API
+  for them, what was spent through Lumen today and this month, and a link to the service's billing
+  page. Balances are asked for when the page opens or after a run, never in the background.
+* **An optional monthly budget** (off by default): above it, Lumen asks before each paid run.
+* **New services**: Grok Imagine, Qwen-Image, OpenRouter Images, and *OpenAI-compatible images* (an
+  address, a key and a model), which covers Together, LiteLLM and similar proxies.
+* **Which other aggregators** (Runware, WaveSpeed, Replicate…) is the user's choice; none is planned
+  yet.
+* Services without a mask get the picture and the instruction; Lumen keeps the pixels outside the
+  selection itself, as it does for Gemini. Keys stay in the Windows Credential Manager.
+
+#### 19.1 Implementation steps
+
+1. [x] **Current models for OpenAI and Gemini.** The catalogue with the models and retired ids; GPT Image
+   2.6 Sunburst by default (2.6 Flare, 2.5 Sunburst and Flare to choose from); a retired id in saved
+   settings is replaced when Lumen starts, with a note; *Reference fidelity* only for models that take
+   it; free sizes (multiples of 16, 1:3 to 3:1) for GPT Image 2 and later, so the result has the
+   picture's own shape; the *xhigh* and *max* qualities. The Nano Banana models to choose from (the
+   default stays Nano Banana until a live check with the new ones). Released as a fix (0.2.1), which
+   also tries out updating from 0.2.0.
+   * Done (10 November 2026): `ai/OnlineCatalog` reads `resources/providers/online.json` (models,
+     defaults, retired ids with their shutdown dates and replacements, following chains; dated
+     snapshots count as their model). `ProviderRegistry::load` replaces a retired model in saved
+     settings, saves, and `takeLoadNotes()` gives the note the window shows at the start; the
+     adapters also replace one at run time (a date can pass while Lumen runs) and leave shut-down
+     models out of the service's own list. OpenAI: free sizes with Lumen's usual fitting (multiples
+     of 16, 1:3 to 3:1, at least about 0.65 and at most 3.7 megapixels), *Reference fidelity* only
+     for GPT Image 1.5 and 1 mini. Mock tests only (`tst_providers_cloud onlineCatalog,
+     openaiCurrentModels, retiredModelReplacedOnLoad`); no call to OpenAI or Google was made.
+   * Not yet: a live run with GPT Image 2.6 and the new Nano Banana models (the user's keys).
+2. [ ] **The cost of each run**: an amount, its currency and whether it is an estimate, on each result;
+   from OpenAI's and Gemini's token counts and the catalogue's prices, fal's price list, xAI's and
+   OpenRouter's reported costs. A record of the costs in the app data folder.
+3. [ ] **The Usage page**: per service, the balance and limits (fal, Stability, OpenRouter), spent through
+   Lumen today and this month, the billing page; the optional budget.
+4. [ ] **OpenRouter Images**: models and their prices from its list, up to 16 pictures sent along, the
+   key's limits on the Usage page.
+5. [ ] **Grok Imagine**: generation and editing (up to 5 pictures), aspect ratios and resolutions, the
+   reported cost.
+6. [ ] **Qwen-Image**: region and workspace, Model Studio's synchronous API, editing with up to 3
+   pictures, results downloaded before their 24-hour links expire.
+7. [ ] **OpenAI-compatible images**: address, key, model; Together as the tested example.
+8. [ ] **Setting up**: *Set up AI* lists the services in two groups (one company's models; many models
+   in one account) with a rough price each; the user guide; German; a live check of each service the
+   user has a key for (a few cents).
+
+Acceptance:
+1. A saved `gpt-image-1` engine works again after updating, and says it now uses GPT Image 2.6.
+2. Each result from an online service shows what it cost, or about what; the Usage page adds them up
+   per service and per month.
+3. Where a service reports a balance or a limit, the Usage page shows it; where it does not, it says
+   so and links to the service's billing page.
+4. Grok, Qwen and OpenRouter make images and edits from the editor, with their own models.
+
+Risks and open questions:
+* Model ids change every few months (four OpenAI image models retired in 2026): the catalogue and
+  the services' own model lists, with Lumen's updates, keep up; a retired id fails with a message
+  that names the replacement.
+* Prices in the catalogue go out of date: estimates are marked as such; reported costs win.
+* Gemini's Interactions API is where Google's new features go; `generateContent` stays supported, so
+  moving is left for later.
+* OpenAI's token prices are not in the API reference: the table is taken from the pricing page and
+  dated.
+
 ---
 
 ## 5. Quality strategy

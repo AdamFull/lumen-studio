@@ -35,6 +35,8 @@ public:
     ImageOperation *generate(const ImageRequest &request) override;
     bool supportsUtility(Utility u) const override;
     ImageOperation *runUtility(Utility utility, const QImage &image, const QJsonObject &params) override;
+    // The request's model, else the setting's; a model Google has shut down is replaced.
+    QString modelFor(const QString &requested) const;
 
     // Segmentation (Gemini 2.5+ returns labelled boxes with mask PNGs). Exposed for tests.
     static QJsonObject buildSegmentationBody(const QImage &image, const QJsonArray &parts);

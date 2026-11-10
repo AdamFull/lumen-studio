@@ -1,5 +1,6 @@
 #include "ai/ProviderRegistry.h"
 
+#include "ai/OnlineCatalog.h"
 #include "core/Log.h"
 #include "core/Paths.h"
 #include "core/SecretStore.h"
@@ -8,6 +9,7 @@
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QLocale>
 #include <QPromise>
 #include <QSaveFile>
 #include <QUuid>
@@ -332,6 +334,8 @@ void ProviderRegistry::load()
     if (!f.open(QIODevice::ReadOnly))
         return;
     const QJsonObject root = QJsonDocument::fromJson(f.readAll()).object();
+    f.close();
+    bool changed = false;
     for (const QJsonValue &v : root.value(QStringLiteral("instances")).toArray()) {
         const QJsonObject o = v.toObject();
         const QString id = o.value(QStringLiteral("id")).toString();
@@ -340,6 +344,18 @@ void ProviderRegistry::load()
         if (id.isEmpty() || !t || m_instances.contains(id))
             continue;
         QVariantMap settings = o.value(QStringLiteral("settings")).toObject().toVariantMap();
+        // Online services retire models every few months: a saved one moves to its replacement.
+        if (const QString model = settings.value(QStringLiteral("model")).toString(); !model.isEmpty()) {
+            if (const QString next = online::replacement(typeId, model); !next.isEmpty()) {
+                const auto gone = online::retired(typeId, model);
+                const QString name = o.value(QStringLiteral("name")).toString(t->name);
+                m_loadNotes << tr("The model %1 was shut down on %2, so “%3” now uses %4.")
+                                   .arg(model, QLocale().toString(gone->shutdown, QLocale::LongFormat), name, next);
+                qCInfo(lcAi) << "Model" << model << "of" << id << "replaced by" << next;
+                settings.insert(QStringLiteral("model"), next);
+                changed = true;
+            }
+        }
         const QVariantMap secrets = loadSecrets(id, *t);
         for (auto it = secrets.begin(); it != secrets.end(); ++it)
             settings.insert(it.key(), it.value());
@@ -354,8 +370,15 @@ void ProviderRegistry::load()
         const QJsonObject b = it.value().toObject();
         m_roles.insert(it.key(), RoleBinding{b.value(QStringLiteral("provider")).toString(), b.value(QStringLiteral("model")).toString()});
     }
+    if (changed)
+        save();
     emit providersChanged();
     emit rolesChanged();
+}
+
+QStringList ProviderRegistry::takeLoadNotes()
+{
+    return std::exchange(m_loadNotes, {});
 }
 
 void ProviderRegistry::save() const

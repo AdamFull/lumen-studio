@@ -5,6 +5,7 @@ add_library(lumen_ai STATIC
     Provider.h ProviderImpl.h Provider.cpp
     ProviderUtil.h ProviderUtil.cpp
     ProviderRegistry.h ProviderRegistry.cpp
+    OnlineCatalog.h OnlineCatalog.cpp
     providers/SdWebUiProvider.h providers/SdWebUiProvider.cpp
     providers/SdCppProvider.h providers/SdCppProvider.cpp
     providers/OpenAiChatProvider.h providers/OpenAiChatProvider.cpp
@@ -36,6 +37,12 @@ add_library(lumen_ai STATIC
     PartService.h PartService.cpp
 )
 target_include_directories(lumen_ai PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
+# What the online services' APIs do not say about their models (plan M19).
+qt_add_resources(lumen_ai online_services
+    PREFIX "/providers"
+    BASE "${PROJECT_SOURCE_DIR}/resources/providers"
+    FILES "${PROJECT_SOURCE_DIR}/resources/providers/online.json"
+)
 # ONNX Runtime's C API headers (the runtime itself is loaded at run time, see Onnx.cpp).
 target_include_directories(lumen_ai PRIVATE ${PROJECT_SOURCE_DIR}/third_party/onnxruntime/include)
 # lumen_filters for the AI steps of node filters (FilterNodes); the filters library never depends

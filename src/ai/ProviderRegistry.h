@@ -96,6 +96,8 @@ public:
     void load();
     void save() const;
     QString configPath() const;
+    // What load() changed by itself (a model the service shut down, replaced), for the user to read.
+    QStringList takeLoadNotes();
 
     // Probes default local ports of known servers (serverProbes), in that order.
     QFuture<QList<DetectedServer>> detectLocalServers();
@@ -122,6 +124,7 @@ private:
     QHash<QString, Provider *> m_instances;
     QList<Provider *> m_order;
     QSet<QString> m_disabled;
+    QStringList m_loadNotes;
     QString m_defaultImage;
     QString m_defaultEdit;
     QHash<QString, RoleBinding> m_roles;

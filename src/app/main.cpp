@@ -192,6 +192,13 @@ int main(int argc, char *argv[])
         QTimer::singleShot(200, &window, [&window] { window.offerModelsFolderMove(); });
         QTimer::singleShot(5000, &window, [&window] { window.checkForUpdates(false); });
     }
+    // What changed by itself while loading, such as a model an online service shut down.
+    if (const QStringList notes = studio.providers()->takeLoadNotes(); !notes.isEmpty()) {
+        QTimer::singleShot(1200, &studio, [&studio, notes] {
+            for (const QString &note : notes)
+                studio.notify(note, QStringLiteral("info"));
+        });
+    }
     if (session.previousSessionCrashed()) {
         QTimer::singleShot(1500, &studio, [&studio] {
             studio.notify(QObject::tr("Lumen Studio did not close properly last time. Open documents were restored from the last "

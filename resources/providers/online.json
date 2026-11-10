@@ -1,0 +1,43 @@
+{
+    "updated": "2026-11-10",
+    "services": {
+        "openai_image": {
+            "default": "gpt-image-2.6-sunburst",
+            "models": [
+                {"id": "gpt-image-2.6-sunburst", "freeSize": true},
+                {"id": "gpt-image-2.6-flare", "freeSize": true},
+                {"id": "gpt-image-2.5-sunburst", "freeSize": true},
+                {"id": "gpt-image-2.5-flare", "freeSize": true},
+                {"id": "gpt-image-2", "freeSize": true},
+                {"id": "gpt-image-1.5", "inputFidelity": true},
+                {"id": "gpt-image-1-mini", "inputFidelity": true}
+            ],
+            "retired": [
+                {"id": "gpt-image-1", "shutdown": "2026-10-23", "replacement": "gpt-image-2.6-sunburst"},
+                {"id": "gpt-image-1-mini", "shutdown": "2026-12-01", "replacement": "gpt-image-2.6-flare"},
+                {"id": "gpt-image-1.5", "shutdown": "2026-12-01", "replacement": "gpt-image-2.6-sunburst"},
+                {"id": "chatgpt-image-latest", "shutdown": "2026-12-01", "replacement": "gpt-image-2.6-sunburst"},
+                {"id": "gpt-image-2", "shutdown": "2027-02-10", "replacement": "gpt-image-2.6-sunburst"},
+                {"id": "dall-e-3", "shutdown": "2026-05-12", "replacement": "gpt-image-2.6-sunburst"},
+                {"id": "dall-e-2", "shutdown": "2026-05-12", "replacement": "gpt-image-2.6-flare"}
+            ]
+        },
+        "gemini_image": {
+            "default": "gemini-2.5-flash-image",
+            "models": [
+                {"id": "gemini-2.5-flash-image"},
+                {"id": "gemini-nano-banana-2.1"},
+                {"id": "gemini-3.1-flash-image"},
+                {"id": "gemini-3-pro-image"},
+                {"id": "gemini-3.1-flash-lite-image"}
+            ],
+            "retired": [
+                {"id": "gemini-2.0-flash-preview-image-generation", "shutdown": "2025-11-14", "replacement": "gemini-2.5-flash-image"},
+                {"id": "gemini-2.5-flash-image-preview", "shutdown": "2026-01-15", "replacement": "gemini-2.5-flash-image"},
+                {"id": "gemini-3-pro-image-preview", "shutdown": "2026-06-25", "replacement": "gemini-3-pro-image"},
+                {"id": "gemini-3.1-flash-image-preview", "shutdown": "2026-06-25", "replacement": "gemini-3.1-flash-image"},
+                {"id": "gemini-2.5-flash-image", "shutdown": "2027-03-15", "replacement": "gemini-3.1-flash-lite-image"}
+            ]
+        }
+    }
+}

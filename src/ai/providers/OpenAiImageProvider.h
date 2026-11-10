@@ -17,8 +17,13 @@ public:
     ImageCapabilities capabilities() const override;
     ImageOperation *generate(const ImageRequest &request) override;
 
-    // Picks the supported output size closest to the requested aspect ratio.
+    // Picks the supported output size closest to the requested aspect ratio (GPT Image 1).
     static QString pickSize(const QSize &requested);
+    // GPT Image 2 and later take any size: multiples of 16, 1:3 to 3:1, within their pixel range.
+    static QString pickFreeSize(const QSize &requested);
+    // The model a request uses: the request's, else the setting's, else the default; a model the
+    // service has shut down is replaced by the one the catalogue names.
+    QString modelFor(const QString &requested) const;
     static ImageResult parseResponse(const QByteArray &body);
 
 private:

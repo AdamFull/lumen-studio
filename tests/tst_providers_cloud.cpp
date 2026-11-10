@@ -1,6 +1,8 @@
 #include "MockHttpServer.h"
 
 #include "ai/Detector.h"
+#include "ai/OnlineCatalog.h"
+#include "ai/ProviderRegistry.h"
 #include "ai/providers/AnthropicProvider.h"
 #include "ai/providers/ComfyUiProvider.h"
 #include "ai/providers/FalProvider.h"
@@ -14,6 +16,7 @@
 #include <QFile>
 #include <QJsonArray>
 #include <QPainter>
+#include <QStandardPaths>
 #include <QtTest>
 
 using namespace lumen;
@@ -43,6 +46,9 @@ private slots:
     void geminiImageGenerate();
     void openaiImageEditsMultipart();
     void openaiPickSize();
+    void onlineCatalog();
+    void openaiCurrentModels();
+    void retiredModelReplacedOnLoad();
     void stabilityInpaint();
     void comfyStandardGraph();
     void comfyEndToEnd();
@@ -216,7 +222,8 @@ void TestProvidersCloud::openaiImageEditsMultipart()
     QCOMPARE(body.count("name=\"image[]\""), 2);
     QCOMPARE(body.count("name=\"mask\""), 1);
     QVERIFY(body.contains("Image 1 is the image to edit"));
-    QVERIFY(body.contains("input_fidelity"));
+    QVERIFY(body.contains("gpt-image-2.6-sunburst")); // the default
+    QVERIFY(!body.contains("input_fidelity"));        // GPT Image 2 and later refuse it
     delete op;
 }
 
@@ -225,6 +232,125 @@ void TestProvidersCloud::openaiPickSize()
     QCOMPARE(OpenAiImageProvider::pickSize(QSize(832, 1216)), QStringLiteral("1024x1536"));
     QCOMPARE(OpenAiImageProvider::pickSize(QSize(1920, 1080)), QStringLiteral("1536x1024"));
     QCOMPARE(OpenAiImageProvider::pickSize(QSize(1000, 1100)), QStringLiteral("1024x1024"));
+}
+
+void TestProvidersCloud::onlineCatalog()
+{
+    using namespace online;
+    const QString openai = QStringLiteral("openai_image");
+    QCOMPARE(defaultModel(openai), QStringLiteral("gpt-image-2.6-sunburst"));
+    QVERIFY(modelIds(openai).contains(QStringLiteral("gpt-image-2.6-flare")));
+    QVERIFY(!modelIds(openai).contains(QStringLiteral("gpt-image-1")));
+
+    // Shut down on 23 October 2026: replaced from then on, not before.
+    QCOMPARE(replacement(openai, QStringLiteral("gpt-image-1"), QDate(2026, 11, 10)), QStringLiteral("gpt-image-2.6-sunburst"));
+    QVERIFY(replacement(openai, QStringLiteral("gpt-image-1"), QDate(2026, 10, 22)).isEmpty());
+    QVERIFY(replacement(openai, QStringLiteral("gpt-image-1-mini"), QDate(2026, 11, 30)).isEmpty());
+    QCOMPARE(replacement(openai, QStringLiteral("gpt-image-1-mini"), QDate(2026, 12, 1)), QStringLiteral("gpt-image-2.6-flare"));
+    QVERIFY(replacement(openai, QStringLiteral("gpt-image-2.6-flare"), QDate(2030, 1, 1)).isEmpty()); // nothing known against it
+    QVERIFY(replacement(openai, QStringLiteral("my-proxy-model"), QDate(2030, 1, 1)).isEmpty());
+
+    // A dated snapshot is its model.
+    QVERIFY(model(openai, QStringLiteral("gpt-image-2.5-flare-2026-09-08")).has_value());
+    QVERIFY(model(openai, QStringLiteral("gpt-image-2.5-flare-2026-09-08"))->freeSize);
+    QVERIFY(model(openai, QStringLiteral("gpt-image-1.5"))->inputFidelity);
+    QVERIFY(!model(openai, QStringLiteral("gpt-image-2.6-sunburst"))->inputFidelity);
+
+    // Chains: a replacement that is retired in turn moves on.
+    const QString gemini = QStringLiteral("gemini_image");
+    QCOMPARE(replacement(gemini, QStringLiteral("gemini-2.0-flash-preview-image-generation"), QDate(2026, 11, 10)),
+             QStringLiteral("gemini-2.5-flash-image"));
+    QCOMPARE(replacement(gemini, QStringLiteral("gemini-2.0-flash-preview-image-generation"), QDate(2027, 3, 15)),
+             QStringLiteral("gemini-3.1-flash-lite-image"));
+    QCOMPARE(replacement(gemini, QStringLiteral("gemini-3-pro-image-preview"), QDate(2026, 11, 10)), QStringLiteral("gemini-3-pro-image"));
+}
+
+void TestProvidersCloud::openaiCurrentModels()
+{
+    OpenAiImageProvider p(OpenAiImageProvider::describe(), QStringLiteral("o"), &m_http, nullptr);
+    // A model OpenAI shut down is never sent.
+    p.configure({{QStringLiteral("model"), QStringLiteral("gpt-image-1")}});
+    QCOMPARE(p.modelFor(QString()), QStringLiteral("gpt-image-2.6-sunburst"));
+    QCOMPARE(p.modelFor(QStringLiteral("gpt-image-2.6-flare")), QStringLiteral("gpt-image-2.6-flare"));
+    // Free sizes: the picture's own shape, multiples of 16.
+    const ImageCapabilities caps = p.capabilities();
+    QVERIFY(caps.fixedSizes.isEmpty());
+    QCOMPARE(caps.sizeMultiple, 16);
+    auto parse = [](const QString &s) {
+        const QStringList wh = s.split(u'x');
+        return QSize(wh.value(0).toInt(), wh.value(1).toInt());
+    };
+    QCOMPARE(OpenAiImageProvider::pickFreeSize(QSize(1344, 768)), QStringLiteral("1344x768"));
+    for (const QSize &asked : {QSize(1920, 1080), QSize(4032, 3024), QSize(9000, 1000), QSize(100, 120), QSize(1000, 1000)}) {
+        const QSize s = parse(OpenAiImageProvider::pickFreeSize(asked));
+        QVERIFY2(s.width() % 16 == 0 && s.height() % 16 == 0, qPrintable(OpenAiImageProvider::pickFreeSize(asked)));
+        QVERIFY(qint64(s.width()) * s.height() <= 2560LL * 1440 + 16 * 2600);
+        QVERIFY(qint64(s.width()) * s.height() >= 1024LL * 640 - 16 * 1100);
+        const double aspect = double(s.width()) / s.height();
+        QVERIFY(aspect <= 3.02 && aspect >= 1 / 3.02);
+        if (asked.width() < 3 * asked.height() && asked.height() < 3 * asked.width())
+            QVERIFY(std::abs(aspect - double(asked.width()) / asked.height()) < 0.03);
+    }
+    // GPT Image 1 models keep their three sizes.
+    p.configure({{QStringLiteral("model"), QStringLiteral("my-proxy-model")}});
+    QCOMPARE(p.capabilities().fixedSizes.size(), 3);
+
+    // The service may still list a model it shut down: it is not offered.
+    MockHttpServer server;
+    server.route("GET", QStringLiteral("/v1/models"), [](const MockRequest &) {
+        QJsonArray data;
+        for (const char *id : {"gpt-image-1", "gpt-image-2.6-flare", "gpt-5", "dall-e-3"})
+            data.append(QJsonObject{{QStringLiteral("id"), QString::fromLatin1(id)}});
+        return MockResponse::json({{QStringLiteral("data"), data}});
+    });
+    p.configure({{QStringLiteral("url"), server.baseUrl().toString() + QStringLiteral("/v1")}, {QStringLiteral("api_key"), QStringLiteral("k")}});
+    QFuture<QStringList> listed = p.listModels();
+    QTRY_VERIFY_WITH_TIMEOUT(listed.isFinished(), 5000);
+    QCOMPARE(listed.result(), QStringList{QStringLiteral("gpt-image-2.6-flare")});
+}
+
+// A saved engine with a model the service shut down works again after updating, and says so.
+void TestProvidersCloud::retiredModelReplacedOnLoad()
+{
+    QStandardPaths::setTestModeEnabled(true);
+    auto make = [this](ProviderRegistry &registry) {
+        registry.registerType(OpenAiImageProvider::describe(), [](const ProviderType &t, const QString &id, net::HttpClient *h, QObject *parent) {
+            return new OpenAiImageProvider(t, id, h, parent);
+        });
+    };
+    ProviderRegistry registry(&m_http);
+    make(registry);
+    QDir().mkpath(QFileInfo(registry.configPath()).absolutePath());
+    const QString id = QStringLiteral("openai_image-retired-test");
+    {
+        QFile f(registry.configPath());
+        QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        f.write(QJsonDocument(QJsonObject{{QStringLiteral("version"), 1},
+                                          {QStringLiteral("instances"),
+                                           QJsonArray{QJsonObject{{QStringLiteral("id"), id},
+                                                                  {QStringLiteral("type"), QStringLiteral("openai_image")},
+                                                                  {QStringLiteral("name"), QStringLiteral("My OpenAI")},
+                                                                  {QStringLiteral("settings"),
+                                                                   QJsonObject{{QStringLiteral("model"), QStringLiteral("gpt-image-1")},
+                                                                               {QStringLiteral("quality"), QStringLiteral("medium")}}}}}}})
+                    .toJson());
+    }
+    auto cleanup = qScopeGuard([&registry] { QFile::remove(registry.configPath()); });
+    registry.load();
+    QCOMPARE(registry.provider(id)->text(QStringLiteral("model")), QStringLiteral("gpt-image-2.6-sunburst"));
+    QCOMPARE(registry.provider(id)->text(QStringLiteral("quality")), QStringLiteral("medium")); // the rest stays
+    const QStringList notes = registry.takeLoadNotes();
+    QCOMPARE(notes.size(), 1);
+    QVERIFY(notes.first().contains(QLatin1String("gpt-image-1")));
+    QVERIFY(notes.first().contains(QLatin1String("My OpenAI")));
+    QVERIFY(registry.takeLoadNotes().isEmpty());
+
+    // Saved, so the next start has nothing to say.
+    ProviderRegistry again(&m_http);
+    make(again);
+    again.load();
+    QCOMPARE(again.provider(id)->text(QStringLiteral("model")), QStringLiteral("gpt-image-2.6-sunburst"));
+    QVERIFY(again.takeLoadNotes().isEmpty());
 }
 
 void TestProvidersCloud::stabilityInpaint()

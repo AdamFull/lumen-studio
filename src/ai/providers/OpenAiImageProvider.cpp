@@ -1,5 +1,6 @@
 #include "ai/providers/OpenAiImageProvider.h"
 
+#include "ai/OnlineCatalog.h"
 #include "ai/ProviderUtil.h"
 #include "ai/providers/GeminiProvider.h"
 #include "core/ImageOps.h"
@@ -26,12 +27,14 @@ ProviderType OpenAiImageProvider::describe()
         {QStringLiteral("url"), tr("Base URL"), F::Url, QStringLiteral("https://api.openai.com/v1"), QString(), {}, 0, 0, true, true},
         {QStringLiteral("api_key"), tr("API key"), F::Secret, QString(), QString(), {}, 0, 0, true},
         {QStringLiteral("organization"), tr("Organization ID"), F::Text, QString(), QString(), {}, 0, 0, false, true},
-        {QStringLiteral("model"), tr("Model"), F::Model, QStringLiteral("gpt-image-1"), QString(),
-         {QStringLiteral("gpt-image-1"), QStringLiteral("gpt-image-1-mini")}},
-        {QStringLiteral("quality"), tr("Quality"), F::Choice, QStringLiteral("high"), QString(),
-         {QStringLiteral("low"), QStringLiteral("medium"), QStringLiteral("high"), QStringLiteral("auto")}},
+        {QStringLiteral("model"), tr("Model"), F::Model, online::defaultModel(t.id),
+         tr("Sunburst: more detail and more accurate edits. Flare: faster."), online::modelIds(t.id)},
+        {QStringLiteral("quality"), tr("Quality"), F::Choice, QStringLiteral("high"), tr("xhigh and max: GPT Image 2.5 and later."),
+         {QStringLiteral("low"), QStringLiteral("medium"), QStringLiteral("high"), QStringLiteral("xhigh"), QStringLiteral("max"),
+          QStringLiteral("auto")}},
         {QStringLiteral("input_fidelity"), tr("Reference fidelity"), F::Choice, QStringLiteral("high"),
-         tr("How closely edits preserve faces and details from input images."), {QStringLiteral("low"), QStringLiteral("high")}},
+         tr("How closely edits preserve faces and details from input images. Only GPT Image 1.5 and 1 mini take it."),
+         {QStringLiteral("low"), QStringLiteral("high")}, 0, 0, false, true},
         {QStringLiteral("moderation"), tr("Moderation"), F::Choice, QStringLiteral("auto"), QString(),
          {QStringLiteral("auto"), QStringLiteral("low")}, 0, 0, false, true},
         {QStringLiteral("timeout_s"), tr("Timeout (seconds)"), F::Integer, 600, QString(), {}, 30, 3600, false, true},
@@ -64,16 +67,26 @@ QFuture<QStringList> OpenAiImageProvider::listModels()
 {
     net::CallOptions opts;
     opts.timeoutMs = 15000;
-    return futureFromCall<QStringList>(http()->get(request(QStringLiteral("/models")), opts), [](net::HttpCall *call) {
+    return futureFromCall<QStringList>(http()->get(request(QStringLiteral("/models")), opts), [typeId = type().id](net::HttpCall *call) {
         QStringList out;
         for (const QJsonValue &v : call->json().value(QStringLiteral("data")).toArray()) {
             const QString id = v.toObject().value(QStringLiteral("id")).toString();
-            if (id.contains(QLatin1String("image")) || id.startsWith(QLatin1String("dall-e")))
+            // Shut-down models can stay listed for a while; they are not offered.
+            if (id.contains(QLatin1String("image")) && online::replacement(typeId, id).isEmpty())
                 out << id;
         }
         out.sort();
         return out;
     });
+}
+
+QString OpenAiImageProvider::modelFor(const QString &requested) const
+{
+    QString model = requested.isEmpty() ? text(QStringLiteral("model")) : requested;
+    if (model.isEmpty())
+        model = online::defaultModel(type().id);
+    const QString next = online::replacement(type().id, model);
+    return next.isEmpty() ? model : next;
 }
 
 ImageCapabilities OpenAiImageProvider::capabilities() const
@@ -89,9 +102,35 @@ ImageCapabilities OpenAiImageProvider::capabilities() const
     c.seed = false;
     c.transparentBackground = true;
     c.qualityTiers = true;
-    c.fixedSizes = {QSize(1024, 1024), QSize(1536, 1024), QSize(1024, 1536)};
     c.nativePixels = 1024 * 1024;
+    if (const auto m = online::model(type().id, modelFor(QString())); m && m->freeSize) {
+        c.sizeMultiple = 16;
+        c.maxPixels = 2560 * 1440; // larger is experimental
+    } else {
+        c.fixedSizes = {QSize(1024, 1024), QSize(1536, 1024), QSize(1024, 1536)};
+    }
     return c;
+}
+
+QString OpenAiImageProvider::pickFreeSize(const QSize &requested)
+{
+    if (requested.isEmpty())
+        return QStringLiteral("1024x1024");
+    double w = requested.width();
+    double h = requested.height();
+    // 1:3 to 3:1.
+    if (w > 3 * h)
+        w = 3 * h;
+    if (h > 3 * w)
+        h = 3 * w;
+    // Small requests are drawn at a working size and scaled back by Lumen; large ones stay below
+    // the experimental range.
+    const double pixels = w * h;
+    const double minimum = 1024.0 * 640;
+    const double maximum = 2560.0 * 1440;
+    const double scale = pixels < minimum ? std::sqrt(minimum / pixels) : pixels > maximum ? std::sqrt(maximum / pixels) : 1.0;
+    auto snap = [](double v) { return std::max(16, int(std::lround(v / 16.0)) * 16); };
+    return QStringLiteral("%1x%2").arg(snap(w * scale)).arg(snap(h * scale));
 }
 
 QString OpenAiImageProvider::pickSize(const QSize &requested)
@@ -128,10 +167,12 @@ ImageOperation *OpenAiImageProvider::generate(const ImageRequest &r)
         failLater(op, tr("OpenAI API key is not set. Add it in Settings → Providers."));
         return op;
     }
-    const QString model = r.model.isEmpty() ? text(QStringLiteral("model")) : r.model;
+    const QString model = modelFor(r.model);
+    const auto known = online::model(type().id, model);
     const QString quality = r.quality.isEmpty() ? text(QStringLiteral("quality")) : r.quality;
-    const QString size = pickSize(r.size);
-    const QString fidelity = text(QStringLiteral("input_fidelity"));
+    const QString size = known && known->freeSize ? pickFreeSize(r.size) : pickSize(r.size);
+    // GPT Image 2 and later refuse it.
+    const QString fidelity = known && known->inputFidelity ? text(QStringLiteral("input_fidelity")) : QString();
     const QString moderation = text(QStringLiteral("moderation"));
     const int n = std::clamp(r.batchCount, 1, 10);
     net::CallOptions opts;
@@ -177,7 +218,8 @@ ImageOperation *OpenAiImageProvider::generate(const ImageRequest &r)
                         mb.addField(QStringLiteral("n"), QString::number(n));
                         mb.addField(QStringLiteral("size"), size);
                         mb.addField(QStringLiteral("quality"), quality);
-                        mb.addField(QStringLiteral("input_fidelity"), fidelity);
+                        if (!fidelity.isEmpty())
+                            mb.addField(QStringLiteral("input_fidelity"), fidelity);
                         mb.addField(QStringLiteral("output_format"), QStringLiteral("png"));
                         mb.addField(QStringLiteral("background"), r.transparentBackground ? QStringLiteral("transparent") : QStringLiteral("auto"));
                         int idx = 0;

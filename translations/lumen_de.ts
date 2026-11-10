@@ -184,7 +184,7 @@
         <translation>Unbekannter Fehler</translation>
     </message>
     <message>
-        <location filename="../src/ai/ProviderRegistry.cpp" line="+31"/>
+        <location filename="../src/ai/ProviderRegistry.cpp" line="+33"/>
         <source>Chat assistant</source>
         <translation>Chat-Assistent</translation>
     </message>
@@ -204,7 +204,7 @@
         <translation>Prompt-Autor</translation>
     </message>
     <message numerus="yes">
-        <location line="+430"/>
+        <location line="+451"/>
         <location line="+2"/>
         <location line="+2"/>
         <source>%n model(s)</source>
@@ -219,7 +219,7 @@
         <translation>Claude hat diese Anfrage abgelehnt%1.</translation>
     </message>
     <message>
-        <location filename="../src/ai/providers/GeminiProvider.cpp" line="+472"/>
+        <location filename="../src/ai/providers/GeminiProvider.cpp" line="+481"/>
         <source>Gemini blocked the request (%1)</source>
         <translation>Gemini hat die Anfrage blockiert (%1)</translation>
     </message>
@@ -284,7 +284,7 @@
         <translation>Das Plugin „Live2D-Teile“ ist ausgeschaltet, daher bewirken --slice und --cubism nichts. Schalten Sie es unter Werkzeuge → Plugins… ein und starten Sie Lumen neu.</translation>
     </message>
     <message>
-        <location line="+50"/>
+        <location line="+57"/>
         <source>Lumen Studio did not close properly last time. Open documents were restored from the last autosave; a crash report may be in the log folder (Help → Open log folder).</source>
         <translation>Lumen Studio wurde beim letzten Mal nicht ordnungsgemäß beendet. Geöffnete Dokumente wurden aus der letzten automatischen Sicherung wiederhergestellt; ein Absturzbericht befindet sich möglicherweise im Protokollordner (Hilfe → Protokollordner öffnen).</translation>
     </message>
@@ -2018,7 +2018,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ai::GeminiChatProvider</name>
     <message>
-        <location filename="../src/ai/providers/GeminiProvider.cpp" line="-548"/>
+        <location filename="../src/ai/providers/GeminiProvider.cpp" line="-556"/>
         <source>Gemini models for chat, vision analysis and planning through the Gemini API.</source>
         <translation>Gemini-Modelle für Chat, Bildanalyse und Planung über die Gemini API.</translation>
     </message>
@@ -2104,7 +2104,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Modell</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Segmentation model</source>
         <translation>Segmentierungsmodell</translation>
     </message>
@@ -2132,7 +2132,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         </translation>
     </message>
     <message>
-        <location line="+103"/>
+        <location line="+112"/>
         <location line="+186"/>
         <source>Gemini API key is not set. Add it in Settings → Providers.</source>
         <translation>Der Gemini-API-Schlüssel ist nicht festgelegt. Fügen Sie ihn unter Einstellungen → Anbieter hinzu.</translation>
@@ -2455,7 +2455,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ai::OpenAiImageProvider</name>
     <message>
-        <location filename="../src/ai/providers/OpenAiImageProvider.cpp" line="+20"/>
+        <location filename="../src/ai/providers/OpenAiImageProvider.cpp" line="+21"/>
         <source>GPT-Image models: high quality text-to-image, multi-image character references, masked edits and transparent backgrounds.</source>
         <translation>GPT-Image-Modelle: hochwertige Text-zu-Bild-Generierung, Charakterreferenzen aus mehreren Bildern, maskierte Bearbeitung und transparente Hintergründe.</translation>
     </message>
@@ -2480,22 +2480,32 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Modell</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
+        <source>Sunburst: more detail and more accurate edits. Flare: faster.</source>
+        <translation>Sunburst: mehr Details und genauere Änderungen. Flare: schneller.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Quality</source>
         <translation>Qualität</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+0"/>
+        <source>xhigh and max: GPT Image 2.5 and later.</source>
+        <translation>xhigh und max: GPT Image 2.5 und neuer.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
         <source>Reference fidelity</source>
         <translation>Referenztreue</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>How closely edits preserve faces and details from input images.</source>
-        <translation>Wie genau Bearbeitungen Gesichter und Details der Eingabebilder bewahren.</translation>
+        <source>How closely edits preserve faces and details from input images. Only GPT Image 1.5 and 1 mini take it.</source>
+        <translation>Wie genau Änderungen Gesichter und Details der Eingabebilder erhalten. Nur GPT Image 1.5 und 1 mini unterstützen das.</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>Moderation</source>
         <translation>Moderation</translation>
     </message>
@@ -2520,7 +2530,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Verbunden – Bildmodelle: %1</translation>
     </message>
     <message>
-        <location line="+69"/>
+        <location line="+105"/>
         <source>OpenAI API key is not set. Add it in Settings → Providers.</source>
         <translation>Kein OpenAI-API-Schlüssel festgelegt. Fügen Sie ihn unter Einstellungen → Anbieter hinzu.</translation>
     </message>
@@ -2787,6 +2797,14 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <location line="+23"/>
         <source>Export part PNGs</source>
         <translation>Teile als PNG exportieren</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::ai::ProviderRegistry</name>
+    <message>
+        <location filename="../src/ai/ProviderRegistry.cpp" line="-139"/>
+        <source>The model %1 was shut down on %2, so “%3” now uses %4.</source>
+        <translation>Das Modell %1 wurde am %2 abgeschaltet, daher verwendet „%3“ jetzt %4.</translation>
     </message>
 </context>
 <context>
@@ -11421,12 +11439,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+4"/>
-        <location line="+948"/>
+        <location line="+949"/>
         <source>Write captions</source>
         <translation>Beschreibungen schreiben</translation>
     </message>
     <message>
-        <location line="-947"/>
+        <location line="-948"/>
         <source>The vision model tags every kept image that has no tags yet</source>
         <translation>Das Bildverständnismodell vertaggt jedes behaltene Bild, das noch keine Tags hat</translation>
     </message>
@@ -11487,12 +11505,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+1081"/>
+        <location line="+1082"/>
         <source>Remove</source>
         <translation>Entfernen</translation>
     </message>
     <message>
-        <location line="-1077"/>
+        <location line="-1078"/>
         <source>Export for training…</source>
         <translation>Für das Training exportieren…</translation>
     </message>
@@ -11819,7 +11837,7 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         <translation>Test stoppen</translation>
     </message>
     <message>
-        <location line="+148"/>
+        <location line="+149"/>
         <source>Mean</source>
         <translation>Mittel</translation>
     </message>
@@ -11895,13 +11913,13 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         </translation>
     </message>
     <message>
-        <location line="-384"/>
-        <location line="+386"/>
+        <location line="-385"/>
+        <location line="+387"/>
         <source>Stop</source>
         <translation>Stopp</translation>
     </message>
     <message>
-        <location line="-638"/>
+        <location line="-639"/>
         <source>The newest three epochs draw four new scenes with the LoRA; for comparison the same scenes are drawn without it, with the reference image through IP-Adapter. The Critic scores how well each image keeps the character (0–10). Takes about 45 minutes on an 8 GB GPU.</source>
         <translation>Die drei neuesten Epochen zeichnen vier neue Szenen mit der LoRA; zum Vergleich werden dieselben Szenen ohne sie gezeichnet, mit dem Referenzbild über IP-Adapter. Der Kritiker bewertet, wie gut jedes Bild den Charakter trifft (0–10). Dauert auf einer GPU mit 8 GB etwa 45 Minuten.</translation>
     </message>
@@ -11916,7 +11934,7 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         <translation>GPUs und Preise von RunPod werden geladen…</translation>
     </message>
     <message>
-        <location line="+198"/>
+        <location line="+199"/>
         <source>Identity %1 · pose %2</source>
         <translation>Identität %1 · Pose %2</translation>
     </message>
