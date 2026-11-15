@@ -450,11 +450,13 @@ void TestCore::finders()
     QVERIFY(coverage(exact, QRect(25, 105, 30, 20)) > 0.95);
     QVERIFY(coverage(exact, QRect(25, 143, 30, 14)) < 0.05); // far from it in Lab
 
-    // A 12-megapixel scan stays quick (O(n) filters).
+    // A 12-megapixel scan stays quick (O(n) filters). The limit is loose: the dev build takes about
+    // 8 s, and an O(n^2) filter would take minutes.
+    const QImage scan = drawing.scaled(4000, 3000);
     QElapsedTimer t;
     t.start();
-    img::findStrokes(drawing.scaled(4000, 3000));
-    QVERIFY2(t.elapsed() < 8000, qPrintable(QString::number(t.elapsed())));
+    img::findStrokes(scan);
+    QVERIFY2(t.elapsed() < 20000, qPrintable(QString::number(t.elapsed())));
 }
 
 // The words of "Select → By description" read as a finder (English and some German), or as none.
