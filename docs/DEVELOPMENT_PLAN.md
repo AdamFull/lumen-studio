@@ -4505,8 +4505,33 @@ pins), which is one more reason to take its parts rather than the library.
      middle node is made), `effectNodeInputs`; `tst_filters_ui lutEditor`.
    * Not yet: a mask input on the effect nodes (use *Mix by mask* after them); a check that
      publishing an effect's setting to the Filters panel works as for the classic nodes.
-7. [ ] **Your own effects**: the Slang compiler as a downloadable component, an editor with a live
+7. [x] **Your own effects**: the Slang compiler as a downloadable component, an editor with a live
    preview and the compiler's errors in place, sharing with the source shown first.
+   * Done (15 November 2026): the `slang` component (`slang-2026.8-windows-x86_64.zip` from
+     shader-slang/slang, 64.5 MB, pinned by GitHub's SHA-256; `slangc.exe`, `slang.dll` and
+     `slang-compiler.dll` are all it needs, about 33 MB). `gpu::Compiler` runs it on the source
+     (every compute function in one run, as the built-in effects are compiled, with Lumen's modules
+     written out from `:/gpu/modules`), reads its machine-readable messages by line and column (this
+     slangc may crash on its way out after an error: its messages decide), and never names the file
+     after a module. `Effect::addCompiled` makes an effect of the SPIR-V and reflection (its passes
+     the file's compute functions in order; refused without a `result` or with a texture not
+     rgba16f), which `describe` and `load` find by id, its kernels made once. `ui/effects/UserEffects`:
+     the `.slang` files of `paths::defaultEffects()` (`Documents/Lumen/Effects`), each `user:<name>`
+     and the node `effect:<name>` in the new *Your effects* category; what a text compiled to is
+     cached by its SHA-256, so starting Lumen needs no compiler. `EffectEditorWindow` (Tools →
+     Effect editor…): your effects, the source with line numbers, compiled 0.7 s after typing stops,
+     errors underlined and listed (click to go there), the preview on the active layer through the
+     effect's own node with its sliders (kept while it compiles again), Save, Delete (to the recycle
+     bin), Export…, Open… with a banner saying where it comes from and to read it first, and the
+     compiler's download offered with its size. Tests: `tst_gpu compilerMessages, compileOwnEffect,
+     compileMistakes` and `tst_filters_ui effectEditor`, with the slangc Lumen is built with (no
+     download); `tst_runtime slangComponent` (opt-in, `LUMEN_SLANG_ZIP` naming the downloaded
+     archive) installs the real archive through `Components` from a local server and runs the
+     installed slangc. Run once by hand: the archive's SHA-256 matched GitHub's, and the three files
+     compiled the built-in effects.
+   * Not yet: your own effects in the Develop tab (they are filter steps); syntax colours in the
+     source; a download from GitHub itself inside Lumen (the same downloader as the other
+     components).
 8. [ ] **Presets** (copy and paste settings, apply to many pictures), the user guide, German, a live
    check on a few real photos.
 

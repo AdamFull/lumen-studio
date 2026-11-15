@@ -39,6 +39,14 @@ public:
     // graphics card needed, and passes() is empty. For menus and node types.
     static Effect describe(const QString &id, QString *error = nullptr);
 
+    // Your own effects (plan M20 step 7): one compiled from Slang (gpu::Compiler) is known by its id
+    // until it is removed or added again, and describe() and load() find it like a built-in one.
+    // Its passes are its compute functions in the file's order. Null with the reason when it is
+    // not an effect Lumen can run (no passes, a texture not rgba16f, nothing written to "result").
+    static Effect addCompiled(const QString &id, const QByteArray &spirv, const QByteArray &reflection, QString *error = nullptr);
+    static void removeCompiled(const QString &id);
+    static QStringList compiled();
+
     bool isNull() const { return m_id.isEmpty(); }
     bool canRun() const { return !m_passes.isEmpty(); }
     QString id() const { return m_id; }
@@ -63,6 +71,9 @@ public:
     QVariantMap resolve(const QVariantMap &values, QString *error = nullptr) const;
 
 private:
+    friend struct UserEffect;
+    static Effect describeFrom(const QString &id, const QList<QPair<QString, QByteArray>> &parts, QString *error);
+
     QString m_id;
     QString m_title;
     QString m_group;

@@ -1189,7 +1189,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="-323"/>
-        <location filename="../src/ui/Studio.cpp" line="+161"/>
+        <location filename="../src/ui/Studio.cpp" line="+165"/>
         <location line="+17"/>
         <source>Lumen is shutting down.</source>
         <translation>Lumen wird beendet.</translation>
@@ -4485,7 +4485,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Dafür ist die Grafikkarte nötig: %1</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+15"/>
+        <source>An effect of your own, on the graphics card.</source>
+        <translation>Ein eigener Effekt, auf der Grafikkarte.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
         <location line="+1"/>
         <source>Image</source>
         <translation>Bild</translation>
@@ -4516,17 +4521,17 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Eine .cube-Datei in Ihrem LUT-Ordner; „Hinzufügen…“ im Bereich Entwickeln legt eine dort ab.</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+17"/>
         <source>%1: %2</source>
         <translation>%1: %2</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+4"/>
         <source>The tint&apos;s colour: its hue and how strong it is count, not how light it is.</source>
         <translation>Die Farbe der Tönung: Es zählen ihr Farbton und ihre Stärke, nicht ihre Helligkeit.</translation>
     </message>
     <message>
-        <location line="+76"/>
+        <location line="+98"/>
         <source>%1 cannot be used as a LUT: %2</source>
         <translation>%1 kann nicht als LUT verwendet werden: %2</translation>
     </message>
@@ -4766,7 +4771,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::filters::NodeRegistry</name>
     <message>
-        <location filename="../src/filters/Registry.cpp" line="+95"/>
+        <location filename="../src/filters/Registry.cpp" line="+101"/>
         <source>Input and output</source>
         <translation>Eingabe und Ausgabe</translation>
     </message>
@@ -4779,6 +4784,11 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <location line="+2"/>
         <source>Develop (graphics card)</source>
         <translation>Entwickeln (Grafikkarte)</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Your effects</source>
+        <translation>Eigene Effekte</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -10008,6 +10018,198 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
 </context>
 <context>
+    <name>lumen::ui::EffectEditorWindow</name>
+    <message>
+        <location filename="../src/ui/effects/EffectEditorWindow.cpp" line="+187"/>
+        <location line="+201"/>
+        <source>Effect editor</source>
+        <translation>Effekteditor</translation>
+    </message>
+    <message>
+        <location line="-190"/>
+        <source>Download</source>
+        <translation>Herunterladen</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <location line="+5"/>
+        <source>Your effects</source>
+        <translation>Eigene Effekte</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>New</source>
+        <translation>Neu</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Delete</source>
+        <translation>Löschen</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Name</source>
+        <translation>Name</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Open…</source>
+        <translation>Öffnen…</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Look at an effect someone shared (a .slang file); it is added only when you save it</source>
+        <translation>Einen Effekt ansehen, den jemand geteilt hat (eine .slang-Datei); er wird erst hinzugefügt, wenn Sie ihn speichern</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Export…</source>
+        <translation>Exportieren…</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Save a copy of the source to share</source>
+        <translation>Eine Kopie des Quelltexts zum Teilen speichern</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Save</source>
+        <translation>Speichern</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Keep it in your effects folder: it is then a step of the filter editor</source>
+        <translation>Im Ordner Ihrer Effekte behalten: Dann ist er ein Schritt im Filtereditor</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Source</source>
+        <translation>Quelltext</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Problems</source>
+        <translation>Probleme</translation>
+    </message>
+    <message>
+        <location line="+69"/>
+        <source>Delete effect</source>
+        <translation>Effekt löschen</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Delete “%1”? Its file goes to the recycle bin.</source>
+        <translation>„%1“ löschen? Die Datei kommt in den Papierkorb.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <location line="+3"/>
+        <source>Open an effect</source>
+        <translation>Einen Effekt öffnen</translation>
+    </message>
+    <message>
+        <location line="-3"/>
+        <location line="+7"/>
+        <source>Slang effects (*.slang)</source>
+        <translation>Slang-Effekte (*.slang)</translation>
+    </message>
+    <message>
+        <location line="-1"/>
+        <location line="+6"/>
+        <source>Export the effect</source>
+        <translation>Den Effekt exportieren</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>%1 could not be written.</source>
+        <translation>%1 konnte nicht geschrieben werden.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Downloading the Slang compiler; the Queue shows how far it is.</source>
+        <translation>Der Slang-Compiler wird heruntergeladen; die Warteschlange zeigt, wie weit es ist.</translation>
+    </message>
+    <message>
+        <location line="+35"/>
+        <source>“%1” has changes that are not saved. Save them?</source>
+        <translation>„%1“ hat Änderungen, die nicht gespeichert sind. Speichern?</translation>
+    </message>
+    <message>
+        <location line="+52"/>
+        <source>My effect</source>
+        <translation>Mein Effekt</translation>
+    </message>
+    <message>
+        <location line="+30"/>
+        <source>%1 could not be read.</source>
+        <translation>%1 konnte nicht gelesen werden.</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>To compile effects, Lumen needs the Slang compiler: a download of %1 MB from the Slang project on GitHub, once. Effects you have already compiled work without it.</source>
+        <translation>Zum Kompilieren von Effekten braucht Lumen den Slang-Compiler: einmalig ein Download von %1 MB vom Slang-Projekt auf GitHub. Bereits kompilierte Effekte funktionieren ohne ihn.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>This effect comes from %1 and is not saved yet. Read it before you save it: an effect runs on your graphics card, and a careless or unkind one can make the screen stop for a moment.</source>
+        <translation>Dieser Effekt stammt aus %1 und ist noch nicht gespeichert. Lesen Sie ihn, bevor Sie ihn speichern: Ein Effekt läuft auf Ihrer Grafikkarte, und ein nachlässiger oder böswilliger kann den Bildschirm kurz anhalten.</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Not compiled: the Slang compiler is not installed.</source>
+        <translation>Nicht kompiliert: Der Slang-Compiler ist nicht installiert.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <location line="+80"/>
+        <source>Compiling…</source>
+        <translation>Wird kompiliert…</translation>
+    </message>
+    <message>
+        <location line="-38"/>
+        <source>Line %1</source>
+        <translation>Zeile %1</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>In a module</source>
+        <translation>In einem Modul</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+43"/>
+        <source>%n error(s): the preview shows the last version that worked.</source>
+        <translation>
+            <numerusform>%n Fehler: Die Vorschau zeigt die letzte Fassung, die funktioniert hat.</numerusform>
+            <numerusform>%n Fehler: Die Vorschau zeigt die letzte Fassung, die funktioniert hat.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Compiled. Not saved yet.</source>
+        <translation>Kompiliert. Noch nicht gespeichert.</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Compiled and saved.</source>
+        <translation>Kompiliert und gespeichert.</translation>
+    </message>
+    <message>
+        <location line="+91"/>
+        <source>The preview did not work: %1</source>
+        <translation>Die Vorschau hat nicht funktioniert: %1</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Save the effect</source>
+        <translation>Den Effekt speichern</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Give the effect a name that can be a file&apos;s name (no \ / : * ? &quot; &lt; &gt; |).</source>
+        <translation>Geben Sie dem Effekt einen Namen, der ein Dateiname sein kann (ohne \ / : * ? " &lt; &gt; |).</translation>
+    </message>
+</context>
+<context>
     <name>lumen::ui::ExpressionCheck</name>
     <message>
         <location filename="../src/plugins/parts/ExpressionCheck.cpp" line="+83"/>
@@ -12879,7 +13081,7 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         <translation>Einen Charakter für Live2D in Teile zerlegen</translation>
     </message>
     <message>
-        <location filename="../src/ui/MainWindow.cpp" line="+319"/>
+        <location filename="../src/ui/MainWindow.cpp" line="+320"/>
         <source>General</source>
         <translation>Allgemein</translation>
     </message>
@@ -12920,18 +13122,18 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
     </message>
     <message>
         <location line="+9"/>
-        <location line="+885"/>
+        <location line="+892"/>
         <source>(none)</source>
         <translation>(keine)</translation>
     </message>
     <message>
-        <location line="-881"/>
-        <location line="+835"/>
+        <location line="-888"/>
+        <location line="+842"/>
         <source>Quit</source>
         <translation>Beenden</translation>
     </message>
     <message>
-        <location line="-833"/>
+        <location line="-840"/>
         <source>&amp;Edit</source>
         <translation>&amp;Bearbeiten</translation>
     </message>
@@ -12956,7 +13158,7 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         <translation>Design</translation>
     </message>
     <message>
-        <location line="+115"/>
+        <location line="+122"/>
         <source>&amp;Help</source>
         <translation>&amp;Hilfe</translation>
     </message>
@@ -12982,13 +13184,13 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         <translation>&lt;h3&gt;Lumen Studio %1&lt;/h3&gt;&lt;p&gt;KI-gestützte Bildgenerierung und -bearbeitung.&lt;/p&gt;&lt;p&gt;Erstellt mit Qt %2.&lt;/p&gt;</translation>
     </message>
     <message>
-        <location line="-347"/>
-        <location line="+515"/>
+        <location line="-354"/>
+        <location line="+522"/>
         <source>Jobs</source>
         <translation>Aufträge</translation>
     </message>
     <message>
-        <location line="-732"/>
+        <location line="-739"/>
         <source>Project images — Lumen Studio</source>
         <translation>Projektbilder — Lumen Studio</translation>
     </message>
@@ -13273,7 +13475,17 @@ Sie bezahlen RunPod für jede Minute, die die GPU gemietet ist. Lumen fährt sie
         <translation>Den im Filter-Bedienfeld gewählten Filter im Filtereditor öffnen (einen integrierten Filter als Kopie zum Ändern)</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+5"/>
+        <source>Effect editor…</source>
+        <translation>Effekteditor…</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Write effects of your own for the graphics card, in Slang, with a live preview; they become steps of the filter editor</source>
+        <translation>Eigene Effekte für die Grafikkarte in Slang schreiben, mit Live-Vorschau; sie werden zu Schritten im Filtereditor</translation>
+    </message>
+    <message>
+        <location line="+9"/>
         <source>Open %1</source>
         <translation>%1 öffnen</translation>
     </message>
@@ -19905,6 +20117,34 @@ Geändert %2</translation>
         <location line="+20"/>
         <source>The download did not work: %1</source>
         <translation>Der Download hat nicht funktioniert: %1</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::ui::UserEffects</name>
+    <message>
+        <location filename="../src/ui/effects/UserEffects.cpp" line="+84"/>
+        <source>My effect</source>
+        <translation>Mein Effekt</translation>
+    </message>
+    <message>
+        <location line="+89"/>
+        <source>It is compiled when the Slang compiler is installed (open it in the effect editor).</source>
+        <translation>Er wird kompiliert, sobald der Slang-Compiler installiert ist (im Effekteditor öffnen).</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Compiling…</source>
+        <translation>Wird kompiliert…</translation>
+    </message>
+    <message>
+        <location line="+50"/>
+        <source>“%1” cannot be a file&apos;s name.</source>
+        <translation>„%1“ kann kein Dateiname sein.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>%1 could not be written.</source>
+        <translation>%1 konnte nicht geschrieben werden.</translation>
     </message>
 </context>
 <context>

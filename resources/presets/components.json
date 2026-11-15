@@ -49,6 +49,26 @@
         {"path": "onnx/model_int8.onnx", "size": 203824481, "sha256": "3bff430de583461ab3c1e8b99b19508f4fb238bf0fea0cde2c45f840a0082a26"},
         {"path": "vocab.txt", "size": 231508, "sha256": "07eced375cec144d27c900241f3e339478dec958f92fddbc551f295c992038a3"}
       ]
+    },
+    {
+      "id": "slang",
+      "name": "Slang 2026.8 (compiles your own effects)",
+      "license": "Apache-2.0 WITH LLVM-exception",
+      "folder": "slang-2026.8",
+      "location": "data",
+      "files": [
+        {
+          "url": "https://github.com/shader-slang/slang/releases/download/v2026.8/slang-2026.8-windows-x86_64.zip",
+          "size": 64509474,
+          "sha256": "7a3ffcbd267dbddb4818f68ade13da37e2d394dd305c7276fef964933388f184",
+          "extract": {
+            "bin/slangc.exe": "slangc.exe",
+            "bin/slang.dll": "slang.dll",
+            "bin/slang-compiler.dll": "slang-compiler.dll",
+            "LICENSE": "LICENSE"
+          }
+        }
+      ]
     }
   ]
 }

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "filters/NodeType.h"
+
 #include <QHash>
 #include <QImage>
 #include <QString>
@@ -20,6 +22,13 @@ namespace effects {
 void registerNodes(NodeRegistry &registry);
 // The node id of a built-in effect ("local" → "local-contrast"); empty when it has no node.
 QString nodeIdOf(const QString &effect);
+// One of your own effects (gpu::Effect::addCompiled) as a node "effect:<name>" in the category
+// Your effects, added again when it changes; removed when the effect is.
+QString yourNodeId(const QString &name);
+void registerYourNode(NodeRegistry &registry, const QString &effectId, const QString &name);
+void removeYourNode(NodeRegistry &registry, const QString &name);
+// A node type for an effect of your own as it is now (the effect editor's preview runs it).
+NodeTypePtr yourNode(const QString &effectId, const QString &name);
 // How many runs of effects have been made into pictures so far, for tests: a row of effect nodes
 // read once counts one.
 int chainRuns();

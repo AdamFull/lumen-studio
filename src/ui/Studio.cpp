@@ -1,6 +1,7 @@
 #include "ui/Studio.h"
 
 #include "ui/SmartSelect.h"
+#include "ui/effects/UserEffects.h"
 #include "ui/filters/FindAreaNode.h"
 
 #include "ai/FilterNodes.h"
@@ -57,6 +58,9 @@ Studio::Studio(QObject *parent)
     ai::registerFilterNodes(&m_generation);
     // "Find area": objects by name with the detection models (plan M18 §18.1).
     registerFindAreaNode(m_smartSelect);
+    // Your own effects: from the cache at once (no compiler needed), as effects and nodes.
+    m_userEffects = new UserEffects(&m_components, this);
+    m_userEffects->reload();
     applyConcurrency();
     connect(&m_registry, &ai::ProviderRegistry::providersChanged, this, &Studio::applyConcurrency);
     m_runtimes.load();

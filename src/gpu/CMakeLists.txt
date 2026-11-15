@@ -12,6 +12,7 @@ target_compile_definitions(lumen_volk PUBLIC VK_NO_PROTOTYPES)
 add_library(lumen_gpu STATIC
     Gpu.h Gpu.cpp
     Effects.h Effects.cpp
+    Compiler.h Compiler.cpp
     Vulkan.h
     Vma.cpp
 )
@@ -31,3 +32,9 @@ lumen_add_slang(lumen_gpu effects/lut.slang ENTRIES main EFFECT)
 lumen_add_slang(lumen_gpu effects/local.slang ENTRIES shrinkFine fineAcross fineDown shrinkCoarse coarseAcross coarseDown findAir main EFFECT)
 lumen_add_slang(lumen_gpu effects/detail.slang ENTRIES across down shrinkColour colourAcross colourDown main EFFECT)
 lumen_add_slang(lumen_gpu effects/finish.slang ENTRIES main EFFECT)
+
+# The modules your own effects import (plan M20 step 7): written out for slangc when one is compiled.
+qt_add_resources(lumen_gpu "lumen_gpu_modules"
+    PREFIX "/gpu/modules"
+    BASE shaders
+    FILES shaders/effect.slang shaders/colorspace.slang shaders/sampling.slang)

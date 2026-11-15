@@ -23,6 +23,8 @@ add_library(lumen_ui STATIC
     widgets/DevelopPanel.h widgets/DevelopPanel.cpp
     widgets/ColorWheel.h widgets/ColorWheel.cpp
     Grading.h Grading.cpp
+    effects/UserEffects.h effects/UserEffects.cpp
+    effects/EffectEditorWindow.h effects/EffectEditorWindow.cpp
     widgets/ProviderCombo.h widgets/ProviderCombo.cpp
     widgets/LoraPicker.h widgets/LoraPicker.cpp
     widgets/RunSettingsEditor.h widgets/RunSettingsEditor.cpp

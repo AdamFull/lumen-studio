@@ -20,6 +20,8 @@ public:
 
     // Adds a type, replacing one with the same id.
     void add(NodeTypePtr type);
+    // Removes a type (one of your own effects deleted); graphs that use it keep their pointer.
+    void remove(const QString &id);
     NodeTypePtr find(const QString &id) const;
     bool contains(const QString &id) const { return find(id) != nullptr; }
     // In the order they were added (the classic nodes in menu order).
@@ -40,6 +42,7 @@ namespace categories {
 inline const QString InputOutput = QStringLiteral("io");
 inline const QString Color = QStringLiteral("color");
 inline const QString Develop = QStringLiteral("develop"); // the effects on the graphics card (EffectNodes.h)
+inline const QString Yours = QStringLiteral("yours");     // your own effects (EffectNodes.h)
 inline const QString Detail = QStringLiteral("detail");
 inline const QString Combine = QStringLiteral("combine");
 inline const QString Mask = QStringLiteral("mask");

@@ -27,6 +27,7 @@
 namespace lumen::ui {
 
 class SmartSelect;
+class UserEffects;
 
 // What Studio::showPage opens: the editor (the main window), New from prompt ("generate") and Browse
 // project images ("library"), ids kept from the pages they replace. Plugins add their own pages
@@ -66,6 +67,8 @@ public:
     // Programs and models downloaded on first use (ONNX Runtime, detection models).
     runtime::Components *components() { return &m_components; }
     SmartSelect *smartSelect() const { return m_smartSelect; }
+    // Your own effects (plan M20 step 7).
+    UserEffects *userEffects() const { return m_userEffects; }
     // Moves Lumen's models folder (Settings → Models → Move…), see runtime::moveModelsFolder. The
     // chosen folder is kept in the "models/folder" setting; characters' LoRA files follow it.
     Job *moveModelsFolder(const QString &to);
@@ -205,6 +208,7 @@ private:
     runtime::ModelHub m_hub;
     runtime::Components m_components;
     SmartSelect *m_smartSelect = nullptr;
+    UserEffects *m_userEffects = nullptr;
     runtime::RunPodClient m_runPod{&m_http};
     ai::GenerationService m_generation;
     ai::Director m_director;

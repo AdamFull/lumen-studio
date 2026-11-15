@@ -10,11 +10,15 @@
 #include "core/Paths.h"
 #include "doc/Document.h"
 #include "filters/Ops.h"
+#include "gpu/Compiler.h"
+#include "gpu/Gpu.h"
 #include "filters/Registry.h"
 #include "ui/Studio.h"
 #include "ui/Theme.h"
 #include "ui/canvas/CanvasView.h"
 #include "ui/canvas/EditorState.h"
+#include "ui/effects/EffectEditorWindow.h"
+#include "ui/effects/UserEffects.h"
 #include "ui/filters/FilterCatalog.h"
 #include "ui/filters/FilterRunner.h"
 #include "ui/filters/FiltersPanel.h"
@@ -497,6 +501,7 @@ private slots:
     void editorRunServesApply();
     void panelActionsInView();
     void lutEditor();
+    void effectEditor();
 
 private:
     std::unique_ptr<QTemporaryDir> m_dir;
@@ -1088,6 +1093,125 @@ void TestFiltersUi::lutEditor()
     field.setValue(QStringLiteral("Gone.cube"));
     QCOMPARE(field.value().toString(), QStringLiteral("Gone.cube"));
     QVERIFY(combo->currentText().contains(QLatin1String("missing")));
+}
+
+// Your own effects (plan M20 step 7): written in the editor, compiled as they are typed with the
+// errors where they are, previewed with their sliders, saved as nodes; shared files shown first; a
+// saved effect loads from the cache without the compiler.
+void TestFiltersUi::effectEditor()
+{
+    if (QStringLiteral(LUMEN_TEST_SLANGC).isEmpty())
+        QSKIP("no slangc");
+    if (!gpu::Context::instance().isAvailable())
+        QSKIP("no Vulkan device");
+    // Never the real effects folder: test mode or LUMEN_DATA_DIR moves it.
+    QVERIFY2(!UserEffects::folder().startsWith(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)),
+             qPrintable(UserEffects::folder()));
+    QDir(UserEffects::folder()).removeRecursively();
+    auto clean = qScopeGuard([] { QDir(UserEffects::folder()).removeRecursively(); });
+    gpu::Compiler::setProgram(QStringLiteral(LUMEN_TEST_SLANGC));
+
+    Studio studio;
+    QImage grey(200, 150, QImage::Format_ARGB32_Premultiplied);
+    grey.fill(QColor(120, 120, 120));
+    QVERIFY(studio.openImageAsDocument(grey, QStringLiteral("Effect test")));
+    EffectEditorWindow w(&studio);
+    w.setAttribute(Qt::WA_DeleteOnClose, false);
+    w.QMainWindow::show();
+    QSignalSpy updated(&w, &EffectEditorWindow::updated);
+
+    // A new effect starts from the template and compiles.
+    QTRY_VERIFY_WITH_TIMEOUT(!updated.isEmpty() && !w.isBusy(), 30000);
+    QVERIFY2(w.messages().isEmpty(), qPrintable(w.status()));
+    QCOMPARE(w.status(), QStringLiteral("Compiled. Not saved yet."));
+    QVERIFY(w.field(QStringLiteral("warmth")));
+    QVERIFY(w.field(QStringLiteral("fade")));
+    QVERIFY(!w.preview().isNull());
+    QVERIFY(std::abs(w.preview().pixelColor(5, 5).red() - 120) <= 1);
+
+    // A slider moves the preview.
+    updated.clear();
+    w.field(QStringLiteral("warmth"))->setValue(100.0);
+    emit w.field(QStringLiteral("warmth"))->valueChanged(100.0);
+    QTRY_VERIFY_WITH_TIMEOUT(!updated.isEmpty() && !w.isBusy(), 15000);
+    const QColor warm = w.preview().pixelColor(5, 5);
+    QVERIFY2(warm.red() > warm.blue() + 10, qPrintable(warm.name()));
+
+    // A mistake: said on its line; the preview keeps the last one that worked, and the slider keeps
+    // its value when the source compiles again.
+    const QString good = w.source();
+    QString bad = good;
+    bad.replace(QStringLiteral("p.fade / 100.0"), QStringLiteral("p.faed / 100.0"));
+    const int line = int(bad.left(bad.indexOf(QStringLiteral("p.faed"))).count(u'\n')) + 1;
+    updated.clear();
+    w.setSource(bad);
+    w.compileNow();
+    QTRY_VERIFY_WITH_TIMEOUT(!updated.isEmpty() && !w.isBusy(), 30000);
+    bool onLine = false;
+    for (const gpu::CompileMessage &m : w.messages())
+        onLine = onLine || (m.severity == QLatin1String("error") && m.inSource && m.line == line);
+    QVERIFY2(onLine, qPrintable(w.status()));
+    QVERIFY(w.status().contains(QLatin1String("error")));
+    auto *source = w.findChild<QPlainTextEdit *>(QStringLiteral("effectSource"));
+    QVERIFY(!source->extraSelections().isEmpty());
+    auto *problems = w.findChild<QListWidget *>(QStringLiteral("effectProblems"));
+    QVERIFY(problems->count() >= 1);
+    QVERIFY(problems->item(0)->text().startsWith(QStringLiteral("Line %1:").arg(line)));
+    QCOMPARE(w.preview().pixelColor(5, 5), warm);
+    updated.clear();
+    w.setSource(good);
+    w.compileNow();
+    QTRY_VERIFY_WITH_TIMEOUT(!updated.isEmpty() && !w.isBusy(), 30000);
+    QCOMPARE(w.field(QStringLiteral("warmth"))->value().toDouble(), 100.0);
+
+    // Saved: a file in the folder, a node of the filter editor, and its name in the list.
+    w.setEffectName(QStringLiteral("Warm test"));
+    QSignalSpy changed(studio.userEffects(), &UserEffects::changed);
+    QVERIFY(w.save());
+    QTRY_VERIFY_WITH_TIMEOUT(studio.userEffects()->item(QStringLiteral("Warm test")).ready, 30000);
+    QVERIFY(QFileInfo::exists(QDir(UserEffects::folder()).filePath(QStringLiteral("Warm test.slang"))));
+    const filters::NodeTypePtr node = filters::NodeRegistry::global().find(QStringLiteral("effect:Warm test"));
+    QVERIFY(node);
+    QCOMPARE(node->info().category, filters::categories::Yours);
+    QCOMPARE(node->info().name, QStringLiteral("Warm fade"));
+    QVERIFY(node->info().param(QStringLiteral("warmth")));
+    QTRY_VERIFY(!w.findChild<QListWidget *>(QStringLiteral("effectList"))->findItems(QStringLiteral("Warm test"), Qt::MatchExactly).isEmpty());
+    QCOMPARE(w.status(), QStringLiteral("Compiled and saved."));
+
+    // Started again without a compiler: from the cache, ready at once.
+    {
+        gpu::Compiler::setProgram(QStringLiteral("C:/nowhere/slangc.exe"));
+        auto restore = qScopeGuard([] { gpu::Compiler::setProgram(QStringLiteral(LUMEN_TEST_SLANGC)); });
+        if (qEnvironmentVariableIsEmpty("LUMEN_SLANGC")) {
+            UserEffects later(nullptr);
+            later.reload();
+            QVERIFY(later.item(QStringLiteral("Warm test")).ready);
+            QVERIFY(!later.compilerReady());
+        }
+    }
+
+    // A file someone shared: shown with where it comes from, added only when saved.
+    QTemporaryDir elsewhere;
+    const QString shared = elsewhere.filePath(QStringLiteral("Their look.slang"));
+    {
+        QFile f(shared);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write(EffectEditorWindow::templateSource().toUtf8());
+    }
+    updated.clear();
+    QVERIFY(w.importFile(shared));
+    auto *banner = w.findChild<QLabel *>(QStringLiteral("effectBanner"));
+    QVERIFY(banner->isVisible());
+    QVERIFY(banner->text().contains(QDir::toNativeSeparators(shared)));
+    QCOMPARE(w.effectName(), QStringLiteral("Their look"));
+    QVERIFY(!studio.userEffects()->item(QStringLiteral("Their look")).ready);
+    QVERIFY(!QFileInfo::exists(QDir(UserEffects::folder()).filePath(QStringLiteral("Their look.slang"))));
+    QTRY_VERIFY_WITH_TIMEOUT(!updated.isEmpty() && !w.isBusy(), 30000);
+
+    // Deleted: gone as a file and a node.
+    QVERIFY(studio.userEffects()->remove(QStringLiteral("Warm test")));
+    QVERIFY(!filters::NodeRegistry::global().find(QStringLiteral("effect:Warm test")));
+    QVERIFY(!QFileInfo::exists(QDir(UserEffects::folder()).filePath(QStringLiteral("Warm test.slang"))));
 }
 
 void TestFiltersUi::panelListsAndSettings()

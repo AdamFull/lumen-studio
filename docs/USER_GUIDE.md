@@ -566,6 +566,27 @@ what they made is used again when you apply the saved filter to the same layer.
 
 Filters are `.lumenfilter` files in `Documents\Lumen\Filters`; a file put there appears in the list.
 
+### Your own effects
+
+**Tools → Effect editor…** is for writing effects of your own for the graphics card, in
+[Slang](https://shader-slang.org) (a shading language like HLSL). The first time, it offers to
+download the Slang compiler (about 65 MB from the Slang project on GitHub); effects you have already
+compiled work without it.
+
+* **New** starts from a small example (*Warm fade*) that says how an effect is written: the picture
+  arrives as `source` and the effect writes `result`, in linear light. Each setting with a
+  `[Label]` and a `[Range]` is a slider; `import colorspace;` gives `toSrgb`, `toLinear`, `luma`
+  and OKLab, and the built-in effects show more (several passes, smaller textures with `[Fit]`).
+* The source is compiled a moment after you stop typing. A mistake is underlined where it is and
+  listed under the source (click it to go there); the preview on the right keeps the last version
+  that worked, on the active layer (or a sample picture), with the effect's sliders under it.
+* **Save** keeps it in `Documents\Lumen\Effects` as a `.slang` file. It is then a step of the filter
+  editor, under *Your effects*, and can be part of any filter.
+* **Export…** writes a copy to share. **Open…** shows an effect someone shared, with where it comes
+  from, and adds it only when you save it: read it first. An effect runs on your graphics card; it
+  cannot reach your files, but a careless one can make the screen stop for a moment.
+* **Delete** moves the effect's file to the recycle bin.
+
 ## 9. Opening, saving and exporting
 
 Lumen saves pictures the way other image editors do.

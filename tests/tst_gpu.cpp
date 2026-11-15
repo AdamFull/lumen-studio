@@ -1,6 +1,7 @@
 // lumen_gpu (plan M20 step 1): the device, textures, kernels from Slang's reflection, uploads,
 // dispatches and read-backs, with barriers from the textures' states. Runs under Vulkan's validation
 // layer where the Vulkan SDK provides it, and checks it said nothing; skips without a usable device.
+#include "gpu/Compiler.h"
 #include "gpu/Effects.h"
 #include "gpu/Gpu.h"
 
@@ -48,6 +49,9 @@ private slots:
     void finishEffect();
     void developAtFullSize();
     void lookSheet();
+    void compilerMessages();
+    void compileOwnEffect();
+    void compileMistakes();
     void cleanup();
 
 private:
@@ -1115,6 +1119,139 @@ void TestGpu::lookSheet()
     }
     painter.end();
     QVERIFY(sheet.save(QDir(dir).filePath(QStringLiteral("develop-step5.png"))));
+}
+
+// ---- Your own effects (plan M20 step 7) -------------------------------------------------------------
+
+// An effect of your own: Lumen's modules imported, a slider, two passes with a small texture between.
+static const char kOwnEffect[] = R"(import effect;
+import colorspace;
+
+struct Params
+{
+    [Label("Strength")] [Range(0, 100)] [Default(100)] float strength;
+    uint2 size;
+};
+[[vk::push_constant]] ConstantBuffer<Params> p;
+
+[[vk::binding(0)]] [format("rgba16f")] RWTexture2D<float4> source;
+[[vk::binding(1)]] [format("rgba16f")] RWTexture2D<float4> result;
+[Size(1, 1)] [[vk::binding(2)]] [format("rgba16f")] RWTexture2D<float4> one;
+
+[Effect("Turn over", "Mine")]
+[Over("one")]
+[shader("compute")]
+[numthreads(1, 1, 1)]
+void prepare(uint3 id: SV_DispatchThreadID)
+{
+    one[uint2(0, 0)] = float4(1.0, 1.0, 1.0, 1.0);
+}
+
+[shader("compute")]
+[numthreads(16, 16, 1)]
+void main(uint3 id: SV_DispatchThreadID)
+{
+    if (any(id.xy >= p.size))
+        return;
+    const float4 c = source[id.xy];
+    const float3 over = one[uint2(0, 0)].rgb - toSrgb(c.rgb);
+    result[id.xy] = float4(lerp(c.rgb, toLinear(over), p.strength / 100.0), c.a);
+}
+)";
+
+void TestGpu::compilerMessages()
+{
+    const QString output = QStringLiteral(
+        "E30015\terror\tC:/work/mine.slang\t6\t142\t6\t156\tundefined identifier\r\n"
+        "E30015\tspan\tC:/work/mine.slang\t6\t142\t6\t156\tundefined identifier 'undefinedThing'.\r\n"
+        "W41012\twarning\tC:/lumen/modules/effect.slang\t3\t1\t3\t4\tsomething in a module\n"
+        "not a message\n");
+    const QList<CompileMessage> messages = Compiler::parseMessages(output, QStringLiteral("C:\\work\\mine.slang"));
+    QCOMPARE(messages.size(), 2);
+    QCOMPARE(messages[0].severity, QStringLiteral("error"));
+    QCOMPARE(messages[0].code, QStringLiteral("E30015"));
+    QCOMPARE(messages[0].text, QStringLiteral("undefined identifier 'undefinedThing'."));
+    QCOMPARE(messages[0].line, 6);
+    QCOMPARE(messages[0].column, 142);
+    QCOMPARE(messages[0].endColumn, 156);
+    QVERIFY(messages[0].inSource);
+    QCOMPARE(messages[1].severity, QStringLiteral("warning"));
+    QVERIFY(!messages[1].inSource);
+}
+
+// Compiled, added and run like a built-in effect; compiled again, the new one runs.
+void TestGpu::compileOwnEffect()
+{
+    if (QStringLiteral(LUMEN_TEST_SLANGC).isEmpty())
+        QSKIP("no slangc");
+    Compiler::setProgram(QStringLiteral(LUMEN_TEST_SLANGC));
+    QVERIFY(Compiler::isAvailable());
+    const Compiled compiled = Compiler::compile(QString::fromUtf8(kOwnEffect), QStringLiteral("Turn over"));
+    QVERIFY2(compiled.ok(), qPrintable(compiled.error));
+    QString error;
+    const Effect effect = Effect::addCompiled(QStringLiteral("user:turn-over"), compiled.spirv, compiled.reflection, &error);
+    QVERIFY2(!effect.isNull(), qPrintable(error));
+    QCOMPARE(effect.title(), QStringLiteral("Turn over"));
+    QCOMPARE(effect.defaults().value(QStringLiteral("strength")).toDouble(), 100.0);
+    QCOMPARE(effect.textureSize(QStringLiteral("one"), QSize(640, 480)), QSize(1, 1));
+    QVERIFY(Effect::compiled().contains(QStringLiteral("user:turn-over")));
+    QCOMPARE(Effect::describe(QStringLiteral("user:turn-over")).title(), QStringLiteral("Turn over"));
+
+    if (!m_available)
+        QSKIP("no Vulkan device");
+    const QImage picture = swatches({QColor(100, 100, 100), QColor(200, 120, 80)});
+    QImage out = runOne(QStringLiteral("user:turn-over"), {}, picture, &error);
+    QVERIFY2(!out.isNull(), qPrintable(error));
+    QVERIFY2(near(out.pixelColor(1, 0), QColor(55, 135, 175)), qPrintable(out.pixelColor(1, 0).name()));
+    QVERIFY(near(runOne(QStringLiteral("user:turn-over"), {{QStringLiteral("strength"), 0.0}}, picture).pixelColor(1, 0), QColor(200, 120, 80)));
+
+    // Changed and added again under the same id: the new one runs.
+    QString changed = QString::fromUtf8(kOwnEffect);
+    changed.replace(QStringLiteral("float4(1.0, 1.0, 1.0, 1.0)"), QStringLiteral("float4(0.5, 0.5, 0.5, 1.0)"));
+    const Compiled again = Compiler::compile(changed, QStringLiteral("Turn over"));
+    QVERIFY2(again.ok(), qPrintable(again.error));
+    QVERIFY(!Effect::addCompiled(QStringLiteral("user:turn-over"), again.spirv, again.reflection, &error).isNull());
+    out = runOne(QStringLiteral("user:turn-over"), {}, picture, &error);
+    QVERIFY2(out.pixelColor(0, 0).red() <= 30, qPrintable(out.pixelColor(0, 0).name()));
+    Effect::removeCompiled(QStringLiteral("user:turn-over"));
+    QVERIFY(Effect::describe(QStringLiteral("user:turn-over")).isNull());
+}
+
+// What goes wrong is said where it is: the compiler's errors by line, and an effect Lumen cannot run.
+void TestGpu::compileMistakes()
+{
+    if (QStringLiteral(LUMEN_TEST_SLANGC).isEmpty())
+        QSKIP("no slangc");
+    Compiler::setProgram(QStringLiteral(LUMEN_TEST_SLANGC));
+    QString broken = QString::fromUtf8(kOwnEffect);
+    broken.replace(QStringLiteral("p.strength / 100.0"), QStringLiteral("p.strenght / 100.0"));
+    const Compiled bad = Compiler::compile(broken);
+    QVERIFY(!bad.ok());
+    const int line = int(broken.left(broken.indexOf(QStringLiteral("p.strenght"))).count(u'\n')) + 1;
+    bool found = false;
+    for (const CompileMessage &m : bad.messages)
+        found = found || (m.severity == QLatin1String("error") && m.inSource && m.line == line && m.column > 1);
+    QVERIFY2(found, qPrintable(bad.error));
+    QVERIFY2(bad.error.startsWith(QStringLiteral("Line %1:").arg(line)), qPrintable(bad.error));
+
+    // Compiles, but writes no "result".
+    QString nothing = QString::fromUtf8(kOwnEffect);
+    nothing.replace(QStringLiteral("RWTexture2D<float4> result;"), QStringLiteral("RWTexture2D<float4> output;"));
+    nothing.replace(QStringLiteral("result[id.xy]"), QStringLiteral("output[id.xy]"));
+    const Compiled quiet = Compiler::compile(nothing);
+    QVERIFY2(quiet.ok(), qPrintable(quiet.error));
+    QString error;
+    QVERIFY(Effect::addCompiled(QStringLiteral("user:quiet"), quiet.spirv, quiet.reflection, &error).isNull());
+    QVERIFY2(error.contains(QLatin1String("result")), qPrintable(error));
+    QVERIFY(!Effect::compiled().contains(QStringLiteral("user:quiet")));
+
+    // No compiler: it says so.
+    Compiler::setProgram(QStringLiteral("C:/nowhere/slangc.exe"));
+    if (qEnvironmentVariableIsEmpty("LUMEN_SLANGC")) {
+        QVERIFY(!Compiler::isAvailable());
+        QVERIFY(!Compiler::compile(QString::fromUtf8(kOwnEffect)).ok());
+    }
+    Compiler::setProgram(QStringLiteral(LUMEN_TEST_SLANGC));
 }
 
 QTEST_GUILESS_MAIN(TestGpu)

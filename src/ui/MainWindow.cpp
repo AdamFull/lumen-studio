@@ -17,6 +17,7 @@
 #include "ui/dialogs/UpdateDialog.h"
 #include "ui/dialogs/UserGuideDialog.h"
 #include "ui/filters/FiltersPanel.h"
+#include "ui/effects/EffectEditorWindow.h"
 #include "ui/filters/NodeEditorWindow.h"
 #include "ui/widgets/ServerStatus.h"
 #include "ui/pages/EditorPage.h"
@@ -597,6 +598,13 @@ void MainWindow::buildMenus()
     filterEditor->setStatusTip(filterEditor->toolTip());
     bind(filterEditor, QStringLiteral("filter-editor"));
     m_documentActions << filterEditor;
+    // Your own effects in Slang (plan M20 step 7): steps of the filter editor once saved.
+    QAction *effectEditor = tools->addAction(Icons::get(QStringLiteral("adjust")), tr("Effect editor…"), this,
+                                             [this] { EffectEditorWindow::show(m_studio, this); });
+    effectEditor->setObjectName(QStringLiteral("effectEditorAction"));
+    effectEditor->setToolTip(tr("Write effects of your own for the graphics card, in Slang, with a live preview; they become steps of the filter editor"));
+    effectEditor->setStatusTip(effectEditor->toolTip());
+    bind(effectEditor, QStringLiteral("effect-editor"), true);
     tools->addSeparator();
     for (const ext::PageSpec &spec : std::as_const(m_pageSpecs)) {
         QAction *a = tools->addAction(Icons::get(spec.icon), spec.label);

@@ -262,13 +262,14 @@ private:
     gpu::Effect m_effect;
 };
 
-NodeTypePtr makeNode(const QString &nodeId, const gpu::Effect &effect)
+NodeTypePtr makeNode(const QString &nodeId, const gpu::Effect &effect, bool yours = false)
 {
     NodeTypeInfo info;
     info.id = nodeId;
-    info.name = effectWord(effect.title());
-    info.category = categories::Develop;
-    info.description = describeNode(effect.id());
+    // Your own effect's words are yours: shown as they are written.
+    info.name = yours ? effect.title() : effectWord(effect.title());
+    info.category = yours ? categories::Yours : categories::Develop;
+    info.description = yours ? Text::tr("An effect of your own, on the graphics card.") : describeNode(effect.id());
     info.takesPending = true;
     info.inputs = {{kImage, Text::tr("Image"), PortType::Image, false}};
     info.outputs = {{kImage, Text::tr("Image"), PortType::Image, false}};
@@ -307,9 +308,9 @@ NodeTypePtr makeNode(const QString &nodeId, const gpu::Effect &effect)
             continue;
         ParamSpec spec;
         spec.id = p.name;
-        spec.label = uses.value(p.label) > 1 && !p.section.isEmpty()
-                         ? Text::tr("%1: %2").arg(effectWord(p.section), effectWord(p.label))
-                         : effectWord(p.label);
+        const QString label = yours ? p.label : effectWord(p.label);
+        const QString section = yours ? p.section : effectWord(p.section);
+        spec.label = uses.value(p.label) > 1 && !p.section.isEmpty() ? Text::tr("%1: %2").arg(section, label) : label;
         if (p.control == QLatin1String("wheel") && p.components == 2) {
             spec.type = PortType::Color;
             spec.defaultValue = QColor::fromHsvF(float(p.defaults.value(0) / 360.0), float(p.defaults.value(1) / 100.0), 1.0f);
@@ -353,6 +354,28 @@ QString nodeIdOf(const QString &effect)
             return QLatin1String(k.node);
     }
     return {};
+}
+
+QString yourNodeId(const QString &name)
+{
+    return QStringLiteral("effect:") + name;
+}
+
+NodeTypePtr yourNode(const QString &effectId, const QString &name)
+{
+    const gpu::Effect effect = gpu::Effect::describe(effectId);
+    return effect.isNull() ? nullptr : makeNode(yourNodeId(name), effect, true);
+}
+
+void registerYourNode(NodeRegistry &registry, const QString &effectId, const QString &name)
+{
+    if (NodeTypePtr type = yourNode(effectId, name))
+        registry.add(std::move(type));
+}
+
+void removeYourNode(NodeRegistry &registry, const QString &name)
+{
+    registry.remove(yourNodeId(name));
 }
 
 int chainRuns()

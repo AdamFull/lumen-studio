@@ -46,6 +46,12 @@ void NodeRegistry::add(NodeTypePtr type)
     m_types.append(std::move(type));
 }
 
+void NodeRegistry::remove(const QString &id)
+{
+    QMutexLocker lock(&m_mutex);
+    m_types.removeIf([&id](const NodeTypePtr &t) { return t->id() == id; });
+}
+
 NodeTypePtr NodeRegistry::find(const QString &id) const
 {
     QMutexLocker lock(&m_mutex);
@@ -85,7 +91,7 @@ NodeRegistry &NodeRegistry::global()
 
 QStringList categoryIds()
 {
-    return {categories::InputOutput, categories::Color, categories::Develop, categories::Detail, categories::Combine,
+    return {categories::InputOutput, categories::Color, categories::Develop, categories::Yours, categories::Detail, categories::Combine,
             categories::Mask, categories::Transform, categories::Ai};
 }
 
@@ -97,6 +103,8 @@ QString categoryName(const QString &id)
         return Text::tr("Colour");
     if (id == categories::Develop)
         return Text::tr("Develop (graphics card)");
+    if (id == categories::Yours)
+        return Text::tr("Your effects");
     if (id == categories::Detail)
         return Text::tr("Blur, sharpen and noise");
     if (id == categories::Combine)

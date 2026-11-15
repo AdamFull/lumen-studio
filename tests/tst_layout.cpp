@@ -50,6 +50,9 @@
 #include "ui/filters/FilterCatalog.h"
 #include "ui/filters/FiltersPanel.h"
 #include "ui/widgets/DevelopPanel.h"
+#include "ui/effects/EffectEditorWindow.h"
+#include "gpu/Compiler.h"
+#include "gpu/Gpu.h"
 #include "ui/filters/NodeEditorWindow.h"
 #include "ui/ext/Extension.h"
 #include "core/ImageOps.h"
@@ -532,6 +535,7 @@ private slots:
     void dialogs();
     void filterTools();
     void developPanel();
+    void effectEditor();
     void fileQuestions();
 
 private:
@@ -1234,6 +1238,38 @@ void TestLayout::developPanel()
     Auditor::settle();
     m_auditor.audit(&host, QStringLiteral("Develop panel open 300x3600"));
     m_auditor.shoot(&host, QStringLiteral("Develop panel open 300x3600"));
+}
+
+// The effect editor (M20 step 7): without the compiler (what it needs, with the download) and with
+// an effect compiled, its sliders beside the preview.
+void TestLayout::effectEditor()
+{
+    Studio studio;
+    QVERIFY(studio.openImageAsDocument(sampleImage(), QStringLiteral("Sample")));
+    {
+        gpu::Compiler::setProgram(QString());
+        EffectEditorWindow w(&studio);
+        w.setAttribute(Qt::WA_DeleteOnClose, false);
+        w.resize(1180, 740);
+        w.QMainWindow::show();
+        QVERIFY(QTest::qWaitForWindowExposed(&w));
+        Auditor::settle();
+        m_auditor.audit(&w, QStringLiteral("Effect editor without compiler 1180x740"));
+        m_auditor.shoot(&w, QStringLiteral("Effect editor without compiler 1180x740"));
+    }
+    if (QStringLiteral(LUMEN_TEST_SLANGC).isEmpty() || !gpu::Context::instance().isAvailable())
+        return;
+    gpu::Compiler::setProgram(QStringLiteral(LUMEN_TEST_SLANGC));
+    EffectEditorWindow w(&studio);
+    w.setAttribute(Qt::WA_DeleteOnClose, false);
+    QSignalSpy updated(&w, &EffectEditorWindow::updated);
+    w.resize(1180, 740);
+    w.QMainWindow::show();
+    QVERIFY(QTest::qWaitForWindowExposed(&w));
+    QTRY_VERIFY_WITH_TIMEOUT(!updated.isEmpty() && !w.isBusy(), 30000);
+    Auditor::settle();
+    m_auditor.audit(&w, QStringLiteral("Effect editor 1180x740"));
+    m_auditor.shoot(&w, QStringLiteral("Effect editor 1180x740"));
 }
 
 // The questions about a picture's file (M17): saving over it with everything it can say, and changes

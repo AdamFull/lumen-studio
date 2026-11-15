@@ -26,6 +26,8 @@ QString defaultFilters();
 // Folder of the LUTs (.cube) the Develop tab offers, beside the filters: <Documents>/Lumen/LUTs, or
 // <data root>/luts while data is relocated.
 QString defaultLuts();
+// Your own effects, Slang files (plan M20 step 7): Documents/Lumen/Effects; moved like the others.
+QString defaultEffects();
 // Directory with bundled read-only resources shipped next to the executable (optional).
 QString bundledData();
 

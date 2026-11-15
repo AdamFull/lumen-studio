@@ -4,6 +4,9 @@
 
 #include <QDir>
 #include <QFile>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 
 #include <cmath>
 
@@ -16,6 +19,17 @@ const QString kResult = QStringLiteral("result");
 
 } // namespace
 
+// Your own effects, compiled from Slang, by id.
+struct UserEffect
+{
+    QByteArray spirv;
+    QByteArray reflection;
+    Effect described;
+    QList<Kernel> kernels; // made on first use
+};
+static QMutex g_userLock;
+static QHash<QString, UserEffect> g_user;
+
 QStringList Effect::builtIn()
 {
     QStringList out;
@@ -26,6 +40,11 @@ QStringList Effect::builtIn()
 
 Effect Effect::describe(const QString &id, QString *error)
 {
+    {
+        QMutexLocker locker(&g_userLock);
+        if (const auto it = g_user.constFind(id); it != g_user.cend())
+            return it->described;
+    }
     // Read once per effect: setting a chain's steps asks again each time.
     static QMutex lock;
     static QHash<QString, Effect> known;
@@ -46,15 +65,36 @@ Effect Effect::describe(const QString &id, QString *error)
     if (entries.isEmpty())
         return failed(QStringLiteral("the effect %1 has no passes").arg(id));
 
-    Effect e;
-    e.m_id = id;
+    QList<QPair<QString, QByteArray>> parts;
     for (const QString &line : entries) {
         const QString entry = line.trimmed();
         QFile json(QStringLiteral(":/gpu/%1.%2.json").arg(id, entry));
         if (!json.open(QIODevice::ReadOnly))
             return failed(QStringLiteral("no kernel %1.%2 in Lumen").arg(id, entry));
+        parts.append({entry, json.readAll()});
+    }
+    const Effect e = describeFrom(id, parts, error);
+    if (!e.isNull()) {
+        QMutexLocker locker(&lock);
+        known.insert(id, e);
+    }
+    return e;
+}
+
+Effect Effect::describeFrom(const QString &id, const QList<QPair<QString, QByteArray>> &parts, QString *error)
+{
+    auto failed = [error](const QString &message) {
+        if (error)
+            *error = message;
+        return Effect();
+    };
+    if (parts.isEmpty())
+        return failed(QStringLiteral("%1 has no passes: no function marked [shader(\"compute\")]").arg(id));
+    Effect e;
+    e.m_id = id;
+    for (const auto &[entry, json] : parts) {
         QString why;
-        const KernelInterface info = parseReflection(json.readAll(), entry, &why);
+        const KernelInterface info = parseReflection(json, entry, &why);
         if (info.entry.isEmpty())
             return failed(QStringLiteral("%1: %2").arg(id, why));
         e.m_entries << entry;
@@ -116,13 +156,72 @@ Effect Effect::describe(const QString &id, QString *error)
             p.defaults << (given.isEmpty() ? fallback : given.value(std::min<int>(i, int(given.size()) - 1)).toDouble());
         e.m_params << p;
     }
-    QMutexLocker locker(&lock);
-    known.insert(id, e);
+    // Something must come out.
+    bool writes = false;
+    for (const KernelInterface &info : std::as_const(e.m_interfaces))
+        writes = writes || info.bindings.contains(kResult);
+    if (!writes)
+        return failed(QStringLiteral("%1 never writes \"result\": a texture binding of that name is what comes out").arg(id));
     return e;
+}
+
+Effect Effect::addCompiled(const QString &id, const QByteArray &spirv, const QByteArray &reflection, QString *error)
+{
+    // Its passes are its compute functions, in the order the file has them.
+    QList<QPair<QString, QByteArray>> parts;
+    const QJsonArray entries = QJsonDocument::fromJson(reflection).object().value(QStringLiteral("entryPoints")).toArray();
+    for (const QJsonValue &v : entries) {
+        const QJsonObject entry = v.toObject();
+        if (entry.value(QStringLiteral("stage")).toString() == QLatin1String("compute"))
+            parts.append({entry.value(QStringLiteral("name")).toString(), reflection});
+    }
+    const Effect e = describeFrom(id, parts, error);
+    if (e.isNull())
+        return e;
+    QMutexLocker locker(&g_userLock);
+    g_user.insert(id, UserEffect{spirv, reflection, e, {}});
+    return e;
+}
+
+void Effect::removeCompiled(const QString &id)
+{
+    QMutexLocker locker(&g_userLock);
+    g_user.remove(id);
+}
+
+QStringList Effect::compiled()
+{
+    QMutexLocker locker(&g_userLock);
+    QStringList ids = g_user.keys();
+    ids.sort();
+    return ids;
 }
 
 Effect Effect::load(const QString &id, Context &context, QString *error)
 {
+    {
+        // One of your own: its kernels made once, from its SPIR-V.
+        QMutexLocker locker(&g_userLock);
+        if (const auto it = g_user.find(id); it != g_user.end()) {
+            if (it->kernels.isEmpty()) {
+                QList<Kernel> kernels;
+                for (const QString &entry : std::as_const(it->described.m_entries)) {
+                    QString why;
+                    const Kernel k = context.kernel(it->spirv, it->reflection, entry, &why);
+                    if (k.isNull()) {
+                        if (error)
+                            *error = QStringLiteral("%1: %2").arg(id, why);
+                        return Effect();
+                    }
+                    kernels << k;
+                }
+                it->kernels = kernels;
+            }
+            Effect e = it->described;
+            e.m_passes = it->kernels;
+            return e;
+        }
+    }
     Effect e = describe(id, error);
     if (e.isNull())
         return e;

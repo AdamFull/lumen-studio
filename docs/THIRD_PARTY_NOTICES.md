@@ -25,6 +25,7 @@ feature that needs them. They are not part of the installer.
 | [ONNX Runtime](https://github.com/microsoft/onnxruntime) | MIT | Smart selection, objects by name |
 | [SAM 2.1 tiny](https://github.com/facebookresearch/sam2) (ONNX) | Apache-2.0 | Smart selection, objects by name |
 | [Grounding DINO tiny](https://github.com/IDEA-Research/GroundingDINO) (ONNX) | Apache-2.0 | Objects by name |
+| [Slang](https://github.com/shader-slang/slang) compiler (`slangc`) | Apache-2.0 WITH LLVM-exception | Your own effects |
 | [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp) | MIT | Running image models on this computer |
 | [llama.cpp](https://github.com/ggml-org/llama.cpp) | MIT | Running language models on this computer |
 | [ComfyUI](https://github.com/comfyanonymous/ComfyUI) | GPL-3.0 | An image server, when you install it from Lumen |

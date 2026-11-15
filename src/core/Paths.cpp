@@ -89,6 +89,15 @@ QString defaultLuts()
     return QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + QStringLiteral("/Lumen/LUTs");
 }
 
+QString defaultEffects()
+{
+    if (!overrideRoot().isEmpty())
+        return overrideRoot() + QStringLiteral("/effects");
+    if (QStandardPaths::isTestModeEnabled())
+        return appData() + QStringLiteral("/effects");
+    return QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + QStringLiteral("/Lumen/Effects");
+}
+
 QString bundledData()
 {
     return QCoreApplication::applicationDirPath() + QStringLiteral("/data");

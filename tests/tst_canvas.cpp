@@ -3864,7 +3864,8 @@ void TestCanvas::pluginWindows()
             if (!a->isSeparator())
                 names << a->text();
         }
-        QCOMPARE(names, (QStringList{QStringLiteral("New filter…"), QStringLiteral("Filter editor…"), QStringLiteral("Create"),
+        QCOMPARE(names, (QStringList{QStringLiteral("New filter…"), QStringLiteral("Filter editor…"), QStringLiteral("Effect editor…"),
+                                     QStringLiteral("Create"),
                                      QStringLiteral("Poses"), QStringLiteral("Parts"), QStringLiteral("Plugins…")}));
         QCOMPARE(Shortcuts::instance().keys(QStringLiteral("nav.person")), QList<QKeySequence>{QKeySequence(QStringLiteral("Alt+4"))});
 

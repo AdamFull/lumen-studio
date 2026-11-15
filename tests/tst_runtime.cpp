@@ -237,6 +237,7 @@ private slots:
     void inspectRealModels();
     void loraFamilies();
     void componentsInstall();
+    void slangComponent();
     void modelFormats();
     void modelLibrary();
     void modelsFolderDefaults();
@@ -3004,6 +3005,52 @@ void TestRuntime::loraFamilies()
 // Components downloaded on first use (plan M18 §18.1): the bundled list is pinned; a runtime's
 // archive is unpacked to the files asked for only (not its debug symbols); a model file is put in
 // place; the folder appears only complete; a wrong checksum leaves nothing.
+// The Slang compiler's component as pinned (plan M20 step 7), installed from a copy of its real
+// archive served here, then compiling: opt-in, with LUMEN_SLANG_ZIP naming the downloaded
+// slang-2026.8-windows-x86_64.zip (the address, size and SHA-256 are checked as for a download).
+void TestRuntime::slangComponent()
+{
+    const QString archive = qEnvironmentVariable("LUMEN_SLANG_ZIP");
+    if (archive.isEmpty())
+        QSKIP("set LUMEN_SLANG_ZIP to the downloaded Slang archive");
+    QFile zf(archive);
+    QVERIFY(zf.open(QIODevice::ReadOnly));
+    const QByteArray bytes = zf.readAll();
+    ComponentSpec spec;
+    for (const ComponentSpec &c : componentSpecs()) {
+        if (c.id == QLatin1String("slang"))
+            spec = c;
+    }
+    QCOMPARE(spec.id, QStringLiteral("slang"));
+    QCOMPARE(qint64(bytes.size()), spec.files.first().size);
+    QCOMPARE(QString::fromLatin1(QCryptographicHash::hash(bytes, QCryptographicHash::Sha256).toHex()), spec.files.first().sha256);
+    MockHttpServer server;
+    server.route("GET", QStringLiteral("/slang.zip"), [&](const MockRequest &) {
+        MockResponse r;
+        r.contentType = "application/zip";
+        r.body = bytes;
+        return r;
+    });
+    spec.files.first().url = QUrl(server.baseUrl().toString() + QStringLiteral("/slang.zip"));
+    QTemporaryDir dir;
+    net::HttpClient http;
+    JobQueue jobs;
+    Components components(&http, &jobs);
+    components.setSpecs({spec});
+    components.setRoots(dir.filePath(QStringLiteral("data")), dir.filePath(QStringLiteral("models")));
+    Job *job = components.install(QStringLiteral("slang"));
+    QVERIFY(job);
+    QTRY_VERIFY_WITH_TIMEOUT(job->isFinished(), 60000);
+    QVERIFY2(job->state() == Job::State::Succeeded, qPrintable(job->errorString()));
+    const QString slangc = components.path(QStringLiteral("slang"), QStringLiteral("slangc.exe"));
+    QVERIFY(QFileInfo::exists(slangc));
+    QProcess version;
+    version.setProcessChannelMode(QProcess::MergedChannels);
+    version.start(slangc, {QStringLiteral("-version")});
+    QVERIFY(version.waitForFinished(30000));
+    QCOMPARE(QString::fromUtf8(version.readAll()).trimmed(), QStringLiteral("2026.8"));
+}
+
 void TestRuntime::componentsInstall()
 {
     // The bundled list: ONNX Runtime and the two detection models, each file with size and SHA-256.
@@ -3015,7 +3062,8 @@ void TestRuntime::componentsInstall()
             QVERIFY2(f.size > 0 && f.sha256.size() == 64 && f.url.scheme() == QLatin1String("https"), qPrintable(c.id));
         }
     }
-    QCOMPARE(ids, (QStringList{QStringLiteral("onnxruntime"), QStringLiteral("sam2.1-tiny"), QStringLiteral("grounding-dino-tiny")}));
+    QCOMPARE(ids, (QStringList{QStringLiteral("onnxruntime"), QStringLiteral("sam2.1-tiny"), QStringLiteral("grounding-dino-tiny"),
+                               QStringLiteral("slang")}));
     QVERIFY(componentSpecs().at(1).inModels && !componentSpecs().at(0).inModels);
     QCOMPARE(componentSpecs().at(1).files.first().url.toString(),
              QStringLiteral("https://huggingface.co/onnx-community/sam2.1-hiera-tiny-ONNX/resolve/814a066640debee5a91e70aa401fb8e17e030503/"
