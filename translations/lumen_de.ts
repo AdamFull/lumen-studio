@@ -85,39 +85,6 @@
     </message>
 </context>
 <context>
-    <name>Grading</name>
-    <message>
-        <location filename="../src/ui/Grading.cpp" line="+217"/>
-        <source>%1 cannot be used as a LUT: %2</source>
-        <translation>%1 kann nicht als LUT verwendet werden: %2</translation>
-    </message>
-    <message>
-        <location line="+15"/>
-        <source>the file is not there</source>
-        <translation>die Datei ist nicht vorhanden</translation>
-    </message>
-    <message>
-        <location line="+13"/>
-        <source>it is a 1D LUT; the Develop tab takes 3D ones</source>
-        <translation>es ist eine 1D-LUT; der Bereich Entwickeln nimmt 3D-LUTs</translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>no LUT_3D_SIZE between 2 and 128</source>
-        <translation>kein LUT_3D_SIZE zwischen 2 und 128</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>%1 values instead of %2</source>
-        <translation>%1 Werte statt %2</translation>
-    </message>
-    <message>
-        <location line="+48"/>
-        <source>%1 could not be copied to %2.</source>
-        <translation>%1 konnte nicht nach %2 kopiert werden.</translation>
-    </message>
-</context>
-<context>
     <name>QObject</name>
     <message>
         <location filename="../src/ai/Director.cpp" line="+63"/>
@@ -4465,15 +4432,140 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
 </context>
 <context>
+    <name>lumen::filters::EffectNodes</name>
+    <message>
+        <location filename="../src/filters/EffectNodes.cpp" line="+56"/>
+        <source>White balance, exposure, contrast, highlights and shadows, vibrance and saturation.</source>
+        <translation>Weißabgleich, Belichtung, Kontrast, Lichter und Tiefen, Dynamik und Sättigung.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Texture, clarity and dehaze: the contrast of fine detail and of larger shapes, and haze.</source>
+        <translation>Struktur, Klarheit und Dunst entfernen: der Kontrast feiner Details und größerer Formen, und Dunst.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>A curve for all three colours and one for each.</source>
+        <translation>Eine Kurve für alle drei Farben und eine für jede.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The hue, saturation and luminance of eight colours.</source>
+        <translation>Farbton, Sättigung und Luminanz von acht Farben.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Tints for the shadows, midtones and highlights.</source>
+        <translation>Tönungen für Tiefen, Mitteltöne und Lichter.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>A look from a LUT (.cube) in your LUTs folder.</source>
+        <translation>Ein Look aus einer LUT (.cube) in Ihrem LUT-Ordner.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Sharpening and noise reduction.</source>
+        <translation>Schärfen und Rauschreduzierung.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>A vignette and film grain.</source>
+        <translation>Eine Vignette und Filmkörnung.</translation>
+    </message>
+    <message>
+        <location line="+99"/>
+        <source>The graphics card could not run the effects: %1</source>
+        <translation>Die Grafikkarte konnte die Effekte nicht ausführen: %1</translation>
+    </message>
+    <message>
+        <location line="+33"/>
+        <location line="+55"/>
+        <source>It needs the graphics card: %1</source>
+        <translation>Dafür ist die Grafikkarte nötig: %1</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <location line="+1"/>
+        <source>Image</source>
+        <translation>Bild</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Curve for all three</source>
+        <translation>Kurve für alle drei</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Red curve</source>
+        <translation>Rotkurve</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Green curve</source>
+        <translation>Grünkurve</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Blue curve</source>
+        <translation>Blaukurve</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>A .cube file in your LUTs folder; the Develop tab&apos;s Add… puts one there.</source>
+        <translation>Eine .cube-Datei in Ihrem LUT-Ordner; „Hinzufügen…“ im Bereich Entwickeln legt eine dort ab.</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>%1: %2</source>
+        <translation>%1: %2</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>The tint&apos;s colour: its hue and how strong it is count, not how light it is.</source>
+        <translation>Die Farbe der Tönung: Es zählen ihr Farbton und ihre Stärke, nicht ihre Helligkeit.</translation>
+    </message>
+    <message>
+        <location line="+76"/>
+        <source>%1 cannot be used as a LUT: %2</source>
+        <translation>%1 kann nicht als LUT verwendet werden: %2</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>the file is not there</source>
+        <translation>die Datei ist nicht vorhanden</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>it is a 1D LUT; the Develop tab takes 3D ones</source>
+        <translation>es ist eine 1D-LUT; der Bereich Entwickeln nimmt 3D-LUTs</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>no LUT_3D_SIZE between 2 and 128</source>
+        <translation>kein LUT_3D_SIZE zwischen 2 und 128</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>%1 values instead of %2</source>
+        <translation>%1 Werte statt %2</translation>
+    </message>
+    <message>
+        <location line="+48"/>
+        <source>%1 could not be copied to %2.</source>
+        <translation>%1 konnte nicht nach %2 kopiert werden.</translation>
+    </message>
+</context>
+<context>
     <name>lumen::filters::Evaluator</name>
     <message>
-        <location filename="../src/filters/Evaluator.cpp" line="+90"/>
-        <location line="+468"/>
+        <location filename="../src/filters/Evaluator.cpp" line="+92"/>
+        <location line="+473"/>
         <source>It gave no result.</source>
         <translation>Er hat kein Ergebnis geliefert.</translation>
     </message>
     <message>
-        <location line="-444"/>
+        <location line="-447"/>
         <source>“%1”: %2</source>
         <translation>„%1“: %2</translation>
     </message>
@@ -4483,7 +4575,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Am Eingang „%2“ von „%1“ ist nichts angeschlossen.</translation>
     </message>
     <message>
-        <location line="+586"/>
+        <location line="+599"/>
         <source>That node cannot be shown: it is not in the filter or is part of a loop.</source>
         <translation>Dieser Knoten kann nicht angezeigt werden: Er ist nicht im Filter oder Teil einer Schleife.</translation>
     </message>
@@ -4493,7 +4585,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Es gibt kein Bild, auf das der Filter angewendet werden kann.</translation>
     </message>
     <message>
-        <location line="+92"/>
+        <location line="+101"/>
         <source>“%1” was cancelled.</source>
         <translation>„%1“ wurde abgebrochen.</translation>
     </message>
@@ -4674,7 +4766,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::filters::NodeRegistry</name>
     <message>
-        <location filename="../src/filters/Registry.cpp" line="+93"/>
+        <location filename="../src/filters/Registry.cpp" line="+95"/>
         <source>Input and output</source>
         <translation>Eingabe und Ausgabe</translation>
     </message>
@@ -4682,6 +4774,11 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <location line="+2"/>
         <source>Colour</source>
         <translation>Farbe</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Develop (graphics card)</source>
+        <translation>Entwickeln (Grafikkarte)</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -8971,7 +9068,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::CurveEditor</name>
     <message>
-        <location filename="../src/ui/filters/ParamWidgets.cpp" line="+60"/>
+        <location filename="../src/ui/filters/ParamWidgets.cpp" line="+62"/>
         <source>Drag a point to change the curve. Click to add a point; double-click or right-click a point to remove it.</source>
         <translation>Ziehen Sie einen Punkt, um die Kurve zu ändern. Klicken Sie, um einen Punkt hinzuzufügen; doppel- oder rechtsklicken Sie auf einen Punkt, um ihn zu entfernen.</translation>
     </message>
@@ -14939,9 +15036,19 @@ Klicken Sie, um den Knoten auszuwählen.</translation>
 <context>
     <name>lumen::ui::ParamField</name>
     <message>
-        <location filename="../src/ui/filters/ParamWidgets.cpp" line="+247"/>
+        <location filename="../src/ui/filters/ParamWidgets.cpp" line="+248"/>
+        <source>None</source>
+        <translation>Keine</translation>
+    </message>
+    <message>
+        <location line="+19"/>
         <source>Describe it in your own words</source>
         <translation>Beschreiben Sie es in Ihren eigenen Worten</translation>
+    </message>
+    <message>
+        <location line="+67"/>
+        <source>%1 (missing)</source>
+        <translation>%1 (fehlt)</translation>
     </message>
 </context>
 <context>

@@ -39,6 +39,7 @@ private:
 namespace categories {
 inline const QString InputOutput = QStringLiteral("io");
 inline const QString Color = QStringLiteral("color");
+inline const QString Develop = QStringLiteral("develop"); // the effects on the graphics card (EffectNodes.h)
 inline const QString Detail = QStringLiteral("detail");
 inline const QString Combine = QStringLiteral("combine");
 inline const QString Mask = QStringLiteral("mask");

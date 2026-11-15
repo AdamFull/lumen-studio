@@ -531,8 +531,8 @@ A filter is a chain of steps (nodes) from **Input** to **Output**:
 * The **Input** gives the picture and the selection (as a mask). Its *Reads* setting is *Active
   layer* or *Whole picture*.
 * **Add node** (`Shift+A`, or right-click an empty place) lists the nodes by kind: colour (levels,
-  curves, brightness and contrast, hue and saturation, black and white…), detail (blur, sharpen,
-  noise, remove specks), combining (blend, mix by mask), masks (mask from image, grow, shrink and
+  curves, brightness and contrast, hue and saturation, black and white…), develop (the Develop
+  tab's groups on the graphics card), detail (blur, sharpen, noise, remove specks), combining (blend, mix by mask), masks (mask from image, grow, shrink and
   feather), transforms (resize, crop, flip, rotate) and AI. Type to search; Enter adds the first
   match.
 * Drag from a node's output (right) to another node's input (left) to connect them. The dots are
@@ -549,6 +549,13 @@ A filter is a chain of steps (nodes) from **Input** to **Output**:
   and redo inside the editor.
 * **Save** (`Ctrl+S`) and **Save as…** write the filter into the filters folder; the Filters panel
   shows it at once.
+
+**Develop steps** in the filter editor are the Develop tab's groups: *Develop*, *Local contrast*,
+*Tone curve*, *Colour mixer*, *Colour grading* (its wheels are colours here: their hue and how
+strong they are count), *LUT* (one from your LUTs folder), *Detail* and *Vignette and grain*. They
+run on the graphics card, and several in a row run as one: the picture comes back from the card
+only after the last of them, so a long row costs about as much as a short one. A step left at its
+start values does nothing and costs nothing.
 
 **AI steps** in the filter editor: **Edit with AI** (changes the picture as you describe it; connect
 a mask such as the Input's selection to its *Area* to change only that area), **Fill area with AI**

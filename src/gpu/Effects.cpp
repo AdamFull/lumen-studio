@@ -24,8 +24,16 @@ QStringList Effect::builtIn()
     return out;
 }
 
-Effect Effect::load(const QString &id, Context &context, QString *error)
+Effect Effect::describe(const QString &id, QString *error)
 {
+    // Read once per effect: setting a chain's steps asks again each time.
+    static QMutex lock;
+    static QHash<QString, Effect> known;
+    {
+        QMutexLocker locker(&lock);
+        if (const auto it = known.constFind(id); it != known.cend())
+            return *it;
+    }
     auto failed = [error](const QString &message) {
         if (error)
             *error = message;
@@ -40,19 +48,25 @@ Effect Effect::load(const QString &id, Context &context, QString *error)
 
     Effect e;
     e.m_id = id;
-    for (const QString &entry : entries) {
+    for (const QString &line : entries) {
+        const QString entry = line.trimmed();
+        QFile json(QStringLiteral(":/gpu/%1.%2.json").arg(id, entry));
+        if (!json.open(QIODevice::ReadOnly))
+            return failed(QStringLiteral("no kernel %1.%2 in Lumen").arg(id, entry));
         QString why;
-        const Kernel k = context.kernel(id + u'.' + entry.trimmed(), &why);
-        if (k.isNull())
+        const KernelInterface info = parseReflection(json.readAll(), entry, &why);
+        if (info.entry.isEmpty())
             return failed(QStringLiteral("%1: %2").arg(id, why));
+        e.m_entries << entry;
+        e.m_interfaces << info;
         // Effects work in half floats; the 8-bit picture is the chain's business.
-        for (auto it = k.info().formats.cbegin(); it != k.info().formats.cend(); ++it) {
+        for (auto it = info.formats.cbegin(); it != info.formats.cend(); ++it) {
             if (it.value() != QLatin1String("rgba16f"))
                 return failed(QStringLiteral("%1: %2 of %3 is %4; effects take rgba16f").arg(id, it.key(), entry, it.value()));
         }
-        for (auto it = k.info().inputs.cbegin(); it != k.info().inputs.cend(); ++it)
+        for (auto it = info.inputs.cbegin(); it != info.inputs.cend(); ++it)
             e.m_inputs.insert(it.key(), it.value());
-        for (auto it = k.info().textureAttributes.cbegin(); it != k.info().textureAttributes.cend(); ++it) {
+        for (auto it = info.textureAttributes.cbegin(); it != info.textureAttributes.cend(); ++it) {
             const QVariantList scale = it.value().value(QStringLiteral("Scale"));
             const QVariantList fixed = it.value().value(QStringLiteral("Size"));
             const QVariantList fit = it.value().value(QStringLiteral("Fit"));
@@ -66,17 +80,16 @@ Effect Effect::load(const QString &id, Context &context, QString *error)
                 e.m_textures.insert(it.key(), it.value());
         }
         // A pass over a texture: one of the effect's own, which it writes or reads.
-        if (const QVariantList over = k.info().attributes.value(QStringLiteral("Over")); !over.isEmpty()) {
+        if (const QVariantList over = info.attributes.value(QStringLiteral("Over")); !over.isEmpty()) {
             const QString name = over.first().toString();
-            if (name != kResult && (!k.info().bindings.contains(name) || name == kSource || k.info().inputs.contains(name)))
+            if (name != kResult && (!info.bindings.contains(name) || name == kSource || info.inputs.contains(name)))
                 return failed(QStringLiteral("%1: %2 runs over %3, which is not one of its own textures").arg(id, entry, name));
         }
-        e.m_passes << k;
     }
-    if (e.m_passes.first().info().params.size() != e.m_passes.last().info().params.size())
+    if (e.m_interfaces.first().params.size() != e.m_interfaces.last().params.size())
         return failed(QStringLiteral("%1: its passes have different parameters").arg(id));
 
-    const KernelInterface &first = e.m_passes.first().info();
+    const KernelInterface &first = e.m_interfaces.first();
     const QVariantList effect = first.attributes.value(QStringLiteral("Effect"));
     e.m_title = effect.value(0, id).toString();
     e.m_group = effect.value(1).toString();
@@ -103,6 +116,26 @@ Effect Effect::load(const QString &id, Context &context, QString *error)
             p.defaults << (given.isEmpty() ? fallback : given.value(std::min<int>(i, int(given.size()) - 1)).toDouble());
         e.m_params << p;
     }
+    QMutexLocker locker(&lock);
+    known.insert(id, e);
+    return e;
+}
+
+Effect Effect::load(const QString &id, Context &context, QString *error)
+{
+    Effect e = describe(id, error);
+    if (e.isNull())
+        return e;
+    for (const QString &entry : std::as_const(e.m_entries)) {
+        QString why;
+        const Kernel k = context.kernel(id + u'.' + entry, &why);
+        if (k.isNull()) {
+            if (error)
+                *error = QStringLiteral("%1: %2").arg(id, why);
+            return Effect();
+        }
+        e.m_passes << k;
+    }
     return e;
 }
 
@@ -126,7 +159,7 @@ QSize Effect::textureSize(const QString &name, const QSize &picture) const
 
 QSize Effect::passSize(int pass, const QSize &picture) const
 {
-    const QVariantList over = m_passes.value(pass).info().attributes.value(QStringLiteral("Over"));
+    const QVariantList over = m_interfaces.value(pass).attributes.value(QStringLiteral("Over"));
     return over.isEmpty() ? picture : textureSize(over.first().toString(), picture);
 }
 

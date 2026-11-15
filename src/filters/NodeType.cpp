@@ -137,6 +137,27 @@ QVariantMap resolveParams(const NodeTypeInfo &info, const QVariantMap &stored, d
     return out;
 }
 
+PendingImage::~PendingImage() = default;
+
+PendingImagePtr pendingOf(const QVariant &value)
+{
+    return value.userType() == qMetaTypeId<PendingImagePtr>() ? value.value<PendingImagePtr>() : nullptr;
+}
+
+QImage imageOf(const QVariant &value)
+{
+    if (const PendingImagePtr pending = pendingOf(value))
+        return pending->image();
+    return value.value<QImage>();
+}
+
+QVariant madeValue(const QVariant &value)
+{
+    if (const PendingImagePtr pending = pendingOf(value))
+        return pending->image();
+    return value;
+}
+
 NodeArgs::NodeArgs(Values inputs, QVariantMap params)
     : m_inputs(std::move(inputs))
     , m_params(std::move(params))
@@ -145,7 +166,7 @@ NodeArgs::NodeArgs(Values inputs, QVariantMap params)
 
 QImage NodeArgs::image(const QString &port) const
 {
-    return m_inputs.value(port).value<QImage>();
+    return imageOf(m_inputs.value(port));
 }
 
 QImage NodeArgs::mask(const QString &port) const

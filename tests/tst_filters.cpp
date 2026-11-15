@@ -1,11 +1,13 @@
 #include "core/Async.h"
 #include "core/Error.h"
 #include "core/ImageOps.h"
+#include "filters/EffectNodes.h"
 #include "filters/Evaluator.h"
 #include "filters/Graph.h"
 #include "filters/Library.h"
 #include "filters/Ops.h"
 #include "filters/Registry.h"
+#include "gpu/Effects.h"
 
 #include <QPainter>
 #include <QFile>
@@ -467,6 +469,9 @@ private slots:
     void asynchronousNode();
     void expensiveNodeWaitsForRun();
     void goldenImage();
+    void effectNodeTypes();
+    void effectNodesRunAsOneChain();
+    void effectNodeInputs();
 };
 
 void TestFilters::registryDescribesEveryNode()
@@ -480,7 +485,11 @@ void TestFilters::registryDescribesEveryNode()
                               QStringLiteral("mask-from-image"), QStringLiteral("grow-shrink-feather"),
                               QStringLiteral("invert-mask"), QStringLiteral("find-lines"), QStringLiteral("find-specks"), QStringLiteral("color-range"),
                               QStringLiteral("resize"), QStringLiteral("crop"),
-                              QStringLiteral("flip"), QStringLiteral("rotate")};
+                              QStringLiteral("flip"), QStringLiteral("rotate"),
+                              // The effects on the graphics card (M20 step 6).
+                              QStringLiteral("develop"), QStringLiteral("local-contrast"), QStringLiteral("tone-curve"),
+                              QStringLiteral("colour-mixer"), QStringLiteral("colour-grading"), QStringLiteral("lut"),
+                              QStringLiteral("detail"), QStringLiteral("vignette-grain")};
     const QList<NodeTypePtr> types = NodeRegistry::global().types();
     QCOMPARE(types.size(), classic.size());
     for (const QString &id : classic) {
@@ -1753,6 +1762,202 @@ void TestFilters::goldenImage()
     // One level of slack for another compiler's floating point (pow, exp in the nodes).
     const int difference = maxDifference(o.result.image, img::normalized(golden));
     QVERIFY2(difference <= 1, qPrintable(QStringLiteral("largest difference to golden.png: %1").arg(difference)));
+}
+
+// ---- Effects as nodes (plan M20 step 6) -----------------------------------------------------------
+
+// A colourful picture for the effects.
+static QImage colourful(int w, int h)
+{
+    QImage image(w, h, QImage::Format_ARGB32_Premultiplied);
+    for (int y = 0; y < h; ++y) {
+        for (int x = 0; x < w; ++x)
+            image.setPixel(x, y, qRgb(40 + 180 * x / w, 30 + 200 * y / h, 200 - 150 * x / w));
+    }
+    return image;
+}
+
+static QString nodeOfType(const Graph &graph, const QString &type)
+{
+    for (const Node &n : graph.nodes()) {
+        if (n.type->id() == type)
+            return n.id;
+    }
+    return {};
+}
+
+static int largestDifference(const QImage &a, const QImage &b)
+{
+    if (a.size() != b.size())
+        return 256;
+    const QImage x = a.convertToFormat(QImage::Format_ARGB32);
+    const QImage y = b.convertToFormat(QImage::Format_ARGB32);
+    int most = 0;
+    for (int row = 0; row < x.height(); ++row) {
+        const auto *p = reinterpret_cast<const QRgb *>(x.constScanLine(row));
+        const auto *q = reinterpret_cast<const QRgb *>(y.constScanLine(row));
+        for (int i = 0; i < x.width(); ++i) {
+            most = std::max({most, std::abs(qRed(p[i]) - qRed(q[i])), std::abs(qGreen(p[i]) - qGreen(q[i])),
+                             std::abs(qBlue(p[i]) - qBlue(q[i]))});
+        }
+    }
+    return most;
+}
+
+// The Develop tab's effects are nodes, described from their shaders without the graphics card.
+void TestFilters::effectNodeTypes()
+{
+    const NodeRegistry &registry = NodeRegistry::global();
+    QStringList develop;
+    for (const NodeTypePtr &t : registry.typesInCategory(categories::Develop))
+        develop << t->id();
+    QCOMPARE(develop, (QStringList{QStringLiteral("develop"), QStringLiteral("local-contrast"), QStringLiteral("tone-curve"),
+                                   QStringLiteral("colour-mixer"), QStringLiteral("colour-grading"), QStringLiteral("lut"),
+                                   QStringLiteral("detail"), QStringLiteral("vignette-grain")}));
+    QVERIFY(categoryIds().contains(categories::Develop));
+    QCOMPARE(effects::nodeIdOf(QStringLiteral("local")), QStringLiteral("local-contrast"));
+
+    const NodeTypeInfo &dev = registry.find(QStringLiteral("develop"))->info();
+    QCOMPARE(dev.name, QStringLiteral("Develop"));
+    QVERIFY(dev.takesPending);
+    const ParamSpec *exposure = dev.param(QStringLiteral("exposure"));
+    QVERIFY(exposure);
+    QCOMPARE(exposure->type, PortType::Number);
+    QCOMPARE(exposure->minimum, -5.0);
+    QCOMPARE(exposure->maximum, 5.0);
+    QCOMPARE(exposure->decimals, 2);
+
+    // Labels two controls share get their section.
+    const NodeTypeInfo &finish = registry.find(QStringLiteral("vignette-grain"))->info();
+    QCOMPARE(finish.param(QStringLiteral("vignette"))->label, QStringLiteral("Vignette: Amount"));
+    QCOMPARE(finish.param(QStringLiteral("grain"))->label, QStringLiteral("Grain: Amount"));
+    QCOMPARE(finish.param(QStringLiteral("midpoint"))->label, QStringLiteral("Midpoint"));
+    QCOMPARE(registry.find(QStringLiteral("colour-mixer"))->info().param(QStringLiteral("satRed"))->label, QStringLiteral("Saturation: Red"));
+    // Wheels are colours, the curve's points and the LUT text with their editors.
+    const ParamSpec *shadows = registry.find(QStringLiteral("colour-grading"))->info().param(QStringLiteral("shadows"));
+    QCOMPARE(shadows->type, PortType::Color);
+    QCOMPARE(shadows->defaultValue.value<QColor>().hsvSaturation(), 0);
+    const NodeTypeInfo &curve = registry.find(QStringLiteral("tone-curve"))->info();
+    QCOMPARE(curve.param(QStringLiteral("curveRed"))->editor, QStringLiteral("curve"));
+    QCOMPARE(curve.param(QStringLiteral("curve"))->defaultValue.toString(), effects::straightCurve());
+    QCOMPARE(registry.find(QStringLiteral("lut"))->info().param(QStringLiteral("lut"))->editor, QStringLiteral("lut"));
+    QVERIFY(registry.find(QStringLiteral("detail"))->info().param(QStringLiteral("radius"))->pixels);
+}
+
+// A row of effect nodes runs as one chain on the graphics card: the picture comes back once, at
+// the end, and is the same as the chain run directly. Another node between them splits the row;
+// the editor's selected effect node gives a picture; one that changes nothing passes it on.
+void TestFilters::effectNodesRunAsOneChain()
+{
+    if (!gpu::Context::instance().isAvailable())
+        QSKIP("no Vulkan device");
+    const NodeRegistry &registry = NodeRegistry::global();
+    Graph g;
+    const QString in = g.addNode(QStringLiteral("input"), {}, registry);
+    const QString develop = g.addNode(QStringLiteral("develop"), {}, registry);
+    const QString local = g.addNode(QStringLiteral("local-contrast"), {}, registry);
+    const QString finish = g.addNode(QStringLiteral("vignette-grain"), {}, registry);
+    const QString out = g.addNode(QStringLiteral("output"), {}, registry);
+    QVERIFY(g.connect(in, QStringLiteral("image"), develop, QStringLiteral("image")));
+    QVERIFY(g.connect(develop, QStringLiteral("image"), local, QStringLiteral("image")));
+    QVERIFY(g.connect(local, QStringLiteral("image"), finish, QStringLiteral("image")));
+    QVERIFY(g.connect(finish, QStringLiteral("image"), out, QStringLiteral("image")));
+    g.setParam(develop, QStringLiteral("exposure"), 0.5);
+    g.setParam(local, QStringLiteral("clarity"), 60.0);
+    g.setParam(finish, QStringLiteral("vignette"), -70.0);
+
+    const QImage src = colourful(96, 64);
+    Evaluator evaluator;
+    int before = effects::chainRuns();
+    Outcome o = run(evaluator, g, {src, {}});
+    QVERIFY2(o.error.isEmpty(), qPrintable(o.error));
+    QCOMPARE(effects::chainRuns() - before, 1);
+    QCOMPARE(o.result.evaluated.size(), 5);
+
+    gpu::Chain direct;
+    QVERIFY(direct.setSteps({{QStringLiteral("develop"), {{QStringLiteral("exposure"), 0.5}}},
+                             {QStringLiteral("local"), {{QStringLiteral("clarity"), 60.0}}},
+                             {QStringLiteral("finish"), {{QStringLiteral("vignette"), -70.0}}}}));
+    const QImage expected = direct.render(src);
+    QVERIFY(!expected.isNull());
+    QVERIFY2(largestDifference(o.result.image, expected) <= 1, qPrintable(QString::number(largestDifference(o.result.image, expected))));
+
+    // One slider of the last effect: only that node runs again, and the row is made once more.
+    g.setParam(finish, QStringLiteral("vignette"), -20.0);
+    before = effects::chainRuns();
+    o = run(evaluator, g, {src, {}});
+    QVERIFY2(o.error.isEmpty(), qPrintable(o.error));
+    QCOMPARE(o.result.evaluated, (QStringList{finish, out}));
+    QCOMPARE(effects::chainRuns() - before, 1);
+    QVERIFY(o.result.image.pixelColor(1, 1).value() > expected.pixelColor(1, 1).value());
+
+    // The editor shows the middle node: its picture is made, not handed on pending.
+    EvalOptions middle;
+    middle.target = local;
+    o = run(evaluator, g, {src, {}}, middle);
+    QVERIFY2(o.error.isEmpty(), qPrintable(o.error));
+    const QVariant shown = o.result.outputs.value(QStringLiteral("image"));
+    QCOMPARE(shown.typeId(), QMetaType::QImage);
+    QCOMPARE(shown.value<QImage>().size(), src.size());
+
+    // A classic node between effects: the row is split, each part made once.
+    Graph split;
+    const QString in2 = split.addNode(QStringLiteral("input"), {}, registry);
+    const QString a = split.addNode(QStringLiteral("develop"), {}, registry);
+    const QString invert = split.addNode(QStringLiteral("invert"), {}, registry);
+    const QString b = split.addNode(QStringLiteral("develop"), {}, registry);
+    const QString out2 = split.addNode(QStringLiteral("output"), {}, registry);
+    split.connect(in2, QStringLiteral("image"), a, QStringLiteral("image"));
+    split.connect(a, QStringLiteral("image"), invert, QStringLiteral("image"));
+    split.connect(invert, QStringLiteral("image"), b, QStringLiteral("image"));
+    split.connect(b, QStringLiteral("image"), out2, QStringLiteral("image"));
+    split.setParam(a, QStringLiteral("exposure"), 1.0);
+    split.setParam(b, QStringLiteral("saturation"), -100.0);
+    Evaluator second;
+    before = effects::chainRuns();
+    o = run(second, split, {src, {}});
+    QVERIFY2(o.error.isEmpty(), qPrintable(o.error));
+    QCOMPARE(effects::chainRuns() - before, 2);
+    const QColor grey = o.result.image.pixelColor(30, 20);
+    QVERIFY2(std::abs(grey.red() - grey.blue()) <= 1, qPrintable(grey.name()));
+
+    // At its defaults an effect node passes the picture on as it is, without the graphics card.
+    Graph idle = chain({QStringLiteral("develop"), QStringLiteral("detail")}, registry);
+    Evaluator third;
+    before = effects::chainRuns();
+    o = run(third, idle, {src, {}});
+    QVERIFY2(o.error.isEmpty(), qPrintable(o.error));
+    QCOMPARE(effects::chainRuns(), before);
+    QCOMPARE(o.result.image, src);
+}
+
+// The tone curve and LUT nodes take their inputs from their parameters; a LUT not in the folder
+// stops with its name.
+void TestFilters::effectNodeInputs()
+{
+    if (!gpu::Context::instance().isAvailable())
+        QSKIP("no Vulkan device");
+    const NodeRegistry &registry = NodeRegistry::global();
+    const QImage src = colourful(32, 24);
+    Graph curve = chain({QStringLiteral("tone-curve")}, registry);
+    const QString curveNode = nodeOfType(curve, QStringLiteral("tone-curve"));
+    curve.setParam(curveNode, QStringLiteral("curve"), QStringLiteral("0 255, 255 0"));
+    Evaluator evaluator;
+    Outcome o = run(evaluator, curve, {src, {}});
+    QVERIFY2(o.error.isEmpty(), qPrintable(o.error));
+    const QColor was = src.pixelColor(5, 5);
+    const QColor now = o.result.image.pixelColor(5, 5);
+    QVERIFY2(std::abs(now.red() - (255 - was.red())) <= 2 && std::abs(now.blue() - (255 - was.blue())) <= 2, qPrintable(now.name()));
+
+    Graph lut = chain({QStringLiteral("lut")}, registry);
+    const QString lutNode = nodeOfType(lut, QStringLiteral("lut"));
+    // No LUT chosen: the picture as it is.
+    o = run(evaluator, lut, {src, {}});
+    QVERIFY2(o.error.isEmpty(), qPrintable(o.error));
+    QCOMPARE(o.result.image, src);
+    lut.setParam(lutNode, QStringLiteral("lut"), QStringLiteral("Not there.cube"));
+    o = run(evaluator, lut, {src, {}});
+    QVERIFY2(o.error.contains(QLatin1String("Not there.cube")), qPrintable(o.error));
 }
 
 QTEST_MAIN(TestFilters)

@@ -1,6 +1,7 @@
 #include "ui/Grading.h"
 
 #include "core/Paths.h"
+#include "filters/EffectNodes.h"
 #include "filters/Ops.h"
 
 #include <QCoreApplication>
@@ -18,11 +19,6 @@
 namespace lumen::ui::grading {
 
 namespace {
-
-struct Text
-{
-    Q_DECLARE_TR_FUNCTIONS(Grading)
-};
 
 const QString kCurve = QStringLiteral("curve");
 const QString kLut = QStringLiteral("lut");
@@ -101,7 +97,7 @@ const QStringList &curveChannels()
 
 QString straightCurve()
 {
-    return QStringLiteral("0 0, 255 255");
+    return filters::effects::straightCurve();
 }
 
 State fromJson(const QJsonObject &grading)
@@ -193,118 +189,22 @@ QList<gpu::EffectStep> steps(const State &state, const QHash<QString, gpu::Effec
 
 QImage curveImage(const QHash<QString, QString> &curves)
 {
-    QImage image(256, 1, QImage::Format_RGBA16FPx4);
-    QList<int> tables[4];
-    for (int c = 0; c < 4; ++c) {
-        const QString points = curves.value(curveChannels()[c]);
-        tables[c] = filters::ops::curveTable(filters::ops::parseCurve(points.trimmed().isEmpty() ? straightCurve() : points));
-    }
-    auto *px = reinterpret_cast<qfloat16 *>(image.scanLine(0));
-    for (int i = 0; i < 256; ++i) {
-        // Red, green, blue: each channel's curve; alpha: the one for all three.
-        px[i * 4 + 0] = qfloat16(tables[1].value(i, i) / 255.0f);
-        px[i * 4 + 1] = qfloat16(tables[2].value(i, i) / 255.0f);
-        px[i * 4 + 2] = qfloat16(tables[3].value(i, i) / 255.0f);
-        px[i * 4 + 3] = qfloat16(tables[0].value(i, i) / 255.0f);
-    }
-    return image;
+    return filters::effects::curveImage(curves);
 }
 
 QImage loadCube(const QString &path, QString *error)
 {
-    auto failed = [error, &path](const QString &why) {
-        if (error)
-            *error = Text::tr("%1 cannot be used as a LUT: %2").arg(QFileInfo(path).fileName(), why);
-        return QImage();
-    };
-    // Read once per file and change.
-    static QMutex lock;
-    static QHash<QString, QPair<QDateTime, QImage>> cache;
-    const QFileInfo info(path);
-    {
-        QMutexLocker locker(&lock);
-        const auto it = cache.constFind(path);
-        if (it != cache.cend() && it->first == info.lastModified())
-            return it->second;
-    }
-    QFile file(path);
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
-        return failed(Text::tr("the file is not there"));
-    QTextStream in(&file);
-    int n = 0;
-    QList<float> values;
-    while (!in.atEnd()) {
-        const QString line = in.readLine().trimmed();
-        if (line.isEmpty() || line.startsWith(u'#'))
-            continue;
-        const QStringList words = line.split(u' ', Qt::SkipEmptyParts);
-        const QString key = words.first().toUpper();
-        if (key == QLatin1String("LUT_3D_SIZE")) {
-            n = words.value(1).toInt();
-        } else if (key == QLatin1String("LUT_1D_SIZE")) {
-            return failed(Text::tr("it is a 1D LUT; the Develop tab takes 3D ones"));
-        } else if (key.at(0).isLetter()) {
-            continue; // TITLE, DOMAIN_MIN, DOMAIN_MAX and the like
-        } else if (words.size() == 3) {
-            for (const QString &w : words)
-                values << w.toFloat();
-        }
-    }
-    if (n < 2 || n > 128)
-        return failed(Text::tr("no LUT_3D_SIZE between 2 and 128"));
-    if (values.size() != n * n * n * 3)
-        return failed(Text::tr("%1 values instead of %2").arg(values.size()).arg(n * n * n * 3));
-    // Red runs fastest, then green, then blue: blue picks the block of columns, red the column in
-    // it, green the row.
-    QImage image(n * n, n, QImage::Format_RGBA16FPx4);
-    for (int b = 0; b < n; ++b) {
-        for (int g = 0; g < n; ++g) {
-            auto *row = reinterpret_cast<qfloat16 *>(image.scanLine(g));
-            for (int r = 0; r < n; ++r) {
-                const int at = ((b * n + g) * n + r) * 3;
-                qfloat16 *px = row + (r + b * n) * 4;
-                px[0] = qfloat16(values[at]);
-                px[1] = qfloat16(values[at + 1]);
-                px[2] = qfloat16(values[at + 2]);
-                px[3] = qfloat16(1.0f);
-            }
-        }
-    }
-    QMutexLocker locker(&lock);
-    cache.insert(path, {info.lastModified(), image});
-    return image;
+    return filters::effects::loadCube(path, error);
 }
 
 QStringList availableLuts()
 {
-    return QDir(paths::defaultLuts()).entryList({QStringLiteral("*.cube")}, QDir::Files, QDir::Name | QDir::IgnoreCase);
+    return filters::effects::availableLuts();
 }
 
 QString addLut(const QString &path, QString *error)
 {
-    if (loadCube(path, error).isNull())
-        return {};
-    const QDir folder(paths::defaultLuts());
-    QDir().mkpath(folder.path());
-    const QString name = QFileInfo(path).fileName();
-    const QString target = folder.filePath(name);
-    if (QFileInfo(target) == QFileInfo(path))
-        return name;
-    // The same file again is fine; another one of the same name gets a number.
-    QString chosen = name;
-    for (int i = 2; QFile::exists(folder.filePath(chosen)); ++i) {
-        QFile a(folder.filePath(chosen));
-        QFile b(path);
-        if (a.open(QIODevice::ReadOnly) && b.open(QIODevice::ReadOnly) && a.readAll() == b.readAll())
-            return chosen;
-        chosen = QStringLiteral("%1 %2.cube").arg(QFileInfo(name).completeBaseName()).arg(i);
-    }
-    if (!QFile::copy(path, folder.filePath(chosen))) {
-        if (error)
-            *error = Text::tr("%1 could not be copied to %2.").arg(name, QDir::toNativeSeparators(folder.path()));
-        return {};
-    }
-    return chosen;
+    return filters::effects::addLut(path, error);
 }
 
 } // namespace lumen::ui::grading

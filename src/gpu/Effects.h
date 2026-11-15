@@ -33,10 +33,14 @@ class Effect
 public:
     // The effects compiled with Lumen (":/gpu/<id>.passes").
     static QStringList builtIn();
-    // A built-in effect; null with the reason on errors.
+    // A built-in effect, ready to run; null with the reason on errors.
     static Effect load(const QString &id, Context &context = Context::instance(), QString *error = nullptr);
+    // What a built-in effect is (title, parameters, inputs), from its shader's reflection alone: no
+    // graphics card needed, and passes() is empty. For menus and node types.
+    static Effect describe(const QString &id, QString *error = nullptr);
 
-    bool isNull() const { return m_passes.isEmpty(); }
+    bool isNull() const { return m_id.isEmpty(); }
+    bool canRun() const { return !m_passes.isEmpty(); }
     QString id() const { return m_id; }
     QString title() const { return m_title; }
     QString group() const { return m_group; }
@@ -64,6 +68,8 @@ private:
     QString m_group;
     QList<EffectParam> m_params;
     QList<Kernel> m_passes;
+    QStringList m_entries;
+    QList<KernelInterface> m_interfaces; // one per pass, from the reflection
     QHash<QString, QString> m_inputs;
     QHash<QString, QHash<QString, QVariantList>> m_textures; // [Scale] and [Size] by texture
 };

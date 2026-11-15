@@ -89,6 +89,7 @@ private:
     QLineEdit *m_text = nullptr;
     QPlainTextEdit *m_prompt = nullptr;
     bool m_engines = false; // m_combo lists image engines
+    bool m_luts = false;    // m_combo lists the LUTs folder
 };
 
 // The suffix a number box shows after the value of a setting ("px" becomes " px").

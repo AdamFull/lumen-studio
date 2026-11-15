@@ -78,6 +78,9 @@ struct NodeTypeInfo
     // explicit Run (EvalOptions::runExpensive), and its result is then reused from the cache. It
     // always runs at full resolution, in a preview too, so the result previewed is the one applied.
     bool expensive = false;
+    // Its image inputs may arrive as pending images (PendingImage), to add to: the effects on the
+    // graphics card. Every other node gets them made.
+    bool takesPending = false;
 
     const PortSpec *input(const QString &id) const;
     const PortSpec *output(const QString &id) const;
@@ -86,6 +89,26 @@ struct NodeTypeInfo
 
 // Port id -> value: the inputs given to a node, or the outputs it returns.
 using Values = QHash<QString, QVariant>;
+
+// An image a node has described but not made yet (plan M20 step 6): effects on the graphics card
+// that the next such node adds to, so a row of them runs as one chain without the picture coming
+// back between them. A node that does not take pending images (NodeTypeInfo::takesPending) gets
+// the image made, as does the evaluation's result; it is made once, however many read it.
+class PendingImage
+{
+public:
+    virtual ~PendingImage();
+    // Makes it (once; any thread), ARGB32_Premultiplied. Throws lumen::Error when it cannot.
+    virtual QImage image() const = 0;
+};
+using PendingImagePtr = std::shared_ptr<const PendingImage>;
+
+// The pending image a value holds; null when it holds none.
+PendingImagePtr pendingOf(const QVariant &value);
+// The image a value holds, made when it is pending. Throws lumen::Error when that fails.
+QImage imageOf(const QVariant &value);
+// The value with a pending image made; other values as they are.
+QVariant madeValue(const QVariant &value);
 
 // A stored parameter value checked against its spec: a number clamped to its range (and rounded
 // when it has no decimals), an unknown choice replaced by the default, a colour parsed from its
@@ -104,7 +127,7 @@ public:
     NodeArgs(Values inputs, QVariantMap params);
 
     bool isConnected(const QString &port) const { return m_inputs.contains(port); }
-    QImage image(const QString &port) const; // null when not connected
+    QImage image(const QString &port) const; // null when not connected; a pending one made
     QImage mask(const QString &port) const;
     // A connected input of that id, else the parameter: a value port can drive a parameter. The
     // evaluator resolves a driving value like the parameter (range, preview scale).
@@ -237,3 +260,5 @@ using NodeFunction = std::function<NodeResult(const NodeArgs &, EvalContext &)>;
 NodeTypePtr makeNodeType(NodeTypeInfo info, NodeFunction function);
 
 } // namespace lumen::filters
+
+Q_DECLARE_METATYPE(lumen::filters::PendingImagePtr)

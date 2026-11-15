@@ -496,6 +496,7 @@ private slots:
     void filterNamesStayApart();
     void editorRunServesApply();
     void panelActionsInView();
+    void lutEditor();
 
 private:
     std::unique_ptr<QTemporaryDir> m_dir;
@@ -1055,6 +1056,38 @@ void TestFiltersUi::curveEditor()
     QTest::mouseClick(curve, Qt::RightButton, Qt::NoModifier, at.toPoint());
     QCOMPARE(curve->points().size(), 3);
     QCOMPARE(curve->points().at(1), QPointF(192, 200));
+}
+
+// The LUT node's setting lists the LUTs folder; one that is not there stays chosen, marked missing.
+void TestFiltersUi::lutEditor()
+{
+    // Never the real LUTs folder: test mode or LUMEN_DATA_DIR moves it.
+    QVERIFY2(!paths::defaultLuts().startsWith(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)),
+             qPrintable(paths::defaultLuts()));
+    QDir().mkpath(paths::defaultLuts());
+    const QString cube = QDir(paths::defaultLuts()).filePath(QStringLiteral("Warm look.cube"));
+    {
+        QFile file(cube);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write("LUT_3D_SIZE 2\n0 0 0\n1 0 0\n0 1 0\n1 1 0\n0 0 1\n1 0 1\n0 1 1\n1 1 1\n");
+    }
+    auto clean = qScopeGuard([&cube] { QFile::remove(cube); });
+    const filters::ParamSpec spec = filters::NodeRegistry::global().find(QStringLiteral("lut"))->info().params.first();
+    QCOMPARE(spec.editor, QStringLiteral("lut"));
+    ParamField field(spec, QString());
+    auto *combo = field.findChild<QComboBox *>();
+    QVERIFY(combo);
+    QCOMPARE(combo->currentData().toString(), QString());
+    const int warm = combo->findData(QStringLiteral("Warm look.cube"));
+    QVERIFY(warm > 0);
+    QCOMPARE(combo->itemText(warm), QStringLiteral("Warm look"));
+    QSignalSpy changed(&field, &ParamField::valueChanged);
+    combo->setCurrentIndex(warm);
+    QCOMPARE(changed.count(), 1);
+    QCOMPARE(field.value().toString(), QStringLiteral("Warm look.cube"));
+    field.setValue(QStringLiteral("Gone.cube"));
+    QCOMPARE(field.value().toString(), QStringLiteral("Gone.cube"));
+    QVERIFY(combo->currentText().contains(QLatin1String("missing")));
 }
 
 void TestFiltersUi::panelListsAndSettings()

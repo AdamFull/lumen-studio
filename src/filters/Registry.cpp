@@ -1,6 +1,7 @@
 #include "filters/Registry.h"
 
 #include "filters/ClassicNodes.h"
+#include "filters/EffectNodes.h"
 
 #include <QCoreApplication>
 
@@ -76,6 +77,7 @@ NodeRegistry &NodeRegistry::global()
     static NodeRegistry *registry = [] {
         auto *r = new NodeRegistry;
         registerClassicNodes(*r);
+        effects::registerNodes(*r);
         return r;
     }();
     return *registry;
@@ -83,7 +85,7 @@ NodeRegistry &NodeRegistry::global()
 
 QStringList categoryIds()
 {
-    return {categories::InputOutput, categories::Color, categories::Detail, categories::Combine,
+    return {categories::InputOutput, categories::Color, categories::Develop, categories::Detail, categories::Combine,
             categories::Mask, categories::Transform, categories::Ai};
 }
 
@@ -93,6 +95,8 @@ QString categoryName(const QString &id)
         return Text::tr("Input and output");
     if (id == categories::Color)
         return Text::tr("Colour");
+    if (id == categories::Develop)
+        return Text::tr("Develop (graphics card)");
     if (id == categories::Detail)
         return Text::tr("Blur, sharpen and noise");
     if (id == categories::Combine)

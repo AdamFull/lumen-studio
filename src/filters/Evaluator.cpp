@@ -80,14 +80,18 @@ QVariant drivenValue(const NodeTypeInfo &info, const PortSpec &port, const QVari
     return spec ? resolveParam(*spec, value, scale) : value;
 }
 
-// The outputs of a node, every declared one present and in its port's canonical format. The
-// message does not name the node: the callers add the name.
+// The outputs of a node, every declared one present and in its port's canonical format (a pending
+// image stays pending: it is made where it is read). The message does not name the node: the
+// callers add the name.
 Values checkedOutputs(const NodeTypeInfo &info, Values outputs)
 {
     for (const PortSpec &p : info.outputs) {
         auto it = outputs.find(p.id);
-        if (it == outputs.end() || !it->isValid() || (isPicture(p.type) && it->value<QImage>().isNull()))
+        const bool pending = it != outputs.end() && p.type == PortType::Image && pendingOf(*it);
+        if (it == outputs.end() || !it->isValid() || (isPicture(p.type) && !pending && it->value<QImage>().isNull()))
             throw Error(Text::tr("It gave no result."));
+        if (pending)
+            continue;
         if (p.type == PortType::Image)
             *it = img::normalized(it->value<QImage>());
         else if (p.type == PortType::Mask)
@@ -103,7 +107,7 @@ Values scaledDown(const NodeTypeInfo &info, Values outputs, double scale)
         auto it = outputs.find(p.id);
         if (it == outputs.end() || !isPicture(p.type))
             continue;
-        const QImage image = it->value<QImage>();
+        const QImage image = imageOf(*it);
         *it = img::scaled(image, scaledSize(image.size(), scale), true);
     }
     return checkedOutputs(info, outputs);
@@ -500,7 +504,10 @@ private:
             if (!link)
                 continue;
             const PortSpec *out = m_graph.node(link->fromNode)->type->info().output(link->fromPort);
-            const QVariant value = m_outputs[s.lane].value(link->fromNode).value(link->fromPort);
+            QVariant value = m_outputs[s.lane].value(link->fromNode).value(link->fromPort);
+            // Only the effects on the graphics card add to a pending image; it is made for the rest.
+            if (!info.takesPending)
+                value = madeValue(value);
             inputs.insert(port.id, drivenValue(info, port, convertedInput(out->type, port.type, value), laneScale(s.lane)));
         }
         return inputs;
@@ -583,10 +590,20 @@ private:
             return;
         const QHash<QString, Values> &outputs = m_outputs[laneOf(m_options.scale)];
         m_result.scale = m_options.scale;
-        m_result.outputs = outputs.value(m_options.target);
-        const Values output = outputs.value(m_graph.outputNode());
-        m_result.image = output.value(QStringLiteral("image")).value<QImage>();
-        m_result.mask = output.value(QStringLiteral("mask")).value<QImage>();
+        try {
+            // What is given back is made: the selected node of the editor may be an effect.
+            Values target = outputs.value(m_options.target);
+            for (auto it = target.begin(); it != target.end(); ++it)
+                *it = madeValue(*it);
+            m_result.outputs = target;
+            const Values output = outputs.value(m_graph.outputNode());
+            m_result.image = imageOf(output.value(QStringLiteral("image")));
+            m_result.mask = output.value(QStringLiteral("mask")).value<QImage>();
+        } catch (const Error &e) {
+            m_promise.setException(Error(e.message()));
+            m_promise.finish();
+            return;
+        }
         if (m_options.progress && !m_result.needsRun)
             m_options.progress(m_total, m_total, QString());
         m_promise.addResult(m_result);
@@ -771,18 +788,27 @@ Values evaluateNode(const NodeType &type, const Values &inputs, const QVariantMa
     Values given;
     for (const PortSpec &port : info.inputs) {
         const auto it = inputs.constFind(port.id);
-        if (it == inputs.constEnd() || (isPicture(port.type) && it->value<QImage>().isNull())) {
+        const bool pending = it != inputs.constEnd() && port.type == PortType::Image && pendingOf(*it);
+        if (it == inputs.constEnd() || (isPicture(port.type) && !pending && it->value<QImage>().isNull())) {
             if (!port.optional)
                 throw Error(missingInput(info, port));
             continue;
         }
-        given.insert(port.id, port.type == PortType::Image  ? QVariant(img::normalized(it->value<QImage>()))
+        if (pending && info.takesPending) {
+            given.insert(port.id, *it);
+            continue;
+        }
+        given.insert(port.id, port.type == PortType::Image  ? QVariant(img::normalized(imageOf(*it)))
                               : port.type == PortType::Mask ? QVariant(toMask(it->value<QImage>()))
                                                             : drivenValue(info, port, *it, scale));
     }
     auto checked = [&info](const Values &outputs) {
         try {
-            return checkedOutputs(info, outputs);
+            // Made, for the caller: it reads images.
+            Values made = checkedOutputs(info, outputs);
+            for (auto it = made.begin(); it != made.end(); ++it)
+                *it = madeValue(*it);
+            return made;
         } catch (const Error &e) {
             throw Error(nodeFailed(info.name, e.message()));
         }

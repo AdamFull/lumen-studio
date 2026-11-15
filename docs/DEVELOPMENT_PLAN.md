@@ -4484,7 +4484,27 @@ pins), which is one more reason to take its parts rather than the library.
      developPanel` grades with the new groups.
    * Not yet: highlights and shadows are still global curves (the local ones could use the coarse
      copy now); a look at real photos, as for step 4.
-6. [ ] **Effects as nodes**: consecutive GPU nodes run as one chain, without a read-back between them.
+6. [x] **Effects as nodes**: consecutive GPU nodes run as one chain, without a read-back between them.
+   * Done (15 November 2026): `Effect::describe` reads an effect from its reflection alone (no
+     device; cached), so node types are made at start without Vulkan. `filters/EffectNodes`
+     (`lumen_filters` now links `lumen_gpu`; the configure check still keeps AI, document, runtime
+     and UI out): a node per Develop effect in the new *Develop (graphics card)* category
+     (`develop`, `local-contrast`, `tone-curve`, `colour-mixer`, `colour-grading`, `lut`, `detail`,
+     `vignette-grain`), its settings from the shader (a label two settings share gets its section,
+     "Grain: Amount"; a wheel is a colour, its hue and saturation used; the curve as four curve
+     texts; the LUT as a name with a new `lut` editor in `ParamField`; Detail's radius scales with
+     the preview). A node hands on a `PendingImage` (new in `NodeType.h`; `NodeTypeInfo::takesPending`,
+     `imageOf`, `madeValue`): the picture and the effects still to run; the next effect node adds
+     its step, and anything else (another node, the result, the editor's selected node) gets it
+     made once, on a pooled `gpu::Chain` (two, by picture, so a slider moved does not send the
+     picture again). The evaluator keeps pending outputs in its cache like any other, so moving one
+     slider re-runs that node and makes the row again. A node at its start values passes the
+     picture on untouched. The curve and LUT helpers moved here from `ui/Grading`, which uses them.
+     Tests: `tst_filters effectNodeTypes, effectNodesRunAsOneChain` (three effects, one run, the
+     same pixels as the chain run directly; a classic node between splits the row; the selected
+     middle node is made), `effectNodeInputs`; `tst_filters_ui lutEditor`.
+   * Not yet: a mask input on the effect nodes (use *Mix by mask* after them); a check that
+     publishing an effect's setting to the Filters panel works as for the classic nodes.
 7. [ ] **Your own effects**: the Slang compiler as a downloadable component, an editor with a live
    preview and the compiler's errors in place, sharing with the source shown first.
 8. [ ] **Presets** (copy and paste settings, apply to many pictures), the user guide, German, a live

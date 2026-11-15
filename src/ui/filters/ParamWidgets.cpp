@@ -1,11 +1,13 @@
 #include "ui/filters/ParamWidgets.h"
 
 #include "ai/FilterNodes.h"
+#include "filters/EffectNodes.h"
 #include "filters/Ops.h"
 #include "ui/Theme.h"
 #include "ui/widgets/Controls.h"
 
 #include <QComboBox>
+#include <QFileInfo>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -295,6 +297,26 @@ ParamField::ParamField(const filters::ParamSpec &spec, const QVariant &value, co
             connect(m_combo, &QComboBox::currentIndexChanged, this, [this] { emit valueChanged(m_combo->currentData()); });
             break;
         }
+        if (spec.editor == QLatin1String("lut")) {
+            // A LUT from the LUTs folder (the Develop tab adds them), or none.
+            auto *row = new QHBoxLayout(this);
+            row->setContentsMargins(0, 0, 0, 0);
+            row->setSpacing(8);
+            m_luts = true;
+            m_combo = new QComboBox(this);
+            m_combo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+            m_combo->setMinimumContentsLength(8);
+            m_combo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+            m_combo->addItem(tr("None"), QString());
+            for (const QString &name : filters::effects::availableLuts())
+                m_combo->addItem(QFileInfo(name).completeBaseName(), name);
+            m_combo->setAccessibleName(text);
+            row->addWidget(labelWidget());
+            row->addWidget(m_combo, 1);
+            setValue(value);
+            connect(m_combo, &QComboBox::currentIndexChanged, this, [this] { emit valueChanged(m_combo->currentData()); });
+            break;
+        }
         if (spec.editor == ai::filter_nodes::PromptEditor) {
             // A prompt: a few lines, wrapped, so a whole sentence can be read and changed.
             auto *column = new QVBoxLayout(this);
@@ -368,6 +390,10 @@ void ParamField::setValue(const QVariant &value)
         if (i < 0 && m_engines && !value.toString().isEmpty()) {
             // An engine that is gone stays chosen (the step says so) until another one is picked.
             m_combo->addItem(ai::filterNodeEngineName(value.toString()), value.toString());
+            i = m_combo->count() - 1;
+        } else if (i < 0 && m_luts && !value.toString().isEmpty()) {
+            // A LUT that is not in the folder stays chosen (running the node says so).
+            m_combo->addItem(tr("%1 (missing)").arg(QFileInfo(value.toString()).completeBaseName()), value.toString());
             i = m_combo->count() - 1;
         }
         m_combo->setCurrentIndex(std::max(0, i));
