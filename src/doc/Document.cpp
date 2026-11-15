@@ -146,6 +146,9 @@ void Document::mergeDown(const QUuid &id)
         }
     }
     m_undo.beginMacro(tr("Merge down"));
+    if (lower->graded())
+        m_undo.push(new GradingCommand(this, lower->id, Grading{lower->original, lower->grading(), lower->image},
+                                       Grading{QImage(), QJsonObject(), lower->image}, QString()));
     m_undo.push(new PixelsCommand(this, lower->id, bounds(), lower->image, merged, false, QString()));
     m_undo.push(new RemoveLayerCommand(this, upper->id, QString()));
     m_undo.endMacro();
@@ -164,6 +167,28 @@ void Document::flattenImage()
     after.selection = m_selection;
     after.active = layer->id;
     m_undo.push(new ContentCommand(this, before, after, tr("Flatten image")));
+}
+
+void Document::setGrading(const QUuid &id, const Grading &grading, const QString &undoText)
+{
+    const LayerPtr layer = findLayer(id);
+    if (!layer)
+        return;
+    const Grading before{layer->original, layer->grading(), layer->image};
+    Grading after = grading;
+    after.image = img::normalized(after.image);
+    if (after.original.isNull())
+        after.steps = QJsonObject();
+    m_undo.push(new GradingCommand(this, id, before, after, undoText));
+}
+
+void Document::bakeGrading(const QUuid &id)
+{
+    const LayerPtr layer = findLayer(id);
+    if (!layer || !layer->graded())
+        return;
+    m_undo.push(new GradingCommand(this, id, Grading{layer->original, layer->grading(), layer->image},
+                                   Grading{QImage(), QJsonObject(), layer->image}, tr("Bake grading")));
 }
 
 void Document::setLayerProps(const QUuid &id, const LayerProps &props, const QString &undoText)
@@ -247,6 +272,15 @@ void Document::resizeCanvas(const QRect &newRect, const QString &undoText)
         p.drawImage(-newRect.topLeft(), l->image);
         p.end();
         c->image = img;
+        if (l->graded()) {
+            QImage original(newRect.size(), QImage::Format_ARGB32_Premultiplied);
+            original.fill(Qt::transparent);
+            QPainter o(&original);
+            o.setCompositionMode(QPainter::CompositionMode_Source);
+            o.drawImage(-newRect.topLeft(), l->original);
+            o.end();
+            c->original = original;
+        }
         after.layers.append(c);
     }
     if (!m_selection.isNull()) {
@@ -270,6 +304,8 @@ void Document::scaleImage(const QSize &newSize)
     for (const LayerPtr &l : m_layers) {
         auto c = std::make_shared<Layer>(*l);
         c->image = img::normalized(l->image.scaled(newSize, Qt::IgnoreAspectRatio, Qt::SmoothTransformation));
+        if (l->graded())
+            c->original = img::normalized(l->original.scaled(newSize, Qt::IgnoreAspectRatio, Qt::SmoothTransformation));
         after.layers.append(c);
     }
     if (!m_selection.isNull())
@@ -306,6 +342,7 @@ void Document::rotateImage(int degrees)
     for (const LayerPtr &l : m_layers) {
         auto c = std::make_shared<Layer>(*l);
         c->image = turned(l->image, degrees, std::nullopt);
+        c->original = turned(l->original, degrees, std::nullopt);
         after.layers.append(c);
     }
     if (!m_selection.isNull())
@@ -325,6 +362,7 @@ void Document::flipImage(Qt::Orientation orientation)
     for (const LayerPtr &l : m_layers) {
         auto c = std::make_shared<Layer>(*l);
         c->image = turned(l->image, 0, orientation);
+        c->original = turned(l->original, 0, orientation);
         after.layers.append(c);
     }
     if (!m_selection.isNull())
@@ -426,6 +464,23 @@ QImage &Document::selectionForPainting()
     if (m_selection.isNull())
         m_selection = img::createMask(m_size);
     return m_selection;
+}
+
+void Document::setGradingRaw(const QUuid &id, const Grading &grading)
+{
+    const LayerPtr layer = findLayer(id);
+    if (!layer)
+        return;
+    layer->original = grading.original;
+    if (grading.original.isNull() || grading.steps.isEmpty())
+        layer->meta.remove(QStringLiteral("develop"));
+    else
+        layer->meta.insert(QStringLiteral("develop"), grading.steps);
+    if (grading.image.cacheKey() != layer->image.cacheKey())
+        layer->image = grading.image;
+    // Bumped either way: the save writes the original (or removes it) with the layer.
+    notifyPixelsChanged(id, bounds());
+    emit gradingChanged(id);
 }
 
 void Document::notifyPixelsChanged(const QUuid &id, const QRect &rect)

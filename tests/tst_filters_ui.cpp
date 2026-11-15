@@ -1366,7 +1366,7 @@ void TestFiltersUi::editorFiltersTab()
             side = t;
     }
     QVERIFY(side);
-    QCOMPARE(side->tabText(side->indexOf(panel)), QStringLiteral("Filters"));
+    QCOMPARE(side->tabBar()->accessibleTabName(side->indexOf(panel)), QStringLiteral("Filters"));
     QVERIFY(panel->selectFilter(builtIn(QStringLiteral("old-photo"))));
     QVERIFY(page.canvas()->preview().isNull()); // another tab is shown
     side->setCurrentWidget(panel);

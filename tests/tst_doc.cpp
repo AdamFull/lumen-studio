@@ -9,6 +9,7 @@
 #include <QBuffer>
 #include <QElapsedTimer>
 #include <QImageReader>
+#include <QJsonArray>
 #include <QPainter>
 #include <QTemporaryDir>
 #include <QSignalSpy>
@@ -37,6 +38,8 @@ private slots:
     void projectAssetsRoundTrip();
     void projectDocumentRoundTrip();
     void projectRecords();
+    void gradingUndoAndTransforms();
+    void gradingRoundTrip();
 };
 
 static QImage solid(const QSize &s, const QColor &c)
@@ -239,6 +242,126 @@ void TestDoc::projectDocumentRoundTrip()
     QCOMPARE(ld->layers.size(), 1);
     QCOMPARE(ld->layers[0]->image.pixelColor(5, 5), QColor(Qt::yellow));
     QCOMPARE(int(ld->selection.constScanLine(50)[60]), 255);
+}
+
+static QJsonObject someGrading()
+{
+    return QJsonObject{{QStringLiteral("steps"), QJsonArray{QJsonObject{{QStringLiteral("effect"), QStringLiteral("develop")},
+                                                                         {QStringLiteral("values"), QJsonObject{{QStringLiteral("exposure"), 1.0}}}}}}};
+}
+
+// A graded layer keeps its pixels from before; undo, bake, the picture's own changes and merging
+// keep the two together (plan M20 step 3).
+void TestDoc::gradingUndoAndTransforms()
+{
+    Document doc(QSize(40, 30));
+    const QUuid id = doc.addLayer(QStringLiteral("Base"), solid(QSize(40, 30), Qt::red));
+    const LayerPtr layer = doc.findLayer(id);
+    const QImage red = layer->image;
+    QVERIFY(!layer->graded());
+    QVERIFY(!layer->pixelsLocked());
+    QSignalSpy changed(&doc, &Document::gradingChanged);
+
+    doc.setGrading(id, Grading{red, someGrading(), solid(QSize(40, 30), Qt::blue)}, QStringLiteral("Develop"));
+    QVERIFY(layer->graded());
+    QVERIFY(layer->pixelsLocked());
+    QCOMPARE(layer->image.pixelColor(3, 3), QColor(Qt::blue));
+    QCOMPARE(layer->original.pixelColor(3, 3), QColor(Qt::red));
+    QCOMPARE(layer->grading(), someGrading());
+    QCOMPARE(changed.size(), 1);
+
+    doc.undoStack()->undo();
+    QVERIFY(!layer->graded());
+    QCOMPARE(layer->image.pixelColor(3, 3), QColor(Qt::red));
+    QVERIFY(!layer->meta.contains(QStringLiteral("develop")));
+    doc.undoStack()->redo();
+    QVERIFY(layer->graded());
+    QCOMPARE(layer->image.pixelColor(3, 3), QColor(Qt::blue));
+
+    // Bake: the pixels stay, the grading goes; undo brings it back.
+    doc.bakeGrading(id);
+    QVERIFY(!layer->graded());
+    QCOMPARE(layer->image.pixelColor(3, 3), QColor(Qt::blue));
+    QVERIFY(layer->grading().isEmpty());
+    doc.undoStack()->undo();
+    QVERIFY(layer->graded());
+
+    // The picture's own changes take the original along.
+    doc.resizeCanvas(QRect(5, 5, 20, 10), QStringLiteral("Crop"));
+    LayerPtr now = doc.findLayer(id);
+    QCOMPARE(now->original.size(), QSize(20, 10));
+    QCOMPARE(now->original.pixelColor(0, 0), QColor(Qt::red));
+    QCOMPARE(now->grading(), someGrading());
+    doc.rotateImage(90);
+    now = doc.findLayer(id);
+    QCOMPARE(now->original.size(), QSize(10, 20));
+    QCOMPARE(now->image.size(), QSize(10, 20));
+    doc.scaleImage(QSize(20, 40));
+    now = doc.findLayer(id);
+    QCOMPARE(now->original.size(), QSize(20, 40));
+    doc.flipImage(Qt::Horizontal);
+    QCOMPARE(doc.findLayer(id)->original.size(), QSize(20, 40));
+    doc.undoStack()->undo();
+    doc.undoStack()->undo();
+    doc.undoStack()->undo();
+    doc.undoStack()->undo();
+    QCOMPARE(doc.findLayer(id)->original.size(), QSize(40, 30));
+
+    // Merging a layer into a graded one bakes it first, in the same undo step.
+    const QUuid top = doc.addLayer(QStringLiteral("Top"), QImage());
+    doc.mergeDown(top);
+    QVERIFY(!doc.findLayer(id)->graded());
+    QCOMPARE(doc.layerCount(), 1);
+    doc.undoStack()->undo();
+    QCOMPARE(doc.layerCount(), 2);
+    QVERIFY(doc.findLayer(id)->graded());
+
+    // Every slider back at 0: the original is the layer again.
+    doc.setGrading(id, Grading{QImage(), QJsonObject(), doc.findLayer(id)->original}, QStringLiteral("Reset"));
+    QVERIFY(!doc.findLayer(id)->graded());
+    QCOMPARE(doc.findLayer(id)->image.pixelColor(3, 3), QColor(Qt::red));
+
+    // A copy of a graded layer is graded the same.
+    doc.undoStack()->undo();
+    const QUuid copy = doc.duplicateLayer(id);
+    QVERIFY(doc.findLayer(copy)->graded());
+    QCOMPARE(doc.findLayer(copy)->grading(), someGrading());
+}
+
+// The original and the grading are saved with the project; baking removes the original.
+void TestDoc::gradingRoundTrip()
+{
+    QTemporaryDir dir;
+    Project project;
+    auto open = project.open(dir.filePath(QStringLiteral("graded.lumen")));
+    QTRY_VERIFY(open.isFinished());
+    Document doc(QSize(64, 48));
+    const QUuid id = doc.addLayer(QStringLiteral("Photo"), solid(QSize(64, 48), Qt::red));
+    doc.addLayer(QStringLiteral("Plain"), solid(QSize(64, 48), Qt::green));
+    doc.setGrading(id, Grading{doc.findLayer(id)->image, someGrading(), solid(QSize(64, 48), Qt::blue)}, QStringLiteral("Develop"));
+    project.saveDocument(&doc);
+    QTRY_VERIFY(!project.isSaving(doc.id()));
+
+    auto loaded = project.loadDocument(doc.id());
+    QTRY_VERIFY(loaded.isFinished());
+    auto ld = loaded.result();
+    QCOMPARE(ld->layers.size(), 2);
+    const LayerPtr photo = ld->layers[0];
+    QVERIFY(photo->graded());
+    QCOMPARE(photo->image.pixelColor(5, 5), QColor(Qt::blue));
+    QCOMPARE(photo->original.pixelColor(5, 5), QColor(Qt::red));
+    QCOMPARE(photo->grading(), someGrading());
+    QVERIFY(!ld->layers[1]->graded());
+
+    // Baked and saved: no original any more.
+    doc.bakeGrading(id);
+    project.saveDocument(&doc);
+    QTRY_VERIFY(!project.isSaving(doc.id()));
+    auto again = project.loadDocument(doc.id());
+    QTRY_VERIFY(again.isFinished());
+    QVERIFY(!again.result()->layers[0]->graded());
+    QVERIFY(again.result()->layers[0]->grading().isEmpty());
+    QCOMPARE(again.result()->layers[0]->image.pixelColor(5, 5), QColor(Qt::blue));
 }
 
 void TestDoc::projectRecords()

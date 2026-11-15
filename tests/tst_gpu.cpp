@@ -34,6 +34,7 @@ private slots:
     void chainTwoPasses();
     void chainKeepsThePicture();
     void chainLater();
+    void developEffect();
     void cleanup();
 
 private:
@@ -479,6 +480,80 @@ void TestGpu::chainLater()
     QVERIFY(std::abs(big.pixelColor(2000, 1500).blue() - small.pixelColor(400, 300).blue()) <= 1);
     qInfo() << "4000 x 3000 with two effects:" << finished.gpuMilliseconds() << "ms on the GPU; 800 x 600:" << preview.gpuMilliseconds()
             << "ms";
+}
+
+// The Develop panel's effect: all at 0 leaves the picture, each slider moves what it says.
+void TestGpu::developEffect()
+{
+    if (!m_available)
+        QSKIP("no Vulkan device");
+    QString error;
+    const Effect develop = Effect::load(QStringLiteral("develop"), Context::instance(), &error);
+    QVERIFY2(!develop.isNull(), qPrintable(error));
+    QCOMPARE(develop.title(), QStringLiteral("Develop"));
+    QCOMPARE(develop.group(), QStringLiteral("Basic"));
+    QCOMPARE(develop.defaults().size(), 10);
+    QString sections;
+    for (const EffectParam &p : develop.params()) {
+        if (p.name == QLatin1String("temperature") || p.name == QLatin1String("exposure") || p.name == QLatin1String("saturation"))
+            sections += p.section + u';';
+    }
+    QCOMPARE(sections, QStringLiteral("White balance;Tone;Presence;"));
+
+    // Grey 128, a warm colour, dark grey, light greys, near black.
+    const QList<QColor> colors{QColor(128, 128, 128), QColor(200, 120, 80), QColor(30, 30, 30), QColor(200, 200, 200),
+                               QColor(230, 230, 230), QColor(10, 10, 10)};
+    QImage picture(int(colors.size()), 1, QImage::Format_RGBA8888);
+    for (int i = 0; i < colors.size(); ++i)
+        picture.setPixelColor(i, 0, colors[i]);
+    auto run = [&](const QVariantMap &values) {
+        Chain chain;
+        if (!chain.setSteps({{QStringLiteral("develop"), values}}))
+            return QImage();
+        return chain.render(picture);
+    };
+    auto at = [](const QImage &img, int x) { return img.pixelColor(x, 0); };
+
+    const QImage neutral = run({});
+    for (int i = 0; i < colors.size(); ++i) {
+        const QColor c = at(neutral, i);
+        QVERIFY2(std::abs(c.red() - colors[i].red()) <= 1 && std::abs(c.green() - colors[i].green()) <= 1
+                     && std::abs(c.blue() - colors[i].blue()) <= 1,
+                 qPrintable(QStringLiteral("%1 became %2").arg(colors[i].name(), c.name())));
+    }
+
+    // One stop more is twice the light.
+    const QImage brighter = run({{QStringLiteral("exposure"), 1.0}});
+    QVERIFY(std::abs(at(brighter, 0).red() - int(std::lround(toSrgb(2 * toLinear(128 / 255.0)) * 255))) <= 1);
+
+    const QImage grey = run({{QStringLiteral("saturation"), -100.0}});
+    const QColor g = at(grey, 1);
+    QVERIFY2(std::abs(g.red() - g.blue()) <= 1 && std::abs(g.red() - g.green()) <= 1, qPrintable(g.name()));
+
+    const QColor warm = at(run({{QStringLiteral("temperature"), 100.0}}), 0);
+    QVERIFY2(warm.red() > warm.blue() + 10, qPrintable(warm.name()));
+    const QColor cool = at(run({{QStringLiteral("temperature"), -100.0}}), 0);
+    QVERIFY2(cool.blue() > cool.red() + 10, qPrintable(cool.name()));
+
+    // Contrast: the middle stays, darks darker, lights lighter.
+    const QImage contrast = run({{QStringLiteral("contrast"), 100.0}});
+    QVERIFY(std::abs(at(contrast, 0).red() - 128) <= 3);
+    QVERIFY(at(contrast, 2).red() < 30);
+    QVERIFY(at(contrast, 3).red() > 200);
+    const QImage flat = run({{QStringLiteral("contrast"), -100.0}});
+    QVERIFY(at(flat, 2).red() > 30);
+    QVERIFY(at(flat, 3).red() < 200);
+
+    // Each tone slider moves its own part.
+    QVERIFY(at(run({{QStringLiteral("highlights"), -100.0}}), 4).red() < 225);
+    QVERIFY(std::abs(at(run({{QStringLiteral("highlights"), -100.0}}), 5).red() - 10) <= 1);
+    QVERIFY(at(run({{QStringLiteral("shadows"), 100.0}}), 2).red() > 35);
+    QVERIFY(std::abs(at(run({{QStringLiteral("shadows"), 100.0}}), 4).red() - 230) <= 1);
+    QVERIFY(at(run({{QStringLiteral("blacks"), 100.0}}), 5).red() > 15);
+    QVERIFY(at(run({{QStringLiteral("whites"), -100.0}}), 4).red() < 225);
+    // Vibrance lifts the weak colour more than saturation's share.
+    const QColor vivid = at(run({{QStringLiteral("vibrance"), 100.0}}), 1);
+    QVERIFY(vivid.red() - vivid.blue() > 200 - 80);
 }
 
 QTEST_GUILESS_MAIN(TestGpu)

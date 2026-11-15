@@ -49,6 +49,7 @@
 #include "ui/dialogs/UserGuideDialog.h"
 #include "ui/filters/FilterCatalog.h"
 #include "ui/filters/FiltersPanel.h"
+#include "ui/widgets/DevelopPanel.h"
 #include "ui/filters/NodeEditorWindow.h"
 #include "ui/ext/Extension.h"
 #include "core/ImageOps.h"
@@ -530,6 +531,7 @@ private slots:
     void settingsDialog();
     void dialogs();
     void filterTools();
+    void developPanel();
     void fileQuestions();
 
 private:
@@ -1198,6 +1200,34 @@ void TestLayout::filterTools()
         m_auditor.audit(&host, surface);
         m_auditor.shoot(&host, surface);
     }
+}
+
+// The Develop tab at the side panel's minimum width and its height in a 1280x720 window: its sliders
+// (or, without a usable graphics card, why there are none) and its buttons, on a graded layer.
+void TestLayout::developPanel()
+{
+    Studio studio;
+    doc::Document *doc = studio.openImageAsDocument(sampleImage(), QStringLiteral("Sample"));
+    QVERIFY(doc);
+    EditorState state;
+    CanvasView canvas(&state);
+    canvas.setDocument(doc);
+    QWidget host;
+    auto *layout = new QVBoxLayout(&host);
+    layout->setContentsMargins(0, 0, 0, 0);
+    auto *panel = new DevelopPanel(&studio, &canvas, &host);
+    layout->addWidget(panel);
+    host.resize(300, 540);
+    host.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&host));
+    panel->setValue(QStringLiteral("exposure"), 0.5);
+    QSignalSpy committed(panel, &DevelopPanel::committed);
+    panel->commit();
+    if (!panel->values().isEmpty())
+        QTRY_VERIFY_WITH_TIMEOUT(!committed.isEmpty(), 15000);
+    Auditor::settle();
+    m_auditor.audit(&host, QStringLiteral("Develop panel 300x540"));
+    m_auditor.shoot(&host, QStringLiteral("Develop panel 300x540"));
 }
 
 // The questions about a picture's file (M17): saving over it with everything it can say, and changes

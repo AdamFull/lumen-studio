@@ -150,6 +150,36 @@ void MoveLayerCommand::undo()
         m_doc->moveLayerRaw(m_to, m_from);
 }
 
+GradingCommand::GradingCommand(Document *doc, const QUuid &id, const Grading &before, const Grading &after, const QString &text,
+                               QUndoCommand *parent)
+    : QUndoCommand(text, parent)
+    , m_doc(doc)
+    , m_layer(id)
+    , m_beforeOriginal(before.original)
+    , m_beforeSteps(before.steps)
+    , m_beforeImage(before.image)
+    , m_afterOriginal(after.original)
+    , m_afterSteps(after.steps)
+    , m_afterImage(after.image)
+{
+}
+
+void GradingCommand::redo()
+{
+    apply(m_afterOriginal, m_afterSteps, m_afterImage);
+}
+
+void GradingCommand::undo()
+{
+    apply(m_beforeOriginal, m_beforeSteps, m_beforeImage);
+}
+
+void GradingCommand::apply(const CompressedImage &original, const QJsonObject &steps, const CompressedImage &image)
+{
+    if (m_doc)
+        m_doc->setGradingRaw(m_layer, Grading{original.image(), steps, image.image()});
+}
+
 LayerPropsCommand::LayerPropsCommand(Document *doc, const QUuid &id, const LayerProps &before, const LayerProps &after,
                                      const QString &text)
     : QUndoCommand(text)

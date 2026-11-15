@@ -8,6 +8,7 @@
 #include <QWidget>
 
 #include <functional>
+#include <optional>
 
 class QSlider;
 class QDoubleSpinBox;
@@ -33,15 +34,23 @@ public:
     int labelWidth() const;
     void setLabelWidth(int width);
     static void alignLabels(const QList<SliderField *> &fields);
+    // A double-click on the label puts this value back, as in Lightroom.
+    void setResetValue(double value);
 
 signals:
     void valueChanged(double value);
+    // A change is done: the slider let go, a key or the wheel moved it, a number was typed.
+    void editingFinished();
+
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) override;
 
 private:
     QLabel *m_label;
     QSlider *m_slider;
     QDoubleSpinBox *m_spin;
     double m_scale;
+    std::optional<double> m_reset;
 };
 
 // Colour swatch that opens a colour dialog.

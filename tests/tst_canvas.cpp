@@ -33,7 +33,9 @@
 #include "ui/pages/PromptPlan.h"
 #include "ui/pages/StartScreen.h"
 #include "ui/pages/VariantStrip.h"
+#include "ui/widgets/DevelopPanel.h"
 #include "ui/widgets/JobCard.h"
+#include "gpu/Gpu.h"
 #include "ui/widgets/LoraPicker.h"
 #include "ui/dialogs/PlanChangeDialog.h"
 #include "ui/dialogs/SelectByDescriptionDialog.h"
@@ -186,6 +188,7 @@ private slots:
     void shortcutRegistry();
     void shortcutsHaveNoConflicts();
     void themeContrast();
+    void developPanel();
     void themeAnyFolderName();
     void accessibleNames();
     void fitLabelWraps();
@@ -582,6 +585,102 @@ void TestCanvas::themeAnyFolderName()
         QCheckBox box; // a stylesheet is parsed when the first widget needs it
         box.ensurePolished();
     }
+}
+
+// The Develop tab (plan M20 step 3): a preview while a slider moves, the grading at full size as one
+// undo step, the layer's pixels kept from before, Before, Bake and Reset.
+void TestCanvas::developPanel()
+{
+    if (!gpu::Context::instance().isAvailable())
+        QSKIP("no Vulkan device");
+    Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
+    QTemporaryDir dir;
+    Studio studio;
+    studio.openProject(dir.filePath(QStringLiteral("develop.lumen")));
+    QTRY_VERIFY_WITH_TIMEOUT(studio.isProjectOpen(), 5000);
+    MainWindow window(&studio);
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    QImage grey(400, 300, QImage::Format_ARGB32_Premultiplied);
+    grey.fill(QColor(100, 100, 100));
+    doc::Document *doc = studio.openImageAsDocument(grey, QStringLiteral("Grade me"));
+    QVERIFY(doc);
+    const doc::LayerPtr layer = doc->activeLayer();
+    QVERIFY(layer);
+    window.editor()->showDevelopPanel();
+    DevelopPanel *panel = window.editor()->developPanel();
+    QVERIFY(panel->isVisible());
+    CanvasView *canvas = window.editor()->canvas();
+
+    // Moving a slider shows a preview; the layer is not changed yet.
+    panel->setValue(QStringLiteral("exposure"), 1.0);
+    QTRY_VERIFY(!canvas->preview(CanvasView::Preview::Filter).isNull());
+    QVERIFY(!layer->graded());
+    QCOMPARE(layer->image.pixelColor(10, 10).red(), 100);
+    const int previewRed = canvas->preview(CanvasView::Preview::Filter).pixelColor(5, 5).red();
+    QVERIFY2(previewRed > 120, qPrintable(QString::number(previewRed)));
+
+    // Letting go grades the layer at full size, as one undo step.
+    QSignalSpy committed(panel, &DevelopPanel::committed);
+    panel->commit();
+    QTRY_COMPARE_WITH_TIMEOUT(committed.size(), 1, 10000);
+    QVERIFY2(committed.first().first().toBool(), qPrintable(committed.first().at(1).toString()));
+    QVERIFY(layer->graded());
+    const int graded = layer->image.pixelColor(10, 10).red();
+    QVERIFY(std::abs(graded - previewRed) <= 2);
+    QCOMPARE(layer->original.pixelColor(10, 10).red(), 100);
+    QTRY_VERIFY(canvas->preview(CanvasView::Preview::Filter).isNull());
+    QCOMPARE(doc->undoStack()->undoText(), QStringLiteral("Develop"));
+
+    // Painting on it is refused with what to do.
+    QVERIFY(layer->pixelsLocked());
+    QVERIFY(Tool::lockedMessage(*layer).contains(QLatin1String("bake")));
+
+    // Undo and redo, with the sliders following.
+    doc->undoStack()->undo();
+    QVERIFY(!layer->graded());
+    QCOMPARE(layer->image.pixelColor(10, 10).red(), 100);
+    QCOMPARE(panel->values().value(QStringLiteral("exposure")).toDouble(), 0.0);
+    doc->undoStack()->redo();
+    QVERIFY(layer->graded());
+    QCOMPARE(panel->values().value(QStringLiteral("exposure")).toDouble(), 1.0);
+
+    // Before shows the layer as it was, without changing it.
+    panel->showBefore(true);
+    QTRY_VERIFY(!canvas->preview(CanvasView::Preview::Filter).isNull());
+    QCOMPARE(canvas->preview(CanvasView::Preview::Filter).pixelColor(5, 5).red(), 100);
+    QCOMPARE(layer->image.pixelColor(10, 10).red(), graded);
+    panel->showBefore(false);
+    QTRY_VERIFY(canvas->preview(CanvasView::Preview::Filter).isNull());
+
+    // A second change grades the original again, not the graded pixels.
+    panel->setValue(QStringLiteral("exposure"), 0.5);
+    panel->commit();
+    QTRY_COMPARE_WITH_TIMEOUT(committed.size(), 2, 10000);
+    QVERIFY(layer->image.pixelColor(10, 10).red() < graded);
+    QCOMPARE(layer->original.pixelColor(10, 10).red(), 100);
+
+    // Bake: the pixels stay, the sliders start again from 0.
+    const int half = layer->image.pixelColor(10, 10).red();
+    auto *bake = panel->findChild<QPushButton *>(QStringLiteral("developBake"));
+    QVERIFY(bake && bake->isEnabled());
+    bake->click();
+    QVERIFY(!layer->graded());
+    QCOMPARE(layer->image.pixelColor(10, 10).red(), half);
+    QCOMPARE(panel->values().value(QStringLiteral("exposure")).toDouble(), 0.0);
+    QVERIFY(!bake->isEnabled());
+
+    // Reset puts a graded layer back as it was.
+    panel->setValue(QStringLiteral("saturation"), -50.0);
+    panel->setValue(QStringLiteral("exposure"), -1.0);
+    panel->commit();
+    QTRY_COMPARE_WITH_TIMEOUT(committed.size(), 3, 10000);
+    QVERIFY(layer->graded());
+    auto *reset = panel->findChild<QPushButton *>(QStringLiteral("developReset"));
+    reset->click();
+    QTRY_VERIFY(!layer->graded());
+    QCOMPARE(layer->image.pixelColor(10, 10).red(), half);
+    QVERIFY(panel->values().value(QStringLiteral("saturation")).toDouble() == 0.0);
 }
 
 void TestCanvas::themeContrast()
@@ -6777,12 +6876,13 @@ void TestCanvas::filtersInTheShell()
             side = t;
     }
     QVERIFY(side);
+    // By name: the tabs show their names, or only icons when the panel is too narrow for them.
     QStringList tabs;
     for (int i = 0; i < side->count(); ++i) {
         if (side->isTabVisible(i))
-            tabs << side->tabText(i);
+            tabs << side->tabBar()->accessibleTabName(i);
     }
-    QCOMPARE(tabs, (QStringList{QStringLiteral("Layers"), QStringLiteral("History"), QStringLiteral("Filters")}));
+    QCOMPARE(tabs, (QStringList{QStringLiteral("Layers"), QStringLiteral("History"), QStringLiteral("Filters"), QStringLiteral("Develop")}));
     viewFilters->trigger();
     QCOMPARE(side->currentWidget(), panel);
     // A filter is chosen from the start (the first built-in one, not the list's heading), so the

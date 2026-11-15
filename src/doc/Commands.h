@@ -107,6 +107,28 @@ private:
     LayerProps m_after;
 };
 
+// Sets a layer's grading: its pixels before the grading, the grading, and the graded pixels (plan
+// M20 step 3). The images are kept compressed.
+class GradingCommand : public QUndoCommand
+{
+public:
+    GradingCommand(Document *doc, const QUuid &id, const Grading &before, const Grading &after, const QString &text,
+                   QUndoCommand *parent = nullptr);
+    void redo() override;
+    void undo() override;
+
+private:
+    void apply(const CompressedImage &original, const QJsonObject &steps, const CompressedImage &image);
+    QPointer<Document> m_doc;
+    QUuid m_layer;
+    CompressedImage m_beforeOriginal;
+    QJsonObject m_beforeSteps;
+    CompressedImage m_beforeImage;
+    CompressedImage m_afterOriginal;
+    QJsonObject m_afterSteps;
+    CompressedImage m_afterImage;
+};
+
 // Swaps the complete document content (canvas resize, crop, scale, flatten).
 class ContentCommand : public QUndoCommand
 {

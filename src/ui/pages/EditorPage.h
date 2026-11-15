@@ -23,6 +23,7 @@ class ColorSwatch;
 class ElidedLabel;
 class DocumentFiles;
 class EditorState;
+class DevelopPanel;
 class FiltersPanel;
 class LayersPanel;
 class PromptBar;
@@ -54,6 +55,8 @@ public:
     // The Filters tab of the right panel (View → Filters, Tools → New filter… / Filter editor…).
     FiltersPanel *filtersPanel() const { return m_filters; }
     void showFiltersPanel();
+    DevelopPanel *developPanel() const { return m_develop; }
+    void showDevelopPanel();
     StartScreen *startScreen() const { return m_start; }
     bool showsStartScreen() const;
     void selectTool(const QString &id);
@@ -125,6 +128,8 @@ private:
     AiPanel *m_ai;
     QUndoView *m_history;
     FiltersPanel *m_filters;
+    DevelopPanel *m_develop;
+    QList<QIcon> m_sideIcons; // the side tabs' icons, put back when there is room
     QTabWidget *m_side;
     QLabel *m_zoomLabel;
     QLabel *m_infoLabel;

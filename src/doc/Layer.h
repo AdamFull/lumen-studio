@@ -41,14 +41,34 @@ struct LayerProps
 
 // A raster layer. Pixels are document-sized ARGB32_Premultiplied. Owned by a Document through
 // shared pointers so undo commands can keep removed layers alive.
+//
+// A graded layer (plan M20 step 3) keeps its pixels from before the grading in `original` and the
+// grading in meta["develop"]; `image` is the graded result, so everything that reads the layer sees
+// what the canvas shows. Its pixels are not edited: Bake makes the grading part of them.
 struct Layer
 {
     QUuid id = QUuid::createUuid();
     LayerProps props;
     QImage image;
-    QJsonObject meta;      // provenance (generation parameters, source asset...)
+    QImage original;       // null when the layer has no grading
+    QJsonObject meta;      // provenance (generation parameters, source asset...), the grading
     quint64 revision = 0;  // bumped on every pixel change; used to skip re-encoding unchanged layers
     quint64 savedRevision = ~quint64(0);
+
+    bool graded() const { return !original.isNull(); }
+    // Tools, filters and cut leave these pixels alone.
+    bool pixelsLocked() const { return props.locked || graded(); }
+    // The grading: {"steps": [{"effect": "develop", "values": {...}}]}.
+    QJsonObject grading() const { return meta.value(QStringLiteral("develop")).toObject(); }
+};
+
+// What a layer's grading is, for undo and for setting it: the pixels before it (null: none), its
+// steps, and the pixels it gives.
+struct Grading
+{
+    QImage original;
+    QJsonObject steps;
+    QImage image;
 };
 
 using LayerPtr = std::shared_ptr<Layer>;

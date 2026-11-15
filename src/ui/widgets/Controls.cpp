@@ -67,6 +67,13 @@ SliderField::SliderField(const QString &label, double min, double max, double va
         m_slider->setValue(int(std::lround(d * m_scale)));
         emit valueChanged(d);
     });
+    connect(m_slider, &QSlider::sliderReleased, this, &SliderField::editingFinished);
+    // Keys, the wheel and clicks beside the handle move it without a drag.
+    connect(m_slider, &QSlider::actionTriggered, this, [this](int action) {
+        if (action != QAbstractSlider::SliderMove)
+            QMetaObject::invokeMethod(this, &SliderField::editingFinished, Qt::QueuedConnection);
+    });
+    connect(m_spin, &QDoubleSpinBox::editingFinished, this, &SliderField::editingFinished);
 }
 
 double SliderField::value() const
@@ -86,6 +93,24 @@ void SliderField::setRange(double min, double max)
     QSignalBlocker b1(m_slider), b2(m_spin);
     m_spin->setRange(min, max);
     m_slider->setRange(int(std::lround(min * m_scale)), int(std::lround(max * m_scale)));
+}
+
+void SliderField::setResetValue(double value)
+{
+    m_reset = value;
+    m_label->installEventFilter(this);
+    m_label->setToolTip(tr("Double-click to reset"));
+}
+
+bool SliderField::eventFilter(QObject *watched, QEvent *event)
+{
+    if (watched == m_label && event->type() == QEvent::MouseButtonDblClick && m_reset) {
+        setValue(*m_reset);
+        emit valueChanged(*m_reset);
+        emit editingFinished();
+        return true;
+    }
+    return QWidget::eventFilter(watched, event);
 }
 
 void SliderField::setCompact(bool compact)

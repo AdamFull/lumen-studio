@@ -18,6 +18,7 @@
 #include "ui/dialogs/ImageSizeDialog.h"
 #include "ui/dialogs/NewCanvasDialog.h"
 #include "ui/filters/FiltersPanel.h"
+#include "ui/widgets/DevelopPanel.h"
 #include "ui/pages/AiOptions.h"
 #include "ui/pages/AiPanel.h"
 #include "ui/pages/PromptBar.h"
@@ -214,8 +215,8 @@ EditorPage::EditorPage(Studio *studio, QWidget *parent)
     sh->addWidget(fit);
     cv->addWidget(status);
 
-    // Side panel: Layers, History and Filters; the AI panel (every option) when the prompt bar asks
-    // for it.
+    // Side panel: Layers, History, Filters and Develop; the AI panel (every option) when the prompt
+    // bar asks for it.
     m_side = new QTabWidget(splitter);
     m_side->setMinimumWidth(300);
     m_side->setDocumentMode(true);
@@ -227,8 +228,10 @@ EditorPage::EditorPage(Studio *studio, QWidget *parent)
     m_side->addTab(m_history, Icons::get(QStringLiteral("history")), tr("History"));
     m_filters = new FiltersPanel(studio, m_canvas, m_side);
     m_side->addTab(m_filters, Icons::get(QStringLiteral("adjust")), tr("Filters"));
-    // Four tabs (with the AI panel) share a narrow panel: rather than hide behind arrows or shorten
-    // their names to "Lay…", the other three show only their icons then (updateSideTabs).
+    m_develop = new DevelopPanel(studio, m_canvas, m_side);
+    m_side->addTab(m_develop, Icons::get(QStringLiteral("sun")), tr("Develop"));
+    // Five tabs (with the AI panel) share a narrow panel: rather than hide behind arrows or shorten
+    // their names to "Lay…", they drop their icons, then their names (updateSideTabs).
     m_side->setUsesScrollButtons(false);
     m_side->setElideMode(Qt::ElideRight);
     m_side->installEventFilter(this);
@@ -237,6 +240,8 @@ EditorPage::EditorPage(Studio *studio, QWidget *parent)
     closeAi->setIconSize(QSize(12, 12));
     m_side->tabBar()->setTabButton(aiTab, QTabBar::RightSide, closeAi);
     m_side->setTabVisible(aiTab, false);
+    for (int i = 0; i < m_side->count(); ++i)
+        m_sideIcons << m_side->tabIcon(i);
     connect(closeAi, &QToolButton::clicked, this, &EditorPage::hideAiPanel);
 
     // The prompt bar under the canvas, its results above it.
@@ -404,21 +409,24 @@ bool EditorPage::eventFilter(QObject *watched, QEvent *event)
 void EditorPage::updateSideTabs()
 {
     const int ai = m_side->indexOf(m_ai);
-    const QStringList names = {tr("Layers"), tr("History"), tr("Filters")};
-    auto label = [this, ai, &names](bool named) {
-        for (int i = 0, n = 0; i < m_side->count() && n < names.size(); ++i) {
-            if (i == ai)
-                continue;
-            m_side->setTabText(i, named ? names.at(n) : QString());
-            m_side->setTabToolTip(i, named ? QString() : names.at(n));
-            m_side->tabBar()->setAccessibleTabName(i, names.at(n));
-            ++n;
+    const QStringList names = {tr("Layers"), tr("History"), tr("Filters"), tr("Develop")};
+    enum Mode { NamesAndIcons, Names, Icons };
+    auto label = [&](Mode mode) {
+        for (int i = 0, n = 0; i < m_side->count(); ++i) {
+            const QString name = i == ai ? tr("AI") : names.value(n++);
+            m_side->setTabText(i, mode == Icons ? QString() : name);
+            m_side->setTabIcon(i, mode == Names ? QIcon() : m_sideIcons.value(i));
+            m_side->setTabToolTip(i, mode == Icons ? name : QString());
+            m_side->tabBar()->setAccessibleTabName(i, name);
         }
     };
-    label(true);
-    // The names while they fit (the bar asks for their whole width, sizeHint).
-    if (m_side->isTabVisible(ai) && m_side->tabBar()->sizeHint().width() > m_side->width())
-        label(false);
+    // The names with their icons while they fit (the bar asks for its whole width, sizeHint), then
+    // the names alone, then only the icons.
+    for (Mode mode : {NamesAndIcons, Names, Icons}) {
+        label(mode);
+        if (m_side->tabBar()->sizeHint().width() <= m_side->width())
+            break;
+    }
 }
 
 void EditorPage::showAiPanel(std::optional<AiPanel::Mode> mode)
@@ -448,6 +456,11 @@ bool EditorPage::isAiPanelShown() const
 void EditorPage::showFiltersPanel()
 {
     m_side->setCurrentWidget(m_filters);
+}
+
+void EditorPage::showDevelopPanel()
+{
+    m_side->setCurrentWidget(m_develop);
 }
 
 bool EditorPage::showsStartScreen() const
@@ -561,7 +574,7 @@ void EditorPage::deleteSelectionPixels()
         return;
     const doc::LayerPtr layer = m_doc->activeLayer();
     const QRect bounds = m_doc->selectionBounds();
-    if (!layer || bounds.isEmpty() || layer->props.locked)
+    if (!layer || bounds.isEmpty() || layer->pixelsLocked())
         return;
     QImage pixels = layer->image.copy(bounds);
     const QImage mask = m_doc->selection().copy(bounds);
@@ -623,8 +636,8 @@ void EditorPage::copySelection(bool cut)
         m_studio->notify(tr("Select an area to cut first."));
         return;
     }
-    if (cut && layer->props.locked) {
-        m_studio->notify(tr("The active layer is locked."), QStringLiteral("warning"));
+    if (cut && layer->pixelsLocked()) {
+        m_studio->notify(Tool::lockedMessage(*layer), QStringLiteral("warning"));
         return;
     }
     const QRect r = selected ? m_doc->selectionBounds() : m_doc->bounds();

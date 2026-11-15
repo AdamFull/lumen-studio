@@ -106,9 +106,9 @@ bool TransformTool::ensureSession(bool report)
     const doc::LayerPtr layer = doc->activeLayer();
     if (!layer)
         return false;
-    if (layer->props.locked) {
+    if (layer->pixelsLocked()) {
         if (report)
-            emit message(tr("The active layer is locked."));
+            emit message(lockedMessage(*layer));
         return false;
     }
     QRect src;

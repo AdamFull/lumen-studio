@@ -431,6 +431,8 @@ QFuture<void> Project::saveDocument(Document *doc)
         bool encode;
         quint64 revision;
         QByteArray data;
+        QImage original; // a graded layer's pixels from before its grading
+        QByteArray originalData;
     };
     struct SaveJob
     {
@@ -470,7 +472,7 @@ QFuture<void> Project::saveDocument(Document *doc)
     for (int i = 0; i < doc->layerCount(); ++i) {
         const LayerPtr l = doc->layerAt(i);
         job->layers.append(LayerJob{l->id.toString(QUuid::WithoutBraces), i, l->props.toJson(), l->meta, l->image,
-                                    l->revision != l->savedRevision, l->revision, {}});
+                                    l->revision != l->savedRevision, l->revision, {}, l->original, {}});
     }
     QPointer<Document> guard(doc);
     const quint64 revisionAtSave = doc->revision();
@@ -478,9 +480,13 @@ QFuture<void> Project::saveDocument(Document *doc)
     job->clock.start();
     return async::run([job] {
                QtConcurrent::blockingMap(async::pool(), job->layers, [](LayerJob &lj) {
-                   if (lj.encode)
+                   if (lj.encode) {
                        lj.data = img::encode(lj.image, "PNG", 1);
+                       if (!lj.original.isNull())
+                           lj.originalData = img::encode(lj.original, "PNG", 1);
+                   }
                    lj.image = QImage();
+                   lj.original = QImage();
                });
                for (const LayerJob &lj : job->layers)
                    job->encoded += lj.encode ? 1 : 0;
@@ -520,6 +526,16 @@ QFuture<void> Project::saveDocument(Document *doc)
                         q.addBindValue(toJsonBytes(lj.props));
                         q.addBindValue(toJsonBytes(lj.meta));
                         q.addBindValue(lj.data);
+                        ProjectStore::check(q.exec(), q);
+                        // The original goes with the pixels: written when there is one, removed when not.
+                        if (!lj.originalData.isEmpty()) {
+                            ProjectStore::check(q.prepare(QStringLiteral("INSERT OR REPLACE INTO layer_originals(layer_id, data) VALUES(?,?)")), q);
+                            q.addBindValue(lj.id);
+                            q.addBindValue(lj.originalData);
+                        } else {
+                            ProjectStore::check(q.prepare(QStringLiteral("DELETE FROM layer_originals WHERE layer_id=?")), q);
+                            q.addBindValue(lj.id);
+                        }
                     } else {
                         ProjectStore::check(q.prepare(QStringLiteral("UPDATE layers SET position=?, props=?, meta=? WHERE id=?")), q);
                         q.addBindValue(lj.position);
@@ -539,9 +555,11 @@ QFuture<void> Project::saveDocument(Document *doc)
                         stale << q.value(0).toString();
                 }
                 for (const QString &id : stale) {
-                    ProjectStore::check(q.prepare(QStringLiteral("DELETE FROM layers WHERE id=?")), q);
-                    q.addBindValue(id);
-                    ProjectStore::check(q.exec(), q);
+                    for (const char *sql : {"DELETE FROM layers WHERE id=?", "DELETE FROM layer_originals WHERE layer_id=?"}) {
+                        ProjectStore::check(q.prepare(QString::fromLatin1(sql)), q);
+                        q.addBindValue(id);
+                        ProjectStore::check(q.exec(), q);
+                    }
                 }
                 if (!db.commit())
                     throw StoreError("commit failed");
@@ -609,6 +627,7 @@ QFuture<std::shared_ptr<LoadedDocument>> Project::loadDocument(const QString &id
             QString id;
             QJsonObject props, meta;
             QByteArray data;
+            QByteArray original;
         };
         QList<L> layers;
     };
@@ -628,7 +647,17 @@ QFuture<std::shared_ptr<LoadedDocument>> Project::loadDocument(const QString &id
             q.addBindValue(id);
             ProjectStore::check(q.exec(), q);
             while (q.next())
-                raw->layers.append({q.value(0).toString(), fromJsonBytes(q.value(1)), fromJsonBytes(q.value(2)), q.value(3).toByteArray()});
+                raw->layers.append({q.value(0).toString(), fromJsonBytes(q.value(1)), fromJsonBytes(q.value(2)), q.value(3).toByteArray(), {}});
+            ProjectStore::check(q.prepare(QStringLiteral(
+                "SELECT o.layer_id, o.data FROM layer_originals o JOIN layers l ON l.id = o.layer_id WHERE l.document_id=?")), q);
+            q.addBindValue(id);
+            ProjectStore::check(q.exec(), q);
+            while (q.next()) {
+                for (Raw::L &l : raw->layers) {
+                    if (l.id == q.value(0).toString())
+                        l.original = q.value(1).toByteArray();
+                }
+            }
             return raw;
         })
         .then(async::pool(), [id](std::shared_ptr<Raw> raw) {
@@ -655,6 +684,14 @@ QFuture<std::shared_ptr<LoadedDocument>> Project::loadDocument(const QString &id
                     image = fixed;
                 }
                 layer->image = image;
+                // A grading needs its original at the layer's size; without one it is gone.
+                if (!l.original.isEmpty()) {
+                    const QImage original = img::normalized(img::decode(l.original));
+                    if (original.size() == image.size())
+                        layer->original = original;
+                }
+                if (layer->original.isNull())
+                    layer->meta.remove(QStringLiteral("develop"));
                 layer->revision = 1;
                 layer->savedRevision = 1;
                 doc->layers[i] = layer;
@@ -681,7 +718,8 @@ void Project::removeDocument(const QString &id)
         .run<void>([id](QSqlDatabase &db) {
             db.transaction();
             QSqlQuery q(db);
-            for (const char *sql : {"DELETE FROM layers WHERE document_id=?", "DELETE FROM documents WHERE id=?"}) {
+            for (const char *sql : {"DELETE FROM layer_originals WHERE layer_id IN (SELECT id FROM layers WHERE document_id=?)",
+                                    "DELETE FROM layers WHERE document_id=?", "DELETE FROM documents WHERE id=?"}) {
                 ProjectStore::check(q.prepare(QString::fromLatin1(sql)), q);
                 q.addBindValue(id);
                 ProjectStore::check(q.exec(), q);

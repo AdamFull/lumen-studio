@@ -147,6 +147,12 @@ double BrushTool::brushRadius() const
     return state()->brushSize() / 2.0;
 }
 
+QString Tool::lockedMessage(const doc::Layer &layer)
+{
+    return layer.graded() && !layer.props.locked ? tr("The active layer has a grading: bake it in the Develop tab to paint on it.")
+                                                 : tr("The active layer is locked.");
+}
+
 void BrushTool::press(CanvasView *view, const ToolEvent &ev)
 {
     doc::Document *doc = view->document();
@@ -155,8 +161,8 @@ void BrushTool::press(CanvasView *view, const ToolEvent &ev)
         emit message(tr("Add a layer first."));
         return;
     }
-    if (layer->props.locked || !layer->props.visible) {
-        emit message(layer->props.locked ? tr("The active layer is locked.") : tr("The active layer is hidden."));
+    if (layer->pixelsLocked() || !layer->props.visible) {
+        emit message(layer->pixelsLocked() ? lockedMessage(*layer) : tr("The active layer is hidden."));
         return;
     }
     m_layer = layer->id;
@@ -651,8 +657,8 @@ void FillTool::press(CanvasView *view, const ToolEvent &ev)
     const QPoint pt = ev.docPos.toPoint();
     if (!layer || !doc->bounds().contains(pt))
         return;
-    if (layer->props.locked) {
-        emit message(tr("The active layer is locked."));
+    if (layer->pixelsLocked()) {
+        emit message(lockedMessage(*layer));
         return;
     }
     QImage region;
@@ -700,9 +706,9 @@ MoveTool::MoveTool(EditorState *state, QObject *parent)
 void MoveTool::press(CanvasView *view, const ToolEvent &ev)
 {
     const doc::LayerPtr layer = view->document()->activeLayer();
-    if (!layer || layer->props.locked) {
+    if (!layer || layer->pixelsLocked()) {
         if (layer)
-            emit message(tr("The active layer is locked."));
+            emit message(lockedMessage(*layer));
         return;
     }
     m_layer = layer->id;
@@ -759,7 +765,7 @@ bool MoveTool::key(CanvasView *view, QKeyEvent *e)
     default: return false;
     }
     const doc::LayerPtr layer = view->document()->activeLayer();
-    if (!layer || layer->props.locked)
+    if (!layer || layer->pixelsLocked())
         return true;
     QImage moved(layer->image.size(), QImage::Format_ARGB32_Premultiplied);
     moved.fill(Qt::transparent);

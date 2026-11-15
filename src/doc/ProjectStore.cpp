@@ -25,6 +25,9 @@ const char *kSchema[] = {
     "CREATE TABLE IF NOT EXISTS layers ("
     " id TEXT PRIMARY KEY, document_id TEXT NOT NULL, position INTEGER, props TEXT, meta TEXT, data BLOB)",
     "CREATE INDEX IF NOT EXISTS layers_doc ON layers(document_id, position)",
+    // A graded layer's pixels from before its grading (plan M20). Lumen versions without grading
+    // ignore the table and show the graded pixels.
+    "CREATE TABLE IF NOT EXISTS layer_originals (layer_id TEXT PRIMARY KEY, data BLOB NOT NULL)",
     "CREATE TABLE IF NOT EXISTS records ("
     " id TEXT PRIMARY KEY, type TEXT NOT NULL, name TEXT, created INTEGER, modified INTEGER, json TEXT, thumb BLOB)",
     "CREATE INDEX IF NOT EXISTS records_type ON records(type, modified)",

@@ -435,6 +435,22 @@ With a selection only the selected pixels move. Enter applies, Esc reverts.
 
 ## 8. Filters
 
+### Develop: colour grading
+
+The **Develop** tab on the right grades the active layer, as Lightroom's Basic panel does:
+*Temperature* and *Tint* (white balance), *Exposure* (in stops), *Contrast*, *Highlights*,
+*Shadows*, *Whites* and *Blacks*, *Vibrance* and *Saturation*. It runs on the graphics card (Vulkan;
+without a card that can, the tab says why and the other filters still work).
+
+* While a slider moves, the canvas shows the picture at screen size; when you let go, the layer is
+  graded at full size, as one step to undo. Double-click a slider's name to put it back to 0.
+* The layer keeps its pixels from before the grading, also in the saved project, so you can change
+  the grading later; **Reset** puts the layer back as it was. **Before** shows it as it was while
+  the button is down.
+* A graded layer is not painted on, filtered or moved: **Bake** makes the grading part of its
+  pixels, and the sliders start again from 0. Cropping, scaling, rotating and flipping the picture
+  keep the grading; merging a layer down into a graded one bakes it.
+
 ### The Filters panel
 
 The **Filters** tab on the right (also **View → Filters**) lists:

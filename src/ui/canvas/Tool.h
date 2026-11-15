@@ -17,6 +17,9 @@ class Tool : public QObject
 {
     Q_OBJECT
 public:
+    // Why the layer's pixels cannot be changed: locked, or graded (to be baked first).
+    static QString lockedMessage(const doc::Layer &layer);
+
     explicit Tool(EditorState *state, QObject *parent = nullptr)
         : QObject(parent)
         , m_state(state)

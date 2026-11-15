@@ -85,6 +85,11 @@ public:
     void moveLayer(const QUuid &id, int newIndex);
     void mergeDown(const QUuid &id);
     void flattenImage();
+    // A layer's grading as one undo step (plan M20 step 3): `grading.original` null removes the
+    // grading and shows grading.image (the pixels from before it).
+    void setGrading(const QUuid &id, const Grading &grading, const QString &undoText);
+    // Makes the grading part of the layer's pixels: they stay as they are, the grading goes.
+    void bakeGrading(const QUuid &id);
     void setLayerProps(const QUuid &id, const LayerProps &props, const QString &undoText = QString());
     // Replaces pixels of a layer inside rect with `pixels` (rect-sized) as one undo step.
     void applyPixels(const QUuid &id, const QRect &rect, const QImage &pixels, const QString &undoText);
@@ -109,6 +114,7 @@ public:
     void moveLayerRaw(int from, int to);
     void setLayerPropsRaw(const QUuid &id, const LayerProps &props);
     void writePixelsRaw(const QUuid &id, const QRect &rect, const QImage &pixels);
+    void setGradingRaw(const QUuid &id, const Grading &grading);
     void setSelectionRaw(const QImage &mask);
     void writeSelectionRaw(const QRect &rect, const QImage &pixels);
     // Direct access for painting tools; call notify* after modifying.
@@ -154,6 +160,8 @@ signals:
     void nameChanged(const QString &name);
     void layersChanged();
     void layerPropsChanged(const QUuid &id);
+    // A layer got, changed or lost its grading (also through undo).
+    void gradingChanged(const QUuid &id);
     void pixelsChanged(const QUuid &id, const QRect &rect);
     void compositeChanged(const QRect &rect);
     void selectionChanged(const QRect &rect);

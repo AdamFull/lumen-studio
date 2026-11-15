@@ -629,6 +629,8 @@ bool FilterRunner::apply(Target target, QString *why)
         return fail(tr("Open an image first."));
     if (target == Target::Layer && layer->props.locked)
         return fail(tr("The layer is locked. Unlock it, or put the result on a new layer."));
+    if (target == Target::Layer && layer->graded())
+        return fail(tr("The layer has a grading. Bake it in the Develop tab, or put the result on a new layer."));
     for (const filters::Issue &issue : m_graph->validate()) {
         if (issue.severity == filters::Issue::Severity::Error)
             return fail(issue.message);
@@ -685,7 +687,7 @@ bool FilterRunner::apply(Target target, QString *why)
                                         "so nothing was changed."));
                 return;
             }
-            if (job.target == Target::Layer && layer->props.locked) {
+            if (job.target == Target::Layer && layer->pixelsLocked()) {
                 emit finished(false, tr("The layer was locked while the filter ran, so nothing was changed."));
                 return;
             }

@@ -4411,8 +4411,28 @@ pins), which is one more reason to take its parts rather than the library.
      under the validation layer): linear-light arithmetic against a CPU reference, a two-pass blur,
      the picture kept between runs, a preview and a full-size run at once (4000 × 3000 with two
      effects 9.5 ms on the GPU, 800 × 600 0.4 ms).
-3. [ ] **Develop panel, basics**: white balance, exposure, contrast, highlights, shadows, whites and
+3. [x] **Develop panel, basics**: white balance, exposure, contrast, highlights, shadows, whites and
    blacks, vibrance and saturation; settings kept with the layer; before and after; *Bake*.
+   * Done (15 November 2026): `src/gpu/effects/develop.slang` (one pass in linear light: white
+     balance keeping the brightness, exposure in stops, tone on the luminance in a perceptual scale
+     with an S-curve or its inverse for contrast and fading bands for highlights, shadows, whites
+     and blacks, vibrance weighted by how strong a colour already is, saturation; all 0 is the
+     picture; `[Section]` groups the sliders). A graded layer keeps `Layer::original` and
+     `meta["develop"]` (`{"steps": [{"effect", "values"}]}`, only what moved); `image` is the graded
+     result, so the canvas, saving, export, AI and filters read it unchanged. `GradingCommand`
+     (compressed images) for setting, resetting and baking; `pixelsLocked()` keeps tools, filters,
+     cut and delete off a graded layer, with the reason; resize, scale, rotate and flip take the
+     original along; merging into a graded layer bakes it in the same step. The project keeps
+     originals in a new `layer_originals` table (older Lumen ignores it and shows the graded
+     pixels). `DevelopPanel` (the Develop tab, `sun`): sliders from the effect, a preview at the
+     canvas's size through the Filter preview while one moves, the full size on a worker thread
+     when it is let go (one undo step; a layer changed meanwhile is left alone), Before, Reset,
+     Bake; double-clicking a slider's name resets it (`SliderField::setResetValue`, and a new
+     `editingFinished`). The side tabs show only icons whenever their names do not fit.
+     Tests: `tst_gpu developEffect`, `tst_doc gradingUndoAndTransforms, gradingRoundTrip`,
+     `tst_canvas developPanel`, `tst_layout developPanel`.
+   * Not yet: a look at real photos (only synthetic pictures so far); highlights and shadows are
+     global curves, the local ones (from a blurred picture) come with clarity in step 5.
 4. [ ] **Tone curve, colour mixer, colour grading wheels, LUTs** (`.cube`).
 5. [ ] **Detail and looks**: clarity, texture and dehaze (a fast multi-scale blur), sharpening, noise
    reduction, vignette, grain.

@@ -20,6 +20,7 @@ add_library(lumen_ui STATIC
     widgets/ReferenceStrip.h widgets/ReferenceStrip.cpp
     widgets/CharacterChip.h widgets/CharacterChip.cpp
     widgets/LayersPanel.h widgets/LayersPanel.cpp
+    widgets/DevelopPanel.h widgets/DevelopPanel.cpp
     widgets/ProviderCombo.h widgets/ProviderCombo.cpp
     widgets/LoraPicker.h widgets/LoraPicker.cpp
     widgets/RunSettingsEditor.h widgets/RunSettingsEditor.cpp
@@ -63,7 +64,7 @@ add_library(lumen_ui STATIC
     filters/FiltersPanel.h filters/FiltersPanel.cpp
 )
 target_include_directories(lumen_ui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
-target_link_libraries(lumen_ui PUBLIC lumen_ai lumen_runtime lumen_live2d lumen_doc lumen_pose lumen_filters lumen_core
+target_link_libraries(lumen_ui PUBLIC lumen_ai lumen_gpu lumen_runtime lumen_live2d lumen_doc lumen_pose lumen_filters lumen_core
     Qt6::Widgets Qt6::Svg Qt6::OpenGL Qt6::OpenGLWidgets)
 lumen_configure_target(lumen_ui)
 

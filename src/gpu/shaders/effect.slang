@@ -52,3 +52,11 @@ struct UnitAttribute
 {
     string text;
 };
+
+// A heading the parameter comes under ("White balance", "Tone"); it holds for the parameters after
+// it until the next one.
+[__AttributeUsage(_AttributeTargets.Var)]
+struct SectionAttribute
+{
+    string text;
+};

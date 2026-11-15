@@ -59,6 +59,7 @@ Effect Effect::load(const QString &id, Context &context, QString *error)
     const QVariantList effect = first.attributes.value(QStringLiteral("Effect"));
     e.m_title = effect.value(0, id).toString();
     e.m_group = effect.value(1).toString();
+    QString section;
     for (const ParamField &f : first.params) {
         EffectParam p;
         p.name = f.name;
@@ -66,6 +67,9 @@ Effect Effect::load(const QString &id, Context &context, QString *error)
         p.components = f.components;
         p.label = f.attributes.value(QStringLiteral("Label")).value(0).toString();
         p.unit = f.attributes.value(QStringLiteral("Unit")).value(0).toString();
+        if (f.attributes.contains(QStringLiteral("Section")))
+            section = f.attributes.value(QStringLiteral("Section")).value(0).toString();
+        p.section = section;
         if (const QVariantList range = f.attributes.value(QStringLiteral("Range")); range.size() == 2) {
             p.minimum = range.at(0).toDouble();
             p.maximum = range.at(1).toDouble();

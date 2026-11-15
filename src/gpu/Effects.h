@@ -16,6 +16,7 @@ struct EffectParam
     QString name;
     QString label;            // empty: not shown (such as "size")
     QString unit;
+    QString section;          // its heading, from [Section] on it or a parameter before it
     QString scalar;           // "float32", "int32", "uint32"
     int components = 1;
     double minimum = 0;

@@ -23,7 +23,7 @@
 <context>
     <name>Gpu</name>
     <message>
-        <location filename="../src/gpu/Gpu.cpp" line="+124"/>
+        <location filename="../src/gpu/Gpu.cpp" line="+149"/>
         <source>Vulkan is not installed on this computer (it comes with the graphics driver).</source>
         <translation>Vulkan ist auf diesem Computer nicht installiert (es kommt mit dem Grafiktreiber).</translation>
     </message>
@@ -54,7 +54,7 @@
         <translation>Die Grafikkarte %1 konnte nicht geöffnet werden (%2).</translation>
     </message>
     <message>
-        <location line="+183"/>
+        <location line="+191"/>
         <source>Effects on the graphics card are turned off.</source>
         <translation>Effekte auf der Grafikkarte sind ausgeschaltet.</translation>
     </message>
@@ -3362,7 +3362,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Nach unten zusammenfügen</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+17"/>
         <source>Background</source>
         <translation>Hintergrund</translation>
     </message>
@@ -3370,6 +3370,11 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <location line="+4"/>
         <source>Flatten image</source>
         <translation>Auf Hintergrundebene reduzieren</translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <source>Bake grading</source>
+        <translation>Farbkorrektur einbacken</translation>
     </message>
     <message>
         <location line="+8"/>
@@ -3392,17 +3397,17 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Auswahl umkehren</translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location line="+46"/>
         <source>Resize canvas</source>
         <translation>Arbeitsfläche anpassen</translation>
     </message>
     <message>
-        <location line="+18"/>
+        <location line="+20"/>
         <source>Scale image</source>
         <translation>Bild skalieren</translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location line="+38"/>
         <source>Rotate 90° clockwise</source>
         <translation>Um 90° im Uhrzeigersinn drehen</translation>
     </message>
@@ -3417,7 +3422,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Um 180° drehen</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+17"/>
         <source>Flip horizontally</source>
         <translation>Horizontal spiegeln</translation>
     </message>
@@ -3509,12 +3514,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Löschen der Assets fehlgeschlagen</translation>
     </message>
     <message>
-        <location line="+204"/>
+        <location line="+222"/>
         <source>Saving document failed</source>
         <translation>Speichern des Dokuments fehlgeschlagen</translation>
     </message>
     <message>
-        <location line="+103"/>
+        <location line="+123"/>
         <source>Deleting document failed</source>
         <translation>Löschen des Dokuments fehlgeschlagen</translation>
     </message>
@@ -7500,17 +7505,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::BrushTool</name>
     <message>
-        <location filename="../src/ui/canvas/Tools.cpp" line="+155"/>
+        <location filename="../src/ui/canvas/Tools.cpp" line="+161"/>
         <source>Add a layer first.</source>
         <translation>Fügen Sie zuerst eine Ebene hinzu.</translation>
     </message>
     <message>
         <location line="+4"/>
-        <source>The active layer is locked.</source>
-        <translation>Die aktive Ebene ist gesperrt.</translation>
-    </message>
-    <message>
-        <location line="+0"/>
         <source>The active layer is hidden.</source>
         <translation>Die aktive Ebene ist ausgeblendet.</translation>
     </message>
@@ -8139,7 +8139,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::ColorSwatch</name>
     <message>
-        <location filename="../src/ui/widgets/Controls.cpp" line="+125"/>
+        <location filename="../src/ui/widgets/Controls.cpp" line="+150"/>
         <source>Choose colour</source>
         <translation>Farbe wählen</translation>
     </message>
@@ -8944,6 +8944,150 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
 </context>
 <context>
+    <name>lumen::ui::DevelopPanel</name>
+    <message>
+        <location filename="../src/ui/widgets/DevelopPanel.cpp" line="+26"/>
+        <source>White balance</source>
+        <translation>Weißabgleich</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Temperature</source>
+        <translation>Temperatur</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Tint</source>
+        <translation>Tönung</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Tone</source>
+        <translation>Tonwerte</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Exposure</source>
+        <translation>Belichtung</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Contrast</source>
+        <translation>Kontrast</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Highlights</source>
+        <translation>Lichter</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Shadows</source>
+        <translation>Tiefen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Whites</source>
+        <translation>Weiß</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Blacks</source>
+        <translation>Schwarz</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Presence</source>
+        <translation>Präsenz</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Vibrance</source>
+        <translation>Dynamik</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Saturation</source>
+        <translation>Sättigung</translation>
+    </message>
+    <message>
+        <location line="+27"/>
+        <source>Before</source>
+        <translation>Vorher</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Show the layer as it was before the grading</source>
+        <translation>Die Ebene so zeigen, wie sie vor der Farbkorrektur war</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Reset</source>
+        <translation>Zurücksetzen</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Every slider back to 0, and the layer as it was</source>
+        <translation>Alle Regler zurück auf 0 und die Ebene wie vorher</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Bake</source>
+        <translation>Einbacken</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Make the grading part of the layer&apos;s pixels, so you can paint on it</source>
+        <translation>Die Farbkorrektur fest in die Pixel der Ebene übernehmen, damit Sie darauf malen können</translation>
+    </message>
+    <message>
+        <location line="+153"/>
+        <source>Grading needs the graphics card: %1</source>
+        <translation>Die Farbkorrektur braucht die Grafikkarte: %1</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Open a picture to grade it.</source>
+        <translation>Öffnen Sie ein Bild, um es zu korrigieren.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The layer is locked.</source>
+        <translation>Die Ebene ist gesperrt.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Grading at full size…</source>
+        <translation>Farbkorrektur in voller Größe…</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Graded: change it any time. Bake it to paint on the layer.</source>
+        <translation>Korrigiert: jederzeit änderbar. Backen Sie sie ein, um auf der Ebene zu malen.</translation>
+    </message>
+    <message>
+        <location line="+71"/>
+        <location line="+100"/>
+        <source>Grading did not work: %1</source>
+        <translation>Die Farbkorrektur hat nicht funktioniert: %1</translation>
+    </message>
+    <message>
+        <location line="-23"/>
+        <source>Reset grading</source>
+        <translation>Farbkorrektur zurücksetzen</translation>
+    </message>
+    <message>
+        <location line="+27"/>
+        <source>The layer changed while it was being graded, so nothing was changed.</source>
+        <translation>Die Ebene wurde während der Farbkorrektur geändert, daher wurde nichts geändert.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Develop</source>
+        <translation>Entwickeln</translation>
+    </message>
+</context>
+<context>
     <name>lumen::ui::DirectorSession</name>
     <message>
         <location filename="../src/plugins/characters/director/DirectorSession.cpp" line="+282"/>
@@ -9095,7 +9239,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::EditorPage</name>
     <message>
-        <location filename="../src/ui/pages/EditorPage.cpp" line="+111"/>
+        <location filename="../src/ui/pages/EditorPage.cpp" line="+112"/>
         <source>Undo (Ctrl+Z)</source>
         <translation>Rückgängig (Strg+Z)</translation>
     </message>
@@ -9145,32 +9289,38 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Original</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+12"/>
         <source>AI</source>
         <translation>KI</translation>
     </message>
     <message>
-        <location line="-9"/>
-        <location line="+181"/>
+        <location line="-11"/>
+        <location line="+183"/>
         <source>Layers</source>
         <translation>Ebenen</translation>
     </message>
     <message>
-        <location line="-309"/>
+        <location line="-311"/>
         <source>New blank canvas (Ctrl+N)</source>
         <translation>Neue leere Arbeitsfläche (Strg+N)</translation>
     </message>
     <message>
         <location line="+129"/>
-        <location line="+180"/>
+        <location line="+182"/>
         <source>History</source>
         <translation>Protokoll</translation>
     </message>
     <message>
-        <location line="-178"/>
-        <location line="+178"/>
+        <location line="-180"/>
+        <location line="+180"/>
         <source>Filters</source>
         <translation>Filter</translation>
+    </message>
+    <message>
+        <location line="-178"/>
+        <location line="+178"/>
+        <source>Develop</source>
+        <translation>Entwickeln</translation>
     </message>
     <message>
         <location line="-171"/>
@@ -9323,7 +9473,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Aus der Prompt-Leiste generieren</translation>
     </message>
     <message>
-        <location line="+159"/>
+        <location line="+164"/>
         <location filename="../src/ui/dialogs/NewCanvasDialog.cpp" line="+27"/>
         <source>Untitled</source>
         <translation>Unbenannt</translation>
@@ -9439,12 +9589,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Wählen Sie zuerst einen Bereich zum Ausschneiden aus.</translation>
     </message>
     <message>
-        <location line="+4"/>
-        <source>The active layer is locked.</source>
-        <translation>Die aktive Ebene ist gesperrt.</translation>
-    </message>
-    <message>
-        <location line="+11"/>
+        <location line="+15"/>
         <source>Cut %1 × %2 px</source>
         <translation>%1 × %2 px ausgeschnitten</translation>
     </message>
@@ -9534,13 +9679,8 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::FillTool</name>
     <message>
-        <location filename="../src/ui/canvas/Tools.cpp" line="+24"/>
-        <source>The active layer is locked.</source>
-        <translation>Die aktive Ebene ist gesperrt.</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/canvas/Tools.h" line="+12"/>
-        <location filename="../src/ui/canvas/Tools.cpp" line="+22"/>
+        <location line="+12"/>
+        <location filename="../src/ui/canvas/Tools.cpp" line="+46"/>
         <source>Fill</source>
         <translation>Füllen</translation>
     </message>
@@ -9613,6 +9753,11 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <location line="+5"/>
         <source>The layer is locked. Unlock it, or put the result on a new layer.</source>
         <translation>Die Ebene ist gesperrt. Entsperren Sie sie oder legen Sie das Ergebnis auf eine neue Ebene.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The layer has a grading. Bake it in the Develop tab, or put the result on a new layer.</source>
+        <translation>Die Ebene hat eine Farbkorrektur. Backen Sie sie im Tab „Entwickeln“ ein oder legen Sie das Ergebnis auf eine neue Ebene.</translation>
     </message>
     <message>
         <location line="+25"/>
@@ -13811,13 +13956,8 @@ Downloads und trainierte LoRAs kommen hierher, in Unterordner mit Namen wie bei 
 <context>
     <name>lumen::ui::MoveTool</name>
     <message>
-        <location filename="../src/ui/canvas/Tools.cpp" line="+304"/>
-        <source>The active layer is locked.</source>
-        <translation>Die aktive Ebene ist gesperrt.</translation>
-    </message>
-    <message>
         <location filename="../src/ui/canvas/Tools.h" line="+81"/>
-        <location filename="../src/ui/canvas/Tools.cpp" line="+41"/>
+        <location filename="../src/ui/canvas/Tools.cpp" line="+345"/>
         <source>Move layer</source>
         <translation>Ebene verschieben</translation>
     </message>
@@ -18924,6 +19064,14 @@ oder eines aus den Projektbildern ziehen</translation>
     </message>
 </context>
 <context>
+    <name>lumen::ui::SliderField</name>
+    <message>
+        <location filename="../src/ui/widgets/Controls.cpp" line="-48"/>
+        <source>Double-click to reset</source>
+        <translation>Doppelklicken zum Zurücksetzen</translation>
+    </message>
+</context>
+<context>
     <name>lumen::ui::SmartSelect</name>
     <message>
         <location filename="../src/ui/SmartSelect.cpp" line="+100"/>
@@ -19197,6 +19345,19 @@ Geändert %2</translation>
     </message>
 </context>
 <context>
+    <name>lumen::ui::Tool</name>
+    <message>
+        <location filename="../src/ui/canvas/Tools.cpp" line="-429"/>
+        <source>The active layer has a grading: bake it in the Develop tab to paint on it.</source>
+        <translation>Die aktive Ebene hat eine Farbkorrektur: Backen Sie sie im Tab „Entwickeln“ ein, um darauf zu malen.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The active layer is locked.</source>
+        <translation>Die aktive Ebene ist gesperrt.</translation>
+    </message>
+</context>
+<context>
     <name>lumen::ui::TransformTool</name>
     <message>
         <location filename="../src/ui/canvas/TransformTool.cpp" line="+57"/>
@@ -19204,12 +19365,7 @@ Geändert %2</translation>
         <translation>Innen: verschieben · Griffe: skalieren (Umschalt behält Seitenverhältnis, Alt von der Mitte aus) · außen: drehen (Umschalt rastet ein) · Eingabe übernimmt, Esc verwirft</translation>
     </message>
     <message>
-        <location line="+54"/>
-        <source>The active layer is locked.</source>
-        <translation>Die aktive Ebene ist gesperrt.</translation>
-    </message>
-    <message>
-        <location line="+29"/>
+        <location line="+83"/>
         <source>The active layer is empty.</source>
         <translation>Die aktive Ebene ist leer.</translation>
     </message>
