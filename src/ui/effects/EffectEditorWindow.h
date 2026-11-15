@@ -8,7 +8,9 @@
 #include <QPointer>
 #include <QTimer>
 
+class QCheckBox;
 class QLabel;
+class QTreeWidget;
 class QLineEdit;
 class QListWidget;
 class QPlainTextEdit;
@@ -17,14 +19,17 @@ class QVBoxLayout;
 
 namespace lumen::ui {
 
+class CodeEditor;
 class ParamField;
 class Studio;
 class UserEffects;
 
-// The effect editor (plan M20 step 7): your own effects written in Slang, a window of its own. Your
-// effects on the left; the source in the middle, compiled as you type, with the compiler's errors
-// underlined where they are and listed below it; on the right the effect on the active layer (or a
-// sample picture) with its sliders, which come from the source's [Label] and [Range]. Save puts it in
+// The effect editor (plan M20 steps 7 and 8): your own effects written in Slang, a window of its own,
+// laid out like a code editor. Your effects on the left; the source in the middle (CodeEditor:
+// colours, completion, problems marked in place), compiled as you type, with the compiler's
+// messages listed below it and find and replace above; on the right the effect on the active layer
+// (or a sample picture) with its sliders, which come from the source's [Label] and [Range], and a
+// reference of what Lumen gives effects. File, Edit, Build and View menus with the usual keys. Save puts it in
 // the effects folder, where it is a node of the filter editor. Open… shows a file someone shared,
 // with what it is said first, and adds nothing until it is saved; Export… writes a copy to share.
 class EffectEditorWindow : public QMainWindow
@@ -55,6 +60,10 @@ public:
     QImage preview() const { return m_previewImage; }
     ParamField *field(const QString &param) const;
 
+    // Find (and replace) over the source, with the word at the cursor.
+    void showFind(bool replace);
+    CodeEditor *editor() const { return m_editor; }
+
     // The starting point of a new effect.
     static QString templateSource();
 
@@ -66,6 +75,7 @@ protected:
     void closeEvent(QCloseEvent *e) override;
 
 private:
+    void buildMenus(QPushButton *add, QPushButton *open, QPushButton *exportButton);
     void fillList();
     void compiled(const gpu::Compiled &result, int generation);
     void showMessages();
@@ -80,7 +90,15 @@ private:
     UserEffects *m_effects;
     QListWidget *m_list = nullptr;
     QLineEdit *m_name = nullptr;
-    QPlainTextEdit *m_editor = nullptr;
+    CodeEditor *m_editor = nullptr;
+    QWidget *m_findBar = nullptr;
+    QWidget *m_replaceRow = nullptr;
+    QLineEdit *m_findText = nullptr;
+    QLineEdit *m_replaceText = nullptr;
+    QCheckBox *m_caseBox = nullptr;
+    QCheckBox *m_wordsBox = nullptr;
+    QTreeWidget *m_reference = nullptr;
+    QLabel *m_position = nullptr;
     QListWidget *m_problems = nullptr;
     QLabel *m_banner = nullptr;
     QPushButton *m_download = nullptr;

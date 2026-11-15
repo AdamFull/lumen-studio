@@ -9,12 +9,21 @@
 #include "gpu/Effects.h"
 #include "ui/Studio.h"
 #include "ui/Theme.h"
+#include "ui/effects/CodeEditor.h"
 #include "ui/effects/UserEffects.h"
 #include "ui/filters/FilterCatalog.h"
 #include "ui/filters/ParamWidgets.h"
 
 #include <QCloseEvent>
 #include <QFileDialog>
+#include <QToolButton>
+#include <QShortcut>
+#include <QTreeWidget>
+#include <QTabWidget>
+#include <QStatusBar>
+#include <QMenuBar>
+#include <QInputDialog>
+#include <QCheckBox>
 #include <QFileInfo>
 #include <QFontDatabase>
 #include <QHBoxLayout>
@@ -38,96 +47,6 @@ namespace {
 
 QPointer<EffectEditorWindow> g_window;
 int g_previews = 0;
-
-// The source with line numbers beside it.
-class CodeEditor : public QPlainTextEdit
-{
-public:
-    explicit CodeEditor(QWidget *parent)
-        : QPlainTextEdit(parent)
-        , m_gutter(new Gutter(this))
-    {
-        setLineWrapMode(QPlainTextEdit::NoWrap);
-        QFont mono = QFontDatabase::systemFont(QFontDatabase::FixedFont);
-        mono.setPointSizeF(std::max(9.0, font().pointSizeF()));
-        setFont(mono);
-        setTabStopDistance(fontMetrics().horizontalAdvance(QLatin1Char(' ')) * 4);
-        connect(this, &QPlainTextEdit::blockCountChanged, this, [this] { setViewportMargins(gutterWidth(), 0, 0, 0); });
-        connect(this, &QPlainTextEdit::updateRequest, this, [this](const QRect &rect, int dy) {
-            if (dy)
-                m_gutter->scroll(0, dy);
-            else
-                m_gutter->update(0, rect.y(), m_gutter->width(), rect.height());
-        });
-        setViewportMargins(gutterWidth(), 0, 0, 0);
-    }
-
-    int gutterWidth() const
-    {
-        const int digits = std::max(3, int(QString::number(std::max(1, blockCount())).size()));
-        return 10 + fontMetrics().horizontalAdvance(QLatin1Char('9')) * digits;
-    }
-
-    void setErrorLines(const QSet<int> &lines)
-    {
-        m_errorLines = lines;
-        m_gutter->update();
-    }
-
-protected:
-    void resizeEvent(QResizeEvent *e) override
-    {
-        QPlainTextEdit::resizeEvent(e);
-        const QRect r = contentsRect();
-        m_gutter->setGeometry(r.left(), r.top(), gutterWidth(), r.height());
-    }
-
-private:
-    class Gutter : public QWidget
-    {
-    public:
-        explicit Gutter(CodeEditor *editor)
-            : QWidget(editor)
-            , m_editor(editor)
-        {
-        }
-
-    protected:
-        void paintEvent(QPaintEvent *e) override
-        {
-            QPainter p(this);
-            const Palette &pal = Theme::palette();
-            p.fillRect(e->rect(), pal.panel);
-            QTextBlock block = m_editor->firstVisibleBlock();
-            int top = qRound(m_editor->blockBoundingGeometry(block).translated(m_editor->contentOffset()).top());
-            while (block.isValid() && top <= e->rect().bottom()) {
-                const int height = qRound(m_editor->blockBoundingRect(block).height());
-                if (block.isVisible()) {
-                    const int line = block.blockNumber() + 1;
-                    const bool error = m_editor->m_errorLines.contains(line);
-                    p.setPen(error ? pal.danger : pal.textMuted);
-                    QFont f = m_editor->font();
-                    f.setBold(error);
-                    p.setFont(f);
-                    p.drawText(0, top, width() - 6, height, Qt::AlignRight | Qt::AlignVCenter, QString::number(line));
-                }
-                block = block.next();
-                top += height;
-            }
-        }
-
-    private:
-        CodeEditor *m_editor;
-    };
-
-    Gutter *m_gutter;
-    QSet<int> m_errorLines;
-};
-
-CodeEditor *codeEditor(QPlainTextEdit *e)
-{
-    return static_cast<CodeEditor *>(e);
-}
 
 } // namespace
 
@@ -249,6 +168,80 @@ EffectEditorWindow::EffectEditorWindow(Studio *studio, QWidget *parent)
     nameRow->addWidget(exportButton);
     nameRow->addWidget(m_save);
     mv->addLayout(nameRow);
+    // Find and replace (Ctrl+F, Ctrl+H), over the source.
+    m_findBar = new QWidget(middle);
+    m_findBar->setObjectName(QStringLiteral("effectFindBar"));
+    auto *fv = new QVBoxLayout(m_findBar);
+    fv->setContentsMargins(0, 0, 0, 0);
+    auto *findRow = new QHBoxLayout;
+    m_findText = new QLineEdit(m_findBar);
+    m_findText->setObjectName(QStringLiteral("effectFind"));
+    m_findText->setPlaceholderText(tr("Find"));
+    m_findText->setClearButtonEnabled(true);
+    auto *previous = new QPushButton(tr("Previous"), m_findBar);
+    auto *next = new QPushButton(tr("Next"), m_findBar);
+    m_caseBox = new QCheckBox(tr("Match case"), m_findBar);
+    m_wordsBox = new QCheckBox(tr("Whole words"), m_findBar);
+    auto *closeFind = new QToolButton(m_findBar);
+    closeFind->setText(QStringLiteral("✕"));
+    closeFind->setToolTip(tr("Close (Esc)"));
+    closeFind->setAutoRaise(true);
+    findRow->addWidget(m_findText, 1);
+    findRow->addWidget(previous);
+    findRow->addWidget(next);
+    findRow->addWidget(m_caseBox);
+    findRow->addWidget(m_wordsBox);
+    findRow->addWidget(closeFind);
+    fv->addLayout(findRow);
+    m_replaceRow = new QWidget(m_findBar);
+    auto *replaceRow = new QHBoxLayout(m_replaceRow);
+    replaceRow->setContentsMargins(0, 0, 0, 0);
+    m_replaceText = new QLineEdit(m_replaceRow);
+    m_replaceText->setObjectName(QStringLiteral("effectReplace"));
+    m_replaceText->setPlaceholderText(tr("Replace with"));
+    auto *replaceOne = new QPushButton(tr("Replace"), m_replaceRow);
+    auto *replaceAll = new QPushButton(tr("Replace all"), m_replaceRow);
+    replaceRow->addWidget(m_replaceText, 1);
+    replaceRow->addWidget(replaceOne);
+    replaceRow->addWidget(replaceAll);
+    fv->addWidget(m_replaceRow);
+    m_findBar->hide();
+    mv->addWidget(m_findBar);
+    auto findFlags = [this] { return std::pair{m_caseBox->isChecked(), m_wordsBox->isChecked()}; };
+    auto findNext = [this, findFlags](bool backwards) {
+        const auto [matchCase, words] = findFlags();
+        const bool found = m_editor->find(m_findText->text(), backwards, matchCase, words);
+        m_findText->setProperty("role", found || m_findText->text().isEmpty() ? QVariant() : QVariant(QStringLiteral("error")));
+        m_findText->style()->unpolish(m_findText);
+        m_findText->style()->polish(m_findText);
+        return found;
+    };
+    connect(m_findText, &QLineEdit::returnPressed, this, [findNext] { findNext(false); });
+    connect(m_findText, &QLineEdit::textEdited, this, [this, findNext] {
+        // As you type: from where the match started.
+        QTextCursor c = m_editor->textCursor();
+        c.setPosition(c.selectionStart());
+        m_editor->setTextCursor(c);
+        findNext(false);
+    });
+    connect(next, &QPushButton::clicked, this, [findNext] { findNext(false); });
+    connect(previous, &QPushButton::clicked, this, [findNext] { findNext(true); });
+    connect(replaceOne, &QPushButton::clicked, this, [this, findFlags] {
+        const auto [matchCase, words] = findFlags();
+        m_editor->replaceNext(m_findText->text(), m_replaceText->text(), matchCase, words);
+    });
+    connect(replaceAll, &QPushButton::clicked, this, [this, findFlags] {
+        const auto [matchCase, words] = findFlags();
+        const int n = m_editor->replaceAll(m_findText->text(), m_replaceText->text(), matchCase, words);
+        statusBar()->showMessage(tr("%n replaced.", nullptr, n), 4000);
+    });
+    connect(closeFind, &QToolButton::clicked, this, [this] {
+        m_findBar->hide();
+        m_editor->setFocus();
+    });
+    auto *escape = new QShortcut(QKeySequence(Qt::Key_Escape), m_findBar, nullptr, nullptr, Qt::WidgetWithChildrenShortcut);
+    connect(escape, &QShortcut::activated, closeFind, &QToolButton::click);
+
     auto *codeSplit = new QSplitter(Qt::Vertical, middle);
     m_editor = new CodeEditor(codeSplit);
     m_editor->setObjectName(QStringLiteral("effectSource"));
@@ -276,14 +269,45 @@ EffectEditorWindow::EffectEditorWindow(Studio *studio, QWidget *parent)
     m_previewLabel->setMinimumSize(240, 180);
     m_previewLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
     rv->addWidget(m_previewLabel, 3);
-    auto *scroll = new QScrollArea(right);
+    auto *tabs = new QTabWidget(right);
+    tabs->setObjectName(QStringLiteral("effectSideTabs"));
+    tabs->setDocumentMode(true);
+    auto *scroll = new QScrollArea(tabs);
     scroll->setWidgetResizable(true);
     scroll->setFrameShape(QFrame::NoFrame);
     m_fieldsHost = new QWidget(scroll);
     m_fields = new QVBoxLayout(m_fieldsHost);
     m_fields->addStretch();
     scroll->setWidget(m_fieldsHost);
-    rv->addWidget(scroll, 2);
+    tabs->addTab(scroll, tr("Settings"));
+    // What Lumen gives effects, with a sentence each; a double-click puts it in the source.
+    m_reference = new QTreeWidget(tabs);
+    m_reference->setObjectName(QStringLiteral("effectReference"));
+    m_reference->setHeaderHidden(true);
+    m_reference->setRootIsDecorated(true);
+    const std::pair<QString, QString> groups[] = {{QStringLiteral("attribute"), tr("Attributes (import effect)")},
+                                                  {QStringLiteral("lumen"), tr("Lumen's functions")},
+                                                  {QStringLiteral("function"), tr("Slang's functions")}};
+    for (const auto &[kind, title] : groups) {
+        auto *group = new QTreeWidgetItem(m_reference, {title});
+        group->setFlags(Qt::ItemIsEnabled);
+        for (const QString &word : documentedWords(kind)) {
+            const CodeDoc doc = codeDoc(word);
+            auto *item = new QTreeWidgetItem(group, {doc.signature});
+            item->setToolTip(0, doc.text);
+            item->setData(0, Qt::UserRole, doc.signature);
+        }
+        group->setExpanded(kind != QLatin1String("function"));
+    }
+    connect(m_reference, &QTreeWidget::itemDoubleClicked, this, [this](QTreeWidgetItem *item) {
+        const QString text = item->data(0, Qt::UserRole).toString();
+        if (text.isEmpty())
+            return;
+        m_editor->insertPlainText(text);
+        m_editor->setFocus();
+    });
+    tabs->addTab(m_reference, tr("Reference"));
+    rv->addWidget(tabs, 2);
 
     split->addWidget(left);
     split->addWidget(middle);
@@ -303,12 +327,8 @@ EffectEditorWindow::EffectEditorWindow(Studio *studio, QWidget *parent)
     connect(m_problems, &QListWidget::itemActivated, this, [this](QListWidgetItem *item) {
         const int line = item->data(Qt::UserRole).toInt();
         const int column = item->data(Qt::UserRole + 1).toInt();
-        if (line <= 0)
-            return;
-        QTextCursor cursor(m_editor->document()->findBlockByNumber(line - 1));
-        cursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor, std::max(0, column - 1));
-        m_editor->setTextCursor(cursor);
-        m_editor->setFocus();
+        if (line > 0)
+            m_editor->goToLine(line, column);
     });
     connect(m_problems, &QListWidget::itemClicked, m_problems, &QListWidget::itemActivated);
     connect(m_list, &QListWidget::itemActivated, this, [this](QListWidgetItem *item) {
@@ -359,6 +379,15 @@ EffectEditorWindow::EffectEditorWindow(Studio *studio, QWidget *parent)
         compileNow();
     });
 
+    buildMenus(add, open, exportButton);
+    m_position = new QLabel(this);
+    m_position->setObjectName(QStringLiteral("effectPosition"));
+    statusBar()->addPermanentWidget(m_position);
+    connect(m_editor, &CodeEditor::cursorMoved, this, [this](int line, int column) {
+        m_position->setText(tr("Line %1, column %2").arg(line).arg(column));
+    });
+    m_position->setText(tr("Line %1, column %2").arg(1).arg(1));
+
     fillList();
     const QList<UserEffects::Item> items = m_effects->items();
     if (items.isEmpty())
@@ -392,6 +421,73 @@ bool EffectEditorWindow::confirmDiscard()
     if (answer == QMessageBox::Save)
         return save();
     return true;
+}
+
+void EffectEditorWindow::buildMenus(QPushButton *add, QPushButton *open, QPushButton *exportButton)
+{
+    auto action = [this](QMenu *menu, const QString &text, const QKeySequence &key, auto &&slot, const QString &name = {}) {
+        QAction *a = menu->addAction(text, this, std::forward<decltype(slot)>(slot));
+        if (!key.isEmpty()) {
+            a->setShortcut(key);
+            a->setShortcutContext(Qt::WindowShortcut);
+        }
+        if (!name.isEmpty())
+            a->setObjectName(name);
+        return a;
+    };
+    QMenu *file = menuBar()->addMenu(tr("&File"));
+    action(file, tr("New effect"), QKeySequence::New, [add] { add->click(); });
+    action(file, tr("Open…"), QKeySequence::Open, [open] { open->click(); });
+    action(file, tr("Save"), QKeySequence::Save, [this] { save(); }, QStringLiteral("effectSaveAction"));
+    action(file, tr("Export…"), QKeySequence(), [exportButton] { exportButton->click(); });
+    file->addSeparator();
+    action(file, tr("Close"), QKeySequence::Close, [this] { close(); });
+
+    QMenu *edit = menuBar()->addMenu(tr("&Edit"));
+    action(edit, tr("Undo"), QKeySequence::Undo, [this] { m_editor->undo(); });
+    action(edit, tr("Redo"), QKeySequence::Redo, [this] { m_editor->redo(); });
+    edit->addSeparator();
+    action(edit, tr("Find…"), QKeySequence::Find, [this] { showFind(false); }, QStringLiteral("effectFindAction"));
+    action(edit, tr("Replace…"), QKeySequence(Qt::CTRL | Qt::Key_H), [this] { showFind(true); });
+    action(edit, tr("Find next"), QKeySequence::FindNext, [this] { m_editor->find(m_findText->text(), false, m_caseBox->isChecked(), m_wordsBox->isChecked()); });
+    action(edit, tr("Find previous"), QKeySequence::FindPrevious,
+           [this] { m_editor->find(m_findText->text(), true, m_caseBox->isChecked(), m_wordsBox->isChecked()); });
+    action(edit, tr("Go to line…"), QKeySequence(Qt::CTRL | Qt::Key_G), [this] {
+        bool ok = false;
+        const int line = QInputDialog::getInt(this, tr("Go to line"), tr("Line (1 to %1):").arg(m_editor->blockCount()),
+                                              m_editor->currentLine(), 1, m_editor->blockCount(), 1, &ok);
+        if (ok)
+            m_editor->goToLine(line);
+    });
+    edit->addSeparator();
+    action(edit, tr("Comment or uncomment"), QKeySequence(Qt::CTRL | Qt::Key_Slash), [this] { m_editor->toggleComment(); });
+    action(edit, tr("Indent"), QKeySequence(), [this] { m_editor->indentSelection(false); });
+    action(edit, tr("Unindent"), QKeySequence(), [this] { m_editor->indentSelection(true); });
+    action(edit, tr("Complete word"), QKeySequence(Qt::CTRL | Qt::Key_Space), [this] { m_editor->complete(); });
+
+    QMenu *build = menuBar()->addMenu(tr("&Build"));
+    action(build, tr("Compile now"), QKeySequence(Qt::CTRL | Qt::Key_B), [this] { compileNow(); }, QStringLiteral("effectCompileAction"));
+    action(build, tr("Next problem"), QKeySequence(Qt::Key_F8), [this] { m_editor->nextProblem(false); });
+    action(build, tr("Previous problem"), QKeySequence(Qt::SHIFT | Qt::Key_F8), [this] { m_editor->nextProblem(true); });
+
+    QMenu *view = menuBar()->addMenu(tr("&View"));
+    action(view, tr("Larger text"), QKeySequence::ZoomIn, [this] { m_editor->zoom(1); });
+    action(view, tr("Smaller text"), QKeySequence::ZoomOut, [this] { m_editor->zoom(-1); });
+    action(view, tr("Normal text size"), QKeySequence(Qt::CTRL | Qt::Key_0), [this] { m_editor->zoom(0); });
+}
+
+void EffectEditorWindow::showFind(bool replace)
+{
+    m_findBar->show();
+    m_replaceRow->setVisible(replace);
+    // The selected word, or the one at the cursor, to look for.
+    QTextCursor c = m_editor->textCursor();
+    if (!c.hasSelection())
+        c.select(QTextCursor::WordUnderCursor);
+    if (!c.selectedText().isEmpty() && !c.selectedText().contains(QChar::ParagraphSeparator))
+        m_findText->setText(c.selectedText());
+    m_findText->setFocus();
+    m_findText->selectAll();
 }
 
 void EffectEditorWindow::fillList()
@@ -553,8 +649,7 @@ void EffectEditorWindow::compiled(const gpu::Compiled &result, int generation)
 void EffectEditorWindow::showMessages()
 {
     m_problems->clear();
-    QList<QTextEdit::ExtraSelection> marks;
-    QSet<int> errorLines;
+    QList<CodeProblem> problems;
     const Palette &pal = Theme::palette();
     for (const gpu::CompileMessage &m : std::as_const(m_messages)) {
         const bool error = m.severity == QLatin1String("error");
@@ -563,24 +658,8 @@ void EffectEditorWindow::showMessages()
         item->setForeground(error ? pal.danger : pal.warning);
         item->setData(Qt::UserRole, m.inSource ? m.line : 0);
         item->setData(Qt::UserRole + 1, m.column);
-        if (!m.inSource || m.line <= 0)
-            continue;
-        if (error)
-            errorLines.insert(m.line);
-        // Underlined where it is.
-        const QTextBlock block = m_editor->document()->findBlockByNumber(m.line - 1);
-        if (!block.isValid())
-            continue;
-        QTextEdit::ExtraSelection mark;
-        mark.cursor = QTextCursor(block);
-        const int start = std::clamp(m.column - 1, 0, std::max(0, block.length() - 1));
-        const int end = m.endLine == m.line && m.endColumn > m.column ? m.endColumn - 1 : block.length() - 1;
-        mark.cursor.setPosition(block.position() + start);
-        mark.cursor.setPosition(block.position() + std::max(start + 1, std::min(end, block.length() - 1)), QTextCursor::KeepAnchor);
-        mark.format.setUnderlineStyle(QTextCharFormat::WaveUnderline);
-        mark.format.setUnderlineColor(error ? pal.danger : pal.warning);
-        mark.format.setToolTip(m.text);
-        marks << mark;
+        if (m.inSource && m.line > 0)
+            problems << CodeProblem{m.line, m.column, m.endLine, m.endColumn, error, m.text};
     }
     // A problem Lumen found that is not the compiler's (no "result", a texture not rgba16f); a
     // missing compiler is said in the banner and the status line.
@@ -588,8 +667,7 @@ void EffectEditorWindow::showMessages()
         auto *item = new QListWidgetItem(m_error, m_problems);
         item->setForeground(pal.danger);
     }
-    m_editor->setExtraSelections(marks);
-    codeEditor(m_editor)->setErrorLines(errorLines);
+    m_editor->setProblems(problems);
     m_status->setText(status());
 }
 

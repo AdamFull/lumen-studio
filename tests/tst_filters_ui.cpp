@@ -17,6 +17,7 @@
 #include "ui/Theme.h"
 #include "ui/canvas/CanvasView.h"
 #include "ui/canvas/EditorState.h"
+#include "ui/effects/CodeEditor.h"
 #include "ui/effects/EffectEditorWindow.h"
 #include "ui/effects/UserEffects.h"
 #include "ui/filters/FilterCatalog.h"
@@ -45,6 +46,7 @@
 #include <QMutex>
 #include <QPainter>
 #include <QPlainTextEdit>
+#include <QTreeWidget>
 #include <QPromise>
 #include <QPushButton>
 #include <QSignalSpy>
@@ -502,6 +504,7 @@ private slots:
     void panelActionsInView();
     void lutEditor();
     void effectEditor();
+    void codeEditor();
 
 private:
     std::unique_ptr<QTemporaryDir> m_dir;
@@ -1208,10 +1211,141 @@ void TestFiltersUi::effectEditor()
     QVERIFY(!QFileInfo::exists(QDir(UserEffects::folder()).filePath(QStringLiteral("Their look.slang"))));
     QTRY_VERIFY_WITH_TIMEOUT(!updated.isEmpty() && !w.isBusy(), 30000);
 
+    // Find with the word at the cursor; the reference puts what it lists into the source.
+    w.editor()->goToLine(1, 1);
+    w.showFind(true);
+    QVERIFY(w.findChild<QWidget *>(QStringLiteral("effectFindBar"))->isVisible());
+    auto *reference = w.findChild<QTreeWidget *>(QStringLiteral("effectReference"));
+    QVERIFY(reference && reference->topLevelItemCount() == 3);
+    QTreeWidgetItem *first = reference->topLevelItem(0)->child(0);
+    QVERIFY(first);
+    const int length = int(w.source().size());
+    emit reference->itemDoubleClicked(first, 0);
+    QCOMPARE(int(w.source().size()), length + int(first->data(0, Qt::UserRole).toString().size()));
+    QVERIFY(w.findChild<QAction *>(QStringLiteral("effectCompileAction")));
+
     // Deleted: gone as a file and a node.
     QVERIFY(studio.userEffects()->remove(QStringLiteral("Warm test")));
     QVERIFY(!filters::NodeRegistry::global().find(QStringLiteral("effect:Warm test")));
     QVERIFY(!QFileInfo::exists(QDir(UserEffects::folder()).filePath(QStringLiteral("Warm test.slang"))));
+}
+
+// The effect editor's code editor: colours by kind, indent and comments, closed pairs, completion,
+// problems marked and stepped through, find and replace.
+void TestFiltersUi::codeEditor()
+{
+    CodeEditor editor;
+    editor.resize(600, 400);
+    editor.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&editor));
+    editor.setPlainText(QStringLiteral("import colorspace;\n"
+                                       "// a note\n"
+                                       "[Label(\"Amount\")] float3 c = toSrgb(x) * 2.5;\n"
+                                       "/* two\n"
+                                       "   lines */ float y = saturate(c.r);\n"));
+    SlangHighlighter *h = editor.highlighter();
+    QCOMPARE(h->kindAt(0, 0), QStringLiteral("keyword"));
+    QCOMPARE(h->kindAt(1, 3), QStringLiteral("comment"));
+    QCOMPARE(h->kindAt(2, 1), QStringLiteral("attribute"));
+    QCOMPARE(h->kindAt(2, 8), QStringLiteral("string"));
+    QCOMPARE(h->kindAt(2, 18), QStringLiteral("type"));
+    QCOMPARE(h->kindAt(2, 31), QStringLiteral("lumen"));
+    QCOMPARE(h->kindAt(2, 42), QStringLiteral("number"));
+    QCOMPARE(h->kindAt(3, 4), QStringLiteral("comment"));
+    QCOMPARE(h->kindAt(4, 3), QStringLiteral("comment")); // the block comment goes on
+    QCOMPARE(h->kindAt(4, 12), QStringLiteral("type"));   // and ends
+    QCOMPARE(h->kindAt(4, 22), QStringLiteral("function"));
+    QVERIFY(h->kindAt(2, 25).isEmpty()); // "c": a plain name
+    QVERIFY(!codeDoc(QStringLiteral("toSrgb")).text.isEmpty());
+    QVERIFY(documentedWords(QStringLiteral("attribute")).contains(QStringLiteral("Fit")));
+
+    // Enter keeps the indent and adds one after a brace; a brace closes back.
+    editor.setPlainText(QString());
+    QTest::keyClicks(&editor, QStringLiteral("void main()"));
+    QTest::keyClick(&editor, Qt::Key_Return);
+    QTest::keyClicks(&editor, QStringLiteral("{"));
+    QCOMPARE(editor.toPlainText(), QStringLiteral("void main()\n{}")); // closed as typed
+    QTest::keyClick(&editor, Qt::Key_Return);
+    QCOMPARE(editor.toPlainText(), QStringLiteral("void main()\n{\n    \n}"));
+    QTest::keyClicks(&editor, QStringLiteral("return"));
+    QCOMPARE(editor.textCursor().block().text(), QStringLiteral("    return"));
+    // Typing a closer that is there steps over it.
+    QTest::keyClicks(&editor, QStringLiteral("(1)"));
+    QCOMPARE(editor.textCursor().block().text(), QStringLiteral("    return(1)"));
+
+    // Comments on and off for the lines selected; Tab and Shift+Tab move them.
+    editor.setPlainText(QStringLiteral("a = 1;\nb = 2;\nc = 3;"));
+    QTextCursor c(editor.document());
+    c.setPosition(0);
+    c.setPosition(editor.document()->findBlockByNumber(1).position() + 3, QTextCursor::KeepAnchor);
+    editor.setTextCursor(c);
+    editor.toggleComment();
+    QCOMPARE(editor.toPlainText(), QStringLiteral("// a = 1;\n// b = 2;\nc = 3;"));
+    editor.toggleComment();
+    QCOMPARE(editor.toPlainText(), QStringLiteral("a = 1;\nb = 2;\nc = 3;"));
+    editor.selectAll();
+    QTest::keyClick(&editor, Qt::Key_Tab);
+    QCOMPARE(editor.toPlainText(), QStringLiteral("    a = 1;\n    b = 2;\n    c = 3;"));
+    QTest::keyClick(&editor, Qt::Key_Backtab);
+    QCOMPARE(editor.toPlainText(), QStringLiteral("a = 1;\nb = 2;\nc = 3;"));
+
+    // Completion: Slang's and Lumen's words and the source's own.
+    editor.setPlainText(QStringLiteral("float brightness = 1;\n"));
+    editor.moveCursor(QTextCursor::End);
+    QVERIFY(editor.completions(QStringLiteral("toS")).contains(QStringLiteral("toSrgb")));
+    QVERIFY(editor.completions(QStringLiteral("bri")).contains(QStringLiteral("brightness")));
+    QVERIFY(editor.completions(QStringLiteral("sat")).contains(QStringLiteral("saturate")));
+    QTest::keyClicks(&editor, QStringLiteral("bri"));
+    QTRY_VERIFY(editor.isCompleting());
+    QTest::keyClick(&editor, Qt::Key_Return);
+    QCOMPARE(editor.textCursor().block().text(), QStringLiteral("brightness"));
+    QVERIFY(!editor.isCompleting());
+
+    // Problems: marked, found by place, stepped through round the end.
+    editor.setPlainText(QStringLiteral("line one\nline two has a mistake\nline three\nline four warns\n"));
+    editor.setProblems({{2, 15, 2, 22, true, QStringLiteral("undefined identifier 'mistake'")},
+                        {4, 11, 4, 16, false, QStringLiteral("something to look at")}});
+    QVERIFY(editor.problemAt(2, 17));
+    QCOMPARE(editor.problemAt(2, 17)->text, QStringLiteral("undefined identifier 'mistake'"));
+    QVERIFY(!editor.problemAt(1, 3));
+    editor.goToLine(1);
+    QVERIFY(editor.nextProblem());
+    QCOMPARE(editor.currentLine(), 2);
+    QCOMPARE(editor.currentColumn(), 15);
+    QVERIFY(editor.nextProblem());
+    QCOMPARE(editor.currentLine(), 4);
+    QVERIFY(editor.nextProblem()); // round to the first
+    QCOMPARE(editor.currentLine(), 2);
+    QVERIFY(editor.nextProblem(true));
+    QCOMPARE(editor.currentLine(), 4);
+    bool underlined = false;
+    for (const QTextEdit::ExtraSelection &s : editor.extraSelections())
+        underlined = underlined || s.format.underlineStyle() == QTextCharFormat::WaveUnderline;
+    QVERIFY(underlined);
+    editor.setProblems({});
+    QVERIFY(!editor.nextProblem());
+
+    // Find, round the end; replace one and all.
+    editor.setPlainText(QStringLiteral("alpha beta alpha gamma Alpha"));
+    editor.moveCursor(QTextCursor::Start);
+    QVERIFY(editor.find(QStringLiteral("alpha")));
+    QCOMPARE(editor.textCursor().selectionStart(), 0);
+    QVERIFY(editor.find(QStringLiteral("alpha"), false, true));
+    QCOMPARE(editor.textCursor().selectionStart(), 11);
+    QVERIFY(editor.find(QStringLiteral("alpha"), false, true)); // round
+    QCOMPARE(editor.textCursor().selectionStart(), 0);
+    QVERIFY(!editor.find(QStringLiteral("delta")));
+    QCOMPARE(editor.replaceAll(QStringLiteral("alpha"), QStringLiteral("x")), 3);
+    QCOMPARE(editor.toPlainText(), QStringLiteral("x beta x gamma x"));
+    editor.document()->undo();
+    QCOMPARE(editor.toPlainText(), QStringLiteral("alpha beta alpha gamma Alpha")); // one undo step
+    editor.goToLine(1, 6);
+    QCOMPARE(editor.currentColumn(), 6);
+    const int before = editor.font().pointSize();
+    editor.zoom(2);
+    QVERIFY(editor.font().pointSize() > before);
+    editor.zoom(0);
+    QCOMPARE(editor.font().pointSize(), before);
 }
 
 void TestFiltersUi::panelListsAndSettings()

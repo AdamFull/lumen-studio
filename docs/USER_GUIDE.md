@@ -577,9 +577,20 @@ compiled work without it.
   arrives as `source` and the effect writes `result`, in linear light. Each setting with a
   `[Label]` and a `[Range]` is a slider; `import colorspace;` gives `toSrgb`, `toLinear`, `luma`
   and OKLab, and the built-in effects show more (several passes, smaller textures with `[Fit]`).
-* The source is compiled a moment after you stop typing. A mistake is underlined where it is and
-  listed under the source (click it to go there); the preview on the right keeps the last version
-  that worked, on the active layer (or a sample picture), with the effect's sliders under it.
+* The source is compiled a moment after you stop typing (or at once with `Ctrl+B`). A mistake is
+  underlined where it is, its line number is red with a dot beside it, hovering shows what is
+  wrong, and it is listed under the source (click it to go there; `F8` and `Shift+F8` step through
+  them). The preview on the right keeps the last version that worked, on the active layer (or a
+  sample picture), with the effect's sliders under it.
+* Writing it: Slang is shown in colour (Lumen's own functions in bold); hovering a function or an
+  attribute says what it does. `Ctrl+Space` completes a word (it also opens by itself after three
+  letters) from Slang, Lumen and the names in your source. Enter keeps the indent and adds one
+  after `{`; brackets and quotes close as you type them; `Tab` and `Shift+Tab` indent and unindent
+  the lines selected; `Ctrl+/` comments them out or back in. `Ctrl+F` finds, `Ctrl+H` replaces,
+  `Ctrl+G` goes to a line, `Ctrl` with the wheel (or `Ctrl++`, `Ctrl+-`) makes the text larger or
+  smaller. The menus list all of them.
+* **Reference** (next to the sliders) lists Lumen's attributes and functions and the Slang functions
+  effects use most, with a sentence each; double-click one to put it in the source.
 * **Save** keeps it in `Documents\Lumen\Effects` as a `.slang` file. It is then a step of the filter
   editor, under *Your effects*, and can be part of any filter.
 * **Export…** writes a copy to share. **Open…** shows an effect someone shared, with where it comes

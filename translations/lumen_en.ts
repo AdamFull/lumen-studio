@@ -450,4 +450,15 @@ The models of the earlier version are in %2 (%n files, %3). Move them to the new
         <translation><numerusform>Found %n server.</numerusform><numerusform>Found %n servers.</numerusform></translation>
     </message>
 </context>
+<context>
+    <name>lumen::ui::EffectEditorWindow</name>
+    <message numerus="yes">
+        <source>%n error(s): the preview shows the last version that worked.</source>
+        <translation><numerusform>%n error: the preview shows the last version that worked.</numerusform><numerusform>%n errors: the preview shows the last version that worked.</numerusform></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n replaced.</source>
+        <translation><numerusform>%n replaced.</numerusform><numerusform>%n replaced.</numerusform></translation>
+    </message>
+</context>
 </TS>

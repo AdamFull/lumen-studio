@@ -8277,6 +8277,204 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
 </context>
 <context>
+    <name>lumen::ui::CodeEditor</name>
+    <message>
+        <location filename="../src/ui/effects/CodeEditor.cpp" line="+127"/>
+        <source>On the first pass: the effect&apos;s name, as the filter editor shows it.</source>
+        <translation>Auf dem ersten Durchgang: der Name des Effekts, wie der Filtereditor ihn zeigt.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>A setting&apos;s name on its slider. Settings without one are not shown.</source>
+        <translation>Der Name einer Einstellung an ihrem Regler. Einstellungen ohne ihn werden nicht gezeigt.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The slider&apos;s ends.</source>
+        <translation>Die Enden des Reglers.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Where the slider starts; 0, or the nearest end of its range, without one.</source>
+        <translation>Wo der Regler beginnt; ohne Angabe 0 oder das nächste Ende seines Bereichs.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Shown after the slider&apos;s value.</source>
+        <translation>Wird hinter dem Wert des Reglers gezeigt.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>A heading for this setting and the ones after it.</source>
+        <translation>Eine Überschrift für diese Einstellung und die folgenden.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>A float2 set on a colour wheel: hue in degrees, saturation in %.</source>
+        <translation>Ein float2, das an einem Farbrad eingestellt wird: Farbton in Grad, Sättigung in %.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>A texture the effect reads besides the picture: tone curves or a 3D LUT.</source>
+        <translation>Eine Textur, die der Effekt neben dem Bild liest: Gradationskurven oder eine 3D-LUT.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>A texture of the effect&apos;s own, n times smaller than the picture.</source>
+        <translation>Eine eigene Textur des Effekts, n-mal kleiner als das Bild.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>A texture of the effect&apos;s own whose long side is so many pixels: a blur on it covers the same part of any picture, so the preview looks like the full size.</source>
+        <translation>Eine eigene Textur des Effekts, deren lange Seite so viele Pixel hat: Eine Unschärfe darauf deckt bei jedem Bild denselben Anteil ab, sodass die Vorschau wie die volle Größe aussieht.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>A texture of the effect&apos;s own of a fixed size (1, 1 for one value).</source>
+        <translation>Eine eigene Textur des Effekts mit fester Größe (1, 1 für einen Wert).</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>A pass that runs over one of the effect&apos;s textures instead of the picture.</source>
+        <translation>Ein Durchgang, der statt über das Bild über eine Textur des Effekts läuft.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Threads per group: 16, 16, 1 for a pass over pixels.</source>
+        <translation>Threads pro Gruppe: 16, 16, 1 für einen Durchgang über Pixel.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Makes a function a pass; the passes run in the file&apos;s order.</source>
+        <translation>Macht eine Funktion zu einem Durchgang; die Durchgänge laufen in der Reihenfolge der Datei.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Linear light to display values (the sRGB curve); above 1 it goes on in a line. import colorspace;</source>
+        <translation>Lineares Licht in Anzeigewerte (die sRGB-Kurve); über 1 geht es geradlinig weiter. import colorspace;</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Display values to linear light. import colorspace;</source>
+        <translation>Anzeigewerte in lineares Licht. import colorspace;</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The luminance of linear light (Rec. 709). import colorspace;</source>
+        <translation>Die Luminanz von linearem Licht (Rec. 709). import colorspace;</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>OKLab: lightness and two colour axes spaced as people see them. import colorspace;</source>
+        <translation>OKLab: Helligkeit und zwei Farbachsen, so abgestuft, wie Menschen sie sehen. import colorspace;</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>OKLab back to linear light. import colorspace;</source>
+        <translation>OKLab zurück in lineares Licht. import colorspace;</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The OKLab direction of a colour wheel&apos;s hue. import colorspace;</source>
+        <translation>Die OKLab-Richtung des Farbtons eines Farbrads. import colorspace;</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>A texture between its pixels (centres at .5), the edges held. import sampling;</source>
+        <translation>Eine Textur zwischen ihren Pixeln (Mitten bei .5), die Ränder gehalten. import sampling;</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The same place in a texture of another size: a smaller copy read back up. import sampling;</source>
+        <translation>Dieselbe Stelle in einer Textur anderer Größe: eine kleinere Kopie wieder hochgelesen. import sampling;</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>The average of the pixels of `from` that fall into one pixel of a smaller texture. import sampling;</source>
+        <translation>Der Mittelwert der Pixel von `from`, die in ein Pixel einer kleineren Textur fallen. import sampling;</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Which pixels of `from` fall into one pixel of a smaller texture. import sampling;</source>
+        <translation>Welche Pixel von `from` in ein Pixel einer kleineren Textur fallen. import sampling;</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>A Gaussian blur along one direction: across into one texture, then down into another. import sampling;</source>
+        <translation>Eine Gaußsche Unschärfe in eine Richtung: quer in eine Textur, dann abwärts in eine andere. import sampling;</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>a + (b − a) × t: from a at 0 to b at 1.</source>
+        <translation>a + (b − a) × t: von a bei 0 bis b bei 1.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>x kept between 0 and 1.</source>
+        <translation>x zwischen 0 und 1 gehalten.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>x kept between low and high.</source>
+        <translation>x zwischen low und high gehalten.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>0 below edge0, 1 above edge1, a smooth S between.</source>
+        <translation>0 unter edge0, 1 über edge1, dazwischen ein weiches S.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>0 where x &lt; edge, else 1.</source>
+        <translation>0, wo x &lt; edge, sonst 1.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>x to the power y (x not below 0).</source>
+        <translation>x hoch y (x nicht unter 0).</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>2 to the power x: exposure in stops.</source>
+        <translation>2 hoch x: Belichtung in Blendenstufen.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The dot product.</source>
+        <translation>Das Skalarprodukt.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>A vector&apos;s length.</source>
+        <translation>Die Länge eines Vektors.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>x minus its floor: the part after the point.</source>
+        <translation>x minus seiner Abrundung: der Teil nach dem Komma.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>True when any component is true.</source>
+        <translation>Wahr, wenn eine Komponente wahr ist.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>A texture&apos;s size.</source>
+        <translation>Die Größe einer Textur.</translation>
+    </message>
+    <message>
+        <location line="+485"/>
+        <source>Error: %1</source>
+        <translation>Fehler: %1</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Warning: %1</source>
+        <translation>Warnung: %1</translation>
+    </message>
+</context>
+<context>
     <name>lumen::ui::ColorSwatch</name>
     <message>
         <location filename="../src/ui/widgets/Controls.cpp" line="+150"/>
@@ -10020,13 +10218,13 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::EffectEditorWindow</name>
     <message>
-        <location filename="../src/ui/effects/EffectEditorWindow.cpp" line="+187"/>
-        <location line="+201"/>
+        <location filename="../src/ui/effects/EffectEditorWindow.cpp" line="+106"/>
+        <location line="+311"/>
         <source>Effect editor</source>
         <translation>Effekteditor</translation>
     </message>
     <message>
-        <location line="-190"/>
+        <location line="-300"/>
         <source>Download</source>
         <translation>Herunterladen</translation>
     </message>
@@ -10053,36 +10251,92 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+4"/>
+        <location line="+285"/>
         <source>Open…</source>
         <translation>Öffnen…</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-283"/>
         <source>Look at an effect someone shared (a .slang file); it is added only when you save it</source>
         <translation>Einen Effekt ansehen, den jemand geteilt hat (eine .slang-Datei); er wird erst hinzugefügt, wenn Sie ihn speichern</translation>
     </message>
     <message>
         <location line="+1"/>
+        <location line="+284"/>
         <source>Export…</source>
         <translation>Exportieren…</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-282"/>
         <source>Save a copy of the source to share</source>
         <translation>Eine Kopie des Quelltexts zum Teilen speichern</translation>
     </message>
     <message>
         <location line="+1"/>
+        <location line="+280"/>
         <source>Save</source>
         <translation>Speichern</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="-277"/>
         <source>Keep it in your effects folder: it is then a step of the filter editor</source>
         <translation>Im Ordner Ihrer Effekte behalten: Dann ist er ein Schritt im Filtereditor</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+15"/>
+        <source>Find</source>
+        <translation>Suchen</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Previous</source>
+        <translation>Vorheriges</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Next</source>
+        <translation>Nächstes</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Match case</source>
+        <translation>Groß/klein beachten</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Whole words</source>
+        <translation>Ganze Wörter</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Close (Esc)</source>
+        <translation>Schließen (Esc)</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Replace with</source>
+        <translation>Ersetzen durch</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Replace</source>
+        <translation>Ersetzen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Replace all</source>
+        <translation>Alle ersetzen</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+33"/>
+        <source>%n replaced.</source>
+        <translation>
+            <numerusform>%n ersetzt.</numerusform>
+            <numerusform>%n ersetzt.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+12"/>
         <source>Source</source>
         <translation>Quelltext</translation>
     </message>
@@ -10092,7 +10346,32 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Probleme</translation>
     </message>
     <message>
-        <location line="+69"/>
+        <location line="+31"/>
+        <source>Settings</source>
+        <translation>Einstellungen</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Attributes (import effect)</source>
+        <translation>Attribute (import effect)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Lumen&apos;s functions</source>
+        <translation>Funktionen von Lumen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Slang&apos;s functions</source>
+        <translation>Funktionen von Slang</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>Reference</source>
+        <translation>Referenz</translation>
+    </message>
+    <message>
+        <location line="+38"/>
         <source>Delete effect</source>
         <translation>Effekt löschen</translation>
     </message>
@@ -10130,12 +10409,143 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Der Slang-Compiler wird heruntergeladen; die Warteschlange zeigt, wie weit es ist.</translation>
     </message>
     <message>
-        <location line="+35"/>
+        <location line="+14"/>
+        <location line="+2"/>
+        <source>Line %1, column %2</source>
+        <translation>Zeile %1, Spalte %2</translation>
+    </message>
+    <message>
+        <location line="+28"/>
         <source>“%1” has changes that are not saved. Save them?</source>
         <translation>„%1“ hat Änderungen, die nicht gespeichert sind. Speichern?</translation>
     </message>
     <message>
-        <location line="+52"/>
+        <location line="+21"/>
+        <source>&amp;File</source>
+        <translation>&amp;Datei</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>New effect</source>
+        <translation>Neuer Effekt</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Close</source>
+        <translation>Schließen</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>&amp;Edit</source>
+        <translation>&amp;Bearbeiten</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Undo</source>
+        <translation>Rückgängig</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Redo</source>
+        <translation>Wiederholen</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Find…</source>
+        <translation>Suchen…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Replace…</source>
+        <translation>Ersetzen…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Find next</source>
+        <translation>Weitersuchen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Find previous</source>
+        <translation>Rückwärts suchen</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Go to line…</source>
+        <translation>Gehe zu Zeile…</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Go to line</source>
+        <translation>Gehe zu Zeile</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Line (1 to %1):</source>
+        <translation>Zeile (1 bis %1):</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Comment or uncomment</source>
+        <translation>Kommentieren oder nicht</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Indent</source>
+        <translation>Einrücken</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Unindent</source>
+        <translation>Ausrücken</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Complete word</source>
+        <translation>Wort vervollständigen</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>&amp;Build</source>
+        <translation>&amp;Kompilieren</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Compile now</source>
+        <translation>Jetzt kompilieren</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Next problem</source>
+        <translation>Nächstes Problem</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Previous problem</source>
+        <translation>Vorheriges Problem</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>&amp;View</source>
+        <translation>&amp;Ansicht</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Larger text</source>
+        <translation>Größere Schrift</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Smaller text</source>
+        <translation>Kleinere Schrift</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Normal text size</source>
+        <translation>Normale Schriftgröße</translation>
+    </message>
+    <message>
+        <location line="+60"/>
         <source>My effect</source>
         <translation>Mein Effekt</translation>
     </message>
@@ -10161,12 +10571,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+9"/>
-        <location line="+80"/>
+        <location line="+62"/>
         <source>Compiling…</source>
         <translation>Wird kompiliert…</translation>
     </message>
     <message>
-        <location line="-38"/>
+        <location line="-21"/>
         <source>Line %1</source>
         <translation>Zeile %1</translation>
     </message>
@@ -10176,7 +10586,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>In einem Modul</translation>
     </message>
     <message numerus="yes">
-        <location line="+43"/>
+        <location line="+26"/>
         <source>%n error(s): the preview shows the last version that worked.</source>
         <translation>
             <numerusform>%n Fehler: Die Vorschau zeigt die letzte Fassung, die funktioniert hat.</numerusform>
@@ -10206,7 +10616,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     <message>
         <location line="+0"/>
         <source>Give the effect a name that can be a file&apos;s name (no \ / : * ? &quot; &lt; &gt; |).</source>
-        <translation>Geben Sie dem Effekt einen Namen, der ein Dateiname sein kann (ohne \ / : * ? " &lt; &gt; |).</translation>
+        <translation>Geben Sie dem Effekt einen Namen, der ein Dateiname sein kann (ohne \ / : * ? &quot; &lt; &gt; |).</translation>
     </message>
 </context>
 <context>

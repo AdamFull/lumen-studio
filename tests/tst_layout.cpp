@@ -50,6 +50,7 @@
 #include "ui/filters/FilterCatalog.h"
 #include "ui/filters/FiltersPanel.h"
 #include "ui/widgets/DevelopPanel.h"
+#include "ui/effects/CodeEditor.h"
 #include "ui/effects/EffectEditorWindow.h"
 #include "gpu/Compiler.h"
 #include "gpu/Gpu.h"
@@ -1270,6 +1271,18 @@ void TestLayout::effectEditor()
     Auditor::settle();
     m_auditor.audit(&w, QStringLiteral("Effect editor 1180x740"));
     m_auditor.shoot(&w, QStringLiteral("Effect editor 1180x740"));
+    // A mistake, marked where it is, with find and replace open.
+    QString bad = w.source();
+    bad.replace(QStringLiteral("p.fade / 100.0"), QStringLiteral("p.faed / 100.0"));
+    updated.clear();
+    w.setSource(bad);
+    w.compileNow();
+    QTRY_VERIFY_WITH_TIMEOUT(!updated.isEmpty() && !w.isBusy(), 30000);
+    w.showFind(true);
+    w.editor()->nextProblem();
+    Auditor::settle();
+    m_auditor.audit(&w, QStringLiteral("Effect editor with a mistake 1180x740"));
+    m_auditor.shoot(&w, QStringLiteral("Effect editor with a mistake 1180x740"));
 }
 
 // The questions about a picture's file (M17): saving over it with everything it can say, and changes
