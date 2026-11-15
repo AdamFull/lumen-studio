@@ -477,6 +477,20 @@ Below the basics, more groups open with a click on their name:
   far in it starts, *Roundness* how round it is, *Feather* how soft its edge; *Grain* adds film-like
   noise, with its *Size* and *Roughness*.
 
+**Presets** at the top of the tab are looks to start from: Lumen's own (*Black and white*, *Cool
+and crisp*, *Soft matte*, *Vivid*, *Warm film*) and yours. Choosing one sets every control (what it
+has, the rest to the start) and grades the layer, as one step to undo; change anything after.
+*Save the settings as a preset…* keeps the settings now under a name of yours (the same name
+again replaces it); *Delete a preset* removes one of yours. **Copy** and **Paste** take the
+settings from one picture to another.
+
+*Apply to picture files…* (under **Presets**) grades files without opening them: choose the
+settings (the tab's now, or a preset), the pictures and a folder for the copies. Each is graded at
+full size and saved as a copy in its own format (a JPEG at about its own quality); the files you
+chose stay as they are, and nothing is written over a file that is there (in the pictures' own
+folder the copies are called "… (graded)"). It runs in the Queue, which shows how far it is. The
+camera's details (Exif) are not copied.
+
 ### The Filters panel
 
 The **Filters** tab on the right (also **View → Filters**) lists:

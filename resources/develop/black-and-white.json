@@ -1,0 +1,12 @@
+{
+  "lumen": "develop-preset",
+  "version": 1,
+  "name": "Black and white",
+  "grading": {
+    "steps": [
+      {"effect": "develop", "values": {"saturation": -100, "contrast": 25}},
+      {"effect": "local", "values": {"clarity": 20}},
+      {"effect": "finish", "values": {"grain": 15}}
+    ]
+  }
+}

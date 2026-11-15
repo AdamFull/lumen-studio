@@ -1,0 +1,12 @@
+{
+  "lumen": "develop-preset",
+  "version": 1,
+  "name": "Warm film",
+  "grading": {
+    "steps": [
+      {"effect": "develop", "values": {"temperature": 22, "contrast": -10, "blacks": 18, "vibrance": 10}},
+      {"effect": "grading", "values": {"shadows": [190, 18], "highlights": [38, 22]}},
+      {"effect": "finish", "values": {"vignette": -20, "grain": 25}}
+    ]
+  }
+}

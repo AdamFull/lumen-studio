@@ -35,6 +35,8 @@
 #include "ui/pages/VariantStrip.h"
 #include "ui/widgets/DevelopPanel.h"
 #include "ui/Grading.h"
+#include "ui/dialogs/BatchDevelopDialog.h"
+#include "core/Job.h"
 #include "ui/widgets/JobCard.h"
 #include "gpu/Gpu.h"
 #include "ui/widgets/LoraPicker.h"
@@ -126,6 +128,9 @@
 #include <QSlider>
 #include <QTcpServer>
 #include <QTemporaryDir>
+#include <QElapsedTimer>
+#include <QImageReader>
+#include <QGuiApplication>
 #include <QFloat16>
 #include <QVector3D>
 #include <QTextDocumentFragment>
@@ -193,6 +198,8 @@ private slots:
     void themeContrast();
     void developPanel();
     void gradingHelpers();
+    void developPresets();
+    void developOnPhotos();
     void themeAnyFolderName();
     void accessibleNames();
     void fitLabelWraps();
@@ -906,6 +913,239 @@ void TestCanvas::gradingHelpers()
     QVERIFY(grading::steps(missing, effects, &error).isEmpty());
     QVERIFY2(error.contains(QLatin1String("gone.cube")), qPrintable(error));
     clean();
+}
+
+// Develop presets, settings copied from one picture to another, and settings applied to picture
+// files (plan M20 step 8).
+void TestCanvas::developPresets()
+{
+    if (!gpu::Context::instance().isAvailable())
+        QSKIP("no Vulkan device");
+    // Never the real presets: test mode or LUMEN_DATA_DIR moves them.
+    QVERIFY2(!grading::presetsFolder().startsWith(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)),
+             qPrintable(grading::presetsFolder()));
+    QDir(grading::presetsFolder()).removeRecursively();
+    auto cleanPresets = qScopeGuard([] { QDir(grading::presetsFolder()).removeRecursively(); });
+
+    // Lumen's own, read-only.
+    QStringList builtIn;
+    for (const grading::Preset &p : grading::presets()) {
+        QVERIFY(p.builtIn);
+        builtIn << p.name;
+    }
+    QCOMPARE(builtIn, (QStringList{QStringLiteral("Black and white"), QStringLiteral("Cool and crisp"), QStringLiteral("Soft matte"),
+                                   QStringLiteral("Vivid"), QStringLiteral("Warm film")}));
+    // Each is a grading the tab can make.
+    const QHash<QString, gpu::Effect> effects = grading::describedEffects();
+    for (const grading::Preset &p : grading::presets()) {
+        const QJsonObject again = grading::toJson(grading::resolved(p.grading, effects), effects);
+        QCOMPARE(again.value(QStringLiteral("steps")).toArray().size(), p.grading.value(QStringLiteral("steps")).toArray().size());
+    }
+
+    Settings::instance().setValue(QStringLiteral("app/onboarded"), true);
+    QTemporaryDir dir;
+    Studio studio;
+    studio.openProject(dir.filePath(QStringLiteral("presets.lumen")));
+    QTRY_VERIFY_WITH_TIMEOUT(studio.isProjectOpen(), 5000);
+    MainWindow window(&studio);
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    QImage colours(200, 120, QImage::Format_ARGB32_Premultiplied);
+    for (int y = 0; y < colours.height(); ++y) {
+        for (int x = 0; x < colours.width(); ++x)
+            colours.setPixel(x, y, qRgb(40 + x, 200 - y, 90));
+    }
+    doc::Document *first = studio.openImageAsDocument(colours, QStringLiteral("First"));
+    QVERIFY(first);
+    window.editor()->showDevelopPanel();
+    DevelopPanel *panel = window.editor()->developPanel();
+    QSignalSpy committed(panel, &DevelopPanel::committed);
+
+    // A preset: every control as it says, the layer graded as one step.
+    QVERIFY(panel->applyPreset(QStringLiteral("Black and white")));
+    QTRY_COMPARE_WITH_TIMEOUT(committed.size(), 1, 10000);
+    QVERIFY2(committed.last().first().toBool(), qPrintable(committed.last().at(1).toString()));
+    const doc::LayerPtr layer = first->activeLayer();
+    const QColor grey = layer->image.pixelColor(100, 60);
+    QVERIFY2(std::abs(grey.red() - grey.green()) <= 2 && std::abs(grey.green() - grey.blue()) <= 2, qPrintable(grey.name()));
+    QCOMPARE(panel->values().value(QStringLiteral("saturation")).toDouble(), -100.0);
+    QVERIFY(!panel->applyPreset(QStringLiteral("No such look")));
+
+    // Copied, then pasted on another picture: the same grading.
+    panel->copySettings();
+    const std::optional<QJsonObject> copied = grading::settingsFrom(QGuiApplication::clipboard()->mimeData());
+    QVERIFY(copied);
+    QCOMPARE(*copied, layer->grading());
+    doc::Document *second = studio.openImageAsDocument(colours, QStringLiteral("Second"));
+    QVERIFY(second);
+    QTRY_COMPARE(studio.activeDocument(), second);
+    QVERIFY(!second->activeLayer()->graded());
+    committed.clear();
+    QVERIFY(panel->pasteSettings());
+    QTRY_COMPARE_WITH_TIMEOUT(committed.size(), 1, 10000);
+    QCOMPARE(second->activeLayer()->grading(), layer->grading());
+    // Text that is not settings is not pasted.
+    QGuiApplication::clipboard()->setText(QStringLiteral("just words"));
+    QVERIFY(!grading::settingsFrom(QGuiApplication::clipboard()->mimeData()));
+    QVERIFY(!panel->pasteSettings());
+
+    // Saved as one of yours, listed after Lumen's, replaced by name, deleted.
+    QString error;
+    QVERIFY2(panel->saveAsPreset(QStringLiteral("My grey: test"), &error), qPrintable(error));
+    QVERIFY(QFileInfo::exists(QDir(grading::presetsFolder()).filePath(QStringLiteral("My grey_ test.json"))));
+    const std::optional<grading::Preset> mine = grading::preset(QStringLiteral("My grey: test"));
+    QVERIFY(mine && !mine->builtIn);
+    QCOMPARE(mine->grading, layer->grading());
+    QCOMPARE(grading::presets().last().name, QStringLiteral("My grey: test"));
+    QVERIFY(grading::savePreset(QStringLiteral("My grey: test"), QJsonObject(), &error));
+    QCOMPARE(grading::presets().size(), 6);
+    QVERIFY(!grading::savePreset(QStringLiteral("vivid"), QJsonObject(), &error)); // Lumen's name
+    QVERIFY(error.contains(QLatin1String("vivid")));
+    QVERIFY(grading::removePreset(QStringLiteral("My grey: test")));
+    QCOMPARE(grading::presets().size(), 5);
+
+    // Picture files: graded copies in their own formats, the originals untouched, one that is not
+    // a picture said by name.
+    QTemporaryDir files;
+    const QString png = files.filePath(QStringLiteral("one.png"));
+    const QString jpg = files.filePath(QStringLiteral("two.jpg"));
+    const QString bad = files.filePath(QStringLiteral("three.png"));
+    QVERIFY(colours.save(png));
+    QVERIFY(colours.save(jpg, "JPG", 90));
+    {
+        QFile f(bad);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write("not a picture");
+    }
+    const QByteArray pngBefore = [&] { QFile f(png); f.open(QIODevice::ReadOnly); return f.readAll(); }();
+    const QString out = files.filePath(QStringLiteral("Graded"));
+    QStringList failed;
+    const QStringList written = grading::gradeFiles(layer->grading(), {png, jpg, bad}, out, &failed);
+    QCOMPARE(written.size(), 2);
+    QCOMPARE(QFileInfo(written.at(0)).fileName(), QStringLiteral("one.png"));
+    QCOMPARE(QFileInfo(written.at(1)).fileName(), QStringLiteral("two.jpg"));
+    QCOMPARE(failed.size(), 1);
+    QVERIFY(failed.first().startsWith(QStringLiteral("three.png")));
+    const QColor graded = QImage(written.at(0)).pixelColor(100, 60);
+    QVERIFY2(std::abs(graded.red() - graded.blue()) <= 2, qPrintable(graded.name()));
+    QCOMPARE([&] { QFile f(png); f.open(QIODevice::ReadOnly); return f.readAll(); }(), pngBefore);
+    // In the pictures' own folder: a name of their own, never over a file.
+    QCOMPARE(QFileInfo(grading::gradedPath(png, files.path(), QStringLiteral("png"))).fileName(), QStringLiteral("one (graded).png"));
+    QVERIFY(QFile::copy(png, files.filePath(QStringLiteral("one (graded).png"))));
+    QCOMPARE(QFileInfo(grading::gradedPath(png, files.path(), QStringLiteral("png"))).fileName(), QStringLiteral("one (graded) 2.png"));
+
+    // The same through the dialog's job, on the Queue.
+    BatchDevelopDialog dialog(&studio, layer->grading(), &window);
+    dialog.addFiles({png});
+    QCOMPARE(QDir::cleanPath(dialog.folder()), QDir::cleanPath(files.filePath(QStringLiteral("Graded"))));
+    dialog.choosePreset(QStringLiteral("Vivid"));
+    QCOMPARE(dialog.grading(), grading::preset(QStringLiteral("Vivid"))->grading);
+    dialog.setFolder(files.filePath(QStringLiteral("Second")));
+    Job *job = dialog.apply();
+    QVERIFY(job);
+    QTRY_VERIFY_WITH_TIMEOUT(job->isFinished(), 20000);
+    QVERIFY2(job->state() == Job::State::Succeeded, qPrintable(job->errorString()));
+    QVERIFY(QFileInfo::exists(files.filePath(QStringLiteral("Second/one.png"))));
+}
+
+// The Develop tab on real photos (plan M20 step 8): opt-in, LUMEN_PHOTOS naming a folder of JPEGs.
+// Each photo through every preset and a few single effects at full size, timed; the preview at
+// screen size against the full size made small; a contact sheet per photo in
+// LUMEN_SCREENSHOT_DIR to look at.
+void TestCanvas::developOnPhotos()
+{
+    const QString folder = qEnvironmentVariable("LUMEN_PHOTOS");
+    if (folder.isEmpty())
+        QSKIP("set LUMEN_PHOTOS to a folder of photos");
+    if (!gpu::Context::instance().isAvailable())
+        QSKIP("no Vulkan device");
+    const QString shots = qEnvironmentVariable("LUMEN_SCREENSHOT_DIR");
+    const QHash<QString, gpu::Effect> effects = grading::describedEffects();
+    auto steps = [](const QString &effect, const QVariantMap &values) {
+        return QJsonObject{{QStringLiteral("steps"),
+                            QJsonArray{QJsonObject{{QStringLiteral("effect"), effect}, {QStringLiteral("values"), QJsonObject::fromVariantMap(values)}}}}};
+    };
+    QList<QPair<QString, QJsonObject>> looks;
+    for (const grading::Preset &p : grading::presets())
+        looks.append({p.name, p.grading});
+    looks.append({QStringLiteral("Dehaze 60"), steps(QStringLiteral("local"), {{QStringLiteral("dehaze"), 60.0}})});
+    looks.append({QStringLiteral("Clarity 60"), steps(QStringLiteral("local"), {{QStringLiteral("clarity"), 60.0}})});
+    looks.append({QStringLiteral("Noise 60"),
+                  steps(QStringLiteral("detail"), {{QStringLiteral("luminanceNoise"), 60.0}, {QStringLiteral("colourNoise"), 60.0}})});
+    looks.append({QStringLiteral("Shadows +60, highlights -60"),
+                  steps(QStringLiteral("develop"), {{QStringLiteral("shadows"), 60.0}, {QStringLiteral("highlights"), -60.0}})});
+    looks.append({QStringLiteral("Mixer: blue sat -60, orange lum +40"),
+                  steps(QStringLiteral("mixer"), {{QStringLiteral("satBlue"), -60.0}, {QStringLiteral("lumOrange"), 40.0}})});
+
+    const QFileInfoList photos = QDir(folder).entryInfoList({QStringLiteral("*.jpg"), QStringLiteral("*.jpeg"), QStringLiteral("*.png")}, QDir::Files,
+                                                            QDir::Name);
+    QVERIFY(!photos.isEmpty());
+    for (const QFileInfo &file : photos) {
+        QImageReader reader(file.filePath());
+        reader.setAutoTransform(true);
+        const QImage photo = reader.read().convertToFormat(QImage::Format_ARGB32_Premultiplied);
+        QVERIFY2(!photo.isNull(), qPrintable(file.fileName()));
+        const int cell = 480;
+        const QSize thumb = photo.size().scaled(cell, cell, Qt::KeepAspectRatio);
+        const int columns = 4;
+        const int rows = int((looks.size() + 1 + columns - 1) / columns);
+        QImage sheet(columns * cell, rows * (thumb.height() + 4), QImage::Format_RGB32);
+        sheet.fill(Qt::black);
+        QPainter painter(&sheet);
+        painter.drawImage(QPoint(0, 0), photo.scaled(thumb, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+        QStringList report;
+        for (int i = 0; i < looks.size(); ++i) {
+            const grading::State state = grading::resolved(looks[i].second, effects);
+            QString error;
+            const QList<gpu::EffectStep> chainSteps = grading::steps(state, effects, &error);
+            QVERIFY2(error.isEmpty(), qPrintable(error));
+            gpu::Chain full;
+            QVERIFY(full.setSteps(chainSteps, &error));
+            QElapsedTimer timer;
+            timer.start();
+            const QImage graded = full.render(photo);
+            const qint64 ms = timer.elapsed();
+            QVERIFY2(!graded.isNull(), qPrintable(full.error()));
+            // The preview the tab shows (about 1280 wide) against the full size made that small.
+            const QImage small = photo.scaled(photo.size().scaled(1280, 1280, Qt::KeepAspectRatio), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+            gpu::Chain preview;
+            QVERIFY(preview.setSteps(chainSteps, &error));
+            const QImage previewed = preview.render(small).convertToFormat(QImage::Format_RGB32);
+            const QImage fullSmall = graded.scaled(small.size(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation).convertToFormat(QImage::Format_RGB32);
+            double difference = 0;
+            for (int y = 0; y < small.height(); y += 2) {
+                const auto *a = reinterpret_cast<const QRgb *>(previewed.constScanLine(y));
+                const auto *b = reinterpret_cast<const QRgb *>(fullSmall.constScanLine(y));
+                for (int x = 0; x < small.width(); x += 2)
+                    difference += std::abs(qRed(a[x]) - qRed(b[x])) + std::abs(qGreen(a[x]) - qGreen(b[x])) + std::abs(qBlue(a[x]) - qBlue(b[x]));
+            }
+            difference /= (small.width() / 2) * (small.height() / 2) * 3.0;
+            report << QStringLiteral("  %1: %2 ms at %3 x %4 (GPU %5 ms); preview vs full size made small: %6 levels on average")
+                          .arg(looks[i].first)
+                          .arg(ms)
+                          .arg(photo.width())
+                          .arg(photo.height())
+                          .arg(full.gpuMilliseconds(), 0, 'f', 1)
+                          .arg(difference, 0, 'f', 2);
+            const int at = i + 1;
+            painter.drawImage(QPoint((at % columns) * cell, (at / columns) * (thumb.height() + 4)),
+                              graded.scaled(thumb, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+        }
+        painter.end();
+        qInfo().noquote() << file.fileName() << "\n" << report.join(u'\n');
+        if (!shots.isEmpty())
+            sheet.save(QDir(shots).filePath(QStringLiteral("photo-%1.png").arg(file.completeBaseName())));
+    }
+    // A 24-megapixel picture of real content: the landscape made 6000 wide, through a preset.
+    const QImage big = QImage(photos.first().filePath()).scaled(6000, 4000, Qt::IgnoreAspectRatio, Qt::SmoothTransformation)
+                           .convertToFormat(QImage::Format_ARGB32_Premultiplied);
+    const grading::State state = grading::resolved(grading::preset(QStringLiteral("Warm film"))->grading, effects);
+    gpu::Chain chain;
+    QVERIFY(chain.setSteps(grading::steps(state, effects)));
+    QElapsedTimer timer;
+    timer.start();
+    QVERIFY(!chain.render(big).isNull());
+    qInfo() << "6000 x 4000, Warm film:" << timer.elapsed() << "ms; GPU" << chain.gpuMilliseconds() << "ms";
 }
 
 void TestCanvas::themeContrast()

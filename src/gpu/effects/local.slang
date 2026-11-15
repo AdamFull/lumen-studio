@@ -153,8 +153,12 @@ void main(uint3 id: SV_DispatchThreadID)
     // Dehaze: the haze is how much of the air's colour the darkest channel nearby holds
     // (He, Sun and Tang's dark channel, over the coarse copy); taken out, or added for less than 0.
     const float amount = p.dehaze / 100.0;
+    // The haze's colour: mostly a grey as light as the brightest part, so a coloured light (a
+    // setting sun) does not tint the whole picture its opposite when taken out.
+    const float3 brightest = max(air[uint2(0, 0)].rgb, 0.0);
+    const float3 haze = lerp(float3(luma(brightest)), brightest, 0.25);
     if (amount > 0.0) {
-        const float3 a = max(air[uint2(0, 0)].rgb, 1e-3);
+        const float3 a = max(haze, 1e-3);
         // Never more haze than the pixel itself could hold: a blurred estimate alone spills over
         // bright edges (a ring round the sun).
         const float nearby = min(min(big.r / a.r, big.g / a.g), big.b / a.b);
@@ -163,7 +167,7 @@ void main(uint3 id: SV_DispatchThreadID)
         const float through = max(1.0 - 0.95 * amount * saturate(dark), 0.1);
         rgb = max((rgb - a) / through + a, 0.0);
     } else if (amount < 0.0) {
-        rgb = lerp(rgb, max(air[uint2(0, 0)].rgb, 0.0), -amount * 0.45);
+        rgb = lerp(rgb, haze, -amount * 0.45);
     }
 
     // Texture against the fine copy, Clarity against the coarse one, mostly in the midtones.

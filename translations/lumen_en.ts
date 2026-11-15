@@ -461,4 +461,15 @@ The models of the earlier version are in %2 (%n files, %3). Move them to the new
         <translation><numerusform>%n replaced.</numerusform><numerusform>%n replaced.</numerusform></translation>
     </message>
 </context>
+<context>
+    <name>lumen::ui::BatchDevelopDialog</name>
+    <message numerus="yes">
+        <source>Grade %n picture(s)</source>
+        <translation><numerusform>Grade %n picture</numerusform><numerusform>Grade %n pictures</numerusform></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n graded copy(ies) saved in %1.</source>
+        <translation><numerusform>%n graded copy saved in %1.</numerusform><numerusform>%n graded copies saved in %1.</numerusform></translation>
+    </message>
+</context>
 </TS>

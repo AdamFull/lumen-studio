@@ -5,10 +5,18 @@
 #include "ui/Studio.h"
 #include "ui/canvas/CanvasView.h"
 #include "ui/filters/ParamWidgets.h"
+#include "ui/dialogs/BatchDevelopDialog.h"
 #include "ui/widgets/ColorWheel.h"
 #include "ui/widgets/Controls.h"
 
+#include <QClipboard>
 #include <QComboBox>
+#include <QGuiApplication>
+#include <QInputDialog>
+#include <QJsonObject>
+#include <QLineEdit>
+#include <QMenu>
+#include <QMessageBox>
 #include <QFileDialog>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -74,6 +82,29 @@ DevelopPanel::DevelopPanel(Studio *studio, CanvasView *canvas, QWidget *parent)
     m_status->setWordWrap(true);
     m_status->setProperty("role", QStringLiteral("muted"));
     v->addWidget(m_status);
+
+    // Presets and settings to copy (plan M20 step 8).
+    auto *top = new QHBoxLayout;
+    m_presets = new QPushButton(tr("Presets"), this);
+    m_presets->setObjectName(QStringLiteral("developPresets"));
+    m_presets->setToolTip(tr("Looks to start from, yours among them; save the settings as one, or apply them to picture files"));
+    auto *presetMenu = new QMenu(m_presets);
+    m_presets->setMenu(presetMenu);
+    connect(presetMenu, &QMenu::aboutToShow, this, [this, presetMenu] { fillPresetMenu(presetMenu); });
+    m_copy = new QPushButton(tr("Copy"), this);
+    m_copy->setObjectName(QStringLiteral("developCopy"));
+    m_copy->setToolTip(tr("Copy these settings, to paste them on another picture"));
+    m_paste = new QPushButton(tr("Paste"), this);
+    m_paste->setObjectName(QStringLiteral("developPaste"));
+    m_paste->setToolTip(tr("Grade this layer with the settings copied"));
+    top->addWidget(m_presets);
+    top->addStretch();
+    top->addWidget(m_copy);
+    top->addWidget(m_paste);
+    v->addLayout(top);
+    connect(m_copy, &QPushButton::clicked, this, &DevelopPanel::copySettings);
+    connect(m_paste, &QPushButton::clicked, this, &DevelopPanel::pasteSettings);
+    connect(QGuiApplication::clipboard(), &QClipboard::dataChanged, this, &DevelopPanel::updateState);
 
     auto *scroll = new QScrollArea(this);
     scroll->setWidgetResizable(true);
@@ -341,17 +372,7 @@ void DevelopPanel::loadLayer()
         updateState();
         return;
     }
-    grading::State state = layer && layer->graded() ? grading::fromJson(layer->grading()) : grading::State();
-    for (auto it = m_effects.cbegin(); it != m_effects.cend(); ++it) {
-        QString error;
-        const QVariantMap values = it.value().resolve(state.values.value(it.key()), &error);
-        state.values.insert(it.key(), error.isEmpty() ? values : it.value().defaults());
-    }
-    for (const QString &channel : grading::curveChannels()) {
-        if (!state.curves.contains(channel))
-            state.curves.insert(channel, grading::straightCurve());
-    }
-    m_state = state;
+    m_state = grading::resolved(layer && layer->graded() ? layer->grading() : QJsonObject(), m_effects);
     showState();
     {
         QSignalBlocker block(m_before);
@@ -399,6 +420,9 @@ void DevelopPanel::updateState()
     m_status->setText(status);
     m_status->setVisible(!status.isEmpty());
     m_controls->setEnabled(usable);
+    m_presets->setEnabled(!m_effects.isEmpty());
+    m_copy->setEnabled(usable);
+    m_paste->setEnabled(usable && grading::settingsFrom(QGuiApplication::clipboard()->mimeData()).has_value());
     const bool graded = layer && layer->graded();
     m_reset->setEnabled(usable && (graded || !grading::isNeutral(m_state, m_effects)));
     m_bake->setEnabled(usable && graded && !m_committing);
@@ -492,6 +516,98 @@ void DevelopPanel::expandAll(bool open)
     ensureBuilt();
     for (QToolButton *head : std::as_const(m_groups))
         head->setChecked(open);
+}
+
+void DevelopPanel::applyGrading(const QJsonObject &grading)
+{
+    ensureBuilt();
+    if (m_effects.isEmpty())
+        return;
+    m_state = grading::resolved(grading, m_effects);
+    showState();
+    changed();
+    commit();
+}
+
+bool DevelopPanel::applyPreset(const QString &name)
+{
+    const std::optional<grading::Preset> p = grading::preset(name);
+    if (!p)
+        return false;
+    applyGrading(p->grading);
+    return true;
+}
+
+void DevelopPanel::copySettings()
+{
+    ensureBuilt();
+    QGuiApplication::clipboard()->setMimeData(grading::settingsMime(grading::toJson(m_state, m_effects)));
+    m_studio->notify(tr("Develop settings copied: open another picture and paste them."), QStringLiteral("info"));
+}
+
+bool DevelopPanel::pasteSettings()
+{
+    const std::optional<QJsonObject> settings = grading::settingsFrom(QGuiApplication::clipboard()->mimeData());
+    if (!settings)
+        return false;
+    applyGrading(*settings);
+    return true;
+}
+
+bool DevelopPanel::saveAsPreset(const QString &name, QString *error)
+{
+    ensureBuilt();
+    return grading::savePreset(name, grading::toJson(m_state, m_effects), error);
+}
+
+void DevelopPanel::fillPresetMenu(QMenu *menu)
+{
+    menu->clear();
+    const QList<grading::Preset> all = grading::presets();
+    bool yours = false;
+    menu->addSection(tr("Lumen's"));
+    for (const grading::Preset &p : all) {
+        if (!p.builtIn && !yours) {
+            menu->addSection(tr("Yours"));
+            yours = true;
+        }
+        QAction *a = menu->addAction(p.name, this, [this, name = p.name] { applyPreset(name); });
+        a->setObjectName(QStringLiteral("preset:%1").arg(p.name));
+        a->setEnabled(m_controls->isEnabled());
+    }
+    menu->addSeparator();
+    QAction *save = menu->addAction(tr("Save the settings as a preset…"), this, [this] {
+        bool ok = false;
+        const QString name = QInputDialog::getText(this, tr("Save as preset"), tr("Name of the preset:"), QLineEdit::Normal, QString(), &ok).trimmed();
+        if (!ok || name.isEmpty())
+            return;
+        const std::optional<grading::Preset> existing = grading::preset(name);
+        if (existing && !existing->builtIn
+            && QMessageBox::question(this, tr("Save as preset"), tr("There is a preset “%1” already. Replace it?").arg(name)) != QMessageBox::Yes)
+            return;
+        QString error;
+        if (!saveAsPreset(name, &error))
+            QMessageBox::warning(this, tr("Save as preset"), error);
+    });
+    save->setObjectName(QStringLiteral("developSavePreset"));
+    QMenu *remove = menu->addMenu(tr("Delete a preset"));
+    for (const grading::Preset &p : all) {
+        if (p.builtIn)
+            continue;
+        remove->addAction(p.name, this, [this, name = p.name] {
+            if (QMessageBox::question(this, tr("Delete a preset"), tr("Delete the preset “%1”?").arg(name)) == QMessageBox::Yes)
+                grading::removePreset(name);
+        });
+    }
+    remove->setEnabled(yours);
+    menu->addSeparator();
+    QAction *files = menu->addAction(tr("Apply to picture files…"), this, [this] {
+        ensureBuilt();
+        auto *dialog = new BatchDevelopDialog(m_studio, grading::toJson(m_state, m_effects), window());
+        dialog->setAttribute(Qt::WA_DeleteOnClose);
+        dialog->open();
+    });
+    files->setObjectName(QStringLiteral("developApplyToFiles"));
 }
 
 void DevelopPanel::showBefore(bool before)

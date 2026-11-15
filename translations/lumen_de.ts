@@ -7643,6 +7643,106 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
 </context>
 <context>
+    <name>lumen::ui::BatchDevelopDialog</name>
+    <message>
+        <location filename="../src/ui/dialogs/BatchDevelopDialog.cpp" line="+35"/>
+        <source>Apply to picture files</source>
+        <translation>Auf Bilddateien anwenden</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Each picture is graded at full size and saved as a copy in its own format; the files you choose stay as they are. The camera&apos;s details (Exif) are not copied.</source>
+        <translation>Jedes Bild wird in voller Größe bearbeitet und als Kopie in seinem eigenen Format gespeichert; die gewählten Dateien bleiben, wie sie sind. Die Kameradaten (Exif) werden nicht übernommen.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>The Develop tab&apos;s settings now</source>
+        <translation>Die aktuellen Einstellungen im Bereich Entwickeln</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Settings</source>
+        <translation>Einstellungen</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Pictures</source>
+        <translation>Bilder</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Add pictures…</source>
+        <translation>Bilder hinzufügen…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Remove</source>
+        <translation>Entfernen</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Choose…</source>
+        <translation>Wählen…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <location line="+21"/>
+        <source>Save the copies in</source>
+        <translation>Kopien speichern in</translation>
+    </message>
+    <message>
+        <location line="-17"/>
+        <source>Apply</source>
+        <translation>Anwenden</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Add pictures</source>
+        <translation>Bilder hinzufügen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Pictures (%1)</source>
+        <translation>Bilder (%1)</translation>
+    </message>
+    <message>
+        <location line="+35"/>
+        <source>Graded</source>
+        <translation>Bearbeitet</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+55"/>
+        <source>Grade %n picture(s)</source>
+        <translation>
+            <numerusform>%n Bild bearbeiten</numerusform>
+            <numerusform>%n Bilder bearbeiten</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Starting…</source>
+        <translation>Wird gestartet…</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>%1 of %2: %3</source>
+        <translation>%1 von %2: %3</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+16"/>
+        <source>%n graded copy(ies) saved in %1.</source>
+        <translation>
+            <numerusform>%n bearbeitete Kopie in %1 gespeichert.</numerusform>
+            <numerusform>%n bearbeitete Kopien in %1 gespeichert.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Not graded: %1</source>
+        <translation>Nicht bearbeitet: %1</translation>
+    </message>
+</context>
+<context>
     <name>lumen::ui::BrushTool</name>
     <message>
         <location filename="../src/ui/canvas/Tools.cpp" line="+161"/>
@@ -9284,7 +9384,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::DevelopPanel</name>
     <message>
-        <location filename="../src/ui/widgets/DevelopPanel.cpp" line="+30"/>
+        <location filename="../src/ui/widgets/DevelopPanel.cpp" line="+38"/>
         <source>White balance</source>
         <translation>Weißabgleich</translation>
     </message>
@@ -9350,12 +9450,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+168"/>
+        <location line="+191"/>
         <source>Tone curve</source>
         <translation>Gradationskurve</translation>
     </message>
     <message>
-        <location line="-168"/>
+        <location line="-191"/>
         <source>Colour mixer</source>
         <translation>Farbmischer</translation>
     </message>
@@ -9371,12 +9471,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+160"/>
+        <location line="+183"/>
         <source>Red</source>
         <translation>Rot</translation>
     </message>
     <message>
-        <location line="-160"/>
+        <location line="-183"/>
         <source>Orange</source>
         <translation>Orange</translation>
     </message>
@@ -9387,23 +9487,23 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+160"/>
+        <location line="+183"/>
         <source>Green</source>
         <translation>Grün</translation>
     </message>
     <message>
-        <location line="-159"/>
+        <location line="-182"/>
         <source>Aqua</source>
         <translation>Aquamarin</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+160"/>
+        <location line="+183"/>
         <source>Blue</source>
         <translation>Blau</translation>
     </message>
     <message>
-        <location line="-159"/>
+        <location line="-182"/>
         <source>Purple</source>
         <translation>Lila</translation>
     </message>
@@ -9444,12 +9544,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+173"/>
+        <location line="+196"/>
         <source>LUT</source>
         <translation>LUT</translation>
     </message>
     <message>
-        <location line="-173"/>
+        <location line="-196"/>
         <source>Amount</source>
         <translation>Stärke</translation>
     </message>
@@ -9544,7 +9644,37 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Unregelmäßigkeit</translation>
     </message>
     <message>
-        <location line="+32"/>
+        <location line="+25"/>
+        <source>Presets</source>
+        <translation>Vorgaben</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Looks to start from, yours among them; save the settings as one, or apply them to picture files</source>
+        <translation>Looks als Ausgangspunkt, auch Ihre eigenen; die Einstellungen als Vorgabe speichern oder auf Bilddateien anwenden</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Copy</source>
+        <translation>Kopieren</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Copy these settings, to paste them on another picture</source>
+        <translation>Diese Einstellungen kopieren, um sie auf ein anderes Bild einzufügen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Paste</source>
+        <translation>Einfügen</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Grade this layer with the settings copied</source>
+        <translation>Diese Ebene mit den kopierten Einstellungen bearbeiten</translation>
+    </message>
+    <message>
+        <location line="+19"/>
         <source>Before</source>
         <translation>Vorher</translation>
     </message>
@@ -9614,7 +9744,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>%1 (fehlt)</translation>
     </message>
     <message>
-        <location line="+83"/>
+        <location line="+73"/>
         <source>Grading needs the graphics card: %1</source>
         <translation>Die Farbkorrektur braucht die Grafikkarte: %1</translation>
     </message>
@@ -9639,7 +9769,60 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Korrigiert: jederzeit änderbar. Backen Sie sie ein, um auf der Ebene zu malen.</translation>
     </message>
     <message>
-        <location line="+149"/>
+        <location line="+126"/>
+        <source>Develop settings copied: open another picture and paste them.</source>
+        <translation>Entwicklungseinstellungen kopiert: Öffnen Sie ein anderes Bild und fügen Sie sie ein.</translation>
+    </message>
+    <message>
+        <location line="+23"/>
+        <source>Lumen&apos;s</source>
+        <translation>Von Lumen</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Yours</source>
+        <translation>Ihre</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Save the settings as a preset…</source>
+        <translation>Einstellungen als Vorgabe speichern…</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <location line="+5"/>
+        <location line="+4"/>
+        <source>Save as preset</source>
+        <translation>Als Vorgabe speichern</translation>
+    </message>
+    <message>
+        <location line="-9"/>
+        <source>Name of the preset:</source>
+        <translation>Name der Vorgabe:</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>There is a preset “%1” already. Replace it?</source>
+        <translation>Es gibt bereits eine Vorgabe „%1“. Ersetzen?</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <location line="+5"/>
+        <source>Delete a preset</source>
+        <translation>Eine Vorgabe löschen</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Delete the preset “%1”?</source>
+        <translation>Die Vorgabe „%1“ löschen?</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Apply to picture files…</source>
+        <translation>Auf Bilddateien anwenden…</translation>
+    </message>
+    <message>
+        <location line="+59"/>
         <location line="+79"/>
         <source>Grading did not work: %1</source>
         <translation>Die Farbkorrektur hat nicht funktioniert: %1</translation>
@@ -9655,8 +9838,8 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Die Ebene wurde während der Farbkorrektur geändert, daher wurde nichts geändert.</translation>
     </message>
     <message>
-        <location line="-600"/>
-        <location line="+603"/>
+        <location line="-708"/>
+        <location line="+711"/>
         <source>Develop</source>
         <translation>Entwickeln</translation>
     </message>
@@ -11163,6 +11346,64 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <location line="+3"/>
         <source>The objects to select, in a few words.</source>
         <translation>Die auszuwählenden Objekte, in wenigen Worten.</translation>
+    </message>
+</context>
+<context>
+    <name>lumen::ui::Grading</name>
+    <message>
+        <location filename="../src/ui/Grading.cpp" line="+41"/>
+        <source>Warm film</source>
+        <translation>Warmer Film</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Cool and crisp</source>
+        <translation>Kühl und klar</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Black and white</source>
+        <translation>Schwarzweiß</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Soft matte</source>
+        <translation>Weich und matt</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Vivid</source>
+        <translation>Lebendig</translation>
+    </message>
+    <message>
+        <location line="+235"/>
+        <source>%1 could not be read.</source>
+        <translation>%1 konnte nicht gelesen werden.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>%1 is not a Develop preset.</source>
+        <translation>%1 ist keine Entwicklungsvorgabe.</translation>
+    </message>
+    <message>
+        <location line="+66"/>
+        <source>A preset needs a name (up to 80 characters).</source>
+        <translation>Eine Vorgabe braucht einen Namen (bis zu 80 Zeichen).</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>“%1” is one of Lumen&apos;s presets; give yours another name.</source>
+        <translation>„%1“ ist eine Vorgabe von Lumen; geben Sie Ihrer einen anderen Namen.</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>%1 could not be written.</source>
+        <translation>%1 konnte nicht geschrieben werden.</translation>
+    </message>
+    <message>
+        <location line="+47"/>
+        <source>%1 (graded)</source>
+        <translation>%1 (bearbeitet)</translation>
     </message>
 </context>
 <context>

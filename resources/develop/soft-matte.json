@@ -1,0 +1,11 @@
+{
+  "lumen": "develop-preset",
+  "version": 1,
+  "name": "Soft matte",
+  "grading": {
+    "steps": [
+      {"effect": "develop", "values": {"contrast": -20, "whites": -10, "saturation": -15}},
+      {"effect": "curve", "values": {}, "inputs": {"curve": {"rgb": "0 32, 128 128, 255 236"}}}
+    ]
+  }
+}

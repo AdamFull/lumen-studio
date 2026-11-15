@@ -1,0 +1,11 @@
+{
+  "lumen": "develop-preset",
+  "version": 1,
+  "name": "Vivid",
+  "grading": {
+    "steps": [
+      {"effect": "develop", "values": {"contrast": 15, "vibrance": 40, "saturation": 10}},
+      {"effect": "local", "values": {"clarity": 15, "dehaze": 15}}
+    ]
+  }
+}

@@ -4532,8 +4532,38 @@ pins), which is one more reason to take its parts rather than the library.
    * Not yet: your own effects in the Develop tab (they are filter steps); syntax colours in the
      source; a download from GitHub itself inside Lumen (the same downloader as the other
      components).
-8. [ ] **Presets** (copy and paste settings, apply to many pictures), the user guide, German, a live
+8. [x] **Presets** (copy and paste settings, apply to many pictures), the user guide, German, a live
    check on a few real photos.
+   * Done (15 November 2026): presets in `ui/Grading` (Lumen's five in `resources/develop/*.json`,
+     `:/develop`, their names translated; yours as `.json` in `presets/develop` of Lumen's data, a
+     name Lumen's has refused, the same name replacing), `resolved()` making a full state of a
+     saved grading (the Develop tab's loading uses it too); settings on the clipboard as
+     `application/x-lumen-develop` and JSON text. The Develop tab: **Presets** (Lumen's, yours,
+     save, delete, *Apply to picture files…*), **Copy**, **Paste** (enabled while the clipboard
+     holds settings). `grading::gradeFiles` grades picture files at full size on one chain and
+     writes copies through `doc::writeImageFile` in their own format (PNG for one Lumen cannot
+     write; a JPEG at its estimated quality), never over a file (" (graded)" in the pictures' own
+     folder, then numbered); `BatchDevelopDialog` runs it as a Queue job with progress and
+     cancelling between pictures. The effect editor became a code editor (`ui/effects/CodeEditor`:
+     colours, problem marks and hover, F8, completion, documentation on hover, indent, comments,
+     find and replace, go to line, zoom; menus and a Reference tab). Tests: `tst_canvas
+     developPresets` (Lumen's presets, one applied, copy and paste between pictures, yours saved,
+     replaced, refused and deleted, files graded with one that is not a picture, names that never
+     overwrite, the dialog's job), `tst_filters_ui codeEditor` and `effectEditor`, `tst_layout
+     effectEditor` (with a mistake).
+   * Live check (15 November 2026), `tst_canvas developOnPhotos` (opt-in: `LUMEN_PHOTOS` a folder of
+     photos, contact sheets in `LUMEN_SCREENSHOT_DIR`), on five CC0 photos from Wikimedia Commons
+     (a landscape, a portrait, a city at night, a peacock, a sunset; 3580 to 3840 pixels wide): every
+     preset and Dehaze, Clarity, noise reduction, Shadows and Highlights and the mixer at full size,
+     32 to 91 ms each (8 to 34 ms on the GPU); a 6000 × 4000 picture of real content through *Warm
+     film*, 144 ms. The preview at screen size against the full size made small: under one level
+     on average for most, up to 2.5 for grain and sharpening (they are in pixels, as the guide
+     says). Found and fixed: Dehaze took the haze's colour from the brightest part, so a setting sun
+     turned the sky purple (now mostly grey, a quarter of its colour); Shadows lifted near-black
+     (now from a little above it).
+   * Not yet: Highlights and Shadows are global curves; on a portrait, Shadows +60 lifts a dark
+     cloth evenly where a local one would keep its contrast (the coarse copy of Local contrast
+     could steer them).
 
 Acceptance:
 1. Moving a Develop slider on a 24-megapixel photo updates the screen at once; the full-size result

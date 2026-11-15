@@ -43,7 +43,8 @@ float tone(float v)
     v += s - clamped;
     // Each slider moves its part of the range and fades out towards the others.
     v += p.blacks / 100.0 * 0.15 * (1.0 - smoothstep(0.0, 0.35, v));
-    v += p.shadows / 100.0 * 0.25 * smoothstep(0.0, 0.2, v) * (1.0 - smoothstep(0.2, 0.55, v));
+    // Shadows from a little above black: the darkest stay dark (Blacks moves those).
+    v += p.shadows / 100.0 * 0.25 * smoothstep(0.04, 0.24, v) * (1.0 - smoothstep(0.24, 0.58, v));
     v += p.highlights / 100.0 * 0.25 * smoothstep(0.45, 0.75, v) * (1.0 - smoothstep(0.85, 1.05, v));
     v += p.whites / 100.0 * 0.15 * smoothstep(0.65, 1.0, v);
     return max(v, 0.0);

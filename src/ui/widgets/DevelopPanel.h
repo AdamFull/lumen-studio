@@ -10,6 +10,7 @@
 #include <QWidget>
 
 class QComboBox;
+class QMenu;
 class QLabel;
 class QPushButton;
 class QToolButton;
@@ -59,6 +60,15 @@ public:
     bool isBusy() const { return m_committing; }
     void showBefore(bool before);
 
+    // Presets and settings to copy (plan M20 step 8): a grading put on every control and the layer
+    // (one undo step), a preset by its shown name, the settings to and from the clipboard, saved as
+    // one of your presets.
+    void applyGrading(const QJsonObject &grading);
+    bool applyPreset(const QString &name);
+    void copySettings();
+    bool pasteSettings();
+    bool saveAsPreset(const QString &name, QString *error = nullptr);
+
 signals:
     // A full-size grading was put on the layer, or failed (the reason).
     void committed(bool ok, const QString &message);
@@ -79,6 +89,7 @@ private:
     void renderPreview();
     void clearPreview();
     void fillLuts();
+    void fillPresetMenu(QMenu *menu);
     QImage scaledLayer(const doc::Layer &layer, const QImage &pixels, const QSize &size);
     bool differsFromLayer() const;
     QString keyFor(const QString &name, const QList<QString> &keys) const;
@@ -101,6 +112,9 @@ private:
     QPushButton *m_before = nullptr;
     QPushButton *m_reset = nullptr;
     QPushButton *m_bake = nullptr;
+    QPushButton *m_presets = nullptr;
+    QPushButton *m_copy = nullptr;
+    QPushButton *m_paste = nullptr;
     gpu::Chain m_previewChain;
     gpu::Chain m_fullChain;
     QTimer m_previewTimer;

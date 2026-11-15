@@ -42,6 +42,7 @@ add_library(lumen_ui STATIC
     dialogs/NewFromPromptDialog.h dialogs/NewFromPromptDialog.cpp
     dialogs/PlanChangeDialog.h dialogs/PlanChangeDialog.cpp
     dialogs/UpdateDialog.h dialogs/UpdateDialog.cpp
+    dialogs/BatchDevelopDialog.h dialogs/BatchDevelopDialog.cpp
     dialogs/SelectByDescriptionDialog.h dialogs/SelectByDescriptionDialog.cpp
     dialogs/NewCanvasDialog.h dialogs/NewCanvasDialog.cpp
     dialogs/ImageSizeDialog.h dialogs/ImageSizeDialog.cpp
@@ -90,6 +91,14 @@ qt_add_resources(lumen_ui builtin_filters
     PREFIX "/filters/builtin"
     BASE "${PROJECT_SOURCE_DIR}/resources/filters"
     FILES ${LUMEN_BUILTIN_FILTERS}
+)
+
+# Lumen's Develop presets (plan M20 step 8), as :/develop/*.json.
+file(GLOB LUMEN_DEVELOP_PRESETS CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/resources/develop/*.json")
+qt_add_resources(lumen_ui develop_presets
+    PREFIX "/develop"
+    BASE "${PROJECT_SOURCE_DIR}/resources/develop"
+    FILES ${LUMEN_DEVELOP_PRESETS}
 )
 
 # Help → User guide shows the guides built into the program, as :/docs/*.md.

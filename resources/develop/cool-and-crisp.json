@@ -1,0 +1,12 @@
+{
+  "lumen": "develop-preset",
+  "version": 1,
+  "name": "Cool and crisp",
+  "grading": {
+    "steps": [
+      {"effect": "develop", "values": {"temperature": -18, "contrast": 20, "vibrance": 20}},
+      {"effect": "detail", "values": {"sharpen": 40}},
+      {"effect": "local", "values": {"clarity": 25}}
+    ]
+  }
+}
