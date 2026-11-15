@@ -408,8 +408,11 @@ KernelInterface parseReflection(const QByteArray &json, const QString &entry, QS
     // vectors. Other parameters may be inputs: [Input(kind)] on a texture.
     for (const QJsonValue &v : root.value(QStringLiteral("parameters")).toArray()) {
         const QJsonObject p = v.toObject();
-        if (const QVariantList input = attributes(p).value(QStringLiteral("Input")); !input.isEmpty())
+        const QHash<QString, QVariantList> given = attributes(p);
+        if (const QVariantList input = given.value(QStringLiteral("Input")); !input.isEmpty())
             k.inputs.insert(p.value(QStringLiteral("name")).toString(), input.first().toString());
+        if (!given.isEmpty() && p.value(QStringLiteral("binding")).toObject().value(QStringLiteral("kind")).toString() != QLatin1String("pushConstantBuffer"))
+            k.textureAttributes.insert(p.value(QStringLiteral("name")).toString(), given);
         if (p.value(QStringLiteral("binding")).toObject().value(QStringLiteral("kind")).toString() != QLatin1String("pushConstantBuffer"))
             continue;
         const QJsonObject element = p.value(QStringLiteral("type")).toObject().value(QStringLiteral("elementType")).toObject();

@@ -453,6 +453,9 @@ without a card that can, the tab says why and the other filters still work).
 
 Below the basics, more groups open with a click on their name:
 
+* **Local contrast**: *Texture* brings out or smooths fine detail (skin, leaves, fabric),
+  *Clarity* the contrast of larger shapes, mostly in the midtones; *Dehaze* takes out haze and
+  mist (below 0 it adds some).
 * **Tone curve**: drag the curve's points (click to add one, double-click one to remove it). *All
   three* bends red, green and blue together; *Red*, *Green* and *Blue* bend one colour.
 * **Colour mixer**: the *Hue*, *Saturation* and *Luminance* of eight colours (red, orange, yellow,
@@ -466,6 +469,13 @@ Below the basics, more groups open with a click on their name:
   **Add…** copies one into your LUTs folder (`Documents/Lumen/LUTs`), so it is offered on every
   picture; *Amount* mixes it in. A project that uses a LUT you do not have says which one is
   missing.
+* **Detail**: *Sharpening* (*Amount*; *Radius*, how wide the edges it finds are; *Masking*, higher
+  keeps it off smooth parts such as skies) and *Noise reduction* (*Luminance* for grainy noise,
+  *Colour* for coloured specks). Both work on the picture's own pixels, so judge them zoomed in:
+  the preview at screen size shows them weaker.
+* **Vignette and grain**: *Amount* darkens the corners (or lightens them above 0), *Midpoint* is how
+  far in it starts, *Roundness* how round it is, *Feather* how soft its edge; *Grain* adds film-like
+  noise, with its *Size* and *Roughness*.
 
 ### The Filters panel
 

@@ -5,6 +5,8 @@
 #include "gpu/Gpu.h"
 
 #include <QElapsedTimer>
+#include <QDir>
+#include <QPainter>
 #include <QFloat16>
 #include <QRandomGenerator>
 #include <QVector3D>
@@ -40,6 +42,12 @@ private slots:
     void lutEffect();
     void mixerEffect();
     void gradingEffect();
+    void scaledTextures();
+    void localEffect();
+    void detailEffect();
+    void finishEffect();
+    void developAtFullSize();
+    void lookSheet();
     void cleanup();
 
 private:
@@ -774,6 +782,339 @@ void TestGpu::gradingEffect()
     QVERIFY2(std::abs(lighterShadows.pixelColor(2, 0).red() - 225) <= 3, qPrintable(lighterShadows.pixelColor(2, 0).name()));
     const QImage darkerHighlights = run({{QStringLiteral("highlightLightness"), -100.0}});
     QVERIFY2(darkerHighlights.pixelColor(2, 0).red() < 220, qPrintable(darkerHighlights.pixelColor(2, 0).name()));
+}
+
+// A grey picture of `size` with a value per pixel from a function (0..255), alpha full.
+template<typename F>
+static QImage greyPicture(const QSize &size, F f)
+{
+    QImage image(size, QImage::Format_RGBA8888);
+    for (int y = 0; y < size.height(); ++y) {
+        auto *line = image.scanLine(y);
+        for (int x = 0; x < size.width(); ++x) {
+            const int v = std::clamp(int(std::lround(f(x, y))), 0, 255);
+            line[x * 4] = line[x * 4 + 1] = line[x * 4 + 2] = uchar(v);
+            line[x * 4 + 3] = 255;
+        }
+    }
+    return image;
+}
+
+// Mean and spread of a channel over a rectangle.
+static QPair<double, double> spread(const QImage &image, const QRect &r, int channel = 0)
+{
+    double sum = 0, squares = 0;
+    int n = 0;
+    const QImage rgba = image.convertToFormat(QImage::Format_RGBA8888);
+    for (int y = r.top(); y <= r.bottom(); ++y) {
+        const uchar *line = rgba.constScanLine(y);
+        for (int x = r.left(); x <= r.right(); ++x) {
+            const double v = line[x * 4 + channel];
+            sum += v;
+            squares += v * v;
+            ++n;
+        }
+    }
+    const double mean = sum / n;
+    return {mean, std::sqrt(std::max(0.0, squares / n - mean * mean))};
+}
+
+static QImage runOne(const QString &effect, const QVariantMap &values, const QImage &picture, QString *error = nullptr)
+{
+    Chain chain;
+    if (!chain.setSteps({{effect, values}}, error))
+        return {};
+    const QImage out = chain.render(picture);
+    if (out.isNull() && error)
+        *error = chain.error();
+    return out;
+}
+
+// Textures smaller than the picture: n times, a long side, a fixed size; passes over them.
+void TestGpu::scaledTextures()
+{
+    if (!m_available)
+        QSKIP("no Vulkan device");
+    QString error;
+    const Effect local = Effect::load(QStringLiteral("local"), Context::instance(), &error);
+    QVERIFY2(!local.isNull(), qPrintable(error));
+    QCOMPARE(local.textureSize(QStringLiteral("fine"), QSize(6000, 4000)), QSize(1024, 683));
+    QCOMPARE(local.textureSize(QStringLiteral("coarse"), QSize(6000, 4000)), QSize(256, 171));
+    QCOMPARE(local.textureSize(QStringLiteral("coarse"), QSize(3000, 6000)), QSize(128, 256));
+    // Never larger than the picture.
+    QCOMPARE(local.textureSize(QStringLiteral("fine"), QSize(800, 600)), QSize(800, 600));
+    QCOMPARE(local.textureSize(QStringLiteral("air"), QSize(800, 600)), QSize(1, 1));
+    QCOMPARE(local.passSize(0, QSize(6000, 4000)), QSize(1024, 683));
+    QCOMPARE(local.passSize(local.passes().size() - 1, QSize(6000, 4000)), QSize(6000, 4000));
+    const Effect detail = Effect::load(QStringLiteral("detail"), Context::instance(), &error);
+    QVERIFY2(!detail.isNull(), qPrintable(error));
+    QCOMPARE(detail.textureSize(QStringLiteral("colour"), QSize(801, 600)), QSize(201, 150));
+    QCOMPARE(detail.textureSize(QStringLiteral("blurred"), QSize(801, 600)), QSize(801, 600));
+    // A picture of one pixel still runs.
+    const QImage dot = runOne(QStringLiteral("local"), {{QStringLiteral("clarity"), 50.0}, {QStringLiteral("dehaze"), 50.0}},
+                              swatches({QColor(100, 120, 140)}), &error);
+    QVERIFY2(!dot.isNull(), qPrintable(error));
+}
+
+// Texture, Clarity and Dehaze: at 0 nothing changes and a flat picture stays flat whatever they say;
+// more raises the picture's local contrast, less lowers it; Clarity on the preview's size agrees
+// with the full size made small.
+void TestGpu::localEffect()
+{
+    if (!m_available)
+        QSKIP("no Vulkan device");
+    QString error;
+    const QSize size(256, 192);
+    const QRect inside(16, 16, 224, 160);
+    const QImage stripes = greyPicture(size, [](int x, int y) { return 128 + 40 * std::sin(x * 2 * M_PI / 12) * std::cos(y * 2 * M_PI / 16); });
+    const QImage neutral = runOne(QStringLiteral("local"), {}, stripes, &error);
+    QVERIFY2(!neutral.isNull(), qPrintable(error));
+    QVERIFY(std::abs(spread(neutral, inside).second - spread(stripes, inside).second) < 0.5);
+    QVERIFY(std::abs(neutral.pixelColor(40, 40).red() - stripes.pixelColor(40, 40).red()) <= 1);
+
+    const QImage flat = greyPicture(size, [](int, int) { return 128; });
+    const QImage flatOut = runOne(QStringLiteral("local"),
+                                  {{QStringLiteral("texture"), 100.0}, {QStringLiteral("clarity"), 100.0}, {QStringLiteral("dehaze"), 100.0}}, flat);
+    QVERIFY2(std::abs(spread(flatOut, inside).first - 128) < 1.5 && spread(flatOut, inside).second < 1.0,
+             qPrintable(QStringLiteral("%1 ± %2").arg(spread(flatOut, inside).first).arg(spread(flatOut, inside).second)));
+
+    const double base = spread(stripes, inside).second;
+    for (const QString &name : {QStringLiteral("texture"), QStringLiteral("clarity")}) {
+        const double more = spread(runOne(QStringLiteral("local"), {{name, 100.0}}, stripes), inside).second;
+        const double less = spread(runOne(QStringLiteral("local"), {{name, -100.0}}, stripes), inside).second;
+        QVERIFY2(more > base * 1.1 && less < base * 0.95, qPrintable(QStringLiteral("%1: %2 / %3 / %4").arg(name).arg(less).arg(base).arg(more)));
+    }
+
+    // A hazy picture: dehazing spreads it and takes the haze's grey out of the darks.
+    const QImage hazy = greyPicture(size, [](int x, int y) {
+        const double scene = (x / 32 + y / 32) % 2 ? 200.0 : 40.0;
+        return 0.45 * scene + 0.55 * 220.0;
+    });
+    const auto hazed = spread(hazy, inside);
+    const QImage clear = runOne(QStringLiteral("local"), {{QStringLiteral("dehaze"), 100.0}}, hazy);
+    const auto cleared = spread(clear, inside);
+    QVERIFY2(cleared.second > hazed.second * 1.3, qPrintable(QStringLiteral("%1 → %2").arg(hazed.second).arg(cleared.second)));
+    // A dark square of the scene.
+    QVERIFY2(clear.pixelColor(16, 16).red() < hazy.pixelColor(16, 16).red() - 15,
+             qPrintable(QStringLiteral("%1 → %2").arg(hazy.pixelColor(16, 16).red()).arg(clear.pixelColor(16, 16).red())));
+    const QImage hazier = runOne(QStringLiteral("local"), {{QStringLiteral("dehaze"), -100.0}}, hazy);
+    QVERIFY(spread(hazier, inside).second < hazed.second * 0.8);
+
+    // The same picture at 1024 and at 256 wide: Clarity's change agrees once the large one is small.
+    auto blobs = [](double w, double h) {
+        return [w, h](int x, int y) {
+            const double u = x / w, v = y / h;
+            return 120 + 70 * std::exp(-(std::pow(u - 0.3, 2) + std::pow(v - 0.4, 2)) / 0.0012)
+                   - 60 * std::exp(-(std::pow(u - 0.65, 2) + std::pow(v - 0.6, 2)) / 0.0018);
+        };
+    };
+    const QImage big = greyPicture(QSize(1024, 768), blobs(1024, 768));
+    const QImage small = greyPicture(QSize(256, 192), blobs(256, 192));
+    const QVariantMap clarity{{QStringLiteral("clarity"), 100.0}};
+    const QImage bigOut = runOne(QStringLiteral("local"), clarity, big).scaled(256, 192, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    const QImage smallOut = runOne(QStringLiteral("local"), clarity, small);
+    const QImage bigIn = big.scaled(256, 192, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    // At the light blob's middle and the dark one's: Clarity moved each as much on both sizes.
+    for (const QPoint at : {QPoint(77, 77), QPoint(166, 115)}) {
+        const int large = bigOut.pixelColor(at).red() - bigIn.pixelColor(at).red();
+        const int preview = smallOut.pixelColor(at).red() - small.pixelColor(at).red();
+        QVERIFY2(std::abs(large) >= 6 && std::abs(preview - large) <= std::max(2, std::abs(large) / 4),
+                 qPrintable(QStringLiteral("full size %1, preview %2").arg(large).arg(preview)));
+    }
+}
+
+// Sharpening raises an edge's contrast, Masking keeps it off a nearly flat part; noise reduction
+// calms the noise and keeps the edge; colour noise reduction calms the colour.
+void TestGpu::detailEffect()
+{
+    if (!m_available)
+        QSKIP("no Vulkan device");
+    QString error;
+    const QSize size(128, 64);
+    const QImage edge = greyPicture(size, [](int x, int) { return x < 64 ? 60.0 : 180.0; });
+    const QImage neutral = runOne(QStringLiteral("detail"), {}, edge, &error);
+    QVERIFY2(!neutral.isNull(), qPrintable(error));
+    for (int x : {10, 62, 63, 64, 65, 100})
+        QVERIFY(std::abs(neutral.pixelColor(x, 30).red() - edge.pixelColor(x, 30).red()) <= 1);
+    const QImage sharp = runOne(QStringLiteral("detail"), {{QStringLiteral("sharpen"), 100.0}}, edge);
+    QVERIFY2(sharp.pixelColor(64, 30).red() > 185 && sharp.pixelColor(63, 30).red() < 55,
+             qPrintable(QStringLiteral("%1 %2").arg(sharp.pixelColor(63, 30).red()).arg(sharp.pixelColor(64, 30).red())));
+    QVERIFY(std::abs(sharp.pixelColor(10, 30).red() - 60) <= 1);
+
+    // Faint noise: sharpening lifts it, unless masked.
+    QRandomGenerator random(7);
+    QList<int> noise;
+    for (int i = 0; i < size.width() * size.height(); ++i)
+        noise << random.bounded(-12, 13);
+    const QImage noisy = greyPicture(size, [&](int x, int y) { return 128 + noise[y * size.width() + x]; });
+    const QRect all(4, 4, 120, 56);
+    const double before = spread(noisy, all).second;
+    const double sharpened = spread(runOne(QStringLiteral("detail"), {{QStringLiteral("sharpen"), 150.0}}, noisy), all).second;
+    const double masked = spread(runOne(QStringLiteral("detail"), {{QStringLiteral("sharpen"), 150.0}, {QStringLiteral("masking"), 100.0}}, noisy), all).second;
+    QVERIFY2(sharpened > before * 1.2 && masked < sharpened * 0.8, qPrintable(QStringLiteral("%1 %2 %3").arg(before).arg(sharpened).arg(masked)));
+
+    const double calmed = spread(runOne(QStringLiteral("detail"), {{QStringLiteral("luminanceNoise"), 100.0}}, noisy), all).second;
+    QVERIFY2(calmed < before * 0.6, qPrintable(QStringLiteral("%1 → %2").arg(before).arg(calmed)));
+    const QImage edgeCalm = runOne(QStringLiteral("detail"), {{QStringLiteral("luminanceNoise"), 100.0}}, edge);
+    QVERIFY(std::abs(edgeCalm.pixelColor(63, 30).red() - 60) <= 3 && std::abs(edgeCalm.pixelColor(64, 30).red() - 180) <= 3);
+
+    // Colour blotches on grey: red and blue apart by noise, brought together.
+    QImage blotchy(size, QImage::Format_RGBA8888);
+    for (int y = 0; y < size.height(); ++y) {
+        for (int x = 0; x < size.width(); ++x) {
+            const int n = noise[y * size.width() + x];
+            blotchy.setPixelColor(x, y, QColor(128 + n, 128, 128 - n));
+        }
+    }
+    auto colourSpread = [&](const QImage &image) {
+        double sum = 0;
+        for (int y = 4; y < 60; ++y) {
+            for (int x = 4; x < 124; ++x) {
+                const QColor c = image.pixelColor(x, y);
+                sum += std::abs(c.red() - c.blue());
+            }
+        }
+        return sum;
+    };
+    const QImage calmColour = runOne(QStringLiteral("detail"), {{QStringLiteral("colourNoise"), 100.0}}, blotchy);
+    QVERIFY2(colourSpread(calmColour) < colourSpread(blotchy) * 0.5,
+             qPrintable(QStringLiteral("%1 → %2").arg(colourSpread(blotchy)).arg(colourSpread(calmColour))));
+}
+
+// The vignette darkens or lightens the corners, not the middle; grain is noise around the same
+// brightness, the same each time.
+void TestGpu::finishEffect()
+{
+    if (!m_available)
+        QSKIP("no Vulkan device");
+    QString error;
+    const QImage grey = greyPicture(QSize(300, 200), [](int, int) { return 128; });
+    const QImage neutral = runOne(QStringLiteral("finish"), {}, grey, &error);
+    QVERIFY2(!neutral.isNull(), qPrintable(error));
+    QVERIFY(std::abs(neutral.pixelColor(2, 2).red() - 128) <= 1);
+    const QImage dark = runOne(QStringLiteral("finish"), {{QStringLiteral("vignette"), -100.0}}, grey);
+    QVERIFY2(dark.pixelColor(2, 2).red() < 70, qPrintable(dark.pixelColor(2, 2).name()));
+    QVERIFY(std::abs(dark.pixelColor(150, 100).red() - 128) <= 1);
+    QVERIFY(dark.pixelColor(2, 100).red() > dark.pixelColor(2, 2).red());
+    const QImage light = runOne(QStringLiteral("finish"), {{QStringLiteral("vignette"), 100.0}}, grey);
+    QVERIFY(light.pixelColor(2, 2).red() > 180);
+    // Feather 0 is a sharp border, a later midpoint keeps more of the middle.
+    const QImage hard = runOne(QStringLiteral("finish"), {{QStringLiteral("vignette"), -100.0}, {QStringLiteral("feather"), 0.0}}, grey);
+    QVERIFY(hard.pixelColor(150, 60).red() >= 127);
+    const QImage wide = runOne(QStringLiteral("finish"), {{QStringLiteral("vignette"), -100.0}, {QStringLiteral("midpoint"), 100.0}}, grey);
+    QVERIFY(wide.pixelColor(30, 30).red() > dark.pixelColor(30, 30).red());
+
+    const QImage big = greyPicture(QSize(1200, 800), [](int, int) { return 128; });
+    const QVariantMap grain{{QStringLiteral("grain"), 100.0}};
+    const QImage grainy = runOne(QStringLiteral("finish"), grain, big);
+    const auto g = spread(grainy, QRect(100, 100, 1000, 600));
+    QVERIFY2(g.second > 3 && std::abs(g.first - 128) < 2, qPrintable(QStringLiteral("%1 ± %2").arg(g.first).arg(g.second)));
+    QCOMPARE(runOne(QStringLiteral("finish"), grain, big), grainy);
+    const QImage smooth = runOne(QStringLiteral("finish"), {{QStringLiteral("grain"), 100.0}, {QStringLiteral("roughness"), 0.0}}, big);
+    QVERIFY(smooth != grainy);
+    QVERIFY(spread(smooth, QRect(100, 100, 1000, 600)).second > 3);
+}
+
+// The whole Develop tab at once on a 24-megapixel picture, for the time it takes.
+void TestGpu::developAtFullSize()
+{
+    if (!m_available)
+        QSKIP("no Vulkan device");
+    QImage full(6000, 4000, QImage::Format_RGBA8888);
+    full.fill(QColor(120, 110, 100));
+    const QList<EffectStep> steps{{QStringLiteral("develop"), {{QStringLiteral("exposure"), 0.3}, {QStringLiteral("contrast"), 20.0}}},
+                                  {QStringLiteral("detail"), {{QStringLiteral("sharpen"), 60.0}, {QStringLiteral("luminanceNoise"), 30.0}, {QStringLiteral("colourNoise"), 30.0}}},
+                                  {QStringLiteral("local"), {{QStringLiteral("texture"), 20.0}, {QStringLiteral("clarity"), 30.0}, {QStringLiteral("dehaze"), 20.0}}},
+                                  {QStringLiteral("mixer"), {{QStringLiteral("satRed"), 20.0}}},
+                                  {QStringLiteral("grading"), {{QStringLiteral("shadows"), QVariantList{200.0, 30.0}}}},
+                                  {QStringLiteral("finish"), {{QStringLiteral("vignette"), -30.0}, {QStringLiteral("grain"), 20.0}}}};
+    Chain chain;
+    QString error;
+    QVERIFY2(chain.setSteps(steps, &error), qPrintable(error));
+    QElapsedTimer timer;
+    timer.start();
+    const QImage out = chain.render(full);
+    QVERIFY2(!out.isNull(), qPrintable(chain.error()));
+    const qint64 first = timer.restart();
+    QVERIFY(!chain.render(full).isNull());
+    qInfo() << "6000 x 4000 through the Develop tab:" << first << "ms the first time," << timer.elapsed() << "ms again;"
+            << chain.gpuMilliseconds() << "ms on the GPU";
+    QVERIFY(timer.elapsed() < 3000);
+}
+
+// A scene for looking at: a hazy sky, hills, a textured field, a little noise.
+static QImage scene(const QSize &size)
+{
+    QImage image(size, QImage::Format_RGBA8888);
+    QRandomGenerator random(3);
+    const double w = size.width(), h = size.height();
+    for (int y = 0; y < size.height(); ++y) {
+        for (int x = 0; x < size.width(); ++x) {
+            const double u = x / w, v = y / h;
+            const double hill = 0.45 + 0.08 * std::sin(u * 7.0) + 0.05 * std::sin(u * 17.0 + 1.0);
+            const double field = 0.7 + 0.04 * std::sin(u * 11.0);
+            double r, g, b;
+            if (v < hill) {
+                r = 150 + 60 * v;
+                g = 180 + 40 * v;
+                b = 225 - 10 * v;
+            } else if (v < field) {
+                const double far = (field - v) / (field - hill);
+                r = 70 + 90 * far;
+                g = 100 + 70 * far;
+                b = 80 + 110 * far;
+            } else {
+                const double grass = 0.5 + 0.5 * std::sin(x * 0.9 + 3 * std::sin(y * 0.31)) * std::sin(y * 0.7);
+                r = 90 + 50 * grass;
+                g = 120 + 60 * grass;
+                b = 40 + 20 * grass;
+            }
+            const int n = random.bounded(-6, 7);
+            image.setPixelColor(x, y, QColor(std::clamp(int(r) + n, 0, 255), std::clamp(int(g) + n, 0, 255), std::clamp(int(b) + n, 0, 255)));
+        }
+    }
+    // A sun.
+    for (int y = 0; y < size.height(); ++y) {
+        for (int x = 0; x < size.width(); ++x) {
+            const double d = std::hypot(x - w * 0.75, y - h * 0.18) / (w * 0.05);
+            if (d < 1.0)
+                image.setPixelColor(x, y, QColor(255, 250, 230));
+        }
+    }
+    return image;
+}
+
+// With LUMEN_SCREENSHOT_DIR: the scene through each step 5 effect, three by three in the order
+// below (no captions: this test has no fonts), to look at.
+void TestGpu::lookSheet()
+{
+    const QString dir = qEnvironmentVariable("LUMEN_SCREENSHOT_DIR");
+    if (!m_available || dir.isEmpty())
+        QSKIP("for looking at: needs a Vulkan device and LUMEN_SCREENSHOT_DIR");
+    const QImage picture = scene(QSize(600, 400));
+    const QList<QPair<QString, QPair<QString, QVariantMap>>> looks{
+        {QStringLiteral("As it is"), {QStringLiteral("develop"), {}}},
+        {QStringLiteral("Clarity +80"), {QStringLiteral("local"), {{QStringLiteral("clarity"), 80.0}}}},
+        {QStringLiteral("Texture +100"), {QStringLiteral("local"), {{QStringLiteral("texture"), 100.0}}}},
+        {QStringLiteral("Dehaze +70"), {QStringLiteral("local"), {{QStringLiteral("dehaze"), 70.0}}}},
+        {QStringLiteral("Dehaze -50"), {QStringLiteral("local"), {{QStringLiteral("dehaze"), -50.0}}}},
+        {QStringLiteral("Sharpen 120"), {QStringLiteral("detail"), {{QStringLiteral("sharpen"), 120.0}}}},
+        {QStringLiteral("Noise 80"), {QStringLiteral("detail"), {{QStringLiteral("luminanceNoise"), 80.0}, {QStringLiteral("colourNoise"), 80.0}}}},
+        {QStringLiteral("Vignette -60"), {QStringLiteral("finish"), {{QStringLiteral("vignette"), -60.0}}}},
+        {QStringLiteral("Grain 60"), {QStringLiteral("finish"), {{QStringLiteral("grain"), 60.0}}}},
+    };
+    QImage sheet(picture.width() * 3, (picture.height() + 24) * 3, QImage::Format_RGB32);
+    sheet.fill(Qt::black);
+    QPainter painter(&sheet);
+    for (int i = 0; i < looks.size(); ++i) {
+        QString error;
+        const QImage out = runOne(looks[i].second.first, looks[i].second.second, picture, &error);
+        QVERIFY2(!out.isNull(), qPrintable(error));
+        const QPoint at((i % 3) * picture.width(), (i / 3) * (picture.height() + 24));
+        painter.drawImage(at + QPoint(0, 24), out);
+    }
+    painter.end();
+    QVERIFY(sheet.save(QDir(dir).filePath(QStringLiteral("develop-step5.png"))));
 }
 
 QTEST_GUILESS_MAIN(TestGpu)

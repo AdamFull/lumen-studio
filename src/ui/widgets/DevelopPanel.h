@@ -40,12 +40,14 @@ public:
     DevelopPanel(Studio *studio, CanvasView *canvas, QWidget *parent = nullptr);
     ~DevelopPanel() override;
 
-    // Every effect's values now, by parameter name.
+    // Every effect's values now, by parameter name (a name two effects use: the first one's in the
+    // tab, such as Develop's Shadows before Colour grading's).
     QVariantMap values() const;
     grading::State state() const { return m_state; }
     // What a moved control does, from code: a slider, a colour wheel (hue°, saturation %), a curve
     // ("rgb", "r", "g", "b": points "x y, …" from 0 to 255), the LUT (a name in the LUTs folder;
-    // empty for none).
+    // empty for none). A control's name is its parameter's, or "effect/name" when two effects share
+    // it ("grading/shadows").
     void setValue(const QString &name, double value);
     void setWheel(const QString &name, double hue, double saturation);
     void setCurve(const QString &channel, const QString &points);
@@ -79,6 +81,7 @@ private:
     void fillLuts();
     QImage scaledLayer(const doc::Layer &layer, const QImage &pixels, const QSize &size);
     bool differsFromLayer() const;
+    QString keyFor(const QString &name, const QList<QString> &keys) const;
 
     Studio *m_studio;
     CanvasView *m_canvas;
@@ -87,7 +90,6 @@ private:
     QHash<QString, gpu::Effect> m_effects;
     grading::State m_state;
     QString m_unavailable;
-    QHash<QString, QString> m_ownerOf; // parameter name → effect id
     QHash<QString, SliderField *> m_fields;
     QHash<QString, ColorWheel *> m_wheels;
     QHash<QString, QToolButton *> m_groups;

@@ -4458,8 +4458,32 @@ pins), which is one more reason to take its parts rather than the library.
      through the panel, a missing LUT), `tst_layout developPanel` with every group open.
    * Not yet: the mixer shows all 24 sliders at once (Lightroom puts hue, saturation and luminance on
      tabs); a look at real photos and real LUTs.
-5. [ ] **Detail and looks**: clarity, texture and dehaze (a fast multi-scale blur), sharpening, noise
+5. [x] **Detail and looks**: clarity, texture and dehaze (a fast multi-scale blur), sharpening, noise
    reduction, vignette, grain.
+   * Done (15 November 2026): an effect's own textures can be smaller than the picture (`[Scale(n)]`
+     n times, `[Fit(n)]` a long side of n pixels, `[Size(w, h)]` fixed; `Effect::textureSize`) and
+     a pass can run over one of them (`[Over("name")]`, `Effect::passSize`; its `size` is then that
+     texture's). `[Fit]` is what keeps the preview honest: a blur of so many of its pixels covers
+     the same share of any picture. `shaders/sampling.slang`: box average down, Gaussian within a
+     texture, bilinear back up. `effects/local.slang` (*Local contrast*: Texture against a copy
+     1024 pixels long, Clarity against one 256 long, both on the lightness with large steps held
+     back and Clarity mostly in the midtones; Dehaze by the dark channel of the 256 copy, limited by
+     the pixel's own so it does not ring round bright things, the haze's colour the brightest part,
+     or haze added below 0). `effects/detail.slang` (*Detail*: an unsharp mask on the lightness with
+     Radius and Masking; luminance noise by a 5 × 5 bilateral filter; colour noise from a blurred
+     quarter-size OKLab copy, except at real colour edges). `effects/finish.slang` (*Vignette and
+     grain*: amount, midpoint, roundness, feather on the picture's shape; grain as smooth value
+     noise of a pixel or a few, growing with pictures over 2000 pixels, the same every time).
+     `grading::effectOrder` runs detail before local contrast and the finish last;
+     `grading::panelOrder` shows them as photo editors do. The panel's controls are found by name
+     in the tab's order, or as `effect/name` where two effects share one (Develop's Shadows and
+     Colour grading's). A 6000 × 4000 picture through every effect of the tab: about 60 ms
+     (30 ms on the RTX 4060). Tests: `tst_gpu scaledTextures, localEffect` (Clarity on a 256 copy
+     agrees with the 1024 one made small), `detailEffect, finishEffect, developAtFullSize`,
+     `lookSheet` (a sheet of the looks to see, with `LUMEN_SCREENSHOT_DIR`); `tst_canvas
+     developPanel` grades with the new groups.
+   * Not yet: highlights and shadows are still global curves (the local ones could use the coarse
+     copy now); a look at real photos, as for step 4.
 6. [ ] **Effects as nodes**: consecutive GPU nodes run as one chain, without a read-back between them.
 7. [ ] **Your own effects**: the Slang compiler as a downloadable component, an editor with a live
    preview and the compiler's errors in place, sharing with the source shown first.

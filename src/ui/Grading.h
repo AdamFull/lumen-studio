@@ -14,6 +14,9 @@ namespace lumen::ui::grading {
 
 // The Develop tab's effects, in the order they run.
 const QStringList &effectOrder();
+// The same, in the order the tab shows them: the basics and local contrast, colour, then detail and
+// the finishing touches, as photo editors put them.
+const QStringList &panelOrder();
 
 // The curves' channels: all three, then red, green and blue.
 const QStringList &curveChannels();

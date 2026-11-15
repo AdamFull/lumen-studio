@@ -52,6 +52,25 @@ Effect Effect::load(const QString &id, Context &context, QString *error)
         }
         for (auto it = k.info().inputs.cbegin(); it != k.info().inputs.cend(); ++it)
             e.m_inputs.insert(it.key(), it.value());
+        for (auto it = k.info().textureAttributes.cbegin(); it != k.info().textureAttributes.cend(); ++it) {
+            const QVariantList scale = it.value().value(QStringLiteral("Scale"));
+            const QVariantList fixed = it.value().value(QStringLiteral("Size"));
+            const QVariantList fit = it.value().value(QStringLiteral("Fit"));
+            if (!fit.isEmpty() && fit.first().toInt() < 1)
+                return failed(QStringLiteral("%1: %2 fits in %3 pixels; Fit takes 1 or more").arg(id, it.key(), fit.first().toString()));
+            if (!scale.isEmpty() && !(scale.first().toDouble() >= 1.0))
+                return failed(QStringLiteral("%1: %2 is scaled by %3; Scale takes 1 or more").arg(id, it.key(), scale.first().toString()));
+            if (!fixed.isEmpty() && (fixed.size() != 2 || fixed.at(0).toInt() < 1 || fixed.at(1).toInt() < 1))
+                return failed(QStringLiteral("%1: the Size of %2 takes a width and a height of 1 or more").arg(id, it.key()));
+            if (!scale.isEmpty() || !fixed.isEmpty() || !fit.isEmpty())
+                e.m_textures.insert(it.key(), it.value());
+        }
+        // A pass over a texture: one of the effect's own, which it writes or reads.
+        if (const QVariantList over = k.info().attributes.value(QStringLiteral("Over")); !over.isEmpty()) {
+            const QString name = over.first().toString();
+            if (name != kResult && (!k.info().bindings.contains(name) || name == kSource || k.info().inputs.contains(name)))
+                return failed(QStringLiteral("%1: %2 runs over %3, which is not one of its own textures").arg(id, entry, name));
+        }
         e.m_passes << k;
     }
     if (e.m_passes.first().info().params.size() != e.m_passes.last().info().params.size())
@@ -85,6 +104,30 @@ Effect Effect::load(const QString &id, Context &context, QString *error)
         e.m_params << p;
     }
     return e;
+}
+
+QSize Effect::textureSize(const QString &name, const QSize &picture) const
+{
+    const QHash<QString, QVariantList> rules = m_textures.value(name);
+    if (const QVariantList fixed = rules.value(QStringLiteral("Size")); fixed.size() == 2)
+        return QSize(fixed.at(0).toInt(), fixed.at(1).toInt());
+    if (const QVariantList fit = rules.value(QStringLiteral("Fit")); !fit.isEmpty()) {
+        // The long side at n (never larger than the picture), the picture's shape kept.
+        const int longSide = std::max(picture.width(), picture.height());
+        const double n = std::min<double>(fit.first().toInt(), longSide) / std::max(1, longSide);
+        return QSize(std::max(1, int(std::lround(picture.width() * n))), std::max(1, int(std::lround(picture.height() * n))));
+    }
+    if (const QVariantList scale = rules.value(QStringLiteral("Scale")); !scale.isEmpty()) {
+        const double n = std::max(1.0, scale.first().toDouble());
+        return QSize(std::max(1, int(std::ceil(picture.width() / n))), std::max(1, int(std::ceil(picture.height() / n))));
+    }
+    return picture;
+}
+
+QSize Effect::passSize(int pass, const QSize &picture) const
+{
+    const QVariantList over = m_passes.value(pass).info().attributes.value(QStringLiteral("Over"));
+    return over.isEmpty() ? picture : textureSize(over.first().toString(), picture);
 }
 
 QVariantMap Effect::defaults() const
@@ -233,9 +276,11 @@ QImage Chain::render(const QImage &picture)
         return failed(why);
 
     const QSize size = picture.size();
-    auto texture = [&](Texture &t, Format format) {
-        if (t.isNull() || t.size() != size)
-            t = m_context.texture(size, format, &why);
+    auto texture = [&](Texture &t, Format format, QSize wanted = QSize()) {
+        if (!wanted.isValid())
+            wanted = size;
+        if (t.isNull() || t.size() != wanted)
+            t = m_context.texture(wanted, format, &why);
         return !t.isNull();
     };
     Run run(m_context);
@@ -258,7 +303,9 @@ QImage Chain::render(const QImage &picture)
         Texture &target = current == m_ping ? m_pong : m_ping;
         if (!texture(target, Format::RGBA16F))
             return failed(why);
-        for (const Kernel &pass : step.effect.passes()) {
+        const QList<Kernel> passes = step.effect.passes();
+        for (int i = 0; i < passes.size(); ++i) {
+            const Kernel &pass = passes.at(i);
             QHash<QString, Texture> bound{{kSource, current}, {kResult, target}};
             for (const QString &name : pass.info().bindings.keys()) {
                 if (name == kSource || name == kResult)
@@ -275,11 +322,12 @@ QImage Chain::render(const QImage &picture)
                     continue;
                 }
                 Texture &scratch = m_scratch[step.effect.id() + u'/' + name];
-                if (!texture(scratch, Format::RGBA16F))
+                if (!texture(scratch, Format::RGBA16F, step.effect.textureSize(name, size)))
                     return failed(why);
                 bound.insert(name, scratch);
             }
-            run.dispatch(pass, bound, step.values, size);
+            // "size" is what the pass runs over: the picture, or a texture of the effect's.
+            run.dispatch(pass, bound, step.values, step.effect.passSize(i, size));
         }
         current = target;
     }

@@ -16,8 +16,10 @@
 //   void main(uint3 id: SV_DispatchThreadID) { ... }
 //
 // Its compute entries are its passes, in order. Pictures are in linear light, RGBA half floats with
-// straight alpha. A binding named neither "source" nor "result" is a texture of the same size the
-// effect keeps between its passes (a blur across, then down). All passes share the parameters.
+// straight alpha. A binding named neither "source" nor "result" is a texture the effect keeps between
+// its passes (a blur across, then down): the picture's size, or smaller with [Scale], [Fit] or [Size]; a
+// pass with [Over] runs over one of them. All passes share the parameters; "size" is the size of
+// what the pass runs over.
 
 // The effect's name and its group in the Develop panel; on the first pass.
 [__AttributeUsage(_AttributeTargets.Function)]
@@ -67,6 +69,40 @@ struct ControlAttribute
 struct InputAttribute
 {
     string kind;
+};
+
+// A texture the effect keeps that is n times smaller than the picture (each side rounded up): blurs
+// over a large part of the picture run fast on a small copy, and scale with the picture, so a preview
+// at screen size looks like the full size.
+[__AttributeUsage(_AttributeTargets.Var)]
+struct ScaleAttribute
+{
+    float divisor;
+};
+
+// A texture the effect keeps whose long side is n pixels (the picture's shape; never larger than the
+// picture). A blur of so many of its pixels covers the same part of any picture, so the preview at
+// screen size and the full size agree: what Clarity and Dehaze blur over.
+[__AttributeUsage(_AttributeTargets.Var)]
+struct FitAttribute
+{
+    int pixels;
+};
+
+// A texture the effect keeps of a fixed size (Size(1, 1) for a value found over the whole picture).
+[__AttributeUsage(_AttributeTargets.Var)]
+struct SizeAttribute
+{
+    int width;
+    int height;
+};
+
+// A pass that runs over one of the effect's textures instead of the picture (one thread per pixel of
+// it; "size" is then that texture's size). Read the picture's size with source.GetDimensions.
+[__AttributeUsage(_AttributeTargets.Function)]
+struct OverAttribute
+{
+    string texture;
 };
 
 // A heading the parameter comes under ("White balance", "Tone"); it holds for the parameters after

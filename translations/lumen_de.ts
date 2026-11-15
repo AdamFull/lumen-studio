@@ -54,7 +54,7 @@
         <translation>Die Grafikkarte %1 konnte nicht geöffnet werden (%2).</translation>
     </message>
     <message>
-        <location line="+193"/>
+        <location line="+196"/>
         <source>Effects on the graphics card are turned off.</source>
         <translation>Effekte auf der Grafikkarte sind ausgeschaltet.</translation>
     </message>
@@ -87,7 +87,7 @@
 <context>
     <name>Grading</name>
     <message>
-        <location filename="../src/ui/Grading.cpp" line="+207"/>
+        <location filename="../src/ui/Grading.cpp" line="+217"/>
         <source>%1 cannot be used as a LUT: %2</source>
         <translation>%1 kann nicht als LUT verwendet werden: %2</translation>
     </message>
@@ -9045,12 +9045,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+159"/>
+        <location line="+168"/>
         <source>Tone curve</source>
         <translation>Gradationskurve</translation>
     </message>
     <message>
-        <location line="-159"/>
+        <location line="-168"/>
         <source>Colour mixer</source>
         <translation>Farbmischer</translation>
     </message>
@@ -9066,12 +9066,12 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+151"/>
+        <location line="+160"/>
         <source>Red</source>
         <translation>Rot</translation>
     </message>
     <message>
-        <location line="-151"/>
+        <location line="-160"/>
         <source>Orange</source>
         <translation>Orange</translation>
     </message>
@@ -9082,23 +9082,23 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+151"/>
+        <location line="+160"/>
         <source>Green</source>
         <translation>Grün</translation>
     </message>
     <message>
-        <location line="-150"/>
+        <location line="-159"/>
         <source>Aqua</source>
         <translation>Aquamarin</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+151"/>
+        <location line="+160"/>
         <source>Blue</source>
         <translation>Blau</translation>
     </message>
     <message>
-        <location line="-150"/>
+        <location line="-159"/>
         <source>Purple</source>
         <translation>Lila</translation>
     </message>
@@ -9139,14 +9139,104 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+164"/>
+        <location line="+173"/>
         <source>LUT</source>
         <translation>LUT</translation>
     </message>
     <message>
-        <location line="-164"/>
+        <location line="-173"/>
         <source>Amount</source>
         <translation>Stärke</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Local contrast</source>
+        <translation>Lokaler Kontrast</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Texture</source>
+        <translation>Struktur</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Clarity</source>
+        <translation>Klarheit</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Dehaze</source>
+        <translation>Dunst entfernen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Detail</source>
+        <translation>Details</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Sharpening</source>
+        <translation>Schärfen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Radius</source>
+        <translation>Radius</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Masking</source>
+        <translation>Maskieren</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Noise reduction</source>
+        <translation>Rauschreduzierung</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Colour</source>
+        <translation>Farbe</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Vignette and grain</source>
+        <translation>Vignette und Körnung</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Vignette</source>
+        <translation>Vignette</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Midpoint</source>
+        <translation>Mittelpunkt</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Roundness</source>
+        <translation>Rundheit</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Feather</source>
+        <translation>Weiche Kante</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Grain</source>
+        <translation>Körnung</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Size</source>
+        <translation>Größe</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Roughness</source>
+        <translation>Unregelmäßigkeit</translation>
     </message>
     <message>
         <location line="+32"/>
@@ -9209,7 +9299,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>LUTs (*.cube)</translation>
     </message>
     <message>
-        <location line="+68"/>
+        <location line="+67"/>
         <source>None</source>
         <translation>Keine</translation>
     </message>
@@ -9244,7 +9334,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Korrigiert: jederzeit änderbar. Backen Sie sie ein, um auf der Ebene zu malen.</translation>
     </message>
     <message>
-        <location line="+130"/>
+        <location line="+149"/>
         <location line="+79"/>
         <source>Grading did not work: %1</source>
         <translation>Die Farbkorrektur hat nicht funktioniert: %1</translation>
@@ -9260,8 +9350,8 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Die Ebene wurde während der Farbkorrektur geändert, daher wurde nichts geändert.</translation>
     </message>
     <message>
-        <location line="-573"/>
-        <location line="+576"/>
+        <location line="-600"/>
+        <location line="+603"/>
         <source>Develop</source>
         <translation>Entwickeln</translation>
     </message>

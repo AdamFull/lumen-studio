@@ -733,6 +733,37 @@ void TestCanvas::developPanel()
     QCOMPARE(panel->values().value(QStringLiteral("midtones")).toList().value(0).toDouble(), 120.0);
     panel->setWheel(QStringLiteral("midtones"), 0, 0);
 
+    // Names two effects share: the Develop slider by its name, the grading's own by "effect/name".
+    panel->setValue(QStringLiteral("shadows"), 40.0);
+    panel->setValue(QStringLiteral("grading/shadowLightness"), 10.0);
+    panel->setWheel(QStringLiteral("shadows"), 200, 30);
+    QCOMPARE(panel->state().values.value(QStringLiteral("develop")).value(QStringLiteral("shadows")).toDouble(), 40.0);
+    QCOMPARE(panel->state().values.value(QStringLiteral("grading")).value(QStringLiteral("shadows")).toList().value(0).toDouble(), 200.0);
+    QCOMPARE(panel->values().value(QStringLiteral("shadows")).toDouble(), 40.0);
+    panel->setValue(QStringLiteral("shadows"), 0.0);
+    panel->setValue(QStringLiteral("grading/shadowLightness"), 0.0);
+    panel->setWheel(QStringLiteral("shadows"), 0, 0);
+
+    // Local contrast, detail, vignette and grain each have their group and grade the layer.
+    for (const char *group : {"local", "detail", "finish"})
+        QVERIFY2(panel->findChild<QToolButton *>(QStringLiteral("developGroup_%1").arg(QLatin1String(group))), group);
+    panel->setValue(QStringLiteral("clarity"), 60.0);
+    panel->setValue(QStringLiteral("sharpen"), 50.0);
+    panel->setValue(QStringLiteral("vignette"), -100.0);
+    committed.clear();
+    panel->commit();
+    QTRY_COMPARE_WITH_TIMEOUT(committed.size(), 1, 10000);
+    QVERIFY2(committed.last().first().toBool(), qPrintable(committed.last().at(1).toString()));
+    QVERIFY2(layer->image.pixelColor(1, 1).red() < half - 20, qPrintable(layer->image.pixelColor(1, 1).name()));
+    QVERIFY(std::abs(layer->image.pixelColor(200, 150).red() - half) <= 2);
+    QStringList saved;
+    for (const QJsonValue &v : layer->grading().value(QStringLiteral("steps")).toArray())
+        saved << v.toObject().value(QStringLiteral("effect")).toString();
+    QCOMPARE(saved, (QStringList{QStringLiteral("detail"), QStringLiteral("local"), QStringLiteral("finish")}));
+    panel->setValue(QStringLiteral("clarity"), 0.0);
+    panel->setValue(QStringLiteral("sharpen"), 0.0);
+    panel->setValue(QStringLiteral("vignette"), 0.0);
+
     // A LUT from the LUTs folder: one that turns colours over.
     QVERIFY2(!paths::defaultLuts().startsWith(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)),
              qPrintable(paths::defaultLuts()));

@@ -79,7 +79,17 @@ bool effectNeutral(const QString &id, const State &state, const gpu::Effect &eff
 
 const QStringList &effectOrder()
 {
-    static const QStringList order{QStringLiteral("develop"), kCurve, QStringLiteral("mixer"), QStringLiteral("grading"), kLut};
+    // Noise and sharpening on the picture as it came, before local contrast lifts the noise; the
+    // vignette and grain last, over the finished look.
+    static const QStringList order{QStringLiteral("develop"), QStringLiteral("detail"), QStringLiteral("local"), kCurve,
+                                   QStringLiteral("mixer"), QStringLiteral("grading"), kLut, QStringLiteral("finish")};
+    return order;
+}
+
+const QStringList &panelOrder()
+{
+    static const QStringList order{QStringLiteral("develop"), QStringLiteral("local"), kCurve, QStringLiteral("mixer"),
+                                   QStringLiteral("grading"), kLut, QStringLiteral("detail"), QStringLiteral("finish")};
     return order;
 }
 

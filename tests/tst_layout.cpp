@@ -1230,10 +1230,10 @@ void TestLayout::developPanel()
     m_auditor.shoot(&host, QStringLiteral("Develop panel 300x540"));
     // Every group open: the curve, the mixer's sliders, the wheels and the LUT.
     panel->expandAll(true);
-    host.resize(300, 2400);
+    host.resize(300, 3600);
     Auditor::settle();
-    m_auditor.audit(&host, QStringLiteral("Develop panel open 300x2400"));
-    m_auditor.shoot(&host, QStringLiteral("Develop panel open 300x2400"));
+    m_auditor.audit(&host, QStringLiteral("Develop panel open 300x3600"));
+    m_auditor.shoot(&host, QStringLiteral("Develop panel open 300x3600"));
 }
 
 // The questions about a picture's file (M17): saving over it with everything it can say, and changes

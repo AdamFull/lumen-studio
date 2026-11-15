@@ -44,6 +44,15 @@ const QString kDevelop = QStringLiteral("develop");
     QT_TRANSLATE_NOOP("lumen::ui::DevelopPanel", "Lightness"),       QT_TRANSLATE_NOOP("lumen::ui::DevelopPanel", "Blend"),
     QT_TRANSLATE_NOOP("lumen::ui::DevelopPanel", "Blending"),        QT_TRANSLATE_NOOP("lumen::ui::DevelopPanel", "Balance"),
     QT_TRANSLATE_NOOP("lumen::ui::DevelopPanel", "LUT"),             QT_TRANSLATE_NOOP("lumen::ui::DevelopPanel", "Amount"),
+    QT_TRANSLATE_NOOP("lumen::ui::DevelopPanel", "Local contrast"),  QT_TRANSLATE_NOOP("lumen::ui::DevelopPanel", "Texture"),
+    QT_TRANSLATE_NOOP("lumen::ui::DevelopPanel", "Clarity"),         QT_TRANSLATE_NOOP("lumen::ui::DevelopPanel", "Dehaze"),
+    QT_TRANSLATE_NOOP("lumen::ui::DevelopPanel", "Detail"),          QT_TRANSLATE_NOOP("lumen::ui::DevelopPanel", "Sharpening"),
+    QT_TRANSLATE_NOOP("lumen::ui::DevelopPanel", "Radius"),          QT_TRANSLATE_NOOP("lumen::ui::DevelopPanel", "Masking"),
+    QT_TRANSLATE_NOOP("lumen::ui::DevelopPanel", "Noise reduction"), QT_TRANSLATE_NOOP("lumen::ui::DevelopPanel", "Colour"),
+    QT_TRANSLATE_NOOP("lumen::ui::DevelopPanel", "Vignette and grain"), QT_TRANSLATE_NOOP("lumen::ui::DevelopPanel", "Vignette"),
+    QT_TRANSLATE_NOOP("lumen::ui::DevelopPanel", "Midpoint"),        QT_TRANSLATE_NOOP("lumen::ui::DevelopPanel", "Roundness"),
+    QT_TRANSLATE_NOOP("lumen::ui::DevelopPanel", "Feather"),         QT_TRANSLATE_NOOP("lumen::ui::DevelopPanel", "Grain"),
+    QT_TRANSLATE_NOOP("lumen::ui::DevelopPanel", "Size"),            QT_TRANSLATE_NOOP("lumen::ui::DevelopPanel", "Roughness"),
 };
 
 QString key(const QString &effect, const QString &name)
@@ -142,7 +151,7 @@ void DevelopPanel::ensureBuilt()
     }
     m_unavailable.clear();
     auto *layout = static_cast<QVBoxLayout *>(m_controls->layout());
-    for (const QString &id : grading::effectOrder()) {
+    for (const QString &id : grading::panelOrder()) {
         if (m_effects.contains(id))
             layout->addWidget(buildGroup(m_effects.value(id), id == kDevelop));
     }
@@ -249,7 +258,6 @@ QWidget *DevelopPanel::buildGroup(const gpu::Effect &effect, bool open)
             b->addWidget(heading);
         }
         const QString name = p.name;
-        m_ownerOf.insert(name, id);
         if (p.control == QLatin1String("wheel") && p.components == 2) {
             auto *wheel = new ColorWheel(body);
             wheel->setObjectName(QStringLiteral("%1_%2").arg(id, name));
@@ -405,36 +413,55 @@ void DevelopPanel::changed()
 
 QVariantMap DevelopPanel::values() const
 {
+    // In the tab's order, so a name two effects use is the first one's.
     QVariantMap out;
-    for (auto it = m_state.values.cbegin(); it != m_state.values.cend(); ++it) {
-        for (auto v = it.value().cbegin(); v != it.value().cend(); ++v)
-            out.insert(v.key(), v.value());
+    for (const QString &effect : grading::panelOrder()) {
+        const QVariantMap values = m_state.values.value(effect);
+        for (auto v = values.cbegin(); v != values.cend(); ++v) {
+            if (!out.contains(v.key()))
+                out.insert(v.key(), v.value());
+        }
     }
     return out;
+}
+
+// A control's "effect/name" for "name" (the first effect in the tab's order that has one) or for
+// "effect/name" itself.
+QString DevelopPanel::keyFor(const QString &name, const QList<QString> &keys) const
+{
+    if (name.contains(u'/'))
+        return keys.contains(name) ? name : QString();
+    for (const QString &effect : grading::panelOrder()) {
+        if (keys.contains(key(effect, name)))
+            return key(effect, name);
+    }
+    return {};
 }
 
 void DevelopPanel::setValue(const QString &name, double value)
 {
     ensureBuilt();
-    const QString effect = m_ownerOf.value(name);
-    SliderField *field = m_fields.value(key(effect, name));
+    const QString at = keyFor(name, m_fields.keys());
+    const QString effect = at.section(u'/', 0, 0);
+    SliderField *field = m_fields.value(at);
     if (!field)
         return;
     // SliderField::setValue says nothing; what a moved slider does is done here.
     field->setValue(value);
-    m_state.values[effect].insert(name, field->value());
+    m_state.values[effect].insert(at.section(u'/', 1), field->value());
     changed();
 }
 
 void DevelopPanel::setWheel(const QString &name, double hue, double saturation)
 {
     ensureBuilt();
-    const QString effect = m_ownerOf.value(name);
-    ColorWheel *wheel = m_wheels.value(key(effect, name));
+    const QString at = keyFor(name, m_wheels.keys());
+    const QString effect = at.section(u'/', 0, 0);
+    ColorWheel *wheel = m_wheels.value(at);
     if (!wheel)
         return;
     wheel->setValue(hue, saturation);
-    m_state.values[effect].insert(name, QVariantList{wheel->hue(), wheel->saturation()});
+    m_state.values[effect].insert(at.section(u'/', 1), QVariantList{wheel->hue(), wheel->saturation()});
     changed();
 }
 

@@ -45,6 +45,12 @@ public:
     // What the effect reads besides the picture, from [Input(kind)] on a texture: name → kind
     // ("curve", "lut"). Each comes as a half-float picture with the step (EffectStep::inputs).
     QHash<QString, QString> inputs() const { return m_inputs; }
+    // The size of a texture the effect keeps between its passes, for a picture of `picture`:
+    // [Scale(n)] on it makes it n times smaller, [Fit(n)] its long side n pixels (at most the
+    // picture's), [Size(w, h)] a fixed size; else the picture's size.
+    QSize textureSize(const QString &name, const QSize &picture) const;
+    // What a pass runs over: [Over("name")] on its entry, a texture of the effect's; else the picture.
+    QSize passSize(int pass, const QSize &picture) const;
 
     // Every shown parameter at its default.
     QVariantMap defaults() const;
@@ -59,6 +65,7 @@ private:
     QList<EffectParam> m_params;
     QList<Kernel> m_passes;
     QHash<QString, QString> m_inputs;
+    QHash<QString, QHash<QString, QVariantList>> m_textures; // [Scale] and [Size] by texture
 };
 
 // One effect in a chain, with its values.

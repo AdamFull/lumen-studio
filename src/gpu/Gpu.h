@@ -62,6 +62,7 @@ struct KernelInterface
     QHash<QString, QString> formats; // binding name → "rgba8", "rgba16f"
     QHash<QString, QVariantList> attributes; // the entry's Slang user attributes
     QHash<QString, QString> inputs;          // bindings marked [Input(kind)]: name → kind ("curve", "lut")
+    QHash<QString, QHash<QString, QVariantList>> textureAttributes; // a texture's user attributes ([Scale], [Size])
 
     const ParamField *param(const QString &name) const;
 };
