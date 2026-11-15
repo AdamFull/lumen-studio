@@ -11,6 +11,7 @@ target_compile_definitions(lumen_volk PUBLIC VK_NO_PROTOTYPES)
 
 add_library(lumen_gpu STATIC
     Gpu.h Gpu.cpp
+    Effects.h Effects.cpp
     Vulkan.h
     Vma.cpp
 )

@@ -4392,9 +4392,25 @@ pins), which is one more reason to take its parts rather than the library.
      100–110 ms, 18–24 ms of it on the GPU.
    * Not yet: lavapipe as a software fallback (a separate Mesa download); asynchronous runs
      (step 2's chain runner works from a job).
-2. [ ] **Effects and chains**: an effect format (a `.slang` file whose parameters carry their label,
+2. [x] **Effects and chains**: an effect format (a `.slang` file whose parameters carry their label,
    range and default), a chain runner that keeps its textures between runs, screen-size previews and
    full-size jobs.
+   * Done (15 November 2026): `src/gpu/shaders/effect.slang` defines the attributes and says how an
+     effect is written: `[Effect(title, group)]` on its first pass; `[Label]`, `[Range]`, `[Default]`
+     and `[Unit]` on push-constant fields (a field without a label is not shown; `size` is filled
+     in); its compute entries are its passes, in order; `source` is the picture so far, `result`
+     what the effect makes, any other binding a half-float texture it keeps between its passes.
+     `lumen_add_slang(... EFFECT)` lists the passes in `:/gpu/<effect>.passes`. Slang puts the
+     attributes into its reflection; `parseReflection` reads them, and turns slangc's octal escapes
+     (which JSON does not have) into UTF-8 first. `gpu::Effect` loads one (8-bit bindings refused),
+     with its defaults and `resolve()` (values kept in range, whole numbers for ints, unknown names
+     and wrong counts refused). `gpu::Chain` runs steps over a picture (decode, the enabled effects,
+     never writing over the decoded picture, a dithered encode), keeps its textures, and does not
+     send the same picture again (`reusedPicture()`); `renderLater()` runs on a worker thread. One
+     chain per use: a preview and the full size each have their own. `tst_gpu` (16 cases, clean
+     under the validation layer): linear-light arithmetic against a CPU reference, a two-pass blur,
+     the picture kept between runs, a preview and a full-size run at once (4000 × 3000 with two
+     effects 9.5 ms on the GPU, 800 × 600 0.4 ms).
 3. [ ] **Develop panel, basics**: white balance, exposure, contrast, highlights, shadows, whites and
    blacks, vibrance and saturation; settings kept with the layer; before and after; *Bake*.
 4. [ ] **Tone curve, colour mixer, colour grading wheels, LUTs** (`.cube`).

@@ -42,6 +42,31 @@ QString vkError(VkResult r)
     return QStringLiteral("VkResult %1").arg(int(r));
 }
 
+// slangc writes bytes outside ASCII as octal escapes (a backslash and three octal digits per byte),
+// which JSON does not have: they become the bytes themselves (UTF-8). An escaped backslash stays as
+// it is.
+QByteArray octalEscapesToBytes(const QByteArray &json)
+{
+    QByteArray out;
+    out.reserve(json.size());
+    auto octal = [](char c) { return c >= '0' && c <= '7'; };
+    for (qsizetype i = 0; i < json.size(); ++i) {
+        const char c = json.at(i);
+        if (c != '\\' || i + 1 >= json.size()) {
+            out.append(c);
+            continue;
+        }
+        if (i + 3 < json.size() && octal(json.at(i + 1)) && octal(json.at(i + 2)) && octal(json.at(i + 3))) {
+            out.append(char(((json.at(i + 1) - '0') << 6) | ((json.at(i + 2) - '0') << 3) | (json.at(i + 3) - '0')));
+            i += 3;
+            continue;
+        }
+        out.append(c);
+        out.append(json.at(++i)); // any other escape, kept whole: its second byte is not read as one
+    }
+    return out;
+}
+
 // volk loads vulkan-1.dll once per process.
 bool loadVulkan()
 {
@@ -341,7 +366,7 @@ KernelInterface parseReflection(const QByteArray &json, const QString &entry, QS
         return KernelInterface();
     };
     QJsonParseError pe;
-    const QJsonObject root = QJsonDocument::fromJson(json, &pe).object();
+    const QJsonObject root = QJsonDocument::fromJson(octalEscapesToBytes(json), &pe).object();
     if (pe.error != QJsonParseError::NoError)
         return failed(pe.errorString());
 
@@ -355,6 +380,13 @@ KernelInterface parseReflection(const QByteArray &json, const QString &entry, QS
     if (entryPoint.value(QStringLiteral("stage")).toString() != QLatin1String("compute"))
         return failed(QStringLiteral("%1 is not a compute entry").arg(entry));
     k.entry = entry;
+    auto attributes = [](const QJsonObject &o) {
+        QHash<QString, QVariantList> out;
+        for (const QJsonValue &a : o.value(QStringLiteral("userAttribs")).toArray())
+            out.insert(a.toObject().value(QStringLiteral("name")).toString(), a.toObject().value(QStringLiteral("arguments")).toArray().toVariantList());
+        return out;
+    };
+    k.attributes = attributes(entryPoint);
     const QJsonArray group = entryPoint.value(QStringLiteral("threadGroupSize")).toArray();
     for (int i = 0; i < 3; ++i)
         k.groupSize[i] = std::max(1, group.at(i).toInt(1));
@@ -387,6 +419,7 @@ KernelInterface parseReflection(const QByteArray &json, const QString &entry, QS
             field.name = f.value(QStringLiteral("name")).toString();
             field.offset = binding.value(QStringLiteral("offset")).toInt();
             field.size = binding.value(QStringLiteral("size")).toInt();
+            field.attributes = attributes(f);
             const QString kind = type.value(QStringLiteral("kind")).toString();
             if (kind == QLatin1String("scalar")) {
                 field.scalar = type.value(QStringLiteral("scalarType")).toString();

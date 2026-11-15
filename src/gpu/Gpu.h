@@ -31,6 +31,7 @@ public:
     bool isNull() const { return !d; }
     QSize size() const;
     Format format() const;
+    friend bool operator==(const Texture &a, const Texture &b) { return a.d == b.d; }
 
 private:
     friend class Context;
@@ -46,6 +47,7 @@ struct ParamField
     int size = 0;
     QString scalar;   // "float32", "int32", "uint32"
     int components = 1;
+    QHash<QString, QVariantList> attributes; // Slang user attributes: [Range(-5, 5)] → "Range": {-5, 5}
 };
 
 // What a compute entry needs, from Slang's reflection: its group size, its push constants, and the
@@ -58,6 +60,7 @@ struct KernelInterface
     QList<ParamField> params;
     QHash<QString, int> bindings;
     QHash<QString, QString> formats; // binding name → "rgba8", "rgba16f"
+    QHash<QString, QVariantList> attributes; // the entry's Slang user attributes
 
     const ParamField *param(const QString &name) const;
 };

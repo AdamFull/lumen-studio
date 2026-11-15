@@ -1,0 +1,115 @@
+#pragma once
+
+#include "gpu/Gpu.h"
+
+#include <QFuture>
+#include <QMutex>
+
+// Effects and chains of them (plan M20 step 2). An effect is a Slang file (src/gpu/shaders/effect.slang
+// says how one is written): its passes, its title and group, and its parameters with their labels,
+// ranges and defaults, all from the shader. A chain runs effects over a picture on the graphics card.
+namespace lumen::gpu {
+
+// One parameter of an effect. A vector has a value per component.
+struct EffectParam
+{
+    QString name;
+    QString label;            // empty: not shown (such as "size")
+    QString unit;
+    QString scalar;           // "float32", "int32", "uint32"
+    int components = 1;
+    double minimum = 0;
+    double maximum = 0;
+    bool hasRange = false;
+    QList<double> defaults;   // one per component
+
+    bool shown() const { return !label.isEmpty(); }
+};
+
+class Effect
+{
+public:
+    // The effects compiled with Lumen (":/gpu/<id>.passes").
+    static QStringList builtIn();
+    // A built-in effect; null with the reason on errors.
+    static Effect load(const QString &id, Context &context = Context::instance(), QString *error = nullptr);
+
+    bool isNull() const { return m_passes.isEmpty(); }
+    QString id() const { return m_id; }
+    QString title() const { return m_title; }
+    QString group() const { return m_group; }
+    QList<EffectParam> params() const { return m_params; }
+    QList<Kernel> passes() const { return m_passes; }
+
+    // Every shown parameter at its default.
+    QVariantMap defaults() const;
+    // `values` over the defaults, numbers kept in range; an unknown name or a wrong count of values
+    // is an error.
+    QVariantMap resolve(const QVariantMap &values, QString *error = nullptr) const;
+
+private:
+    QString m_id;
+    QString m_title;
+    QString m_group;
+    QList<EffectParam> m_params;
+    QList<Kernel> m_passes;
+};
+
+// One effect in a chain, with its values.
+struct EffectStep
+{
+    QString effect;
+    QVariantMap values;
+    bool enabled = true;
+};
+
+// Runs effects one after another over a picture: up to the graphics card, into linear light, through
+// the effects, back to 8-bit sRGB with dithering. It keeps its textures between runs: the same picture
+// again (a slider moved) skips the upload. One chain per use, so a preview at screen size and the
+// full size do not take each other's textures. Not for two threads at once, except through
+// renderLater(), which takes turns.
+class Chain
+{
+public:
+    explicit Chain(Context &context = Context::instance());
+    ~Chain();
+
+    // Loads the steps' effects; false with the reason when one is unknown or its values are wrong.
+    bool setSteps(const QList<EffectStep> &steps, QString *error = nullptr);
+    QList<EffectStep> steps() const;
+
+    // The picture with the effects, RGBA8888 with straight alpha, the picture's size; null on errors.
+    QImage render(const QImage &picture);
+    // The same on a worker thread (a full-size result while a preview is shown).
+    QFuture<QImage> renderLater(const QImage &picture);
+
+    QString error() const;
+    // Whether the last render could use the picture already on the graphics card.
+    bool reusedPicture() const;
+    double gpuMilliseconds() const;
+
+private:
+    struct Prepared
+    {
+        Effect effect;
+        QVariantMap values;
+    };
+
+    Context &m_context;
+    mutable QMutex m_lock;
+    QList<EffectStep> m_steps;
+    QList<Prepared> m_prepared;
+    QString m_error;
+    bool m_reused = false;
+    double m_gpuMs = 0;
+    // On the graphics card between runs.
+    qint64 m_pictureKey = 0;
+    QSize m_size;
+    Texture m_base;     // the picture in linear light
+    Texture m_ping;
+    Texture m_pong;
+    Texture m_output;   // 8-bit, for reading back
+    QHash<QString, Texture> m_scratch;
+};
+
+} // namespace lumen::gpu

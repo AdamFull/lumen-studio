@@ -1,6 +1,7 @@
 // lumen_gpu (plan M20 step 1): the device, textures, kernels from Slang's reflection, uploads,
 // dispatches and read-backs, with barriers from the textures' states. Runs under Vulkan's validation
 // layer where the Vulkan SDK provides it, and checks it said nothing; skips without a usable device.
+#include "gpu/Effects.h"
 #include "gpu/Gpu.h"
 
 #include <QElapsedTimer>
@@ -27,6 +28,12 @@ private slots:
     void dependentDispatches();
     void mistakesSayWhat();
     void largePicture();
+    void effectFromShader();
+    void effectValues();
+    void chainRuns();
+    void chainTwoPasses();
+    void chainKeepsThePicture();
+    void chainLater();
     void cleanup();
 
 private:
@@ -68,6 +75,17 @@ void TestGpu::reflection()
     QCOMPARE(k.param(QStringLiteral("size"))->scalar, QStringLiteral("uint32"));
     QCOMPARE(k.param(QStringLiteral("size"))->components, 2);
     QVERIFY(k.pushSize >= 32);
+
+    // slangc's octal escapes for text outside ASCII; an escaped backslash before digits stays.
+    const QByteArray escaped = R"({"parameters": [{"name": "p", "binding": {"kind": "pushConstantBuffer", "index": 0}, "type": {"kind": "constantBuffer",
+        "elementType": {"kind": "struct", "fields": [{"name": "gain", "type": {"kind": "scalar", "scalarType": "float32"},
+        "binding": {"kind": "uniform", "offset": 0, "size": 4}, "userAttribs": [{"name": "Unit", "arguments": ["\303\227"]},
+        {"name": "Label", "arguments": ["C:\\303 \"x\""]}]}]}}}],
+        "entryPoints": [{"name": "main", "stage": "compute", "threadGroupSize": [16, 16, 1], "bindings": []}]})";
+    const KernelInterface u = parseReflection(escaped, QStringLiteral("main"), &error);
+    QCOMPARE(u.params.size(), 1);
+    QCOMPARE(u.params.first().attributes.value(QStringLiteral("Unit")).value(0).toString(), QStringLiteral("\u00D7"));
+    QCOMPARE(u.params.first().attributes.value(QStringLiteral("Label")).value(0).toString(), QStringLiteral("C:\\303 \"x\""));
 
     QVERIFY(parseReflection(f.readAll(), QStringLiteral("nothing"), &error).entry.isEmpty());
     QVERIFY(parseReflection("not json", QStringLiteral("fill"), &error).entry.isEmpty());
@@ -278,6 +296,189 @@ void TestGpu::largePicture()
     const QColor c = result.pixelColor(2999, 1999);
     QVERIFY(std::abs(c.red() - 120) <= 1 && std::abs(c.green() - 160) <= 1 && std::abs(c.blue() - 200) <= 1);
     QVERIFY(timer.elapsed() < 5000);
+}
+
+// The effect describes itself: passes, title, group, sliders, from the shader alone.
+void TestGpu::effectFromShader()
+{
+    if (!m_available)
+        QSKIP("no Vulkan device");
+    const QStringList builtIn = Effect::builtIn();
+    QVERIFY(builtIn.contains(QStringLiteral("gain")));
+    QVERIFY(builtIn.contains(QStringLiteral("box")));
+    QVERIFY(!builtIn.contains(QStringLiteral("color"))); // a shader, not an effect
+
+    QString error;
+    const Effect gain = Effect::load(QStringLiteral("gain"), Context::instance(), &error);
+    QVERIFY2(!gain.isNull(), qPrintable(error));
+    QCOMPARE(gain.title(), QStringLiteral("Gain"));
+    QCOMPARE(gain.group(), QStringLiteral("Test"));
+    QCOMPARE(gain.passes().size(), 1);
+    const QList<EffectParam> params = gain.params();
+    QCOMPARE(params.size(), 3);
+    QCOMPARE(params[0].label, QStringLiteral("Gain"));
+    QCOMPARE(params[0].unit, QStringLiteral("×"));
+    QVERIFY(params[0].hasRange);
+    QCOMPARE(params[0].minimum, 0.0);
+    QCOMPARE(params[0].maximum, 4.0);
+    QCOMPARE(params[0].defaults, QList<double>{1.0});
+    QCOMPARE(params[1].components, 3);
+    QCOMPARE(params[1].defaults, (QList<double>{0.0, 0.0, 0.0})); // no default: 0, inside the range
+    QVERIFY(!params[2].shown());                                   // size
+    QCOMPARE(gain.defaults().keys(), (QStringList{QStringLiteral("gain"), QStringLiteral("lift")}));
+
+    const Effect box = Effect::load(QStringLiteral("box"), Context::instance(), &error);
+    QVERIFY2(!box.isNull(), qPrintable(error));
+    QCOMPARE(box.passes().size(), 2);
+    QCOMPARE(box.passes()[0].info().entry, QStringLiteral("across"));
+    QCOMPARE(box.params().first().scalar, QStringLiteral("int32"));
+
+    QVERIFY(Effect::load(QStringLiteral("eightbit"), Context::instance(), &error).isNull());
+    QVERIFY2(error.contains(QLatin1String("rgba16f")), qPrintable(error));
+    QVERIFY(Effect::load(QStringLiteral("nothing"), Context::instance(), &error).isNull());
+}
+
+void TestGpu::effectValues()
+{
+    if (!m_available)
+        QSKIP("no Vulkan device");
+    const Effect gain = Effect::load(QStringLiteral("gain"));
+    QString error;
+    // Kept in range; the rest at its default.
+    QVariantMap v = gain.resolve({{QStringLiteral("gain"), 9.0}}, &error);
+    QVERIFY(error.isEmpty());
+    QCOMPARE(v.value(QStringLiteral("gain")).toDouble(), 4.0);
+    QCOMPARE(v.value(QStringLiteral("lift")).toList().size(), 3);
+    v = gain.resolve({{QStringLiteral("lift"), QVariantList{-5, 0.5, 2}}}, &error);
+    QCOMPARE(v.value(QStringLiteral("lift")).toList(), (QVariantList{-1.0, 0.5, 1.0}));
+    // A whole number for an int.
+    const Effect box = Effect::load(QStringLiteral("box"));
+    QCOMPARE(box.resolve({{QStringLiteral("radius"), 2.6}}).value(QStringLiteral("radius")).toDouble(), 3.0);
+    // Mistakes are refused, with what is wrong.
+    QVERIFY(gain.resolve({{QStringLiteral("size"), QVariantList{1, 1}}}, &error).isEmpty()); // not shown, not set
+    QVERIFY(error.contains(QLatin1String("size")));
+    QVERIFY(gain.resolve({{QStringLiteral("lift"), 0.5}}, &error).isEmpty());
+    QVERIFY(error.contains(QLatin1String("3 value")));
+    Chain chain;
+    QVERIFY(!chain.setSteps({{QStringLiteral("gain"), {{QStringLiteral("brightness"), 1}}}}, &error));
+    QVERIFY(error.contains(QLatin1String("brightness")));
+    QVERIFY(!chain.setSteps({{QStringLiteral("nothing"), {}}}, &error));
+}
+
+static double toLinear(double c)
+{
+    return c <= 0.04045 ? c / 12.92 : std::pow((c + 0.055) / 1.055, 2.4);
+}
+
+static double toSrgb(double c)
+{
+    c = std::clamp(c, 0.0, 1.0);
+    return c <= 0.0031308 ? c * 12.92 : 1.055 * std::pow(c, 1 / 2.4) - 0.055;
+}
+
+// The effects work in linear light: a gain of 2 doubles the light, not the 8-bit value.
+void TestGpu::chainRuns()
+{
+    if (!m_available)
+        QSKIP("no Vulkan device");
+    QImage picture(64, 32, QImage::Format_RGBA8888);
+    picture.fill(QColor(128, 64, 32, 200));
+    Chain chain;
+    QString error;
+    // No effects: the picture comes back (dithering moves a value by one at most).
+    QVERIFY2(chain.setSteps({}, &error), qPrintable(error));
+    QImage same = chain.render(picture);
+    QVERIFY2(!same.isNull(), qPrintable(chain.error()));
+    QVERIFY(std::abs(same.pixelColor(5, 5).red() - 128) <= 1);
+    QCOMPARE(same.pixelColor(5, 5).alpha(), 200);
+
+    QVERIFY(chain.setSteps({{QStringLiteral("gain"), {{QStringLiteral("gain"), 2.0}}},
+                            {QStringLiteral("gain"), {{QStringLiteral("gain"), 4.0}}, false}}, // off: skipped
+                           &error));
+    const QImage out = chain.render(picture);
+    QVERIFY2(!out.isNull(), qPrintable(chain.error()));
+    QCOMPARE(out.size(), picture.size());
+    const QColor c = out.pixelColor(10, 10);
+    const int got[3] = {c.red(), c.green(), c.blue()};
+    const int channels[3] = {128, 64, 32};
+    for (int i = 0; i < 3; ++i) {
+        const int expected = int(std::lround(toSrgb(2 * toLinear(channels[i] / 255.0)) * 255));
+        QVERIFY2(std::abs(got[i] - expected) <= 1, qPrintable(QStringLiteral("%1 → %2, not %3").arg(channels[i]).arg(got[i]).arg(expected)));
+    }
+    QCOMPARE(c.alpha(), 200);
+}
+
+// A two-pass effect with a texture of its own between its passes.
+void TestGpu::chainTwoPasses()
+{
+    if (!m_available)
+        QSKIP("no Vulkan device");
+    QImage picture(32, 32, QImage::Format_RGBA8888);
+    picture.fill(Qt::black);
+    picture.setPixelColor(10, 10, Qt::white);
+    Chain chain;
+    QVERIFY(chain.setSteps({{QStringLiteral("box"), {{QStringLiteral("radius"), 1}}}}));
+    const QImage out = chain.render(picture);
+    QVERIFY2(!out.isNull(), qPrintable(chain.error()));
+    const int ninth = int(std::lround(toSrgb(1.0 / 9) * 255));
+    for (int y = 9; y <= 11; ++y) {
+        for (int x = 9; x <= 11; ++x)
+            QVERIFY(std::abs(out.pixelColor(x, y).red() - ninth) <= 1);
+    }
+    QVERIFY(out.pixelColor(12, 10).red() <= 1);
+    QVERIFY(out.pixelColor(10, 8).red() <= 1);
+}
+
+// A slider moved: the same picture is not sent again, and the result follows the new value.
+void TestGpu::chainKeepsThePicture()
+{
+    if (!m_available)
+        QSKIP("no Vulkan device");
+    QImage picture(1200, 800, QImage::Format_RGBA8888);
+    picture.fill(QColor(100, 100, 100));
+    Chain chain;
+    QVERIFY(chain.setSteps({{QStringLiteral("gain"), {{QStringLiteral("gain"), 1.5}}}}));
+    const QImage first = chain.render(picture);
+    QVERIFY(!chain.reusedPicture());
+    QVERIFY(chain.setSteps({{QStringLiteral("gain"), {{QStringLiteral("gain"), 0.5}}}}));
+    const QImage second = chain.render(picture);
+    QVERIFY(chain.reusedPicture());
+    QVERIFY(second.pixelColor(5, 5).red() < first.pixelColor(5, 5).red());
+    QVERIFY(std::abs(second.pixelColor(5, 5).red() - int(std::lround(toSrgb(0.5 * toLinear(100 / 255.0)) * 255))) <= 1);
+
+    // Another picture, or a change to this one, is sent again.
+    QImage other = picture.copy();
+    other.setPixelColor(0, 0, Qt::red);
+    QVERIFY(!chain.render(other).isNull());
+    QVERIFY(!chain.reusedPicture());
+    const QImage smaller = picture.scaled(600, 400);
+    QCOMPARE(chain.render(smaller).size(), QSize(600, 400));
+    QVERIFY(!chain.reusedPicture());
+}
+
+// A preview now, the full size on a worker thread, each chain with its own textures.
+void TestGpu::chainLater()
+{
+    if (!m_available)
+        QSKIP("no Vulkan device");
+    QImage full(4000, 3000, QImage::Format_RGBA8888);
+    full.fill(QColor(90, 140, 190));
+    const QList<EffectStep> steps{{QStringLiteral("gain"), {{QStringLiteral("gain"), 1.25}}},
+                                  {QStringLiteral("box"), {{QStringLiteral("radius"), 2}}}};
+    Chain preview;
+    Chain finished;
+    QVERIFY(preview.setSteps(steps));
+    QVERIFY(finished.setSteps(steps));
+    QFuture<QImage> later = finished.renderLater(full);
+    const QImage small = preview.render(full.scaled(800, 600));
+    QVERIFY2(!small.isNull(), qPrintable(preview.error()));
+    QVERIFY(QTest::qWaitFor([&] { return later.isFinished(); }, 30000));
+    const QImage big = later.result();
+    QVERIFY2(!big.isNull(), qPrintable(finished.error()));
+    QCOMPARE(big.size(), full.size());
+    QVERIFY(std::abs(big.pixelColor(2000, 1500).blue() - small.pixelColor(400, 300).blue()) <= 1);
+    qInfo() << "4000 x 3000 with two effects:" << finished.gpuMilliseconds() << "ms on the GPU; 800 x 600:" << preview.gpuMilliseconds()
+            << "ms";
 }
 
 QTEST_GUILESS_MAIN(TestGpu)
