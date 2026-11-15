@@ -4321,6 +4321,106 @@ Risks and open questions:
 * OpenAI's token prices are not in the API reference: the table is taken from the pricing page and
   dated.
 
+### M20 — Colour grading and effects on the GPU
+
+Goal: Lightroom-like colour grading in the editor, and effects anyone can write, both running on the
+graphics card. A layer keeps its pixels and its grading, which can be changed at any time; sliders
+show the result live; the same effects are nodes in the node editor; and an effect is a Slang shader,
+so users can write their own. Asked for by the user (15 November 2026).
+
+Decisions (15 November 2026, with the user):
+* **Effects are Slang compute shaders on Vulkan**, headless: a picture goes up, the chain runs, the
+  result comes back. The canvas stays OpenGL; drawing it with Vulkan is not planned.
+* **The user's nx-gfx is the reference, not a dependency**
+  ([github.com/AdamFull/nx-gfx](https://github.com/AdamFull/nx-gfx)): Lumen takes what it needs
+  (device set-up, resources and their states, barriers, uploads and read-backs, compute pipelines,
+  reflection) into its own `lumen_gpu` library, on Qt's types instead of nx-foundation's. Its
+  submodules are vendored as they are: volk, the Vulkan Memory Allocator and the Vulkan headers.
+* **Built-in effects are compiled when Lumen is built** (`slangc` from the Vulkan SDK, SPIR-V and
+  its reflection embedded as resources). Only effects written by the user need the Slang compiler at
+  run time (about 45 MB), downloaded when first used, like ONNX Runtime.
+* **The parameters come from the shader**: the push-constant fields and their attributes (label,
+  range, default) give the sliders, in the Develop panel and in the node editor alike.
+* **Processing is in linear light, 16-bit float**; documents stay 8-bit, so results come back
+  dithered. 16-bit documents are a separate project.
+* **Non-destructive per layer**, as in Lightroom: the layer keeps its original pixels and its
+  settings; the canvas shows the graded result; *Bake* makes it pixels. Photoshop-style adjustment
+  layers (grading everything below) are not planned.
+* **Previews at screen size, the full size in the background**: a slider change grades what is on
+  screen (a few milliseconds), the full-size result follows as a job.
+* **Without a Vulkan device that can do it** (a virtual machine, Remote Desktop, an old GPU), grading
+  says why it is unavailable; the CPU filters stay. Whether Mesa's software Vulkan (lavapipe) can fill
+  in, and run the tests without a GPU, is to be tried.
+* **A shared effect is code that runs on the graphics card**: Lumen shows its source before running
+  one from someone else; a broken one can make Windows reset the driver.
+
+The trial (15 November 2026, RTX 4060 Laptop, MinGW GCC 13, volk + VMA + Qt, `slangc` 2026.8, clean
+under the validation layer): five passes (decode to linear half floats; white balance, exposure,
+contrast, highlights and shadows, vibrance and saturation; a 49-tap blur in two passes; clarity,
+vignette, grain and a dithered 8-bit encode).
+
+| Picture | The five passes | GPU copies in and out | The whole round trip |
+|---|---|---|---|
+| 6000 × 4000 | 13 ms (the blur 11) | 15 ms | 110–120 ms (30 ms allocating images each time, 27 ms copying out) |
+| 2560 × 1440 | 2 ms | 2 ms | 19 ms |
+
+nx-gfx itself does not build with MinGW GCC 13 (nx-foundation uses Windows functions MinGW's headers
+lack and SIMD and `constexpr` code GCC rejects; nx-gfx's `main` needs a newer nx-foundation than it
+pins), which is one more reason to take its parts rather than the library.
+
+#### 20.1 Implementation steps
+
+1. [x] **The GPU library** (`src/gpu`, `lumen_gpu`): a device made on first use, with the reason when
+   it cannot be; textures and buffers that remember their layout and last access, so barriers are
+   put in by themselves; uploads and read-backs of `QImage`s (8-bit and half-float); compute kernels
+   from SPIR-V with their reflection (push-constant fields by name, the bindings an entry uses, its
+   group size); a recorded run submitted and waited for. Slang compiled at build time. Tests run
+   under the validation layer where the SDK has it, and skip without a Vulkan device.
+   * Done (15 November 2026): `gpu::Context` (made on first use; Vulkan 1.3 with synchronization2,
+     compute and storage images in RGBA8 and RGBA16F; a discrete GPU first, `LUMEN_GPU_DEVICE` to
+     choose, `LUMEN_GPU=off`, `LUMEN_GPU_VALIDATE=1`; the reason in plain words when there is no
+     device), `gpu::Texture` (its layout, stage and access since the last command),
+     `gpu::Kernel` (`parseReflection` reads slangc's `-reflection-json`: group size, push-constant
+     fields by name, used bindings and their formats; formats are checked at dispatch), `gpu::Run`
+     (uploads with straight alpha, dispatches with parameters by name and `size` filled in,
+     read-backs to `QImage`s in RGBA8888 or RGBA16FPx4, barriers from the textures' states, GPU time
+     from timestamps). Each device keeps its own volk function table. `cmake/LumenSlang.cmake`
+     compiles each entry with the flags nx-gfx uses; `src/gpu/shaders/color.slang` has `decode` and
+     `encode` (dithered). volk 1.4.350, VMA 3.4.0 and the Vulkan C headers 1.4.350 are in
+     `third_party`. `tst_gpu` (10 cases, clean under the validation layer on the RTX 4060; with
+     `LUMEN_GPU=off` the device cases skip): a 6000 × 4000 picture up, decoded, encoded and back in
+     100–110 ms, 18–24 ms of it on the GPU.
+   * Not yet: lavapipe as a software fallback (a separate Mesa download); asynchronous runs
+     (step 2's chain runner works from a job).
+2. [ ] **Effects and chains**: an effect format (a `.slang` file whose parameters carry their label,
+   range and default), a chain runner that keeps its textures between runs, screen-size previews and
+   full-size jobs.
+3. [ ] **Develop panel, basics**: white balance, exposure, contrast, highlights, shadows, whites and
+   blacks, vibrance and saturation; settings kept with the layer; before and after; *Bake*.
+4. [ ] **Tone curve, colour mixer, colour grading wheels, LUTs** (`.cube`).
+5. [ ] **Detail and looks**: clarity, texture and dehaze (a fast multi-scale blur), sharpening, noise
+   reduction, vignette, grain.
+6. [ ] **Effects as nodes**: consecutive GPU nodes run as one chain, without a read-back between them.
+7. [ ] **Your own effects**: the Slang compiler as a downloadable component, an editor with a live
+   preview and the compiler's errors in place, sharing with the source shown first.
+8. [ ] **Presets** (copy and paste settings, apply to many pictures), the user guide, German, a live
+   check on a few real photos.
+
+Acceptance:
+1. Moving a Develop slider on a 24-megapixel photo updates the screen at once; the full-size result
+   follows within a second.
+2. The grading stays editable after saving and reopening the project, and *Bake* gives the same
+   pixels as the preview at full size.
+3. A Slang file the user writes appears as an effect with its own sliders and as a node.
+4. Without a usable Vulkan device Lumen says so and everything else works.
+
+Risks and open questions:
+* Drivers differ: tests run under the validation layer; a GPU that misbehaves can be turned off in
+  Settings.
+* 8-bit documents limit how far grading can push before banding; dithering helps, 16-bit documents
+  would fix it.
+* The Slang compiler is large: built-in effects never need it at run time.
+
 ---
 
 ## 5. Quality strategy

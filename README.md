@@ -44,7 +44,10 @@ The plugins are described in **[docs/PLUGINS.md](docs/PLUGINS.md)**.
 ## Building from source (Windows, MinGW)
 
 Requirements: Qt 6.9 (MinGW 64-bit kit, with the optional **Qt WebSockets** and **Qt Image
-Formats** modules), MinGW-w64 13 (shipped with Qt), CMake 3.25 or newer, and Ninja.
+Formats** modules), MinGW-w64 13 (shipped with Qt), CMake 3.25 or newer, Ninja, and the
+[Vulkan SDK](https://vulkan.lunarg.com) for `slangc`, which compiles the GPU effects (its installer
+sets `VULKAN_SDK`; `-DLUMEN_SLANGC=…` names another `slangc`). Running needs no SDK: Vulkan comes with
+the graphics driver, and without it the GPU effects say they are unavailable.
 
 ```bash
 # QT_ROOT must point at the Qt kit; MinGW, CMake and Ninja must be on PATH.

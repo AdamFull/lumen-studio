@@ -21,6 +21,70 @@
     </message>
 </context>
 <context>
+    <name>Gpu</name>
+    <message>
+        <location filename="../src/gpu/Gpu.cpp" line="+124"/>
+        <source>Vulkan is not installed on this computer (it comes with the graphics driver).</source>
+        <translation>Vulkan ist auf diesem Computer nicht installiert (es kommt mit dem Grafiktreiber).</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>The Vulkan here is version %1.%2; effects need 1.3. Updating the graphics driver may help.</source>
+        <translation>Das Vulkan hier hat Version %1.%2; Effekte brauchen 1.3. Ein neuerer Grafiktreiber kann helfen.</translation>
+    </message>
+    <message>
+        <location line="+27"/>
+        <source>Vulkan could not start (%1).</source>
+        <translation>Vulkan konnte nicht starten (%1).</translation>
+    </message>
+    <message>
+        <location line="+62"/>
+        <source>No graphics card with Vulkan was found.</source>
+        <translation>Es wurde keine Grafikkarte mit Vulkan gefunden.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The graphics card (%1) cannot run effects: they need Vulkan 1.3. Updating its driver may help.</source>
+        <translation>Die Grafikkarte (%1) kann keine Effekte ausführen: Sie brauchen Vulkan 1.3. Ein neuerer Treiber kann helfen.</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <location line="+18"/>
+        <source>The graphics card %1 could not be opened (%2).</source>
+        <translation>Die Grafikkarte %1 konnte nicht geöffnet werden (%2).</translation>
+    </message>
+    <message>
+        <location line="+183"/>
+        <source>Effects on the graphics card are turned off.</source>
+        <translation>Effekte auf der Grafikkarte sind ausgeschaltet.</translation>
+    </message>
+    <message>
+        <location line="+142"/>
+        <source>The graphics card has no memory left for a %1 × %2 picture.</source>
+        <translation>Die Grafikkarte hat keinen Speicher mehr für ein Bild mit %1 × %2.</translation>
+    </message>
+    <message>
+        <location line="+204"/>
+        <source>Not enough memory to send a %1 × %2 picture to the graphics card.</source>
+        <translation>Nicht genug Speicher, um ein Bild mit %1 × %2 an die Grafikkarte zu senden.</translation>
+    </message>
+    <message>
+        <location line="+127"/>
+        <source>Not enough memory for a %1 × %2 picture from the graphics card.</source>
+        <translation>Nicht genug Speicher für ein Bild mit %1 × %2 von der Grafikkarte.</translation>
+    </message>
+    <message>
+        <location line="+52"/>
+        <source>The graphics card did not finish within two minutes.</source>
+        <translation>Die Grafikkarte ist nicht innerhalb von zwei Minuten fertig geworden.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The graphics card stopped working (%1); its driver may have been reset.</source>
+        <translation>Die Grafikkarte hat aufgehört zu arbeiten (%1); ihr Treiber wurde vielleicht zurückgesetzt.</translation>
+    </message>
+</context>
+<context>
     <name>QObject</name>
     <message>
         <location filename="../src/ai/Director.cpp" line="+63"/>

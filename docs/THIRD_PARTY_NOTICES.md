@@ -11,6 +11,9 @@ Lumen Studio uses the software below. Each part keeps its own licence.
 | Mesa llvmpipe software OpenGL (`opengl32sw.dll`, from Qt's deployment) | MIT | next to the program |
 | Microsoft DirectX Shader Compiler and D3D compiler (`dxcompiler.dll`, `dxil.dll`, `D3Dcompiler_47.dll`, from Qt's deployment) | Microsoft redistributable components; DXC: University of Illinois / NCSA | next to the program |
 | [ONNX Runtime](https://github.com/microsoft/onnxruntime) C API headers (compiled in; the runtime itself is downloaded, below) | MIT | `third_party/onnxruntime` in the source |
+| [Vulkan-Headers](https://github.com/KhronosGroup/Vulkan-Headers) (compiled in; Vulkan itself comes with the graphics driver) | Apache-2.0 or MIT | `third_party/vulkan` in the source |
+| [volk](https://github.com/zeux/volk), the Vulkan loader (compiled in) | MIT | `third_party/volk` in the source |
+| [Vulkan Memory Allocator](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator) (compiled in) | MIT | `third_party/vma` in the source |
 
 ## Downloaded only when you ask for them
 

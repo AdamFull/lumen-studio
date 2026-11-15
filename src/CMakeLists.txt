@@ -1,4 +1,4 @@
-foreach(module core net runtime pose doc filters ai live2d ui plugins app)
+foreach(module core gpu net runtime pose doc filters ai live2d ui plugins app)
     if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${module}/CMakeLists.txt")
         add_subdirectory(${module})
     endif()

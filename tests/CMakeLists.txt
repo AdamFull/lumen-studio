@@ -9,6 +9,8 @@ function(lumen_add_test name)
 endfunction()
 
 lumen_add_test(tst_core SOURCES tst_core.cpp LIBS lumen_core)
+lumen_add_test(tst_gpu SOURCES tst_gpu.cpp LIBS lumen_gpu)
+lumen_add_slang(tst_gpu gpu_test.slang ENTRIES fill add)
 lumen_add_test(tst_masks SOURCES tst_masks.cpp LIBS lumen_core)
 lumen_add_test(tst_net SOURCES tst_net.cpp MockHttpServer.h LIBS lumen_net)
 # Stand-in server for the supervisor/installer tests: no Qt and a static runtime, so a copy runs

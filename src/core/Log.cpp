@@ -17,6 +17,7 @@ Q_LOGGING_CATEGORY(lcAi, "lumen.ai")
 Q_LOGGING_CATEGORY(lcDoc, "lumen.doc")
 Q_LOGGING_CATEGORY(lcUi, "lumen.ui")
 Q_LOGGING_CATEGORY(lcPerf, "lumen.perf")
+Q_LOGGING_CATEGORY(lcGpu, "lumen.gpu")
 
 namespace lumen::log {
 namespace {
