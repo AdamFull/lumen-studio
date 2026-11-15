@@ -50,6 +50,8 @@ Effect Effect::load(const QString &id, Context &context, QString *error)
             if (it.value() != QLatin1String("rgba16f"))
                 return failed(QStringLiteral("%1: %2 of %3 is %4; effects take rgba16f").arg(id, it.key(), entry, it.value()));
         }
+        for (auto it = k.info().inputs.cbegin(); it != k.info().inputs.cend(); ++it)
+            e.m_inputs.insert(it.key(), it.value());
         e.m_passes << k;
     }
     if (e.m_passes.first().info().params.size() != e.m_passes.last().info().params.size())
@@ -67,6 +69,7 @@ Effect Effect::load(const QString &id, Context &context, QString *error)
         p.components = f.components;
         p.label = f.attributes.value(QStringLiteral("Label")).value(0).toString();
         p.unit = f.attributes.value(QStringLiteral("Unit")).value(0).toString();
+        p.control = f.attributes.value(QStringLiteral("Control")).value(0).toString();
         if (f.attributes.contains(QStringLiteral("Section")))
             section = f.attributes.value(QStringLiteral("Section")).value(0).toString();
         p.section = section;
@@ -122,15 +125,19 @@ QVariantMap Effect::resolve(const QVariantMap &values, QString *error) const
                 *error = QStringLiteral("%1 of %2 takes %3 value(s)").arg(it.key(), m_title).arg(param->components);
             return {};
         }
-        for (QVariant &v : list) {
-            double d = v.toDouble();
+        for (int i = 0; i < list.size(); ++i) {
+            double d = list[i].toDouble();
             if (!std::isfinite(d))
-                d = param->defaults.value(0);
-            if (param->hasRange)
+                d = param->defaults.value(i);
+            if (param->control == QLatin1String("wheel")) {
+                // A hue goes round; a saturation is a percentage.
+                d = i == 0 ? std::fmod(std::fmod(d, 360.0) + 360.0, 360.0) : std::clamp(d, 0.0, 100.0);
+            } else if (param->hasRange) {
                 d = std::clamp(d, param->minimum, param->maximum);
+            }
             if (param->scalar != QLatin1String("float32"))
                 d = std::round(d);
-            v = d;
+            list[i] = d;
         }
         out.insert(it.key(), param->components == 1 ? list.first() : QVariant(list));
     }
@@ -167,8 +174,15 @@ bool Chain::setSteps(const QList<EffectStep> &steps, QString *error)
                 *error = why;
             return false;
         }
+        for (auto it = effect.inputs().cbegin(); it != effect.inputs().cend(); ++it) {
+            if (step.inputs.value(it.key()).isNull()) {
+                if (error)
+                    *error = QStringLiteral("%1 needs its %2").arg(effect.title(), it.value());
+                return false;
+            }
+        }
         if (step.enabled)
-            prepared << Prepared{effect, values};
+            prepared << Prepared{effect, values, step.inputs};
     }
     QMutexLocker lock(&m_lock);
     m_steps = steps;
@@ -249,6 +263,17 @@ QImage Chain::render(const QImage &picture)
             for (const QString &name : pass.info().bindings.keys()) {
                 if (name == kSource || name == kResult)
                     continue;
+                if (step.effect.inputs().contains(name)) {
+                    // Sent once; again when it is another picture.
+                    const QImage picture = step.inputs.value(name);
+                    Input &input = m_inputs[step.effect.id() + u'/' + name];
+                    if (input.texture.isNull() || input.key != picture.cacheKey()) {
+                        input.texture = run.upload(picture);
+                        input.key = picture.cacheKey();
+                    }
+                    bound.insert(name, input.texture);
+                    continue;
+                }
                 Texture &scratch = m_scratch[step.effect.id() + u'/' + name];
                 if (!texture(scratch, Format::RGBA16F))
                     return failed(why);

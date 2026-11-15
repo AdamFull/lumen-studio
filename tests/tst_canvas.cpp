@@ -34,6 +34,7 @@
 #include "ui/pages/StartScreen.h"
 #include "ui/pages/VariantStrip.h"
 #include "ui/widgets/DevelopPanel.h"
+#include "ui/Grading.h"
 #include "ui/widgets/JobCard.h"
 #include "gpu/Gpu.h"
 #include "ui/widgets/LoraPicker.h"
@@ -125,6 +126,8 @@
 #include <QSlider>
 #include <QTcpServer>
 #include <QTemporaryDir>
+#include <QFloat16>
+#include <QVector3D>
 #include <QTextDocumentFragment>
 #include <QTimer>
 #include <QToolButton>
@@ -189,6 +192,7 @@ private slots:
     void shortcutsHaveNoConflicts();
     void themeContrast();
     void developPanel();
+    void gradingHelpers();
     void themeAnyFolderName();
     void accessibleNames();
     void fitLabelWraps();
@@ -589,6 +593,26 @@ void TestCanvas::themeAnyFolderName()
 
 // The Develop tab (plan M20 step 3): a preview while a slider moves, the grading at full size as one
 // undo step, the layer's pixels kept from before, Before, Bake and Reset.
+// A .cube file of size n, from a function of the colour (red runs fastest, then green, then blue).
+template<typename F>
+static QString writeCube(const QString &path, int n, F f, const QString &extra = QString())
+{
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
+        return {};
+    QTextStream out(&file);
+    out << "# A test look\nTITLE \"Test\"\n" << extra << "LUT_3D_SIZE " << n << "\nDOMAIN_MIN 0 0 0\nDOMAIN_MAX 1 1 1\n";
+    for (int b = 0; b < n; ++b) {
+        for (int g = 0; g < n; ++g) {
+            for (int r = 0; r < n; ++r) {
+                const QVector3D c = f(QVector3D(r, g, b) / float(n - 1));
+                out << c.x() << ' ' << c.y() << ' ' << c.z() << '\n';
+            }
+        }
+    }
+    return path;
+}
+
 void TestCanvas::developPanel()
 {
     if (!gpu::Context::instance().isAvailable())
@@ -681,6 +705,176 @@ void TestCanvas::developPanel()
     QTRY_VERIFY(!layer->graded());
     QCOMPARE(layer->image.pixelColor(10, 10).red(), half);
     QVERIFY(panel->values().value(QStringLiteral("saturation")).toDouble() == 0.0);
+
+    // The tone curve turned over: the baked grey becomes its opposite, saved with the layer, back
+    // after undo and redo.
+    panel->setCurve(QStringLiteral("rgb"), QStringLiteral("0 255, 255 0"));
+    QTRY_VERIFY(!canvas->preview(CanvasView::Preview::Filter).isNull());
+    QVERIFY(std::abs(canvas->preview(CanvasView::Preview::Filter).pixelColor(5, 5).red() - (255 - half)) <= 2);
+    committed.clear();
+    panel->commit();
+    QTRY_COMPARE_WITH_TIMEOUT(committed.size(), 1, 10000);
+    QVERIFY2(committed.last().first().toBool(), qPrintable(committed.last().at(1).toString()));
+    QVERIFY2(std::abs(layer->image.pixelColor(10, 10).red() - (255 - half)) <= 2, qPrintable(layer->image.pixelColor(10, 10).name()));
+    QVERIFY(QJsonDocument(layer->grading()).toJson().contains("0 255, 255 0"));
+    doc->undoStack()->undo();
+    QCOMPARE(panel->state().curves.value(QStringLiteral("rgb")), grading::straightCurve());
+    doc->undoStack()->redo();
+    QCOMPARE(panel->state().curves.value(QStringLiteral("rgb")), QStringLiteral("0 255, 255 0"));
+    panel->setCurve(QStringLiteral("rgb"), grading::straightCurve());
+
+    // A green tint in the midtones.
+    panel->setWheel(QStringLiteral("midtones"), 120, 60);
+    committed.clear();
+    panel->commit();
+    QTRY_COMPARE_WITH_TIMEOUT(committed.size(), 1, 10000);
+    const QColor tinted = layer->image.pixelColor(10, 10);
+    QVERIFY2(tinted.green() > tinted.red() + 3 && tinted.green() > tinted.blue() + 3, qPrintable(tinted.name()));
+    QCOMPARE(panel->values().value(QStringLiteral("midtones")).toList().value(0).toDouble(), 120.0);
+    panel->setWheel(QStringLiteral("midtones"), 0, 0);
+
+    // A LUT from the LUTs folder: one that turns colours over.
+    QVERIFY2(!paths::defaultLuts().startsWith(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)),
+             qPrintable(paths::defaultLuts()));
+    QString error;
+    const QString cube = writeCube(dir.filePath(QStringLiteral("Negative.cube")), 2, [](const QVector3D &c) { return QVector3D(1, 1, 1) - c; });
+    const QString name = grading::addLut(cube, &error);
+    QVERIFY2(!name.isEmpty(), qPrintable(error));
+    panel->setLut(name);
+    auto *lutBox = panel->findChild<QComboBox *>(QStringLiteral("developLut"));
+    QVERIFY(lutBox);
+    QCOMPARE(lutBox->currentData().toString(), name);
+    committed.clear();
+    panel->commit();
+    QTRY_COMPARE_WITH_TIMEOUT(committed.size(), 1, 10000);
+    QVERIFY2(committed.last().first().toBool(), qPrintable(committed.last().at(1).toString()));
+    QVERIFY2(std::abs(layer->image.pixelColor(10, 10).red() - (255 - half)) <= 2, qPrintable(layer->image.pixelColor(10, 10).name()));
+    // Gone from the folder: the panel says it is missing, and grading again says why.
+    QVERIFY(QFile::remove(QDir(paths::defaultLuts()).filePath(name)));
+    doc->undoStack()->undo();
+    doc->undoStack()->redo();
+    QVERIFY(lutBox->currentText().contains(QLatin1String("missing")));
+    panel->setValue(QStringLiteral("exposure"), 0.25);
+    committed.clear();
+    panel->commit();
+    QTRY_COMPARE_WITH_TIMEOUT(committed.size(), 1, 10000);
+    QVERIFY(!committed.last().first().toBool());
+    QVERIFY2(committed.last().at(1).toString().contains(name), qPrintable(committed.last().at(1).toString()));
+    panel->setLut(QString());
+    panel->setValue(QStringLiteral("exposure"), 0.0);
+    reset->click();
+    QTRY_VERIFY(!layer->graded());
+}
+
+// The grading between the layer and the chain: curves as a picture, .cube files read or refused,
+// what is saved only what moved.
+void TestCanvas::gradingHelpers()
+{
+    using namespace lumen::ui;
+    auto at = [](const QImage &image, int x, int c) { return float(reinterpret_cast<const qfloat16 *>(image.constScanLine(0))[x * 4 + c]); };
+    const QImage straight = grading::curveImage({});
+    QCOMPARE(straight.size(), QSize(256, 1));
+    for (int x : {0, 100, 255}) {
+        for (int c = 0; c < 4; ++c)
+            QVERIFY(std::abs(at(straight, x, c) - x / 255.0f) < 0.002f);
+    }
+    // The curve for all three in alpha, red's own in red.
+    const QImage curves = grading::curveImage({{QStringLiteral("rgb"), QStringLiteral("0 255, 255 0")}, {QStringLiteral("r"), QStringLiteral("0 0, 255 128")}});
+    QVERIFY(std::abs(at(curves, 0, 3) - 1.0f) < 0.002f);
+    QVERIFY(std::abs(at(curves, 255, 3)) < 0.002f);
+    QVERIFY(std::abs(at(curves, 255, 0) - 128 / 255.0f) < 0.005f);
+    QVERIFY(std::abs(at(curves, 255, 1) - 1.0f) < 0.002f);
+
+    QTemporaryDir dir;
+    QString error;
+    const QString swap = writeCube(dir.filePath(QStringLiteral("swap.cube")), 3, [](const QVector3D &c) { return QVector3D(c.z(), c.y(), c.x()); });
+    const QImage lut = grading::loadCube(swap, &error);
+    QVERIFY2(!lut.isNull(), qPrintable(error));
+    QCOMPARE(lut.size(), QSize(9, 3));
+    // Red 1, green 0, blue 0 (column 2 of block 0, row 0) becomes blue.
+    const auto *px = reinterpret_cast<const qfloat16 *>(lut.constScanLine(0)) + 2 * 4;
+    QCOMPARE(float(px[0]), 0.0f);
+    QCOMPARE(float(px[2]), 1.0f);
+
+    QVERIFY(grading::loadCube(dir.filePath(QStringLiteral("none.cube")), &error).isNull());
+    QVERIFY2(error.contains(QLatin1String("none.cube")), qPrintable(error));
+    QFile oneD(dir.filePath(QStringLiteral("line.cube")));
+    QVERIFY(oneD.open(QIODevice::WriteOnly));
+    oneD.write("LUT_1D_SIZE 2\n0 0 0\n1 1 1\n");
+    oneD.close();
+    QVERIFY(grading::loadCube(oneD.fileName(), &error).isNull());
+    QVERIFY2(error.contains(QLatin1String("1D")), qPrintable(error));
+    QFile shortFile(dir.filePath(QStringLiteral("short.cube")));
+    QVERIFY(shortFile.open(QIODevice::WriteOnly));
+    shortFile.write("LUT_3D_SIZE 2\n0 0 0\n1 1 1\n");
+    shortFile.close();
+    QVERIFY(grading::loadCube(shortFile.fileName(), &error).isNull());
+    QVERIFY2(error.contains(QLatin1String("6 values instead of 24")), qPrintable(error));
+
+    // Adding one copies it into the LUTs folder; the same file again is the same one, another of the
+    // same name gets a number.
+    // Never the real LUTs folder: test mode or LUMEN_DATA_DIR moves it.
+    const QString documents = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+    QVERIFY2(!paths::defaultLuts().startsWith(documents), qPrintable(paths::defaultLuts()));
+    const QDir luts(paths::defaultLuts());
+    auto clean = [&luts] {
+        for (const QString &name : {QStringLiteral("swap.cube"), QStringLiteral("swap 2.cube")})
+            QFile::remove(luts.filePath(name));
+    };
+    clean();
+    QCOMPARE(grading::addLut(swap, &error), QStringLiteral("swap.cube"));
+    QCOMPARE(grading::addLut(swap, &error), QStringLiteral("swap.cube"));
+    QDir().mkpath(dir.filePath(QStringLiteral("other")));
+    const QString other = writeCube(dir.filePath(QStringLiteral("other/swap.cube")), 2, [](const QVector3D &c) { return c; });
+    QCOMPARE(grading::addLut(other, &error), QStringLiteral("swap 2.cube"));
+    QCOMPARE(grading::availableLuts(), (QStringList{QStringLiteral("swap 2.cube"), QStringLiteral("swap.cube")}));
+    QVERIFY(grading::addLut(shortFile.fileName(), &error).isEmpty());
+    QCOMPARE(grading::availableLuts().size(), 2);
+
+    if (!gpu::Context::instance().isAvailable()) {
+        clean();
+        QSKIP("no Vulkan device for the effects");
+    }
+    QHash<QString, gpu::Effect> effects;
+    for (const QString &id : grading::effectOrder())
+        effects.insert(id, gpu::Effect::load(id, gpu::Context::instance()));
+    grading::State state;
+    QVERIFY(grading::isNeutral(state, effects));
+    QVERIFY(grading::toJson(state, effects).isEmpty());
+    QVERIFY(grading::steps(state, effects).isEmpty());
+    // Defaults written out are still nothing.
+    state.values.insert(QStringLiteral("grading"), effects.value(QStringLiteral("grading")).defaults());
+    state.curves.insert(QStringLiteral("rgb"), grading::straightCurve());
+    QVERIFY(grading::toJson(state, effects).isEmpty());
+
+    state.values[QStringLiteral("develop")].insert(QStringLiteral("exposure"), 0.5);
+    state.values[QStringLiteral("grading")].insert(QStringLiteral("midtones"), QVariantList{120.0, 40.0});
+    state.curves.insert(QStringLiteral("g"), QStringLiteral("0 0, 128 150, 255 255"));
+    state.lut = QStringLiteral("swap.cube");
+    const QJsonObject saved = grading::toJson(state, effects);
+    const QJsonArray steps = saved.value(QStringLiteral("steps")).toArray();
+    QStringList order;
+    for (const QJsonValue &v : steps)
+        order << v.toObject().value(QStringLiteral("effect")).toString();
+    QCOMPARE(order, (QStringList{QStringLiteral("develop"), QStringLiteral("curve"), QStringLiteral("grading"), QStringLiteral("lut")}));
+    // Only what moved is saved.
+    QCOMPARE(steps.at(2).toObject().value(QStringLiteral("values")).toObject().keys(), QStringList{QStringLiteral("midtones")});
+    QCOMPARE(steps.at(1).toObject().value(QStringLiteral("inputs")).toObject().value(QStringLiteral("curve")).toObject().keys(),
+             QStringList{QStringLiteral("g")});
+    const grading::State back = grading::fromJson(saved);
+    QCOMPARE(grading::toJson(back, effects), saved);
+    QCOMPARE(back.lut, QStringLiteral("swap.cube"));
+
+    const QList<gpu::EffectStep> chain = grading::steps(back, effects, &error);
+    QCOMPARE(chain.size(), 4);
+    QCOMPARE(chain.at(1).inputs.value(QStringLiteral("curve")).size(), QSize(256, 1));
+    QCOMPARE(chain.at(3).inputs.value(QStringLiteral("lut")).size(), QSize(9, 3));
+    // A LUT that is not there says so.
+    grading::State missing = back;
+    missing.lut = QStringLiteral("gone.cube");
+    QVERIFY(grading::steps(missing, effects, &error).isEmpty());
+    QVERIFY2(error.contains(QLatin1String("gone.cube")), qPrintable(error));
+    clean();
 }
 
 void TestCanvas::themeContrast()

@@ -7,6 +7,7 @@
 #include <QElapsedTimer>
 #include <QFloat16>
 #include <QRandomGenerator>
+#include <QVector3D>
 #include <QtTest>
 
 #include <cmath>
@@ -35,6 +36,10 @@ private slots:
     void chainKeepsThePicture();
     void chainLater();
     void developEffect();
+    void curveEffect();
+    void lutEffect();
+    void mixerEffect();
+    void gradingEffect();
     void cleanup();
 
 private:
@@ -554,6 +559,221 @@ void TestGpu::developEffect()
     // Vibrance lifts the weak colour more than saturation's share.
     const QColor vivid = at(run({{QStringLiteral("vibrance"), 100.0}}), 1);
     QVERIFY(vivid.red() - vivid.blue() > 200 - 80);
+}
+
+// A picture of a few colours in a row.
+static QImage swatches(const QList<QColor> &colors)
+{
+    QImage picture(int(colors.size()), 1, QImage::Format_RGBA8888);
+    for (int i = 0; i < colors.size(); ++i)
+        picture.setPixelColor(i, 0, colors[i]);
+    return picture;
+}
+
+static bool near(const QColor &a, const QColor &b, int by = 1)
+{
+    return std::abs(a.red() - b.red()) <= by && std::abs(a.green() - b.green()) <= by && std::abs(a.blue() - b.blue()) <= by;
+}
+
+// The curves input: 256 x 1 half floats, from a function per channel (red, green, blue, all).
+template<typename F>
+static QImage curvePicture(F f)
+{
+    QImage image(256, 1, QImage::Format_RGBA16FPx4);
+    auto *px = reinterpret_cast<qfloat16 *>(image.scanLine(0));
+    for (int i = 0; i < 256; ++i) {
+        for (int c = 0; c < 4; ++c)
+            px[i * 4 + c] = qfloat16(f(c, i / 255.0f));
+    }
+    return image;
+}
+
+// A 3D LUT as the shader takes it (N² × N), from a function of the colour.
+template<typename F>
+static QImage lutPicture(int n, F f)
+{
+    QImage image(n * n, n, QImage::Format_RGBA16FPx4);
+    for (int g = 0; g < n; ++g) {
+        auto *px = reinterpret_cast<qfloat16 *>(image.scanLine(g));
+        for (int b = 0; b < n; ++b) {
+            for (int r = 0; r < n; ++r) {
+                const QVector3D out = f(QVector3D(r, g, b) / float(n - 1));
+                qfloat16 *at = px + (b * n + r) * 4;
+                at[0] = qfloat16(out.x());
+                at[1] = qfloat16(out.y());
+                at[2] = qfloat16(out.z());
+                at[3] = qfloat16(1.0f);
+            }
+        }
+    }
+    return image;
+}
+
+// The tone curve: straight leaves the picture, the curve for all turns it over, a channel's own
+// curve moves only that channel; without its curves the step says what it needs.
+void TestGpu::curveEffect()
+{
+    if (!m_available)
+        QSKIP("no Vulkan device");
+    QString error;
+    const Effect curve = Effect::load(QStringLiteral("curve"), Context::instance(), &error);
+    QVERIFY2(!curve.isNull(), qPrintable(error));
+    QCOMPARE(curve.title(), QStringLiteral("Tone curve"));
+    QCOMPARE(curve.inputs(), (QHash<QString, QString>{{QStringLiteral("curve"), QStringLiteral("curve")}}));
+
+    const QImage picture = swatches({QColor(100, 100, 100), QColor(200, 120, 80), QColor(10, 240, 30)});
+    Chain chain;
+    QVERIFY(!chain.setSteps({{QStringLiteral("curve"), {}}}, &error));
+    QVERIFY2(error.contains(QLatin1String("curve")), qPrintable(error));
+
+    auto run = [&](const QImage &curves) {
+        EffectStep step{QStringLiteral("curve"), {}};
+        step.inputs.insert(QStringLiteral("curve"), curves);
+        if (!chain.setSteps({step}, &error))
+            return QImage();
+        return chain.render(picture);
+    };
+    const QImage straight = run(curvePicture([](int, float x) { return x; }));
+    QVERIFY2(!straight.isNull(), qPrintable(error + chain.error()));
+    for (int i = 0; i < picture.width(); ++i)
+        QVERIFY2(near(straight.pixelColor(i, 0), picture.pixelColor(i, 0)), qPrintable(straight.pixelColor(i, 0).name()));
+
+    const QImage over = run(curvePicture([](int c, float x) { return c == 3 ? 1.0f - x : x; }));
+    QVERIFY2(near(over.pixelColor(0, 0), QColor(155, 155, 155)), qPrintable(over.pixelColor(0, 0).name()));
+    QVERIFY2(near(over.pixelColor(1, 0), QColor(55, 135, 175)), qPrintable(over.pixelColor(1, 0).name()));
+
+    // Red off: red goes, green and blue stay.
+    const QImage noRed = run(curvePicture([](int c, float x) { return c == 0 ? 0.0f : x; }));
+    QVERIFY2(near(noRed.pixelColor(1, 0), QColor(0, 120, 80)), qPrintable(noRed.pixelColor(1, 0).name()));
+    // Other curves on the same chain: the new ones are used.
+    const QImage fullBlue = run(curvePicture([](int c, float x) { return c == 2 ? 1.0f : x; }));
+    QVERIFY2(near(fullBlue.pixelColor(1, 0), QColor(200, 120, 255)), qPrintable(fullBlue.pixelColor(1, 0).name()));
+}
+
+// A LUT: one that changes nothing leaves the picture; one that swaps red and blue swaps them; Amount
+// mixes it in.
+void TestGpu::lutEffect()
+{
+    if (!m_available)
+        QSKIP("no Vulkan device");
+    QString error;
+    const Effect lut = Effect::load(QStringLiteral("lut"), Context::instance(), &error);
+    QVERIFY2(!lut.isNull(), qPrintable(error));
+    QCOMPARE(lut.inputs().value(QStringLiteral("lut")), QStringLiteral("lut"));
+    QCOMPARE(lut.defaults().value(QStringLiteral("amount")).toDouble(), 100.0);
+    const QImage picture = swatches({QColor(100, 100, 100), QColor(200, 120, 80), QColor(10, 240, 30), QColor(255, 255, 255)});
+    Chain chain;
+    auto run = [&](const QImage &table, double amount) {
+        EffectStep step{QStringLiteral("lut"), {{QStringLiteral("amount"), amount}}};
+        step.inputs.insert(QStringLiteral("lut"), table);
+        if (!chain.setSteps({step}, &error))
+            return QImage();
+        return chain.render(picture);
+    };
+    for (int n : {2, 17, 33}) {
+        const QImage same = run(lutPicture(n, [](const QVector3D &c) { return c; }), 100);
+        QVERIFY2(!same.isNull(), qPrintable(error + chain.error()));
+        for (int i = 0; i < picture.width(); ++i)
+            QVERIFY2(near(same.pixelColor(i, 0), picture.pixelColor(i, 0)),
+                     qPrintable(QStringLiteral("%1: %2").arg(n).arg(same.pixelColor(i, 0).name())));
+    }
+    const auto swap = [](const QVector3D &c) { return QVector3D(c.z(), c.y(), c.x()); };
+    const QImage swapped = run(lutPicture(17, swap), 100);
+    QVERIFY2(near(swapped.pixelColor(1, 0), QColor(80, 120, 200)), qPrintable(swapped.pixelColor(1, 0).name()));
+    QVERIFY2(near(swapped.pixelColor(2, 0), QColor(30, 240, 10)), qPrintable(swapped.pixelColor(2, 0).name()));
+    const QImage none = run(lutPicture(17, swap), 0);
+    QVERIFY(near(none.pixelColor(1, 0), QColor(200, 120, 80)));
+}
+
+// The colour mixer: at 0 nothing changes; each colour's sliders move that colour, not the others,
+// and greys stay grey.
+void TestGpu::mixerEffect()
+{
+    if (!m_available)
+        QSKIP("no Vulkan device");
+    QString error;
+    const Effect mixer = Effect::load(QStringLiteral("mixer"), Context::instance(), &error);
+    QVERIFY2(!mixer.isNull(), qPrintable(error));
+    QCOMPARE(mixer.defaults().size(), 24);
+    // Red, blue, grey, green.
+    const QImage picture = swatches({QColor(200, 40, 40), QColor(40, 60, 200), QColor(128, 128, 128), QColor(40, 180, 60)});
+    auto run = [&](const QVariantMap &values) {
+        Chain chain;
+        if (!chain.setSteps({{QStringLiteral("mixer"), values}}, &error))
+            return QImage();
+        return chain.render(picture);
+    };
+    const QImage neutral = run({});
+    QVERIFY2(!neutral.isNull(), qPrintable(error));
+    for (int i = 0; i < picture.width(); ++i)
+        QVERIFY2(near(neutral.pixelColor(i, 0), picture.pixelColor(i, 0)), qPrintable(neutral.pixelColor(i, 0).name()));
+
+    const QImage paleRed = run({{QStringLiteral("satRed"), -100.0}});
+    const QColor r = paleRed.pixelColor(0, 0);
+    QVERIFY2(r.red() - r.blue() < 30, qPrintable(r.name()));
+    QVERIFY2(near(paleRed.pixelColor(1, 0), picture.pixelColor(1, 0), 2), qPrintable(paleRed.pixelColor(1, 0).name()));
+    QVERIFY(near(paleRed.pixelColor(2, 0), picture.pixelColor(2, 0)));
+
+    // Red's hue towards orange: more green in it.
+    const QColor orange = run({{QStringLiteral("hueRed"), 100.0}}).pixelColor(0, 0);
+    QVERIFY2(orange.green() > 60, qPrintable(orange.name()));
+
+    const QImage darkBlue = run({{QStringLiteral("lumBlue"), -100.0}});
+    QVERIFY2(darkBlue.pixelColor(1, 0).lightness() < picture.pixelColor(1, 0).lightness() - 10,
+             qPrintable(darkBlue.pixelColor(1, 0).name()));
+    QVERIFY2(near(darkBlue.pixelColor(3, 0), picture.pixelColor(3, 0), 2), qPrintable(darkBlue.pixelColor(3, 0).name()));
+    QVERIFY(near(darkBlue.pixelColor(2, 0), picture.pixelColor(2, 0)));
+}
+
+// Colour grading: no tint leaves the picture; a tint in the shadows colours the darks more than the
+// lights, one in the highlights the other way round; Lightness moves its range.
+void TestGpu::gradingEffect()
+{
+    if (!m_available)
+        QSKIP("no Vulkan device");
+    QString error;
+    const Effect grading = Effect::load(QStringLiteral("grading"), Context::instance(), &error);
+    QVERIFY2(!grading.isNull(), qPrintable(error));
+    int wheels = 0;
+    for (const EffectParam &p : grading.params())
+        wheels += p.control == QLatin1String("wheel") && p.components == 2;
+    QCOMPARE(wheels, 3);
+    // A wheel's hue goes round, its saturation stops at 100.
+    const QVariantMap resolved = grading.resolve({{QStringLiteral("shadows"), QVariantList{370.0, 150.0}}}, &error);
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    const QVariantList shadows = resolved.value(QStringLiteral("shadows")).toList();
+    QCOMPARE(shadows.value(0).toDouble(), 10.0);
+    QCOMPARE(shadows.value(1).toDouble(), 100.0);
+
+    const QImage picture = swatches({QColor(30, 30, 30), QColor(128, 128, 128), QColor(225, 225, 225), QColor(200, 120, 80)});
+    auto run = [&](const QVariantMap &values) {
+        Chain chain;
+        if (!chain.setSteps({{QStringLiteral("grading"), values}}, &error))
+            return QImage();
+        return chain.render(picture);
+    };
+    const QImage neutral = run({});
+    QVERIFY2(!neutral.isNull(), qPrintable(error));
+    for (int i = 0; i < picture.width(); ++i)
+        QVERIFY2(near(neutral.pixelColor(i, 0), picture.pixelColor(i, 0)), qPrintable(neutral.pixelColor(i, 0).name()));
+
+    auto redness = [](const QColor &c) { return c.red() - c.blue(); };
+    auto blueness = [](const QColor &c) { return c.blue() - c.red(); };
+    const QImage redShadows = run({{QStringLiteral("shadows"), QVariantList{0.0, 100.0}}});
+    QVERIFY2(redness(redShadows.pixelColor(0, 0)) > 5, qPrintable(redShadows.pixelColor(0, 0).name()));
+    QVERIFY(redness(redShadows.pixelColor(0, 0)) > redness(redShadows.pixelColor(2, 0)));
+    const QImage blueHighlights = run({{QStringLiteral("highlights"), QVariantList{240.0, 100.0}}});
+    QVERIFY2(blueness(blueHighlights.pixelColor(2, 0)) > 5, qPrintable(blueHighlights.pixelColor(2, 0).name()));
+    QVERIFY(blueness(blueHighlights.pixelColor(2, 0)) > blueness(blueHighlights.pixelColor(0, 0)));
+    // Green midtones: the middle grey turns green.
+    const QColor middle = run({{QStringLiteral("midtones"), QVariantList{120.0, 100.0}}}).pixelColor(1, 0);
+    QVERIFY2(middle.green() > middle.red() + 5 && middle.green() > middle.blue() + 5, qPrintable(middle.name()));
+
+    const QImage lighterShadows = run({{QStringLiteral("shadowLightness"), 100.0}});
+    QVERIFY2(lighterShadows.pixelColor(0, 0).red() > 35, qPrintable(lighterShadows.pixelColor(0, 0).name()));
+    QVERIFY2(std::abs(lighterShadows.pixelColor(2, 0).red() - 225) <= 3, qPrintable(lighterShadows.pixelColor(2, 0).name()));
+    const QImage darkerHighlights = run({{QStringLiteral("highlightLightness"), -100.0}});
+    QVERIFY2(darkerHighlights.pixelColor(2, 0).red() < 220, qPrintable(darkerHighlights.pixelColor(2, 0).name()));
 }
 
 QTEST_GUILESS_MAIN(TestGpu)

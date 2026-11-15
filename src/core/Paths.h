@@ -23,6 +23,9 @@ QString defaultModels();
 // Folder of the user's saved filters (.lumenfilter), next to the models folder:
 // <Documents>/Lumen/Filters, or <data root>/filters while data is relocated, as for the models.
 QString defaultFilters();
+// Folder of the LUTs (.cube) the Develop tab offers, beside the filters: <Documents>/Lumen/LUTs, or
+// <data root>/luts while data is relocated.
+QString defaultLuts();
 // Directory with bundled read-only resources shipped next to the executable (optional).
 QString bundledData();
 

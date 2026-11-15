@@ -19,6 +19,8 @@ message(STATUS "Lumen: Slang compiler ${LUMEN_SLANGC}")
 function(lumen_add_slang target source)
     cmake_parse_arguments(SLANG "EFFECT" "" "ENTRIES;DEPENDS" ${ARGN})
     set(include_dir "${PROJECT_SOURCE_DIR}/src/gpu/shaders")
+    # The modules effects import (effect, colorspace…).
+    file(GLOB modules CONFIGURE_DEPENDS "${include_dir}/*.slang")
     get_filename_component(source "${source}" ABSOLUTE)
     get_filename_component(name "${source}" NAME_WE)
     set(out_dir "${CMAKE_CURRENT_BINARY_DIR}/gpu")
@@ -33,7 +35,7 @@ function(lumen_add_slang target source)
             COMMAND "${LUMEN_SLANGC}" "${source}" -I "${include_dir}" -target spirv -profile spirv_1_3
                     -emit-spirv-directly -fvk-use-entrypoint-name -entry ${entry} -stage compute -warnings-disable 39001
                     -o "${spv}" -reflection-json "${json}"
-            DEPENDS "${source}" "${include_dir}/effect.slang" ${SLANG_DEPENDS}
+            DEPENDS "${source}" ${modules} ${SLANG_DEPENDS}
             COMMENT "Slang ${name}.${entry}"
             VERBATIM)
         list(APPEND outputs "${spv}" "${json}")

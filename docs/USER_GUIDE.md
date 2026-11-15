@@ -451,6 +451,22 @@ without a card that can, the tab says why and the other filters still work).
   pixels, and the sliders start again from 0. Cropping, scaling, rotating and flipping the picture
   keep the grading; merging a layer down into a graded one bakes it.
 
+Below the basics, more groups open with a click on their name:
+
+* **Tone curve**: drag the curve's points (click to add one, double-click one to remove it). *All
+  three* bends red, green and blue together; *Red*, *Green* and *Blue* bend one colour.
+* **Colour mixer**: the *Hue*, *Saturation* and *Luminance* of eight colours (red, orange, yellow,
+  green, aqua, blue, purple, magenta). Moving the reds' slider changes skin and brick, not the sky;
+  greys stay grey.
+* **Colour grading**: a colour wheel each for the *Shadows*, *Midtones* and *Highlights*, with its
+  *Lightness*. Drag the point away from the middle to tint that range (further is stronger),
+  double-click the wheel to clear it, or use the arrow keys. *Blending* sets how much the ranges
+  overlap, *Balance* moves the border between shadows and highlights.
+* **LUT**: a look from a `.cube` file (3D LUTs, as colour grading programs and cameras export them).
+  **Add…** copies one into your LUTs folder (`Documents/Lumen/LUTs`), so it is offered on every
+  picture; *Amount* mixes it in. A project that uses a LUT you do not have says which one is
+  missing.
+
 ### The Filters panel
 
 The **Filters** tab on the right (also **View → Filters**) lists:

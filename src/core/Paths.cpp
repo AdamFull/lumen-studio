@@ -80,6 +80,15 @@ QString defaultFilters()
     return QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + QStringLiteral("/Lumen/Filters");
 }
 
+QString defaultLuts()
+{
+    if (!overrideRoot().isEmpty())
+        return overrideRoot() + QStringLiteral("/luts");
+    if (QStandardPaths::isTestModeEnabled())
+        return appData() + QStringLiteral("/luts");
+    return QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + QStringLiteral("/Lumen/LUTs");
+}
+
 QString bundledData()
 {
     return QCoreApplication::applicationDirPath() + QStringLiteral("/data");

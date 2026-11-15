@@ -24,3 +24,7 @@ set_source_files_properties(Vma.cpp PROPERTIES COMPILE_OPTIONS "$<IF:$<CXX_COMPI
 lumen_add_slang(lumen_gpu shaders/color.slang ENTRIES decode encode)
 # Built-in effects.
 lumen_add_slang(lumen_gpu effects/develop.slang ENTRIES main EFFECT)
+lumen_add_slang(lumen_gpu effects/curve.slang ENTRIES main EFFECT)
+lumen_add_slang(lumen_gpu effects/mixer.slang ENTRIES main EFFECT)
+lumen_add_slang(lumen_gpu effects/grading.slang ENTRIES main EFFECT)
+lumen_add_slang(lumen_gpu effects/lut.slang ENTRIES main EFFECT)

@@ -405,9 +405,11 @@ KernelInterface parseReflection(const QByteArray &json, const QString &entry, QS
     }
 
     // Push constants: the one parameter bound as a push-constant buffer, a struct of scalars and
-    // vectors.
+    // vectors. Other parameters may be inputs: [Input(kind)] on a texture.
     for (const QJsonValue &v : root.value(QStringLiteral("parameters")).toArray()) {
         const QJsonObject p = v.toObject();
+        if (const QVariantList input = attributes(p).value(QStringLiteral("Input")); !input.isEmpty())
+            k.inputs.insert(p.value(QStringLiteral("name")).toString(), input.first().toString());
         if (p.value(QStringLiteral("binding")).toObject().value(QStringLiteral("kind")).toString() != QLatin1String("pushConstantBuffer"))
             continue;
         const QJsonObject element = p.value(QStringLiteral("type")).toObject().value(QStringLiteral("elementType")).toObject();
@@ -804,9 +806,12 @@ Texture Run::upload(const QImage &image)
         fail(QStringLiteral("the run was submitted already"));
         return {};
     }
-    const QImage rgba = image.convertToFormat(QImage::Format_RGBA8888);
+    const bool floats = image.depth() >= 64;
+    const Format format = floats ? Format::RGBA16F : Format::RGBA8;
+    const QImage rgba = image.convertToFormat(floats ? QImage::Format_RGBA16FPx4 : QImage::Format_RGBA8888);
+    const int bpp = bytesPerPixel(format);
     QString why;
-    Texture t = m_context.texture(rgba.size(), Format::RGBA8, &why);
+    Texture t = m_context.texture(rgba.size(), format, &why);
     if (t.isNull()) {
         fail(why);
         return {};
@@ -815,13 +820,13 @@ Texture Run::upload(const QImage &image)
     const int w = rgba.width();
     const int h = rgba.height();
     HostBuffer staging;
-    if (!rec.hostBuffer(VkDeviceSize(w) * h * 4, false, staging)) {
+    if (!rec.hostBuffer(VkDeviceSize(w) * h * bpp, false, staging)) {
         fail(Text::tr("Not enough memory to send a %1 × %2 picture to the graphics card.").arg(w).arg(h));
         return {};
     }
     rec.staging.push_back(staging);
     for (int y = 0; y < h; ++y)
-        std::memcpy(static_cast<char *>(staging.mapped) + qsizetype(y) * w * 4, rgba.constScanLine(y), size_t(w) * 4);
+        std::memcpy(static_cast<char *>(staging.mapped) + qsizetype(y) * w * bpp, rgba.constScanLine(y), size_t(w) * bpp);
     vmaFlushAllocation(rec.dev->vma, staging.alloc, 0, VK_WHOLE_SIZE);
 
     TextureState &ts = *t.d;

@@ -53,6 +53,22 @@ struct UnitAttribute
     string text;
 };
 
+// How a parameter is set when it is not a slider: "wheel", a float2 of hue (degrees) and saturation
+// (%), set on a colour wheel.
+[__AttributeUsage(_AttributeTargets.Var)]
+struct ControlAttribute
+{
+    string kind;
+};
+
+// A texture the effect reads besides the picture, with the step: "curve" (256 × 1, the curves for
+// red, green, blue and all three in RGBA) or "lut" (a 3D LUT of side N as an N² × N picture).
+[__AttributeUsage(_AttributeTargets.Var)]
+struct InputAttribute
+{
+    string kind;
+};
+
 // A heading the parameter comes under ("White balance", "Tone"); it holds for the parameters after
 // it until the next one.
 [__AttributeUsage(_AttributeTargets.Var)]

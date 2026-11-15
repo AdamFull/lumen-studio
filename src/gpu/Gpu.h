@@ -61,6 +61,7 @@ struct KernelInterface
     QHash<QString, int> bindings;
     QHash<QString, QString> formats; // binding name → "rgba8", "rgba16f"
     QHash<QString, QVariantList> attributes; // the entry's Slang user attributes
+    QHash<QString, QString> inputs;          // bindings marked [Input(kind)]: name → kind ("curve", "lut")
 
     const ParamField *param(const QString &name) const;
 };
@@ -136,7 +137,8 @@ public:
     Run(const Run &) = delete;
     Run &operator=(const Run &) = delete;
 
-    // An RGBA8 texture with the picture's straight (not premultiplied) colours.
+    // An RGBA8 texture with the picture's straight (not premultiplied) colours; a half- or full-float
+    // picture (Format_RGBA16FPx4, Format_RGBA32FPx4…) gives an RGBA16F texture with its values.
     Texture upload(const QImage &image);
     // Runs `kernel` over `threads` (usually the picture's size). `textures` binds the kernel's storage
     // images by name; `params` sets its push constants by name: numbers, or lists for vectors.

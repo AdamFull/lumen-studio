@@ -4433,7 +4433,31 @@ pins), which is one more reason to take its parts rather than the library.
      `tst_canvas developPanel`, `tst_layout developPanel`.
    * Not yet: a look at real photos (only synthetic pictures so far); highlights and shadows are
      global curves, the local ones (from a blurred picture) come with clarity in step 5.
-4. [ ] **Tone curve, colour mixer, colour grading wheels, LUTs** (`.cube`).
+4. [x] **Tone curve, colour mixer, colour grading wheels, LUTs** (`.cube`).
+   * Done (15 November 2026): effects take pictures besides the source (`[Input("curve"|"lut")]`
+     on a texture: `Effect::inputs`, `EffectStep::inputs`; the chain keeps each one on the card and
+     sends it again only when it changes; a step without its input is refused, saying which) and
+     colour wheels (`[Control("wheel")]` on a `float2` of hue in degrees and saturation in %, the
+     hue going round, the saturation kept to 0..100); half-float pictures are sent as half floats.
+     `shaders/colorspace.slang` (sRGB, OKLab, the wheel's hue as an OKLab direction) is shared by
+     the effects. `effects/curve.slang` (a 256 × 1 picture: the curve for all three in alpha, each
+     channel's own in red, green and blue, on display values), `mixer.slang` (hue, saturation and
+     luminance for eight colour bands in OKLCh, neighbouring bands blended, greys left alone),
+     `grading.slang` (shadows, midtones and highlights wheels with their lightness, blending and
+     balance, in OKLab) and `lut.slang` (an N² × N picture, trilinear, with Amount). `ui/Grading`
+     between the layer and the chain: the effects' order (develop, curve, mixer, grading, LUT), what
+     is saved (only what moved; the curves' points and the LUT's name as the step's `inputs`), the
+     curves as a picture (`CurveEditor`'s points through `filters::ops::curveTable`), `.cube` files
+     read (3D, sizes 2 to 128; 1D ones and wrong counts refused with the reason; kept while the file
+     does not change) and added to the LUTs folder (`paths::defaultLuts()`, `Documents/Lumen/LUTs`;
+     a different file of the same name gets a number). `ColorWheel` (drag, double-click to clear,
+     arrow keys). `DevelopPanel` now has a group per effect that opens and closes (Develop open), a
+     curve with a channel list, the LUT list with *Add…*, and a LUT gone from the folder shown as
+     missing with the reason when grading. Tests: `tst_gpu curveEffect, lutEffect, mixerEffect,
+     gradingEffect`, `tst_canvas gradingHelpers` and `developPanel` (a curve, a wheel and a LUT
+     through the panel, a missing LUT), `tst_layout developPanel` with every group open.
+   * Not yet: the mixer shows all 24 sliders at once (Lightroom puts hue, saturation and luminance on
+     tabs); a look at real photos and real LUTs.
 5. [ ] **Detail and looks**: clarity, texture and dehaze (a fast multi-scale blur), sharpening, noise
    reduction, vignette, grain.
 6. [ ] **Effects as nodes**: consecutive GPU nodes run as one chain, without a read-back between them.

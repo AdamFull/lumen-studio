@@ -17,6 +17,7 @@ struct EffectParam
     QString label;            // empty: not shown (such as "size")
     QString unit;
     QString section;          // its heading, from [Section] on it or a parameter before it
+    QString control;          // how it is set, from [Control]: "" a slider, "wheel" a colour wheel (hue°, saturation %)
     QString scalar;           // "float32", "int32", "uint32"
     int components = 1;
     double minimum = 0;
@@ -41,6 +42,9 @@ public:
     QString group() const { return m_group; }
     QList<EffectParam> params() const { return m_params; }
     QList<Kernel> passes() const { return m_passes; }
+    // What the effect reads besides the picture, from [Input(kind)] on a texture: name → kind
+    // ("curve", "lut"). Each comes as a half-float picture with the step (EffectStep::inputs).
+    QHash<QString, QString> inputs() const { return m_inputs; }
 
     // Every shown parameter at its default.
     QVariantMap defaults() const;
@@ -54,6 +58,7 @@ private:
     QString m_group;
     QList<EffectParam> m_params;
     QList<Kernel> m_passes;
+    QHash<QString, QString> m_inputs;
 };
 
 // One effect in a chain, with its values.
@@ -62,6 +67,7 @@ struct EffectStep
     QString effect;
     QVariantMap values;
     bool enabled = true;
+    QHash<QString, QImage> inputs; // the effect's inputs (Effect::inputs), half-float pictures
 };
 
 // Runs effects one after another over a picture: up to the graphics card, into linear light, through
@@ -94,6 +100,7 @@ private:
     {
         Effect effect;
         QVariantMap values;
+        QHash<QString, QImage> inputs;
     };
 
     Context &m_context;
@@ -111,6 +118,12 @@ private:
     Texture m_pong;
     Texture m_output;   // 8-bit, for reading back
     QHash<QString, Texture> m_scratch;
+    struct Input
+    {
+        qint64 key = 0;
+        Texture texture;
+    };
+    QHash<QString, Input> m_inputs; // sent once, again when the picture changes
 };
 
 } // namespace lumen::gpu

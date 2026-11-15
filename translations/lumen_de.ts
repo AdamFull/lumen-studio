@@ -54,7 +54,7 @@
         <translation>Die Grafikkarte %1 konnte nicht geöffnet werden (%2).</translation>
     </message>
     <message>
-        <location line="+191"/>
+        <location line="+193"/>
         <source>Effects on the graphics card are turned off.</source>
         <translation>Effekte auf der Grafikkarte sind ausgeschaltet.</translation>
     </message>
@@ -64,7 +64,7 @@
         <translation>Die Grafikkarte hat keinen Speicher mehr für ein Bild mit %1 × %2.</translation>
     </message>
     <message>
-        <location line="+204"/>
+        <location line="+207"/>
         <source>Not enough memory to send a %1 × %2 picture to the graphics card.</source>
         <translation>Nicht genug Speicher, um ein Bild mit %1 × %2 an die Grafikkarte zu senden.</translation>
     </message>
@@ -82,6 +82,39 @@
         <location line="+1"/>
         <source>The graphics card stopped working (%1); its driver may have been reset.</source>
         <translation>Die Grafikkarte hat aufgehört zu arbeiten (%1); ihr Treiber wurde vielleicht zurückgesetzt.</translation>
+    </message>
+</context>
+<context>
+    <name>Grading</name>
+    <message>
+        <location filename="../src/ui/Grading.cpp" line="+207"/>
+        <source>%1 cannot be used as a LUT: %2</source>
+        <translation>%1 kann nicht als LUT verwendet werden: %2</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>the file is not there</source>
+        <translation>die Datei ist nicht vorhanden</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>it is a 1D LUT; the Develop tab takes 3D ones</source>
+        <translation>es ist eine 1D-LUT; der Bereich Entwickeln nimmt 3D-LUTs</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>no LUT_3D_SIZE between 2 and 128</source>
+        <translation>kein LUT_3D_SIZE zwischen 2 und 128</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>%1 values instead of %2</source>
+        <translation>%1 Werte statt %2</translation>
+    </message>
+    <message>
+        <location line="+48"/>
+        <source>%1 could not be copied to %2.</source>
+        <translation>%1 konnte nicht nach %2 kopiert werden.</translation>
     </message>
 </context>
 <context>
@@ -8946,72 +8979,177 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
 <context>
     <name>lumen::ui::DevelopPanel</name>
     <message>
-        <location filename="../src/ui/widgets/DevelopPanel.cpp" line="+26"/>
+        <location filename="../src/ui/widgets/DevelopPanel.cpp" line="+30"/>
         <source>White balance</source>
         <translation>Weißabgleich</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="+1"/>
         <source>Temperature</source>
         <translation>Temperatur</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+0"/>
         <source>Tint</source>
         <translation>Tönung</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="+1"/>
         <source>Tone</source>
         <translation>Tonwerte</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+0"/>
         <source>Exposure</source>
         <translation>Belichtung</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="+1"/>
         <source>Contrast</source>
         <translation>Kontrast</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+0"/>
         <source>Highlights</source>
         <translation>Lichter</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="+1"/>
         <source>Shadows</source>
         <translation>Tiefen</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+0"/>
         <source>Whites</source>
         <translation>Weiß</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="+1"/>
         <source>Blacks</source>
         <translation>Schwarz</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+0"/>
         <source>Presence</source>
         <translation>Präsenz</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="+1"/>
         <source>Vibrance</source>
         <translation>Dynamik</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+0"/>
         <source>Saturation</source>
         <translation>Sättigung</translation>
     </message>
     <message>
-        <location line="+27"/>
+        <location line="+1"/>
+        <location line="+159"/>
+        <source>Tone curve</source>
+        <translation>Gradationskurve</translation>
+    </message>
+    <message>
+        <location line="-159"/>
+        <source>Colour mixer</source>
+        <translation>Farbmischer</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Hue</source>
+        <translation>Farbton</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Luminance</source>
+        <translation>Luminanz</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+151"/>
+        <source>Red</source>
+        <translation>Rot</translation>
+    </message>
+    <message>
+        <location line="-151"/>
+        <source>Orange</source>
+        <translation>Orange</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Yellow</source>
+        <translation>Gelb</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <location line="+151"/>
+        <source>Green</source>
+        <translation>Grün</translation>
+    </message>
+    <message>
+        <location line="-150"/>
+        <source>Aqua</source>
+        <translation>Aquamarin</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <location line="+151"/>
+        <source>Blue</source>
+        <translation>Blau</translation>
+    </message>
+    <message>
+        <location line="-150"/>
+        <source>Purple</source>
+        <translation>Lila</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Magenta</source>
+        <translation>Magenta</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Colour grading</source>
+        <translation>Color Grading</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Midtones</source>
+        <translation>Mitteltöne</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Lightness</source>
+        <translation>Helligkeit</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Blend</source>
+        <translation>Übergang</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Blending</source>
+        <translation>Überblendung</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Balance</source>
+        <translation>Abgleich</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+164"/>
+        <source>LUT</source>
+        <translation>LUT</translation>
+    </message>
+    <message>
+        <location line="-164"/>
+        <source>Amount</source>
+        <translation>Stärke</translation>
+    </message>
+    <message>
+        <location line="+32"/>
         <source>Before</source>
         <translation>Vorher</translation>
     </message>
@@ -9027,8 +9165,8 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+2"/>
-        <source>Every slider back to 0, and the layer as it was</source>
-        <translation>Alle Regler zurück auf 0 und die Ebene wie vorher</translation>
+        <source>Every control back to the start, and the layer as it was</source>
+        <translation>Alle Regler auf den Anfang, und die Ebene wie vorher</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -9041,7 +9179,47 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Die Farbkorrektur fest in die Pixel der Ebene übernehmen, damit Sie darauf malen können</translation>
     </message>
     <message>
-        <location line="+153"/>
+        <location line="+101"/>
+        <source>Curve for</source>
+        <translation>Kurve für</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>All three</source>
+        <translation>Alle drei</translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <source>Add…</source>
+        <translation>Hinzufügen…</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Add a LUT (.cube) to the ones offered here</source>
+        <translation>Eine LUT (.cube) zu den hier angebotenen hinzufügen</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Add a LUT</source>
+        <translation>LUT hinzufügen</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>LUTs (*.cube)</source>
+        <translation>LUTs (*.cube)</translation>
+    </message>
+    <message>
+        <location line="+68"/>
+        <source>None</source>
+        <translation>Keine</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>%1 (missing)</source>
+        <translation>%1 (fehlt)</translation>
+    </message>
+    <message>
+        <location line="+83"/>
         <source>Grading needs the graphics card: %1</source>
         <translation>Die Farbkorrektur braucht die Grafikkarte: %1</translation>
     </message>
@@ -9066,23 +9244,24 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Korrigiert: jederzeit änderbar. Backen Sie sie ein, um auf der Ebene zu malen.</translation>
     </message>
     <message>
-        <location line="+71"/>
-        <location line="+100"/>
+        <location line="+130"/>
+        <location line="+79"/>
         <source>Grading did not work: %1</source>
         <translation>Die Farbkorrektur hat nicht funktioniert: %1</translation>
     </message>
     <message>
-        <location line="-23"/>
+        <location line="-26"/>
         <source>Reset grading</source>
         <translation>Farbkorrektur zurücksetzen</translation>
     </message>
     <message>
-        <location line="+27"/>
+        <location line="+30"/>
         <source>The layer changed while it was being graded, so nothing was changed.</source>
         <translation>Die Ebene wurde während der Farbkorrektur geändert, daher wurde nichts geändert.</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="-573"/>
+        <location line="+576"/>
         <source>Develop</source>
         <translation>Entwickeln</translation>
     </message>
@@ -9290,45 +9469,46 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
     </message>
     <message>
         <location line="+12"/>
+        <location line="+178"/>
         <source>AI</source>
         <translation>KI</translation>
     </message>
     <message>
-        <location line="-11"/>
-        <location line="+183"/>
+        <location line="-189"/>
+        <location line="+185"/>
         <source>Layers</source>
         <translation>Ebenen</translation>
     </message>
     <message>
-        <location line="-311"/>
+        <location line="-313"/>
         <source>New blank canvas (Ctrl+N)</source>
         <translation>Neue leere Arbeitsfläche (Strg+N)</translation>
     </message>
     <message>
         <location line="+129"/>
-        <location line="+182"/>
+        <location line="+184"/>
         <source>History</source>
         <translation>Protokoll</translation>
     </message>
     <message>
-        <location line="-180"/>
-        <location line="+180"/>
+        <location line="-182"/>
+        <location line="+182"/>
         <source>Filters</source>
         <translation>Filter</translation>
     </message>
     <message>
-        <location line="-178"/>
-        <location line="+178"/>
+        <location line="-180"/>
+        <location line="+180"/>
         <source>Develop</source>
         <translation>Entwickeln</translation>
     </message>
     <message>
-        <location line="-171"/>
+        <location line="-173"/>
         <source>Close the AI tab</source>
         <translation>Registerkarte „KI“ schließen</translation>
     </message>
     <message>
-        <location line="+36"/>
+        <location line="+38"/>
         <source>Drag on the picture around what should change.</source>
         <translation>Ziehen Sie auf dem Bild einen Rahmen um das, was sich ändern soll.</translation>
     </message>
@@ -9473,7 +9653,7 @@ Die Planung wird ohne Charakterblatt fortgesetzt.</translation>
         <translation>Aus der Prompt-Leiste generieren</translation>
     </message>
     <message>
-        <location line="+164"/>
+        <location line="+167"/>
         <location filename="../src/ui/dialogs/NewCanvasDialog.cpp" line="+27"/>
         <source>Untitled</source>
         <translation>Unbenannt</translation>
