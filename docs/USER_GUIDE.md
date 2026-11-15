@@ -442,6 +442,11 @@ The **Develop** tab on the right grades the active layer, as Lightroom's Basic p
 *Shadows*, *Whites* and *Blacks*, *Vibrance* and *Saturation*. It runs on the graphics card (Vulkan;
 without a card that can, the tab says why and the other filters still work).
 
+*Highlights* and *Shadows* work by area: they brighten or darken a dark or bright part of the
+picture as a whole, so its texture (a dark coat's folds, a cloud's shape) keeps its contrast. Along
+a strong edge they go by each pixel's own light, so the other side does not glow. *Whites* and
+*Blacks* move the lightest and darkest pixels themselves.
+
 * While a slider moves, the canvas shows the picture at screen size; when you let go, the layer is
   graded at full size, as one step to undo. Double-click a slider's name to put it back to 0.
 * The layer keeps its pixels from before the grading, also in the saved project, so you can change

@@ -48,6 +48,7 @@ private slots:
     void detailEffect();
     void finishEffect();
     void developAtFullSize();
+    void localShadowsAndHighlights();
     void lookSheet();
     void compilerMessages();
     void compileOwnEffect();
@@ -1252,6 +1253,57 @@ void TestGpu::compileMistakes()
         QVERIFY(!Compiler::compile(QString::fromUtf8(kOwnEffect)).ok());
     }
     Compiler::setProgram(QStringLiteral(LUMEN_TEST_SLANGC));
+}
+
+// Highlights and Shadows are local (plan M20 step 9): a textured area moves as a whole, so its
+// texture keeps its contrast (a global curve lifts its lighter stripes more); next to an edge the
+// other side does not glow; the preview at screen size agrees with the full size made small.
+void TestGpu::localShadowsAndHighlights()
+{
+    if (!m_available)
+        QSKIP("no Vulkan device");
+    // Left: dark stripes (25 and 45); right: light stripes (200 and 225); the edge at 128.
+    const QSize size(256, 192);
+    const QImage picture = greyPicture(size, [](int x, int) {
+        const bool other = (x / 2) % 2;
+        return x < 128 ? (other ? 45.0 : 25.0) : (other ? 225.0 : 200.0);
+    });
+    auto at = [](const QImage &image, int x) { return image.pixelColor(x, 96).red(); };
+
+    const QImage lifted = runOne(QStringLiteral("develop"), {{QStringLiteral("shadows"), 100.0}}, picture);
+    QVERIFY(!lifted.isNull());
+    // Inside the dark area: both stripes lifted by about as much.
+    const int darkLift = at(lifted, 40) - at(picture, 40);
+    const int otherLift = at(lifted, 42) - at(picture, 42);
+    QVERIFY2(darkLift > 8 && otherLift > 8, qPrintable(QStringLiteral("%1 %2").arg(darkLift).arg(otherLift)));
+    QVERIFY2(std::abs(darkLift - otherLift) <= 5, qPrintable(QStringLiteral("lifts %1 and %2").arg(darkLift).arg(otherLift)));
+    // The light side next to the edge does not glow.
+    for (int x = 128; x < 140; ++x)
+        QVERIFY2(std::abs(at(lifted, x) - at(picture, x)) <= 2, qPrintable(QStringLiteral("%1: %2").arg(x).arg(at(lifted, x))));
+
+    const QImage lowered = runOne(QStringLiteral("develop"), {{QStringLiteral("highlights"), -100.0}}, picture);
+    const int lightDrop = at(picture, 200) - at(lowered, 200);
+    const int otherDrop = at(picture, 202) - at(lowered, 202);
+    QVERIFY2(lightDrop > 8 && otherDrop > 8, qPrintable(QStringLiteral("%1 %2").arg(lightDrop).arg(otherDrop)));
+    QVERIFY2(std::abs(lightDrop - otherDrop) <= 5, qPrintable(QStringLiteral("drops %1 and %2").arg(lightDrop).arg(otherDrop)));
+    for (int x = 116; x < 128; ++x)
+        QVERIFY2(std::abs(at(lowered, x) - at(picture, x)) <= 2, qPrintable(QStringLiteral("%1: %2").arg(x).arg(at(lowered, x))));
+
+    // A large picture and its preview at a quarter agree once the large one is made small.
+    const QImage big = greyPicture(QSize(1024, 768), [](int x, int y) {
+        return 60 + 40 * std::sin(x / 90.0) * std::cos(y / 70.0) + ((x / 3 + y / 3) % 2 ? 8 : 0);
+    });
+    const QVariantMap both{{QStringLiteral("shadows"), 80.0}, {QStringLiteral("highlights"), -80.0}};
+    const QImage small = big.scaled(256, 192, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    const QImage bigOut = runOne(QStringLiteral("develop"), both, big).scaled(256, 192, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    const QImage smallOut = runOne(QStringLiteral("develop"), both, small);
+    double apart = 0;
+    for (int y = 0; y < 192; ++y) {
+        for (int x = 0; x < 256; ++x)
+            apart += std::abs(bigOut.pixelColor(x, y).red() - smallOut.pixelColor(x, y).red());
+    }
+    apart /= 256.0 * 192.0;
+    QVERIFY2(apart < 2.0, qPrintable(QStringLiteral("%1 levels apart").arg(apart)));
 }
 
 QTEST_GUILESS_MAIN(TestGpu)

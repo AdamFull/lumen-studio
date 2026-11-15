@@ -4561,9 +4561,20 @@ pins), which is one more reason to take its parts rather than the library.
      says). Found and fixed: Dehaze took the haze's colour from the brightest part, so a setting sun
      turned the sky purple (now mostly grey, a quarter of its colour); Shadows lifted near-black
      (now from a little above it).
-   * Not yet: Highlights and Shadows are global curves; on a portrait, Shadows +60 lifts a dark
-     cloth evenly where a local one would keep its contrast (the coarse copy of Local contrast
-     could steer them).
+9. [x] **Local Highlights and Shadows** (asked for after the live check).
+   * Done (15 November 2026): `develop.slang` has three passes before its own: the lightness after
+     exposure averaged into a texture of the effect's (`[Fit(256)]`, so the preview agrees with the
+     full size) and blurred (σ 2 of its pixels, about 1% of the long side). Highlights and Shadows
+     take their amount from a guide: the light around where the pixel is like it, the pixel's own
+     where it differs by more than about 0.12 on the perceptual scale (an edge), blended smoothly;
+     so a textured area is moved as a whole and keeps its contrast, and there are no halos. Blacks,
+     Whites and Contrast stay per pixel; with Highlights and Shadows at 0 the guide is not read.
+     Test: `tst_gpu localShadowsAndHighlights` (dark and light stripes lifted and lowered by the same
+     amount, where the global curves moved them by 26 and 58 levels; no glow on the other side of
+     an edge; a preview at a quarter within 2 levels of the full size made small); the earlier
+     tests of the tone sliders pass unchanged. On the photos: the portrait's dark headwrap keeps
+     its folds under Shadows +60; a soft light outline along the head at ±60 is the same with the
+     global curves (the tone curve's own midtones at a soft edge).
 
 Acceptance:
 1. Moving a Develop slider on a 24-megapixel photo updates the screen at once; the full-size result
