@@ -27,7 +27,7 @@ const QString kRepository = QStringLiteral("AdamFull/lumen-studio");
 
 QVersionNumber versionOf(const QString &text)
 {
-    int end = 0;
+    qsizetype end = 0;
     const QVersionNumber number = QVersionNumber::fromString(text, &end);
     return end == text.size() ? number : QVersionNumber();
 }
