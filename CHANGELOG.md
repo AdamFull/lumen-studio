@@ -1,14 +1,46 @@
 # Changelog
 
-## 0.2.1 - 2026-11-10
+## 0.3.0 - 2026-11-15
 
-- **OpenAI's current image models.** OpenAI shut down `gpt-image-1`, Lumen's default, on 23 October 2026.
-  Lumen now uses GPT Image 2.6 Sunburst and moves a saved engine to it by itself, with a note. GPT
-  Image 2.6 Flare (faster) and 2.5 are there to choose, and results keep the picture's own shape
-  instead of one of three fixed sizes.
+Colour grading on the graphics card, and effects of your own.
+
+- **Develop**, a new tab on the right, grades the active layer like a photo editor, live on the
+  graphics card. It has white balance, exposure, contrast, highlights and shadows, whites and blacks,
+  vibrance and saturation. Highlights and Shadows work by area, so a dark coat keeps its folds. It
+  also has a tone curve, a colour mixer for eight colours, colour grading wheels for shadows,
+  midtones and highlights, and LUTs (`.cube` files). Then come texture, clarity and dehaze,
+  sharpening and noise reduction, and a vignette and film grain.
+- The canvas shows the change at once while a slider moves; the full-size result follows in the
+  background, as one step to undo. The grading stays editable, also after saving the project:
+  **Reset** takes it off, **Before** shows the picture as it was, **Bake** makes it part of the
+  layer so you can paint on it.
+- **Presets:** five looks to start from (*Black and white*, *Cool and crisp*, *Soft matte*, *Vivid*,
+  *Warm film*) and your own. **Copy** and **Paste** carry settings from one picture to another.
+  *Apply to picture files…* grades many photos at once and saves copies, leaving the originals as
+  they are.
+- **In the filter editor,** each Develop group is a step of its own. Several in a row run as one on
+  the graphics card, so a long row costs about as much as a short one.
+- **Your own effects:** *Tools → Effect editor…* is for writing effects in Slang. Your source is
+  compiled as you type, with mistakes underlined where they are, and a live preview with your
+  effect's sliders. It works like a code editor, with colours, completion, notes on Lumen's functions
+  when you hover over them, find and replace, and the usual keys. Saved effects become filter steps.
+  You can share them as `.slang` files; when you open one from someone else, you see its source
+  before anything is added. The Slang compiler is a download of about 65 MB, the first time you
+  write an effect.
+- **OpenAI's current image models.** OpenAI shut down `gpt-image-1`, Lumen's default, on 23 October
+  2026. Lumen now uses GPT Image 2.6 Sunburst and moves a saved engine to it by itself, with a note.
+  GPT Image 2.6 Flare (faster) and 2.5 are there to choose, and results keep the picture's own
+  shape instead of one of three fixed sizes.
 - Google's newer Nano Banana models (2.1, 2, 2 Lite and Pro) can be chosen for Gemini.
 - Models a service has shut down are no longer offered, and saved ones move to their replacement.
 - Fixed: a row of the LoRA test results could not be deselected.
+
+The Develop tab and effects need a graphics card with Vulkan 1.3, which most cards from the last
+several years have; without one, the tab says so and everything else works as before.
+
+**Install:** run `LumenStudio-0.3.0-win64.exe`, or unzip the portable version and run
+`LumenStudio.exe`. Lumen 0.2.0 offers this update by itself. Lumen is not code-signed yet, so
+Windows warns about the download: choose *More info → Run anyway*.
 
 ## 0.2.0 - 2026-11-01
 
